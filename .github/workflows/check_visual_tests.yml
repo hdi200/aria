@@ -1,0 +1,259 @@
+name: 'Check: Visual Tests (vtest)'
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }} ${{ github.event_name }} ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: "Setup VTests workflow"
+    runs-on: ubuntu-slim
+    outputs:
+      do_run: ${{ steps.output_data.outputs.do_run }}
+      reference_ref: ${{ steps.output_data.outputs.reference_ref }}
+      artifact_name: ${{ steps.output_data.outputs.artifact_name }}
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v6
+      with:
+        sparse-checkout: buildscripts/ci/tools/make_build_number.sh
+    - name: "Configure workflow"
+      run: |
+        bash ./buildscripts/ci/tools/make_build_number.sh
+        BUILD_NUMBER=$(cat ./build.artifacts/env/build_number.env)
+
+        echo "BUILD_NUMBER=$BUILD_NUMBER" | tee -a $GITHUB_ENV
+
+    - name: Get reference commit for PR
+      if: github.event_name == 'pull_request'
+      env:
+        pull_request_title: ${{ github.event.pull_request.title }}
+        REFERENCE_REF: ${{ github.event.pull_request.base.ref }}
+      run: |
+        if [ -z "$REFERENCE_REF" ]; then DO_RUN='false'; else DO_RUN='true'; fi
+        echo "REFERENCE_REF=$REFERENCE_REF" >> $GITHUB_ENV
+        echo "DO_RUN=$DO_RUN" >> $GITHUB_ENV
+        echo "PR_INFO= ${{ github.event.pull_request.number }} ${pull_request_title}" >> $GITHUB_ENV
+    - name: Get reference commit for push commit
+      if: github.event_name == 'push'
+      run: |
+        REFERENCE_REF=${{ github.event.before }}
+        if [[ -z "$REFERENCE_REF" || "$REFERENCE_REF" == 0000000000000000000000000000000000000000 ]]; then
+          DO_RUN='false'
+        else
+          DO_RUN='true'
+        fi
+        echo "REFERENCE_REF=$REFERENCE_REF" >> $GITHUB_ENV
+        echo "DO_RUN=$DO_RUN" >> $GITHUB_ENV
+        echo "PR_INFO=" >> $GITHUB_ENV
+    - id: output_data
+      name: Output workflow data
+      run: |
+        echo "do_run=${DO_RUN}" | tee -a $GITHUB_OUTPUT
+        echo "reference_ref=${REFERENCE_REF}" | tee -a $GITHUB_OUTPUT
+        UPLOAD_ARTIFACT_NAME="$(tr '":<>|*?/\\’' '_' <<<"VTests Comparison ${BUILD_NUMBER}${PR_INFO}")"
+        echo "artifact_name=$UPLOAD_ARTIFACT_NAME" | tee -a $GITHUB_OUTPUT
+
+  build_current:
+    name: "Build current"
+    runs-on: ubuntu-22.04
+    needs: setup
+    if: needs.setup.outputs.do_run == 'true'
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v6
+
+    - name: Restore ccache files
+      id: restore-ccache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ${{runner.os}}-${{runner.arch}}-vtests-current-ccache-
+        restore-keys: |
+          ${{runner.os}}-${{runner.arch}}-vtests-current-ccache-
+          ${{runner.os}}-${{runner.arch}}-vtests-reference-ccache-
+    - name: Setup ccache
+      run: |
+        sudo apt-get install -y ccache
+        bash ./buildscripts/ci/tools/setup_ccache_config.sh
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: 6.10.2
+        host: 'linux'
+        target: 'desktop'
+        arch: 'linux_gcc_64'
+        modules: 'qt5compat qtnetworkauth qtshadertools qtwebsockets'
+        cache: true
+    - name: Setup environment
+      run: |
+        bash ./buildscripts/ci/linux/setup.sh
+
+    - name: Build and Pack
+      run: |
+        bash ./buildscripts/ci/vtests/build_and_pack.sh
+
+    - name: Show ccache stats
+      run: |
+        ccache -sv
+    - name: Upload
+      uses: actions/upload-artifact@v7
+      with:
+        name: current_build
+        path: ./build.artifacts/
+
+    - name: Prepare ccache files for saving
+      id: prepare-save-ccache
+      if: always()
+      run: |
+        ccache --recompress 10
+        echo "CCACHE_TIMESTAMP=$(date -u +"%F-%T")" | tee -a $GITHUB_OUTPUT
+    - name: Save ccache files
+      if: always()
+      uses: actions/cache/save@v5
+      with:
+        key: ${{ steps.restore-ccache.outputs.cache-primary-key }}${{ steps.prepare-save-ccache.outputs.CCACHE_TIMESTAMP }}
+        path: ${{ github.workspace }}/.ccache
+
+
+  build_reference:
+    name: "Build reference"
+    runs-on: ubuntu-22.04
+    needs: setup
+    if: needs.setup.outputs.do_run == 'true'
+    steps:
+    - name: Clone repository and checkout reference commit
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.setup.outputs.reference_ref }}
+
+    - name: Restore ccache files
+      id: restore-ccache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ${{runner.os}}-${{runner.arch}}-vtests-reference-ccache-
+        restore-keys: |
+          ${{runner.os}}-${{runner.arch}}-vtests-reference-ccache-
+          ${{runner.os}}-${{runner.arch}}-vtests-current-ccache-
+    - name: Setup ccache
+      run: |
+        sudo apt-get install -y ccache
+        bash ./buildscripts/ci/tools/setup_ccache_config.sh
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: 6.10.2
+        host: 'linux'
+        target: 'desktop'
+        arch: 'linux_gcc_64'
+        modules: 'qt5compat qtnetworkauth qtshadertools qtwebsockets'
+        cache: true
+    - name: Setup environment
+      run: |
+        bash ./buildscripts/ci/linux/setup.sh
+
+    - name: Build and Pack
+      run: |
+        bash ./buildscripts/ci/vtests/build_and_pack.sh
+    - name: Show ccache stats
+      run: |
+        ccache -sv
+    - name: Upload
+      uses: actions/upload-artifact@v7
+      with:
+        name: reference_build
+        path: ./build.artifacts/
+
+    - name: Prepare ccache files for saving
+      id: prepare-save-ccache
+      if: always()
+      run: |
+        ccache --recompress 10
+        echo "CCACHE_TIMESTAMP=$(date -u +"%F-%T")" | tee -a $GITHUB_OUTPUT
+    - name: Save ccache files
+      if: always()
+      uses: actions/cache/save@v5
+      with:
+        key: ${{ steps.restore-ccache.outputs.cache-primary-key }}${{ steps.prepare-save-ccache.outputs.CCACHE_TIMESTAMP }}
+        path: ${{ github.workspace }}/.ccache
+
+
+  generate_and_compare:
+    name: "Generate and Compare"
+    runs-on: ubuntu-22.04
+    needs: [setup, build_current, build_reference]
+    if: needs.setup.outputs.do_run == 'true'
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v6
+    - name: Download current
+      uses: actions/download-artifact@v8
+      with:
+        name: current_build
+        path: ./musescore_current
+    - name: Download reference
+      uses: actions/download-artifact@v8
+      with:
+        name: reference_build
+        path: ./musescore_reference
+    - name: Generate PNGs
+      run: |
+        bash ./buildscripts/ci/vtests/generate_pngs.sh
+      env:
+        ASAN_OPTIONS: "detect_leaks=0"
+    - name: Compare PNGs
+      run: |
+        echo "VTEST_DIFF_FOUND=false" >> $GITHUB_ENV
+        ./vtest/vtest-compare-pngs.sh --ci 1
+    - name: Compare PNGs small
+      run: |
+        ./vtest/vtest-compare-pngs.sh --ci 1 -c ./current_pngs_small -r ./reference_pngs_small -o ./comparison/small
+    - name: Compare PNGs gp
+      run: |
+        ./vtest/vtest-compare-pngs.sh --ci 1 -c ./current_pngs_gp_small -r ./reference_pngs_gp_small -o ./comparison/gp
+    - name: Upload comparison
+      if: env.VTEST_DIFF_FOUND == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ needs.setup.outputs.artifact_name }}
+        path: ./comparison
+    #- name: Generate ref drawdata
+    #  run: |
+    #    chmod +x ./musescore_reference/app/bin/mscore4portable
+    #    xvfb-run ./vtest/gen-ref-data.sh -m ./musescore_reference/app/bin/mscore4portable
+    #- name: DrawData VTest
+    #  run: |
+    #    chmod +x ./musescore_current/app/bin/mscore4portable
+    #    xvfb-run ./vtest/vtest.sh -m ./musescore_current/app/bin/mscore4portable
+    # - name: Skip failure signal if PR is labeled 'vtests'
+    #   if: github.event_name == 'pull_request' && contains( env.VTEST_DIFF_FOUND, 'true') && contains(github.event.pull_request.labels.*.name, 'vtests')
+    #   run: |
+    #     echo "This PR appears to change some of the visual tests."
+    #     echo "Please carefully review the new visual test results in the uploaded artifact that can be found here: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+    #     echo "Failure signal skipped because 'vtests' label is applied to the PR"
+    #     export VTEST_DIFF_FOUND=false
+    #     echo "VTEST_DIFF_FOUND=$VTEST_DIFF_FOUND" >> $GITHUB_ENV
+    - name: Emit failure signal for PR if differences are found
+      if: github.event_name == 'pull_request' && contains( env.VTEST_DIFF_FOUND, 'true')
+      run: |
+        echo "This PR appears to change some of the visual tests."
+        echo "Please carefully review the new visual test results in the uploaded artifact that can be found here: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        exit 1
+    - name: Comment push commit
+      if: github.event_name == 'push' && contains( env.VTEST_DIFF_FOUND, 'true')
+      uses: peter-evans/commit-comment@v4.0.0
+      with:
+        body: |
+          This is an automatic message. This commit appears to change some of the visual tests.
+          Please carefully review the new visual test results in the uploaded artifact that can be found
+          [here][1]
+
+          [1]: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        token: ${{ secrets.GITHUB_TOKEN }}

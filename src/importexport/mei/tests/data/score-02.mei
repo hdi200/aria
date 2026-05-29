@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.1/mei-basic.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/5.1/mei-basic.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1+basic">
+   <meiHead>
+      <fileDesc>
+         <titleStmt>
+            <title>Untitled score</title>
+            <respStmt>
+               <persName role="composer">Composer / arranger</persName>
+            </respStmt>
+         </titleStmt>
+         <pubStmt>
+            <date isodate="2023-08-11T14:53:54" />
+         </pubStmt>
+      </fileDesc>
+   </meiHead>
+   <music>
+      <body>
+         <mdiv>
+            <score>
+               <scoreDef>
+                  <pgHead func="first">
+                     <rend halign="center" valign="top">
+                        <rend type="title" fontsize="x-large">Untitled score</rend>
+                        <lb />
+                        <rend type="subtitle" fontsize="large">Subtitle</rend>
+                     </rend>
+                     <rend halign="right" valign="bottom">
+                        <rend type="composer">Composer / arranger</rend>
+                     </rend>
+                  </pgHead>
+                  <staffGrp>
+                     <staffGrp symbol="bracket">
+                        <staffDef n="1" lines="5" meter.count="4" meter.unit="4">
+                           <label>Soprano</label>
+                           <labelAbbr>S.</labelAbbr>
+                           <clef shape="G" line="2" />
+                        </staffDef>
+                     </staffGrp>
+                     <staffGrp bar.thru="true" symbol="bracket">
+                        <staffGrp bar.thru="true" symbol="brace">
+                           <label>Piano</label>
+                           <labelAbbr>Pno.</labelAbbr>
+                           <staffDef n="2" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="G" line="2" />
+                           </staffDef>
+                           <staffDef n="3" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="F" line="4" />
+                           </staffDef>
+                        </staffGrp>
+                        <staffGrp bar.thru="true" symbol="bracketsq">
+                           <label>Organ</label>
+                           <labelAbbr>Org.</labelAbbr>
+                           <staffDef n="4" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="G" line="2" />
+                           </staffDef>
+                           <staffDef n="5" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="F" line="4" />
+                           </staffDef>
+                           <staffDef n="6" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="F" line="4" />
+                           </staffDef>
+                        </staffGrp>
+                        <staffGrp bar.thru="true" symbol="line">
+                           <label>Organ</label>
+                           <labelAbbr>Org.</labelAbbr>
+                           <staffDef n="7" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="G" line="2" />
+                           </staffDef>
+                           <staffDef n="8" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="F" line="4" />
+                           </staffDef>
+                           <staffDef n="9" lines="5" meter.count="4" meter.unit="4">
+                              <clef shape="F" line="4" />
+                           </staffDef>
+                        </staffGrp>
+                        <staffDef n="10" lines="5" meter.count="4" meter.unit="4">
+                           <label>Timpani</label>
+                           <labelAbbr>Timp.</labelAbbr>
+                           <clef shape="F" line="4" />
+                        </staffDef>
+                     </staffGrp>
+                     <staffGrp symbol="bracket">
+                        <staffDef n="11" lines="5" meter.count="4" meter.unit="4">
+                           <label>Violin</label>
+                           <labelAbbr>Vln.</labelAbbr>
+                           <clef shape="G" line="2" />
+                        </staffDef>
+                        <staffDef n="12" lines="5" meter.count="4" meter.unit="4">
+                           <label>Violoncello</label>
+                           <labelAbbr>Vc.</labelAbbr>
+                           <clef shape="F" line="4" />
+                        </staffDef>
+                     </staffGrp>
+                  </staffGrp>
+               </scoreDef>
+               <section xml:id="s1">
+                  <measure xml:id="m110hsbh" n="1">
+                     <staff xml:id="m1s1" n="1">
+                        <layer xml:id="m1s1l1" n="1">
+                           <mRest xml:id="m1o3wj2l" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s2" n="2">
+                        <layer xml:id="m1s2l1" n="1">
+                           <mRest xml:id="m142i4xx" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s3" n="3">
+                        <layer xml:id="m1s3l1" n="1">
+                           <mRest xml:id="m1dd7j99" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s4" n="4">
+                        <layer xml:id="m1s4l1" n="1">
+                           <mRest xml:id="mxchtzl" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s5" n="5">
+                        <layer xml:id="m1s5l1" n="1">
+                           <mRest xml:id="mauexcc" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s6" n="6">
+                        <layer xml:id="m1s6l1" n="1">
+                           <mRest xml:id="moxc4ym" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s7" n="7">
+                        <layer xml:id="m1s7l1" n="1">
+                           <mRest xml:id="m51rgi6" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s8" n="8">
+                        <layer xml:id="m1s8l1" n="1">
+                           <mRest xml:id="mugay3z" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s9" n="9">
+                        <layer xml:id="m1s9l1" n="1">
+                           <mRest xml:id="m1mbk37d" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s10" n="10">
+                        <layer xml:id="m1s10l1" n="1">
+                           <mRest xml:id="m146cnjb" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s11" n="11">
+                        <layer xml:id="m1s11l1" n="1">
+                           <mRest xml:id="m1ewfcgc" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s12" n="12">
+                        <layer xml:id="m1s12l1" n="1">
+                           <mRest xml:id="mtxhrkj" />
+                        </layer>
+                     </staff>
+                  </measure>
+                  <measure xml:id="m4xslfq" right="end" n="2">
+                     <staff xml:id="m2s1" n="1">
+                        <layer xml:id="m2s1l1" n="1">
+                           <mRest xml:id="m7j5f47" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s2" n="2">
+                        <layer xml:id="m2s2l1" n="1">
+                           <mRest xml:id="mineazm" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s3" n="3">
+                        <layer xml:id="m2s3l1" n="1">
+                           <mRest xml:id="mmrg3y0" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s4" n="4">
+                        <layer xml:id="m2s4l1" n="1">
+                           <mRest xml:id="mtlkbjw" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s5" n="5">
+                        <layer xml:id="m2s5l1" n="1">
+                           <mRest xml:id="mbej7b" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s6" n="6">
+                        <layer xml:id="m2s6l1" n="1">
+                           <mRest xml:id="m1a35yvq" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s7" n="7">
+                        <layer xml:id="m2s7l1" n="1">
+                           <mRest xml:id="m1e625az" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s8" n="8">
+                        <layer xml:id="m2s8l1" n="1">
+                           <mRest xml:id="mkrv7bw" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s9" n="9">
+                        <layer xml:id="m2s9l1" n="1">
+                           <mRest xml:id="m176z6ux" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s10" n="10">
+                        <layer xml:id="m2s10l1" n="1">
+                           <mRest xml:id="m37600l" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s11" n="11">
+                        <layer xml:id="m2s11l1" n="1">
+                           <mRest xml:id="m15j9vqm" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s12" n="12">
+                        <layer xml:id="m2s12l1" n="1">
+                           <mRest xml:id="ml3e53g" />
+                        </layer>
+                     </staff>
+                  </measure>
+               </section>
+            </score>
+         </mdiv>
+      </body>
+   </music>
+</mei>

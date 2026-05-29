@@ -1,0 +1,47 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#pragma once
+
+#include "global/modularity/imoduleinterface.h"
+
+#include <QPixmap>
+
+#include "global/io/path.h"
+#include "global/types/retval.h"
+
+#include "types/projectmeta.h"
+#include "types/projecttypes.h"
+
+namespace mu::project {
+class IMscMetaReader : MODULE_GLOBAL_INTERFACE
+{
+    INTERFACE_ID(IMscMetaReader)
+
+public:
+    virtual ~IMscMetaReader() = default;
+
+    virtual muse::RetVal<QPixmap> readThumbnail(const muse::io::path_t& filePath) const = 0;
+    virtual muse::RetVal<ProjectMeta> readMeta(const muse::io::path_t& filePath) const = 0;
+    virtual muse::RetVal<CloudProjectInfo> readCloudProjectInfo(const muse::io::path_t& filePath) const = 0;
+};
+}

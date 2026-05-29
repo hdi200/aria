@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="5.00">
+  <Score>
+    <eid>B_B</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer"></metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle"></metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>C_C</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <Instrument id="cavaquinho">
+        <InstrumentLabel>
+          <longName>Track 1</longName>
+          </InstrumentLabel>
+        <trackName></trackName>
+        <instrumentId>pluck.guitar</instrumentId>
+        <singleNoteDynamics>0</singleNoteDynamics>
+        <StringData>
+          <frets>24</frets>
+          <string>40</string>
+          <string>45</string>
+          <string>50</string>
+          <string>55</string>
+          <string>59</string>
+          <string>64</string>
+          </StringData>
+        <Channel>
+          <program value="25"/>
+          <controller ctrl="7" value="103"/>
+          <controller ctrl="10" value="63"/>
+          <controller ctrl="93" value="255"/>
+          <controller ctrl="91" value="255"/>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>D_D</eid>
+        <Text>
+          <eid>E_E</eid>
+          <style>title</style>
+          <text>Test</text>
+          </Text>
+        </VBox>
+      <Measure>
+        <eid>F_F</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G8vb</concertClefType>
+            <transposingClefType>G8vb</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>G_G</eid>
+            </Clef>
+          <TimeSig>
+            <eid>H_H</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <StaffText>
+            <eid>I_I</eid>
+            <text>Capo. fret 1</text>
+            </StaffText>
+          <Dynamic>
+            <subtype>f</subtype>
+            <velocity>96</velocity>
+            <eid>J_J</eid>
+            </Dynamic>
+          <Tempo>
+            <tempo>1.166667</tempo>
+            <eid>K_K</eid>
+            <text><sym>metNoteQuarterUp</sym> = 70</text>
+            </Tempo>
+          <StringTunings>
+            <visibleStrings></visibleStrings>
+            <StringData>
+              <frets>24</frets>
+              <string>36</string>
+              <string>43</string>
+              <string>50</string>
+              <string>55</string>
+              <string>59</string>
+              <string>62</string>
+              </StringData>
+            <eid>L_L</eid>
+            <style>string_tunings</style>
+            <text/>
+            </StringTunings>
+          <Chord>
+            <eid>M_M</eid>
+            <durationType>half</durationType>
+            <Note>
+              <eid>N_N</eid>
+              <pitch>52</pitch>
+              <tpc>18</tpc>
+              <fret>2</fret>
+              <string>3</string>
+              </Note>
+            <Note>
+              <eid>O_O</eid>
+              <pitch>55</pitch>
+              <tpc>15</tpc>
+              <fret>0</fret>
+              <string>2</string>
+              </Note>
+            <Note>
+              <eid>P_P</eid>
+              <pitch>59</pitch>
+              <tpc>19</tpc>
+              <fret>0</fret>
+              <string>1</string>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>Q_Q</eid>
+            <durationType>half</durationType>
+            <Note>
+              <eid>R_R</eid>
+              <pitch>53</pitch>
+              <tpc>13</tpc>
+              <fret>3</fret>
+              <string>3</string>
+              </Note>
+            <Note>
+              <eid>S_S</eid>
+              <pitch>57</pitch>
+              <tpc>17</tpc>
+              <fret>2</fret>
+              <string>2</string>
+              </Note>
+            <Note>
+              <eid>T_T</eid>
+              <pitch>60</pitch>
+              <tpc>14</tpc>
+              <fret>1</fret>
+              <string>1</string>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>U_U</eid>
+        <voice>
+          <Rest>
+            <eid>V_V</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

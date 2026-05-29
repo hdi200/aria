@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# MuseScore-Studio-CLA-applies
+#
+# MuseScore Studio
+# .mnx Import Module (Experimental)
+
+muse_create_module(iex_mnx)
+
+include(FetchContent)
+
+set(mnxdom_BUILD_TESTING OFF CACHE BOOL "Do not build tests for mnx")
+if(MUE_COMPILE_USE_SYSTEM_MNXDOM)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(mnxdom REQUIRED IMPORTED_TARGET mnxdom)
+    set(MNXDOM_LIB PkgConfig::mnxdom)
+    target_compile_definitions(iex_mnx PRIVATE MNXDOM_SYSTEM)
+    message(STATUS "Using system-installed mnxdom")
+else()
+    FetchContent_Declare(
+        mnxdom
+        GIT_REPOSITORY https://github.com/rpatters1/mnxdom.git
+        GIT_TAG        e7c947bf768caccf315426dcae0dfac02caf738b
+    )
+    FetchContent_MakeAvailable(mnxdom)
+    set(MNXDOM_LIB mnxdom)
+    message(STATUS "Using fetched mnxdom")
+endif()
+
+target_sources(iex_mnx PRIVATE
+    mnxmodule.cpp
+    mnxmodule.h
+    imnxconfiguration.h
+    internal/export/mnxexportglobal.cpp
+    internal/export/mnxexportlayouts.cpp
+    internal/export/mnxexportparts.cpp
+    internal/export/mnxexportsequences.cpp
+    internal/export/mnxexporter.cpp
+    internal/export/mnxexporter.h
+    internal/mnxconfiguration.cpp
+    internal/mnxconfiguration.h
+    internal/import/mnximporter.cpp
+    internal/import/mnximporter.h
+    internal/import/mnximportmarkings.cpp
+    internal/import/mnximportpartmeasures.cpp
+    internal/shared/mnxtypesconv.cpp
+    internal/shared/mnxtypesconv.h
+    internal/notationmnxreader.cpp
+    internal/notationmnxreader.h
+    internal/notationmnxwriter.cpp
+    internal/notationmnxwriter.h
+)
+
+target_link_libraries(iex_mnx PRIVATE
+    ${MNXDOM_LIB}
+    engraving
+)
+
+if (MSVC)
+    target_compile_options(iex_mnx PRIVATE /Zc:preprocessor)
+    set_target_properties(iex_mnx PROPERTIES DISABLE_PRECOMPILE_HEADERS ON)
+endif()
+
+if (MUE_BUILD_IMPORTEXPORT_TESTS)
+    add_subdirectory(tests)
+endif()

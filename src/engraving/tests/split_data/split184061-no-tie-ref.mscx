@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="5.00">
+  <Score>
+    <eid>B_B</eid>
+    <Division>480</Division>
+    <Style>
+      <pageEvenBottomMargin>0.787403</pageEvenBottomMargin>
+      <pageOddBottomMargin>0.787403</pageOddBottomMargin>
+      <lyricsMinBottomDistance>4</lyricsMinBottomDistance>
+      <clefLeftMargin>0.64</clefLeftMargin>
+      <clefKeyRightMargin>1.75</clefKeyRightMargin>
+      <pedalPosBelow x="0" y="0"/>
+      <trillPosAbove x="0" y="0"/>
+      <minMMRestWidth>0</minMMRestWidth>
+      <titleFontSize>10</titleFontSize>
+      <titleFontSpatiumDependent>1</titleFontSpatiumDependent>
+      <subTitleFontSize>10</subTitleFontSize>
+      <subTitleFontSpatiumDependent>1</subTitleFontSpatiumDependent>
+      <composerFontSize>10</composerFontSize>
+      <composerFontSpatiumDependent>1</composerFontSpatiumDependent>
+      <lyricistFontSize>10</lyricistFontSize>
+      <longInstrumentFontSize>10</longInstrumentFontSize>
+      <shortInstrumentFontSize>10</shortInstrumentFontSize>
+      <partInstrumentFontSize>10</partInstrumentFontSize>
+      <dynamicsFontStyle>0</dynamicsFontStyle>
+      <tempoFontSize>10</tempoFontSize>
+      <metronomeFontSize>10</metronomeFontSize>
+      <translatorFontSize>10</translatorFontSize>
+      <repeatLeftFontSize>10</repeatLeftFontSize>
+      <repeatRightFontSize>10</repeatRightFontSize>
+      <textLineFontSize>10</textLineFontSize>
+      <glissandoFontSize>10</glissandoFontSize>
+      <instrumentChangeFontSize>10</instrumentChangeFontSize>
+      <figuredBassFontFace>FreeSerif</figuredBassFontFace>
+      <composerMusicalSymbolSize>10</composerMusicalSymbolSize>
+      <glissandoMusicalSymbolSize>10</glissandoMusicalSymbolSize>
+      <instrumentChangeMusicalSymbolSize>10</instrumentChangeMusicalSymbolSize>
+      <longInstrumentMusicalSymbolSize>10</longInstrumentMusicalSymbolSize>
+      <lyricistMusicalSymbolSize>10</lyricistMusicalSymbolSize>
+      <metronomeMusicalSymbolSize>10</metronomeMusicalSymbolSize>
+      <partInstrumentMusicalSymbolSize>10</partInstrumentMusicalSymbolSize>
+      <shortInstrumentMusicalSymbolSize>10</shortInstrumentMusicalSymbolSize>
+      <subTitleMusicalSymbolSize>10</subTitleMusicalSymbolSize>
+      <tempoMusicalSymbolSize>16.6667</tempoMusicalSymbolSize>
+      <titleMusicalSymbolSize>10</titleMusicalSymbolSize>
+      <translatorMusicalSymbolSize>10</translatorMusicalSymbolSize>
+      <defaultsVersion>301</defaultsVersion>
+      <spatium>1.76389</spatium>
+      </Style>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer">Composer</metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle">Title</metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>C_C</eid>
+        <StaffType group="pitched">
+          </StaffType>
+        </Staff>
+      <Instrument id="piano">
+        <InstrumentLabel>
+          <longName>Piano</longName>
+          <shortName>Pno.</shortName>
+          </InstrumentLabel>
+        <trackName>Piano</trackName>
+        <instrumentId>keyboard.piano</instrumentId>
+        <Channel>
+          <program value="0"/>
+          <controller ctrl="10" value="63"/>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <Measure len="11/16">
+        <eid>D_D</eid>
+        <voice>
+          <TimeSig>
+            <eid>E_E</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Chord>
+            <eid>F_F</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>G_G</eid>
+              <pitch>84</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>H_H</eid>
+            <BeamMode>no</BeamMode>
+            <durationType>quarter</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>I_I</eid>
+              <pitch>84</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>J_J</eid>
+            <BeamMode>no</BeamMode>
+            <dots>1</dots>
+            <durationType>eighth</durationType>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>K_K</eid>
+              <pitch>84</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        <voice>
+          <Chord>
+            <eid>L_L</eid>
+            <durationType>half</durationType>
+            <Note>
+              <eid>M_M</eid>
+              <Spanner type="Tie">
+                <Tie>
+                  <eid>N_N</eid>
+                  </Tie>
+                <next>
+                  <location>
+                    <fractions>1/2</fractions>
+                    </location>
+                  </next>
+                </Spanner>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>O_O</eid>
+            <dots>1</dots>
+            <durationType>eighth</durationType>
+            <Note>
+              <eid>P_P</eid>
+              <Spanner type="Tie">
+                <Tie>
+                  <eid>Q_Q</eid>
+                  </Tie>
+                <next>
+                  <location>
+                    <measures>1</measures>
+                    <fractions>-1/2</fractions>
+                    </location>
+                  </next>
+                </Spanner>
+              <Spanner type="Tie">
+                <prev>
+                  <location>
+                    <fractions>-1/2</fractions>
+                    </location>
+                  </prev>
+                </Spanner>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure len="5/16">
+        <eid>R_R</eid>
+        <voice>
+          <Chord>
+            <eid>S_S</eid>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>T_T</eid>
+              <pitch>84</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>U_U</eid>
+            <durationType>quarter</durationType>
+            <Note>
+              <eid>V_V</eid>
+              <pitch>84</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        <voice>
+          <Chord>
+            <eid>W_W</eid>
+            <durationType>quarter</durationType>
+            <Note>
+              <eid>X_X</eid>
+              <Spanner type="Tie">
+                <Tie>
+                  <eid>Y_Y</eid>
+                  </Tie>
+                <next>
+                  <location>
+                    <fractions>1/4</fractions>
+                    </location>
+                  </next>
+                </Spanner>
+              <Spanner type="Tie">
+                <prev>
+                  <location>
+                    <measures>-1</measures>
+                    <fractions>1/2</fractions>
+                    </location>
+                  </prev>
+                </Spanner>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <Chord>
+            <eid>Z_Z</eid>
+            <durationType>16th</durationType>
+            <Note>
+              <eid>a_a</eid>
+              <Spanner type="Tie">
+                <prev>
+                  <location>
+                    <fractions>-1/4</fractions>
+                    </location>
+                  </prev>
+                </Spanner>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>b_b</eid>
+        <voice>
+          <Chord>
+            <eid>c_c</eid>
+            <durationType>whole</durationType>
+            <Note>
+              <eid>d_d</eid>
+              <pitch>72</pitch>
+              <tpc>14</tpc>
+              </Note>
+            </Chord>
+          <BarLine>
+            <eid>e_e</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

@@ -1,0 +1,22 @@
+name: 'Build: Without Qt'
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }} ${{ github.event_name }} ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run_tests:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v6
+    - name: Setup environment
+      run: |
+        bash ./buildscripts/ci/withoutqt/setup.sh
+    - name: Build
+      run: |
+        bash ./buildscripts/ci/withoutqt/build.sh

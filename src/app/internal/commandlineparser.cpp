@@ -1,0 +1,587 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#include "commandlineparser.h"
+
+#include <QDir>
+
+#include "global/io/dir.h"
+#include "global/internal/baseapplication.h"
+
+#include "app_config.h"
+
+#include "log.h"
+
+using namespace muse;
+using namespace mu::app;
+
+static QStringList prepareArguments(int argc, char** argv)
+{
+    QStringList args;
+
+    for (int i = 0; i < argc; ++i) {
+        QString arg = QString::fromUtf8(argv[i]);
+
+#ifndef NDEBUG
+        if (arg.startsWith("-qmljsdebugger")) {
+            continue;
+        }
+#endif
+
+        args << arg;
+    }
+
+    return args;
+}
+
+template<typename ... Args>
+QCommandLineOption internalCommandLineOption(Args&& ... args)
+{
+    QCommandLineOption option(std::forward<Args>(args)...);
+    option.setFlags(QCommandLineOption::HiddenFromHelp);
+    return option;
+}
+
+void CommandLineParser::init()
+{
+    // Common
+    m_parser.addHelpOption(); // -?, -h, --help
+    m_parser.addVersionOption(); // -v, --version
+
+    m_parser.addPositionalArgument("scorefiles", "The files to open", "[scorefile...]");
+
+    m_parser.addOption(QCommandLineOption("long-version", "Print detailed version information"));
+    m_parser.addOption(QCommandLineOption({ "d", "debug" }, "Debug mode"));
+
+    m_parser.addOption(QCommandLineOption({ "D", "monitor-resolution" }, "Specify monitor resolution", "DPI"));
+    m_parser.addOption(QCommandLineOption({ "T", "trim-image" },
+                                          "Use with '-o <file>.png' and '-o <file.svg>'. Trim exported image with specified margin (in pixels)",
+                                          "margin"));
+
+    m_parser.addOption(QCommandLineOption({ "b", "bitrate" }, "Use with '-o <file>.mp3', sets bitrate, in kbps", "bitrate"));
+
+    m_parser.addOption(QCommandLineOption("template-mode", "Save template mode, no page size")); // and no platform and creationDate tags
+    m_parser.addOption(QCommandLineOption({ "t", "test-mode" }, "Set test mode flag for all files")); // this includes --template-mode
+
+    m_parser.addOption(QCommandLineOption("session-type", "Startup with given session type", "type")); // see StartupScenario::sessionTypeTromString
+
+    m_parser.addOption(QCommandLineOption("unroll-repeats", "Unroll repeats"));
+
+    // Converter mode
+    m_parser.addOption(QCommandLineOption({ "r", "image-resolution" }, "Set output resolution for image export", "DPI"));
+    m_parser.addOption(QCommandLineOption({ "o", "export-to" }, "Export to 'file'. Format depends on file's extension", "file"));
+    m_parser.addOption(QCommandLineOption({ "j", "job" }, "Process a conversion job", "file"));
+    m_parser.addOption(QCommandLineOption("extension", "Use extension to process a conversion job", "uri"));
+
+    m_parser.addOption(QCommandLineOption({ "F", "factory-settings" }, "Use factory settings"));
+    m_parser.addOption(QCommandLineOption({ "R", "revert-settings" }, "Revert to factory settings, but keep default preferences"));
+    m_parser.addOption(QCommandLineOption({ "M", "midi-operations" }, "Specify MIDI import operations file", "file"));
+    m_parser.addOption(QCommandLineOption({ "P", "export-score-parts" }, "Use with '-o <file>.pdf', export score and parts"));
+    m_parser.addOption(QCommandLineOption({ "f", "force" },
+                                          "Use with '-o <file>', ignore warnings reg. score being corrupted or from wrong version"));
+
+    m_parser.addOption(QCommandLineOption("score-media",
+                                          "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
+    m_parser.addOption(QCommandLineOption("highlight-config", "Set highlight to svg, generated from a given score", "highlight-config"));
+    m_parser.addOption(QCommandLineOption("score-meta", "Export score metadata to JSON document and print it to stdout"));
+    m_parser.addOption(QCommandLineOption("score-parts", "Generate parts data for the given score and save them to separate mscz files"));
+    m_parser.addOption(QCommandLineOption("score-parts-pdf",
+                                          "Generate parts data for the given score and export the data to a single JSON file, print it to stdout"));
+    m_parser.addOption(QCommandLineOption("score-transpose",
+                                          "Transpose the given score and export the data to a single JSON file, print it to stdout",
+                                          "options"));
+    m_parser.addOption(QCommandLineOption("score-elements",
+                                          "Scan the given score and export elements to a single JSON file, print it to stdout"));
+    m_parser.addOption(QCommandLineOption("source-update", "Update the source in the given score"));
+
+    m_parser.addOption(QCommandLineOption({ "S", "style" }, "Load style file", "style"));
+
+    m_parser.addOption(QCommandLineOption("sound-profile",
+                                          "Use with '-o <file>.mp3' or with '-j <file>', override the sound profile in the given score(s). "
+                                          "Possible values: \"MuseScore Basic\", \"MuseSounds\"", "sound-profile"));
+
+    m_parser.addOption(QCommandLineOption("tracks-diff",
+                                          "Use with -o <file>.mp3, write a diff of tracks before and after applying the sound profile. "
+                                          "The report contains two lists: oldTracks and newTracks",
+                                          "tracks-diff"));
+
+    m_parser.addOption(QCommandLineOption("transpose",
+                                          "Transpose the given score before executing the '-o' options",
+                                          "options"));
+
+    m_parser.addOption(QCommandLineOption("page",
+                                          "Use with '-o <file>', export only the specified page. "
+                                          "Supported output formats: SVG, PNG, PDF, MSCZ",
+                                          "options"));
+
+    m_parser.addOption(QCommandLineOption("region",
+                                          "Use with '-o <file>', export only the specified region to a separate mscz file. ",
+                                          "options"));
+
+    // MusicXML
+    m_parser.addOption(QCommandLineOption("musicxml-use-default-font",
+                                          "Apply default typeface (Edwin) to imported scores"));
+    m_parser.addOption(QCommandLineOption("musicxml-infer-text-type",
+                                          "Infer text type based on content where possible"));
+
+    // Video export
+#ifdef MUE_BUILD_IMPEXP_VIDEOEXPORT_MODULE
+    m_parser.addOption(QCommandLineOption("score-video", "Generate video for the given score and export it to file"));
+// not implemented
+//    m_parser.addOption(QCommandLineOption("view-mode",
+//                                          "View mode [paged-float, paged-original, paged-float-height, pano, auto]. Auto (default) will choose the best mode according to number of instruments etc... Will show piano for piano score only",
+//                                          "auto"));
+// not implemented
+//    m_parser.addOption(QCommandLineOption("piano", "Show Piano, works only if one part and not auto or float modes"));
+//    m_parser.addOption(QCommandLineOption("piano-position", "Show Piano top or bottom. Default bottom", "bottom"));
+    m_parser.addOption(QCommandLineOption("resolution", "Resolution [2160p, 1440p, 1080p, 720p, 480p, 360p]", "1080p"));
+    m_parser.addOption(QCommandLineOption("fps", "Frame per second [60, 30, 24]", "24"));
+    m_parser.addOption(QCommandLineOption("ls", "Pause before playback in seconds (3.0)", "3.0"));
+    m_parser.addOption(QCommandLineOption("ts", "Pause before end of video in seconds (3.0)", "3.0"));
+#endif
+
+    m_parser.addOption(QCommandLineOption("gp-linked", "create tabulature linked staves for guitar pro"));
+    m_parser.addOption(QCommandLineOption("gp-experimental", "experimental features for guitar pro import"));
+
+    //! NOTE Currently only implemented `full` mode
+    m_parser.addOption(QCommandLineOption("migration", "Whether to do migration with given mode, `full` - full migration", "mode"));
+
+    // Diagnostic
+    m_parser.addOption(QCommandLineOption("diagnostic-output", "Diagnostic output", "output"));
+    m_parser.addOption(QCommandLineOption("diagnostic-gen-drawdata", "Generate engraving draw data", "scores-dir"));
+    m_parser.addOption(QCommandLineOption("diagnostic-com-drawdata", "Compare engraving draw data"));
+    m_parser.addOption(QCommandLineOption("diagnostic-drawdata-to-png", "Convert draw data to png", "file"));
+    m_parser.addOption(QCommandLineOption("diagnostic-drawdiff-to-png", "Convert draw diff to png"));
+
+    // Autobot
+    m_parser.addOption(QCommandLineOption("test-case", "Run test case by name or file", "nameOrFile"));
+    m_parser.addOption(QCommandLineOption("test-case-context", "Set test case context by name or file", "nameOrFile"));
+    m_parser.addOption(QCommandLineOption("test-case-context-value", "Set test case context value", "value"));
+    m_parser.addOption(QCommandLineOption("test-case-func", "Call test case function", "name"));
+    m_parser.addOption(QCommandLineOption("test-case-func-args", "Call test case function args", "args"));
+
+    // Audio plugins
+    m_parser.addOption(QCommandLineOption("register-audio-plugin",
+                                          "Check an audio plugin for compatibility with the application and register it", "path"));
+    m_parser.addOption(QCommandLineOption("register-failed-audio-plugin", "Register an incompatible audio plugin", "path"));
+
+    // Internal
+    m_parser.addOption(internalCommandLineOption("score-display-name-override",
+                                                 "Display name to be shown in splash screen for the score that is being opened", "name"));
+}
+
+void CommandLineParser::parse(int argc, char** argv)
+{
+    m_options = std::make_shared<MuseScoreCmdOptions>();
+
+    QStringList args = prepareArguments(argc, argv);
+    m_parser.parse(args);
+
+    auto floatValue = [this](const QString& name) -> std::optional<float> {
+        bool ok = true;
+        float val = m_parser.value(name).toFloat(&ok);
+        if (ok) {
+            return val;
+        }
+        return std::nullopt;
+    };
+
+    auto doubleValue = [this](const QString& name) -> std::optional<double> {
+        bool ok = true;
+        double val = m_parser.value(name).toDouble(&ok);
+        if (ok) {
+            return val;
+        }
+        return std::nullopt;
+    };
+
+    auto intValue = [this](const QString& name) -> std::optional<int> {
+        bool ok = true;
+        int val = m_parser.value(name).toInt(&ok);
+        if (ok) {
+            return val;
+        }
+        return std::nullopt;
+    };
+
+    auto fromUserInputPath = [](const QString& path) -> QString {
+        return io::Dir::fromNativeSeparators(path).toQString();
+    };
+
+    QStringList scorefiles;
+    for (const QString& arg : m_parser.positionalArguments()) {
+        scorefiles << fromUserInputPath(arg);
+    }
+
+    auto firstScoreFile = [](const QStringList& scorefiles) -> QString {
+        if (scorefiles.size() < 1) {
+            LOGE() << "Option: -o no input file specified";
+            return QString();
+        } else if (scorefiles.size() > 1) {
+            LOGW() << "Option: -o multiple input files specified; processing only the first one";
+        }
+        return scorefiles.front();
+    };
+
+    if (m_parser.isSet("long-version")) {
+        printLongVersion();
+        exit(EXIT_SUCCESS);
+    }
+
+    if (m_parser.isSet("d")) {
+        m_options->global.loggerLevel = logger::Level::Debug;
+    }
+
+    if (m_parser.isSet("D")) {
+        std::optional<double> val = doubleValue("D");
+        if (val) {
+            m_options->ui.physicalDotsPerInch = val;
+        } else {
+            LOGE() << "Option: -D not recognized DPI value: " << m_parser.value("D");
+        }
+    }
+
+    if (m_parser.isSet("T")) {
+        std::optional<int> val = intValue("T");
+        if (val) {
+            m_options->exportImage.trimMarginPixelSize = val;
+        } else {
+            LOGE() << "Option: -T not recognized trim value: " << m_parser.value("T");
+        }
+    }
+
+    if (m_parser.isSet("M")) {
+        m_options->importMidi.operationsFile = fromUserInputPath(m_parser.value("M"));
+    }
+
+    if (m_parser.isSet("b")) {
+        std::optional<int> val = intValue("b");
+        if (val) {
+            m_options->exportAudio.mp3Bitrate = val;
+        } else {
+            LOGE() << "Option: -b not recognized bitrate value: " << m_parser.value("b");
+        }
+    }
+
+    if (m_parser.isSet("template-mode")) {
+        m_options->notation.templateModeEnabled = true;
+    }
+
+    if (m_parser.isSet("t")) {
+        m_options->notation.testModeEnabled = true;
+    }
+
+    if (m_parser.isSet("session-type")) {
+        m_options->startup.type = m_parser.value("session-type").toStdString();
+    }
+
+    if (m_parser.isSet("register-audio-plugin")) {
+        m_options->runMode = IApplication::RunMode::AudioPluginRegistration;
+        m_options->audioPluginRegistration.pluginPath = fromUserInputPath(m_parser.value("register-audio-plugin"));
+        m_options->audioPluginRegistration.failedPlugin = false;
+    }
+
+    if (m_parser.isSet("register-failed-audio-plugin")) {
+        QStringList args1 = m_parser.positionalArguments();
+        m_options->runMode = IApplication::RunMode::AudioPluginRegistration;
+        m_options->audioPluginRegistration.pluginPath = fromUserInputPath(m_parser.value("register-failed-audio-plugin"));
+        m_options->audioPluginRegistration.failedPlugin = true;
+        m_options->audioPluginRegistration.failCode = !args1.empty() ? args1[0].toInt() : -1;
+    }
+
+    // Converter mode
+    if (m_parser.isSet("r")) {
+        std::optional<float> val = floatValue("r");
+        if (val) {
+            m_options->exportImage.pngDpiResolution = val;
+        } else {
+            LOGE() << "Option: -r not recognized DPI value: " << m_parser.value("r");
+        }
+    }
+
+    if (m_parser.isSet("o")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::File;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+        m_options->converterTask.outputFile = fromUserInputPath(m_parser.value("o"));
+
+        // Only if "-o" is set "transpose" has some meaning
+        if (m_parser.isSet("transpose")) {
+            m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::ScoreTransposeOptions] = m_parser.value("transpose");
+        }
+
+        if (m_parser.isSet("page")) {
+            m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::PageNumber] = m_parser.value("page");
+        }
+
+        if (m_parser.isSet("region")) {
+            m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::ScoreRegion] = m_parser.value("region");
+        }
+    }
+
+    if (m_parser.isSet("P")) {
+        if (m_options->converterTask.outputFile.isEmpty()) {
+            LOGE() << "Option: -R no output file specified";
+        } else {
+            m_options->converterTask.type = ConvertType::ConvertScoreParts;
+        }
+    }
+
+    if (m_parser.isSet("j")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::Batch;
+        m_options->converterTask.inputFile = fromUserInputPath(m_parser.value("j"));
+    }
+
+    if (m_parser.isSet("score-media")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::ExportScoreMedia;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+        if (m_parser.isSet("highlight-config")) {
+            m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::HighlightConfigPath]
+                = fromUserInputPath(m_parser.value("highlight-config"));
+        }
+    }
+
+    if (m_parser.isSet("score-meta")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::ExportScoreMeta;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+    }
+
+    if (m_parser.isSet("score-parts")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::ExportScoreParts;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+    }
+
+    if (m_parser.isSet("score-parts-pdf")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::ExportScorePartsPdf;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+    }
+
+    if (m_parser.isSet("score-transpose")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::ExportScoreTranspose;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+        m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::ScoreTransposeOptions] = m_parser.value("score-transpose");
+    }
+
+    if (m_parser.isSet("score-elements")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::ExportScoreElements;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+    }
+
+    if (m_parser.isSet("source-update")) {
+        QStringList args2 = m_parser.positionalArguments();
+
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::SourceUpdate;
+        m_options->converterTask.inputFile = fromUserInputPath(args2.empty() ? "" : args2[0]);
+
+        if (args2.size() >= 2) {
+            m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::ScoreSource] = args2[1];
+        } else {
+            LOGW() << "Option: --source-update no source specified";
+        }
+    }
+
+    // MusicXML
+    if (m_parser.isSet("musicxml-use-default-font")) {
+        m_options->importMusicXml.useDefaultFont = true;
+    }
+
+    if (m_parser.isSet("musicxml-infer-text-type")) {
+        m_options->importMusicXml.inferTextType = true;
+    }
+
+    // Video
+#ifdef MUE_BUILD_IMPEXP_VIDEOEXPORT_MODULE
+    if (m_parser.isSet("score-video")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->converterTask.type = ConvertType::ExportScoreVideo;
+        m_options->converterTask.inputFile = firstScoreFile(scorefiles);
+        m_options->converterTask.outputFile = fromUserInputPath(m_parser.value("o"));
+
+        if (m_parser.isSet("view-mode")) {
+            NOT_IMPLEMENTED;
+        }
+
+        if (m_parser.isSet("piano")) {
+            NOT_IMPLEMENTED;
+        }
+
+        if (m_parser.isSet("piano-position")) {
+            NOT_IMPLEMENTED;
+        }
+
+        if (m_parser.isSet("resolution")) {
+            m_options->exportVideo.resolution = m_parser.value("resolution").toStdString();
+        }
+
+        if (m_parser.isSet("fps")) {
+            m_options->exportVideo.fps = intValue("fps");
+        }
+
+        if (m_parser.isSet("ls")) {
+            m_options->exportVideo.leadingSec = doubleValue("ls");
+        }
+
+        if (m_parser.isSet("ts")) {
+            m_options->exportVideo.trailingSec = doubleValue("ts");
+        }
+    }
+#endif
+
+    if (m_parser.isSet("F") || m_parser.isSet("R")) {
+        m_options->app.revertToFactorySettings = true;
+    }
+
+    if (m_parser.isSet("f")) {
+        m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::ForceMode] = true;
+    }
+
+    if (m_parser.isSet("unroll-repeats")) {
+        m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::UnrollRepeats] = true;
+    }
+
+    if (m_parser.isSet("S")) {
+        m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::StylePath] = fromUserInputPath(m_parser.value("S"));
+    }
+
+    if (m_parser.isSet("sound-profile")) {
+        m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::SoundProfile] = m_parser.value("sound-profile");
+    }
+
+    if (m_parser.isSet("tracks-diff")) {
+        m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::TracksDiffPath] = m_parser.value("tracks-diff");
+    }
+
+    if (m_parser.isSet("extension")) {
+        m_options->converterTask.params[MuseScoreCmdOptions::ParamKey::ExtensionUri] = m_parser.value("extension");
+    }
+
+    if (m_parser.isSet("gp-linked")) {
+        m_options->guitarPro.linkedTabStaffCreated = true;
+    }
+
+    if (m_parser.isSet("gp-experimental")) {
+        m_options->guitarPro.experimental = true;
+    }
+
+    if (m_options->runMode == IApplication::RunMode::ConsoleApp) {
+        if (m_parser.isSet("migration")) {
+            QString val = m_parser.value("migration");
+            m_options->project.fullMigration = (val == "full") ? true : false;
+        }
+    }
+
+    // Diagnostic
+    if (m_parser.isSet("diagnostic-output")) {
+        m_options->diagnostic.output = m_parser.value("diagnostic-output");
+    }
+
+    if (m_parser.isSet("diagnostic-gen-drawdata")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->diagnostic.type = DiagnosticType::GenDrawData;
+        m_options->diagnostic.input << m_parser.value("diagnostic-gen-drawdata");
+    }
+
+    if (m_parser.isSet("diagnostic-com-drawdata")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->diagnostic.type = DiagnosticType::ComDrawData;
+        m_options->diagnostic.input = scorefiles;
+    }
+
+    if (m_parser.isSet("diagnostic-drawdata-to-png")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->diagnostic.type = DiagnosticType::DrawDataToPng;
+        m_options->diagnostic.input << m_parser.value("diagnostic-drawdata-to-png");
+    }
+
+    if (m_parser.isSet("diagnostic-drawdiff-to-png")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->diagnostic.type = DiagnosticType::DrawDiffToPng;
+        m_options->diagnostic.input = scorefiles;
+    }
+
+    // Autobot
+    if (m_parser.isSet("test-case")) {
+        m_options->runMode = IApplication::RunMode::ConsoleApp;
+        m_options->autobot.testCaseNameOrFile = fromUserInputPath(m_parser.value("test-case"));
+    }
+
+    if (m_parser.isSet("test-case-context")) {
+        m_options->autobot.testCaseContextNameOrFile = fromUserInputPath(m_parser.value("test-case-context"));
+    }
+
+    if (m_parser.isSet("test-case-context-value")) {
+        m_options->autobot.testCaseContextValue = m_parser.value("test-case-context-value");
+    }
+
+    if (m_parser.isSet("test-case-func")) {
+        m_options->autobot.testCaseFunc = m_parser.value("test-case-func");
+    }
+
+    if (m_parser.isSet("test-case-func-args")) {
+        m_options->autobot.testCaseFuncArgs = m_parser.value("test-case-func-args");
+    }
+
+    // Startup
+    if (m_options->runMode == IApplication::RunMode::GuiApp) {
+        if (!scorefiles.isEmpty()) {
+            m_options->startup.scoreUrl = QUrl::fromUserInput(scorefiles[0], QDir::currentPath(), QUrl::AssumeLocalFile);
+        }
+
+        if (m_parser.isSet("score-display-name-override")) {
+            m_options->startup.scoreDisplayNameOverride = m_parser.value("score-display-name-override");
+        }
+    }
+}
+
+void CommandLineParser::processBuiltinArgs(const QCoreApplication& app)
+{
+    //! NOTE: some options require an instance of QCoreApplication
+    m_parser.process(app);
+}
+
+IApplication::RunMode CommandLineParser::runMode() const
+{
+    return m_options->runMode;
+}
+
+std::shared_ptr<MuseScoreCmdOptions> CommandLineParser::options() const
+{
+    return m_options;
+}
+
+void CommandLineParser::printLongVersion() const
+{
+    if (BaseApplication::appUnstable()) {
+        printf("MuseScore: Music Score Editor\nUnstable Prerelease for Version %s; Build %s\n",
+               BaseApplication::appVersion().toStdString().c_str(), BaseApplication::appRevision().toStdString().c_str());
+    } else {
+        printf("MuseScore: Music Score Editor; Version %s; Build %s\n",
+               BaseApplication::appVersion().toStdString().c_str(), BaseApplication::appRevision().toStdString().c_str());
+    }
+}

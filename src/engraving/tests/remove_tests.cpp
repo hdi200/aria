@@ -1,0 +1,115 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#include <gtest/gtest.h>
+
+#include "engraving/dom/excerpt.h"
+#include "engraving/dom/masterscore.h"
+#include "engraving/dom/spanner.h"
+
+#include "utils/scorerw.h"
+
+#include "log.h"
+
+using namespace mu::engraving;
+
+static const String REMOVE_DATA_DIR("remove_data/");
+
+class Engraving_RemoveTests : public ::testing::Test
+{
+};
+
+static bool staffHasElements(Score* score, staff_idx_t staffIdx)
+{
+    for (auto i = score->spannerMap().cbegin(); i != score->spannerMap().cend(); ++i) {
+        Spanner* s = i->second;
+        if (s->staffIdx() == staffIdx) {
+            LOGD() << s->typeName() << " is in staff " << staffIdx;
+            return true;
+        }
+    }
+    for (Spanner* s : score->unmanagedSpanners()) {
+        if (s->staffIdx() == staffIdx) {
+            LOGD() << s->typeName() << " is in staff " << staffIdx;
+            return true;
+        }
+    }
+
+    bool staffHasElements = false;
+
+    auto inStaff = [&](EngravingItem* item) {
+        if (item->staffIdx() == staffIdx) {
+            staffHasElements = true;
+        }
+    };
+    score->scanElements(inStaff);
+
+    return staffHasElements;
+}
+
+//---------------------------------------------------------
+//   removeStaff
+//    Checks that after a staff removal all elements
+//    belonging to it are not removed in excerpts.
+//---------------------------------------------------------
+
+TEST_F(Engraving_RemoveTests, removeStaff)
+{
+    MasterScore* score = ScoreRW::readScore(REMOVE_DATA_DIR + u"remove_staff.mscx");
+    EXPECT_TRUE(score);
+
+    // Remove the second staff and see what happens
+    score->startCmd(TranslatableString::untranslatable("Engraving remove tests"));
+    score->cmdRemoveStaff(1);
+    score->endCmd(false, /*layoutAllParts = */ true);
+
+    EXPECT_FALSE(staffHasElements(score, 1));
+    for (Excerpt* ex : score->excerpts()) {
+        Score* s = ex->excerptScore();
+        EXPECT_TRUE(staffHasElements(s, 1));
+    }
+
+    delete score;
+}
+
+TEST_F(Engraving_RemoveTests, removeStaffWithCourtesyClefs)
+{
+    MasterScore* score = ScoreRW::readScore(REMOVE_DATA_DIR + u"remove_staff_courtesy.mscx");
+    EXPECT_TRUE(score);
+
+    score->startCmd(TranslatableString::untranslatable("Engraving remove tests"));
+    score->cmdRemoveStaff(0);
+    score->endCmd(false, /*layoutAllParts = */ true);
+
+    score->doLayout();
+
+    Measure* m1 = score->firstMeasure();
+    Measure* m2 = m1->nextMeasure();
+    EXPECT_TRUE(m2);
+    Segment* courtesyClefSeg = m2->findSegmentR(SegmentType::ClefRepeatAnnounce, m2->ticks());
+    EXPECT_TRUE(courtesyClefSeg);
+    Clef* courtesyClef = toClef(courtesyClefSeg->element(0));
+
+    EXPECT_TRUE(courtesyClef);
+    EXPECT_TRUE(courtesyClef->leftParen());
+    EXPECT_TRUE(courtesyClef->rightParen());
+}

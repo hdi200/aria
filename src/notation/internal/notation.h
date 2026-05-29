@@ -1,0 +1,117 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#pragma once
+
+#include "async/asyncable.h"
+#include "modularity/ioc.h"
+
+#include "../imasternotation.h"
+#include "../inotation.h"
+#include "../inotationconfiguration.h"
+#include "igetscore.h"
+
+namespace mu::engraving {
+class Score;
+}
+
+namespace mu::notation {
+class MasterNotation;
+class NotationInteraction;
+class NotationPlayback;
+class Notation : virtual public INotation, public IGetScore, public muse::Contextable, public muse::async::Asyncable
+{
+    muse::GlobalInject<INotationConfiguration> configuration;
+
+public:
+    explicit Notation(MasterNotation* master, const muse::modularity::ContextPtr& iocCtx, engraving::Score* score = nullptr);
+    ~Notation() override;
+
+    const muse::modularity::ContextPtr& iocContext() const override;
+
+    project::INotationProject* project() const override;
+    IMasterNotationPtr masterNotation() const override;
+
+    QString name() const override;
+    QString projectName() const override;
+    QString projectNameAndPartName() const override;
+
+    QString workTitle() const override;
+    QString projectWorkTitle() const override;
+    QString projectWorkTitleAndPartName() const override;
+
+    bool isOpen() const override;
+    void setIsOpen(bool open) override;
+    muse::async::Notification openChanged() const override;
+
+    bool hasVisibleParts() const override;
+
+    bool isMaster() const override;
+
+    ViewMode viewMode() const override;
+    void setViewMode(const ViewMode& viewMode) override;
+    muse::async::Notification viewModeChanged() const override;
+
+    INotationPaintingPtr painting() const override;
+    INotationViewStatePtr viewState() const override;
+    INotationSoloMuteStatePtr soloMuteState() const override;
+    INotationInteractionPtr interaction() const override;
+    INotationMidiInputPtr midiInput() const override;
+    INotationUndoStackPtr undoStack() const override;
+    INotationElementsPtr elements() const override;
+    INotationStylePtr style() const override;
+    INotationAccessibilityPtr accessibility() const override;
+    INotationPartsPtr parts() const override;
+
+    muse::async::Channel<muse::RectF> notationChanged() const override;
+
+protected:
+    mu::engraving::Score* score() const override;
+    void setScore(mu::engraving::Score* score);
+    muse::async::Notification scoreInited() const override;
+
+    void notifyAboutNotationChanged(const muse::RectF& updateRect = muse::RectF());
+
+    INotationPartsPtr m_parts = nullptr;
+    INotationUndoStackPtr m_undoStack = nullptr;
+    muse::async::Channel<muse::RectF> m_notationChanged;
+
+    MasterNotation* m_masterNotation = nullptr;
+
+private:
+    friend class NotationInteraction;
+    friend class NotationPainting;
+
+    engraving::Score* m_score = nullptr;
+    muse::async::Notification m_scoreInited;
+
+    muse::async::Notification m_openChanged;
+
+    INotationPaintingPtr m_painting = nullptr;
+    INotationViewStatePtr m_viewState = nullptr;
+    INotationSoloMuteStatePtr m_soloMuteState = nullptr;
+    INotationInteractionPtr m_interaction = nullptr;
+    INotationStylePtr m_style = nullptr;
+    INotationMidiInputPtr m_midiInput = nullptr;
+    INotationAccessibilityPtr m_accessibility = nullptr;
+    INotationElementsPtr m_elements = nullptr;
+};
+}

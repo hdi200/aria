@@ -1,0 +1,81 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#pragma once
+
+#include "../inotationviewstate.h"
+#include "async/asyncable.h"
+
+#include "modularity/ioc.h"
+#include "../inotationcontextconfiguration.h"
+
+namespace mu::notation {
+class Notation;
+class NotationViewState : public INotationViewState, public muse::async::Asyncable, public muse::Contextable
+{
+    muse::ContextInject<INotationContextConfiguration> configuration = { this };
+
+public:
+    explicit NotationViewState(Notation* notation, const muse::modularity::ContextPtr& ctx);
+
+    muse::Ret read(const engraving::MscReader& reader, const muse::io::path_t& pathPrefix = "") override;
+    muse::Ret write(engraving::MscWriter& writer, const muse::io::path_t& pathPrefix = "") override;
+
+    bool isMatrixInited() const override;
+    void setMatrixInited(bool inited) override;
+
+    const muse::draw::Transform& matrix() const override;
+    muse::async::Channel<muse::draw::Transform, NotationPaintView*> matrixChanged() const override;
+    void setMatrix(const muse::draw::Transform& matrix, NotationPaintView* sender) override;
+
+    muse::ValCh<int> zoomPercentage() const override;
+
+    muse::ValCh<ZoomType> zoomType() const override;
+    void setZoomType(ZoomType type) override;
+
+    ViewMode viewMode() const override;
+    void setViewMode(const ViewMode& mode) override;
+
+    // Style dialog
+    int styleDialogLastPageIndex() const override;
+    void setStyleDialogLastPageIndex(int value) override;
+    int styleDialogLastSubPageIndex() const override;
+    void setStyleDialogLastSubPageIndex(int value) override;
+
+    muse::async::Notification stateChanged() const override;
+
+    void makeDefault() override;
+
+private:
+    bool m_isMatrixInited = false;
+    muse::draw::Transform m_matrix;
+    muse::async::Channel<muse::draw::Transform, NotationPaintView*> m_matrixChanged;
+    muse::ValCh<int> m_zoomPercentage;
+    muse::ValCh<ZoomType> m_zoomType;
+
+    notation::ViewMode m_viewMode = notation::ViewMode::PAGE;
+
+    int m_styleDialogLastPageIndex = 0;
+    int m_styleDialogLastSubPageIndex = 0;
+
+    muse::async::Notification m_stateChanged;
+};
+}

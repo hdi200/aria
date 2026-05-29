@@ -1,0 +1,48 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#include "printmodule.h"
+
+#include <memory>
+
+#include "modularity/ioc.h"
+
+#include "internal/printprovider.h"
+
+using namespace mu::print;
+using namespace muse::modularity;
+
+static const std::string mname("print");
+
+std::string PrintModule::moduleName() const
+{
+    return mname;
+}
+
+IContextSetup* PrintModule::newContext(const ContextPtr& ctx) const
+{
+    return new PrintContext(ctx);
+}
+
+void PrintContext::registerExports()
+{
+    ioc()->registerExport<IPrintProvider>(mname, std::make_shared<PrintProvider>(iocContext()));
+}

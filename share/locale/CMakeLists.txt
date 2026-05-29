@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# MuseScore-Studio-CLA-applies
+#
+# MuseScore Studio
+# Music Composition & Notation
+#
+# Copyright (C) 2021 MuseScore Limited
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Technically it should be `CONFIGURE_DEPENDS` but given we hardly ever add new
+# translations, it's not worth the extra overhead before every single build.
+file(GLOB TS_FILES ${CMAKE_CURRENT_LIST_DIR}/*.ts)
+
+if (MUE_RUN_LRELEASE)
+    add_custom_target(translations ALL
+        COMMENT "Generating .qm files" VERBATIM
+    )
+
+    qt_add_lrelease(translations TS_FILES ${TS_FILES} NO_GLOBAL_TARGET QM_FILES_OUTPUT_VARIABLE QM_FILES)
+endif()
+
+install(FILES
+    ${CMAKE_CURRENT_LIST_DIR}/languages.json
+    ${QM_FILES}
+    DESTINATION ${MUSE_APP_INSTALL_RESOURCES_LOCATION}/locale
+)
+
+install(DIRECTORY ${QT_INSTALL_PREFIX}/translations/
+    DESTINATION ${MUSE_APP_INSTALL_RESOURCES_LOCATION}/locale
+    FILES_MATCHING
+    REGEX "qt_.*\\.qm"
+    REGEX "qt_help_.*\\.qm" EXCLUDE
+    REGEX "qtbase_.*\\.qm"
+    REGEX "qt*_en\\.qm" EXCLUDE)

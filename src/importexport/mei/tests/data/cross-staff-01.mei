@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://music-encoding.org/schema/5.1/mei-basic.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://music-encoding.org/schema/5.1/mei-basic.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1+basic">
+   <meiHead>
+      <fileDesc>
+         <titleStmt>
+            <title>Untitled score</title>
+            <respStmt>
+               <persName role="composer">Composer / arranger</persName>
+            </respStmt>
+         </titleStmt>
+         <pubStmt>
+            <date isodate="2023-08-11T14:51:50" />
+         </pubStmt>
+      </fileDesc>
+   </meiHead>
+   <music>
+      <body>
+         <mdiv>
+            <score>
+               <scoreDef>
+                  <pgHead func="first">
+                     <rend halign="center" valign="top">
+                        <rend type="title" fontsize="x-large">Cross-staff</rend>
+                        <lb />
+                        <rend type="subtitle" fontsize="large">Subtitle</rend>
+                     </rend>
+                     <rend halign="right" valign="bottom">
+                        <rend type="composer">Composer / arranger</rend>
+                     </rend>
+                  </pgHead>
+                  <staffGrp>
+                     <staffGrp bar.thru="true" symbol="brace">
+                        <label>Piano</label>
+                        <labelAbbr>Pno.</labelAbbr>
+                        <staffDef n="1" lines="5" meter.count="4" meter.unit="4">
+                           <clef shape="G" line="2" />
+                        </staffDef>
+                        <staffDef n="2" lines="5" meter.count="4" meter.unit="4">
+                           <clef shape="F" line="4" />
+                        </staffDef>
+                     </staffGrp>
+                  </staffGrp>
+               </scoreDef>
+               <section xml:id="s1">
+                  <measure xml:id="m11ee0h6" n="1">
+                     <staff xml:id="m1s1" n="1">
+                        <layer xml:id="m1s1l1" n="1">
+                           <mRest xml:id="m1e641zh" />
+                        </layer>
+                     </staff>
+                     <staff xml:id="m1s2" n="2">
+                        <layer xml:id="m1s2l1" n="1">
+                           <beam>
+                              <note xml:id="n1p18dci" dur="16" staff="1" pname="b" oct="4" />
+                              <note xml:id="n187uhng" dur="16" pname="b" oct="2" />
+                              <note xml:id="nzcgtxp" dur="16" pname="b" oct="2" />
+                              <note xml:id="nk6ops8" dur="16" staff="1" pname="d" oct="4" />
+                           </beam>
+                           <beam>
+                              <note xml:id="ntcjc22" dur="16" staff="1" pname="b" oct="4" />
+                              <note xml:id="n1mngjsa" dur="16" pname="b" oct="2" />
+                              <note xml:id="n1jcv1hh" dur="16" pname="b" oct="2" />
+                              <note xml:id="n7q5lbi" dur="16" staff="1" pname="d" oct="4" />
+                           </beam>
+                           <beam>
+                              <note xml:id="nw10ccu" dur="16" staff="1" pname="b" oct="4" />
+                              <note xml:id="n19gk865" dur="16" pname="b" oct="2" />
+                              <note xml:id="n1272h95" dur="16" staff="1" pname="d" oct="4" />
+                           </beam>
+                           <rest xml:id="rf4j9x2" type="mscore-beam-none" dur="16" staff="1" />
+                           <beam>
+                              <note xml:id="npacqi" dur="16" staff="1" pname="b" oct="4" />
+                              <note xml:id="nzntqhi" dur="16" pname="b" oct="2" />
+                           </beam>
+                           <rest xml:id="rnnqhfv" type="mscore-beam-none" dur="16" staff="1" />
+                           <chord xml:id="cddiqiv" dur="16" staff="1" stem.dir="up">
+                              <note xml:id="n5jfee8" pname="g" oct="3" />
+                              <note xml:id="nwpobph" pname="b" oct="3" />
+                              <note xml:id="n1vmxjaz" pname="d" oct="4" />
+                           </chord>
+                        </layer>
+                     </staff>
+                  </measure>
+                  <measure xml:id="mm4bewe" right="end" n="2">
+                     <staff xml:id="m2s1" n="1">
+                        <layer xml:id="m2s1l1" n="1">
+                           <beam>
+                              <note xml:id="n2fzn9a" dur="16" pname="b" oct="4" />
+                              <note xml:id="nypnlzd" dur="16" staff="2" pname="b" oct="3" />
+                              <note xml:id="n1jw2hju" dur="16" pname="b" oct="4" />
+                              <note xml:id="noh701w" dur="16" staff="2" pname="b" oct="3" />
+                           </beam>
+                           <beam>
+                              <note xml:id="n1z0w4uo" dur="16" staff="2" pname="b" oct="3" />
+                              <note xml:id="n6xgfx1" dur="16" pname="b" oct="4" />
+                              <note xml:id="nh9x4hc" dur="16" staff="2" pname="b" oct="3" />
+                              <note xml:id="n1cpwh79" dur="16" pname="b" oct="4" />
+                           </beam>
+                           <beam>
+                              <note xml:id="n1wvsk9i" dur="16" pname="b" oct="4" />
+                              <note xml:id="n131u565" dur="16" staff="2" pname="b" oct="3" />
+                              <note xml:id="nopzsd1" dur="16" staff="2" pname="b" oct="3" />
+                              <note xml:id="n1y26qk1" dur="16" pname="b" oct="4" />
+                           </beam>
+                           <beam>
+                              <note xml:id="n1o7whi1" dur="16" staff="2" pname="b" oct="3" />
+                              <note xml:id="neyzag0" dur="16" pname="b" oct="4" />
+                              <note xml:id="n1p8uc7d" dur="16" pname="b" oct="4" />
+                              <note xml:id="ni1ybvp" dur="16" staff="2" pname="b" oct="3" />
+                           </beam>
+                        </layer>
+                     </staff>
+                     <staff xml:id="m2s2" n="2">
+                        <layer xml:id="m2s2l1" n="1">
+                           <mRest xml:id="m17y66iu" />
+                        </layer>
+                     </staff>
+                  </measure>
+               </section>
+            </score>
+         </mdiv>
+      </body>
+   </music>
+</mei>

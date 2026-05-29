@@ -1,0 +1,71 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+import QtQuick
+
+import Muse.UiComponents
+
+BaseSection {
+    id: root
+
+    title: qsTrc("preferences", "Advanced options")
+
+    property var tables: null
+    property string brailleTable: ""
+
+    property var directions: null
+    property int intervalDirection: -1
+
+    signal brailleTableChangeRequested(string table)
+    signal intervalDirectionChangeRequested(int direction)
+
+    ComboBoxWithTitle {
+        title: qsTrc("preferences", "Braille table for lyrics")
+        columnWidth: root.columnWidth
+
+        currentIndex: indexOfValue(root.brailleTable)
+        model: root.tables
+
+        navigationName: "BrailleTableBox"
+        navigationPanel: root.navigation
+        navigationRow: 1
+
+        onValueEdited: function(newIndex, newValue) {
+            root.brailleTableChangeRequested(newValue);
+        }
+    }
+
+    ComboBoxWithTitle {
+        title: qsTrc("preferences", "Interval direction")
+        columnWidth: root.columnWidth
+
+        currentIndex: indexOfValue(root.intervalDirection)
+        model: root.directions
+
+        navigationName: "IntervalDirectionBox"
+        navigationPanel: root.navigation
+        navigationRow: 2
+
+        onValueEdited: function(newIndex, newValue) {
+            root.intervalDirectionChangeRequested(newValue);
+        }
+    }
+}
