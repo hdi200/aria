@@ -1385,13 +1385,31 @@ void Spanner::setTicks(const Fraction& f)
         return;
     }
 
-    IF_ASSERT_FAILED(f.positive()) {
-        m_ticks = -f;
+    Score* score = this->score();
+    if (!f.positive()) {
+        EngravingItem* start = startElement();
+        EngravingItem* end = endElement();
+        LOGE("Aria spanner non-positive ticks repaired type=%s this=%p tick=%d tick2=%d oldTicks=%d requestedTicks=%d requested=%d/%d track=%zu track2=%zu anchor=%d start=%s/%p end=%s/%p score=%p",
+             typeName(),
+             this,
+             m_tick.ticks(),
+             tick2().ticks(),
+             m_ticks.ticks(),
+             f.ticks(),
+             f.numerator(),
+             f.denominator(),
+             track(),
+             effectiveTrack2(),
+             int(m_anchor),
+             start ? start->typeName() : "<null>",
+             start,
+             end ? end->typeName() : "<null>",
+             end,
+             score);
+        m_ticks = f.isZero() ? Fraction::eps() : -f;
     } else {
         m_ticks = f;
     }
-
-    Score* score = this->score();
 
     if (score) {
         score->spannerMap().setDirty();
