@@ -292,7 +292,8 @@ std::vector<HorizontalSpacing::SegmentPosition> HorizontalSpacing::spaceSegments
         placedSegments.back().xPosInSystemCoords += leadingSpace;
 
         if (curSeg->isChordRestType()) {
-            bool isFirstCROfSystem = curSeg->rtick().isZero() && curSeg->measure()->isFirstInSystem();
+            const Measure* measure = curSeg->measure();
+            bool isFirstCROfSystem = curSeg->rtick().isZero() && measure && measure->system() && measure->isFirstInSystem();
             if (isFirstCROfSystem) {
                 double xMinSystemHeaderDist = ctx.system->leftMargin() + curSeg->style().styleAbsolute(
                     Sid::systemHeaderMinStartOfSystemDistance);
@@ -348,7 +349,7 @@ void HorizontalSpacing::spaceAgainstPreviousSegments(Segment* segment, std::vect
     double x = -DBL_MAX;
     int prevCRSegmentsCount = 0;
 
-    if (segment->measure()->isFirstInSystem()) {
+    if (segment->measure() && segment->measure()->system() && segment->measure()->isFirstInSystem()) {
         checkLyricsAgainstLeftMargin(segment, x, ctx);
     }
 
@@ -501,7 +502,8 @@ void HorizontalSpacing::checkLyricsAgainstRightMargin(std::vector<SegmentPositio
         SegmentPosition& segPos = segPositions[i - 1];
         double x = segPos.xPosInSystemCoords;
         Segment* seg = segPos.segment;
-        if (!seg->measure()->isLastInSystem()) {
+        const Measure* measure = seg->measure();
+        if (!measure || !measure->system() || !measure->isLastInSystem()) {
             break;
         }
         if (seg->isChordRestType()) {
@@ -1394,9 +1396,11 @@ double HorizontalSpacing::minHorizontalDistance(const Segment* f, const Segment*
         return w;
     }
 
+    const Measure* fMeasure = f->measure();
     const bool repeatSeg = f->isStartRepeatBarLineType() || ns->isStartRepeatBarLineType();
     const bool endOfSystem = f->isChordRestType() && !(ns->isChordRestType() || ns->isStartRepeatBarLineType())
-                             && (f->measure()->isLastInSystem() || f->measure()->next()->isHBox());
+                             && fMeasure
+                             && ((fMeasure->system() && fMeasure->isLastInSystem()) || fMeasure->next()->isHBox());
     const bool systemEnd = repeatSeg || endOfSystem;
 
     computeHangingLineWidth(f, ns, w, systemHeaderGap, systemEnd);
@@ -1412,10 +1416,12 @@ bool HorizontalSpacing::needsHeaderSpacingExceptions(const Segment* seg, const S
                                                                           SegmentType::Ambitus,
                                                                           SegmentType::TimeSig,
                                                                           SegmentType::TimeSigStartRepeatAnnounce };
+    const Measure* nextMeasure = nextSeg ? nextSeg->measure() : nullptr;
 
     return muse::contains(HEADER_SEGMENT_TYPES, seg->segmentType())
            && seg->rtick().isZero() && !seg->hasTimeSigAboveStaves()
-           && (nextSeg->measure()->isFirstInSystem() || nextSeg->measure()->prev()->isHBox())
+           && nextMeasure
+           && ((nextMeasure->system() && nextMeasure->isFirstInSystem()) || nextMeasure->prev()->isHBox())
            && (nextSeg->isStartRepeatBarLineType() || nextSeg->isChordRestType());
 }
 

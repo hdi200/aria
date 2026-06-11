@@ -584,8 +584,8 @@ bool Measure::showMeasureNumberInAutoMode() const
         // Show either if
         //   1) This is the first measure of the system OR
         //   2) The previous measure in the system is the first, and is excluded from numbering.
-        return isFirstInSystem()
-               || (prevMeasure && prevMeasure->excludeFromNumbering() && prevMeasure->isFirstInSystem());
+        return (system() && isFirstInSystem())
+               || (prevMeasure && prevMeasure->system() && prevMeasure->excludeFromNumbering() && prevMeasure->isFirstInSystem());
     } else {
         // In the case of an interval, we should show the measure number either if:
         //   1) We should show them every measure
@@ -3325,6 +3325,9 @@ EngravingItem* Measure::prevElementStaff(staff_idx_t staff, EngravingItem* fromI
 double Measure::firstNoteRestSegmentX(bool leading) const
 {
     const System* sys = system();
+    if (!sys) {
+        return 0.0;
+    }
     double margin = style().styleAbsolute(Sid::headerToLineStartDistance);
     for (const Segment* seg = first(); seg; seg = seg->next()) {
         if (seg->isChordRestType()) {
@@ -3355,7 +3358,7 @@ double Measure::firstNoteRestSegmentX(bool leading) const
                     margin = style().styleAbsolute(Sid::lineEndToBarlineDistance);
                 }
                 return std::min(seg->measure()->pos().x() + seg->pos().x() + width + margin, noteRestPos);
-            } else if (!isFirstInSystem() && !isFirstInSection() && prevMeasure()) {
+            } else if (system() && !isFirstInSystem() && !isFirstInSection() && prevMeasure()) {
                 const BarLine* endBl = prevMeasure()->endBarLine();
                 const Segment* endBlSeg = endBl ? endBl->segment() : nullptr;
 

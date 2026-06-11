@@ -81,7 +81,7 @@ void MarkerLayout::doLayoutMarker(Marker* item, TextBase::LayoutData* ldata, Lay
             blWidth = item->absoluteFromSpatium(-ctx.conf().styleS(Sid::endBarWidth));
         } else if (endRepeat) {
             blWidth = item->absoluteFromSpatium(ctx.conf().styleS(Sid::endBarWidth));
-        } else if ((measure->isFirstInSystem() || (measure->prev() && !measure->prev()->isMeasure())) && !rightMarker) {
+        } else if (((measure->system() && measure->isFirstInSystem()) || (measure->prev() && !measure->prev()->isMeasure())) && !rightMarker) {
             // Start of score
             const BarLine* bl =  measure->startBarLine();
             blWidth = bl ? -bl->width() : 0.0;

@@ -83,7 +83,8 @@ void MaskLayout::computeMasks(LayoutContext& ctx, Page* page)
 void MaskLayout::computeBarlineMasks(const Segment* barlineSement, const System* system, const std::vector<TextBase*>& allSystemText,
                                      LayoutContext& ctx)
 {
-    if (barlineSement->measure()->isLastInSystem() && barlineSement == barlineSement->measure()->lastEnabled()) {
+    const Measure* measure = barlineSement->measure();
+    if (measure && measure->system() && measure->isLastInSystem() && barlineSement == measure->lastEnabled()) {
         return;
     }
 

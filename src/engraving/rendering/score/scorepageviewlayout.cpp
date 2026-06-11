@@ -70,7 +70,7 @@ void ScorePageViewLayout::initLayoutContext(const Score* score, LayoutContext& c
         // if the first measure of the score is part of a multi measure rest
         // m->system() will return a nullptr. We need to find the multi measure
         // rest which replaces the measure range
-        if (!m->system() && m->isMeasure() && toMeasure(m)->hasMMRest()) {
+        if (ctx.conf().styleB(Sid::createMultiMeasureRests) && !m->system() && m->isMeasure() && toMeasure(m)->hasMMRest()) {
             LOGD("  don’t start with mmrest");
             m = toMeasure(m)->mmRest();
         }

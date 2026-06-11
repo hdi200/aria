@@ -32,6 +32,7 @@
 #include "engraving/dom/excerpt.h"
 #include "engraving/dom/factory.h"
 #include "engraving/dom/fingering.h"
+#include "engraving/dom/hairpin.h"
 #include "engraving/dom/image.h"
 #include "engraving/dom/masterscore.h"
 #include "engraving/dom/measure.h"
@@ -1248,6 +1249,66 @@ TEST_F(Engraving_PartsTests, partPropertyLinking)
 TEST_F(Engraving_PartsTests, partSpanners)
 {
     testPartCreation(u"part-spanners");
+}
+
+TEST_F(Engraving_PartsTests, addHairpinOnNonTopStaffWithPart)
+{
+    MasterScore* masterScore = ScoreRW::readScore(PARTS_DATA_DIR + u"part-all.mscx");
+    ASSERT_TRUE(masterScore);
+
+    Score* partScore = TestUtils::createPart(masterScore, 1);
+    ASSERT_TRUE(partScore);
+
+    Measure* measure = masterScore->firstMeasure();
+    ASSERT_TRUE(measure);
+
+    constexpr staff_idx_t staffIdx = 1;
+    const track_idx_t track = staff2track(staffIdx);
+    Segment* startSegment = measure->first(SegmentType::ChordRest);
+    ASSERT_TRUE(startSegment);
+    Segment* endSegment = startSegment->next1(SegmentType::ChordRest);
+    ASSERT_TRUE(endSegment);
+
+    EngravingItem* startElement = startSegment->element(track);
+    ASSERT_TRUE(startElement);
+    EngravingItem* endElement = endSegment->element(track);
+    ASSERT_TRUE(endElement);
+
+    masterScore->select(startElement);
+    masterScore->select(endElement, SelectType::RANGE);
+
+    masterScore->startCmd(TranslatableString::untranslatable("Engraving parts tests"));
+    std::vector<Hairpin*> hairpins = masterScore->addHairpins(HairpinType::CRESC_HAIRPIN);
+    masterScore->endCmd();
+
+    ASSERT_EQ(hairpins.size(), 1);
+    Hairpin* masterHairpin = hairpins.front();
+    ASSERT_TRUE(masterHairpin);
+    ASSERT_TRUE(masterHairpin->parent());
+    EXPECT_EQ(masterHairpin->score(), masterScore);
+    EXPECT_EQ(masterHairpin->parent()->score(), masterHairpin->score());
+
+    bool foundPartHairpin = false;
+    for (EngravingObject* linkedObject : masterHairpin->linkList()) {
+        if (!linkedObject->isEngravingItem()) {
+            ADD_FAILURE() << "Expected linked hairpin to be an engraving item";
+            continue;
+        }
+
+        EngravingItem* linkedItem = toEngravingItem(linkedObject);
+        ASSERT_TRUE(linkedItem->isHairpin());
+        Hairpin* linkedHairpin = toHairpin(linkedItem);
+        ASSERT_TRUE(linkedHairpin->parent());
+        EXPECT_EQ(linkedHairpin->parent()->score(), linkedHairpin->score());
+
+        if (linkedHairpin->score() == partScore) {
+            foundPartHairpin = true;
+            EXPECT_EQ(linkedHairpin->staffIdx(), 0);
+        }
+    }
+    EXPECT_TRUE(foundPartHairpin);
+
+    delete masterScore;
 }
 
 TEST_F(Engraving_PartsTests, partTies) {

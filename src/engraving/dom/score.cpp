@@ -4725,8 +4725,10 @@ ChordRest* Score::cmdNextPrevSystem(ChordRest* cr, bool next)
         auto currentSegment = cr->segment();
         // Only go to previous system's beginning if user is already at the absolute beginning of current system
         // and not in first measure of entire score
+        const Measure* currentMMRest = currentMeasure->mmRest();
         if ((destinationMeasure != firstMeasure() && destinationMeasure != firstMeasureMM())
-            && (currentSegment == firstSegment || (currentMeasure->mmRest() && currentMeasure->mmRest()->isFirstInSystem()))) {
+            && (currentSegment == firstSegment
+                || (currentMMRest && currentMMRest->system() && currentMMRest->isFirstInSystem()))) {
             if (!(destinationMeasure = destinationMeasure->prevMeasureMM())) {
                 return cr;
             }

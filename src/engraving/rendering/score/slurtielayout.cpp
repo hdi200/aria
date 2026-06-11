@@ -2006,7 +2006,7 @@ void SlurTieLayout::setPartialTieEndPos(PartialTie* item, SlurTiePos& sPos)
     const Measure* measure = seg->measure();
     const System* system = measure->system();
 
-    if (seg->measure()->isFirstInSystem() && !outgoing) {
+    if (measure->system() && measure->isFirstInSystem() && !outgoing) {
         sPos.p1 = PointF((system ? system->firstNoteRestSegmentX(true) : 0), sPos.p2.y());
         return;
     }

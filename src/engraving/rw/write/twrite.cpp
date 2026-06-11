@@ -1834,7 +1834,6 @@ void TWrite::write(const Harmony* item, XmlWriter& xml, WriteContext& ctx)
     }
 
     writeProperty(item, xml, Pid::HARMONY_DO_NOT_STACK_MODIFIERS);
-    writeProperty(item, xml, Pid::EXCLUDE_VERTICAL_ALIGN);
     writeProperties(toTextBase(item), xml, ctx, false);
     //Pid::HARMONY_VOICE_LITERAL, Pid::HARMONY_VOICING, Pid::HARMONY_DURATION
     //written by the above function call because they are part of element style
@@ -1916,8 +1915,11 @@ void TWrite::write(const Instrument* item, XmlWriter& xml, WriteContext&, const 
         xml.tag("soundId", item->soundId());
     }
 
-    if (!item->instrumentLabel().empty()) {
-        write(item->instrumentLabel(), xml);
+    if (!item->longName().empty()) {
+        xml.writeXml(u"longName", lineBreakToTag(item->longName()));
+    }
+    if (!item->shortName().empty()) {
+        xml.writeXml(u"shortName", lineBreakToTag(item->shortName()));
     }
 
 //      if (!_trackName.empty())
@@ -2589,6 +2591,8 @@ void TWrite::write(const Part* item, XmlWriter& xml, WriteContext& ctx)
         xml.tag("soloist", item->soloist());
     }
 
+    xml.tag("trackName", item->partName());
+
     if (item->color() != Part::DEFAULT_COLOR) {
         xml.tag("color", item->color());
     }
@@ -2875,7 +2879,21 @@ void TWrite::write(const Staff* item, XmlWriter& xml, WriteContext& ctx)
     }
 
     for (const BracketItem* i : item->brackets()) {
-        write(i, xml);
+        BracketType a = i->bracketType();
+        size_t b = i->bracketSpan();
+        if (a == BracketType::NO_BRACKET || a == BracketType::GROUP || b == 0) {
+            continue;
+        }
+        XmlWriter::Attributes attrs = {
+            { "type", static_cast<int>(a) },
+            { "span", b },
+            { "col", i->column() },
+            { "visible", i->visible() }
+        };
+        if (i->color() != ctx.configuration()->defaultColor()) {
+            attrs.push_back({ "color", String::fromStdString(i->color().toString()) });
+        }
+        xml.tag("bracket", attrs);
     }
 
     writeProperty(item, xml, Pid::STAFF_BARLINE_SPAN);
@@ -2991,9 +3009,6 @@ void TWrite::write(const StaffType* item, XmlWriter& xml, WriteContext& ctx)
     xml.startElement("StaffType", { { "group", TConv::toXml(item->group()) } });
     if (!item->xmlName().isEmpty()) {
         xml.tag("name", item->xmlName());
-    }
-    if (!item->staffLabel().empty()) {
-        write(item->staffLabel(), xml);
     }
     if (item->lines() != 5) {
         xml.tag("lines", item->lines());

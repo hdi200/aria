@@ -6750,6 +6750,10 @@ void Score::undoAddElement(EngravingItem* element, bool addToLinkedStaves, bool 
             int diff = static_cast<int>(tr2 - sp->track());
             nsp->setTrack2(linkedTrack + diff);
             nsp->setTrack(linkedTrack);
+            if (sp != nsp) {
+                // linkedClone() keeps the source spanner's parent; reset it after re-scoring.
+                nsp->moveToDummy();
+            }
 
             // determine start/end element for slurs
             // this is only necessary if start/end element is

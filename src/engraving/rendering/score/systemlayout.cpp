@@ -165,7 +165,7 @@ System* SystemLayout::collectSystem(LayoutContext& ctx)
                 updateCrossBeams(system, ctx);
             }
 
-            if (m->isFirstInSystem()) {
+            if (m->system() && m->isFirstInSystem()) {
                 layoutSystemMinWidth = curSysWidth;
                 SystemLayout::layoutSystem(system, ctx, curSysWidth, ctx.state().firstSystem(), ctx.state().firstSystemIndent());
                 MeasureLayout::addSystemHeader(m, ctx.state().firstSystem(), ctx);
