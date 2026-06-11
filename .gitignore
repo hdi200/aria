@@ -88,5 +88,11 @@ CMakeUserPresets.json
 compile_commands.json
 .cache
 
+# Local backups of nested repository metadata kept before flattening.
+/.local-git-backups/
+
+# Local oversized soundfont copy; the public repo keeps the smaller sf3 files.
+/MuseReaderiOS/MuseReaderiOS/Resources/MuseScore_General.sf2
+
 # QML language server
 **/.qmlls.ini

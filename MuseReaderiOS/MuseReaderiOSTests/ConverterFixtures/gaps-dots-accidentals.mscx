@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.6">
+  <Score>
+    <Part>
+      <trackName>Clarinet</trackName>
+      <Staff id="1"/>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>
+        <Chord>
+          <durationType>quarter</durationType>
+          <dots>1</dots>
+          <Note>
+            <pitch>61</pitch>
+            <Accidental><subtype>1</subtype></Accidental>
+          </Note>
+        </Chord>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

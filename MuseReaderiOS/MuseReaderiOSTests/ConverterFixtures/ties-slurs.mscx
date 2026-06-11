@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.6">
+  <Score>
+    <Part>
+      <trackName>Oboe</trackName>
+      <Staff id="1"/>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <Chord>
+          <durationType>half</durationType>
+          <Tie type="start"/>
+          <Slur type="start"/>
+          <Note><pitch>74</pitch></Note>
+        </Chord>
+        <Chord>
+          <durationType>half</durationType>
+          <Note><pitch>74</pitch></Note>
+        </Chord>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

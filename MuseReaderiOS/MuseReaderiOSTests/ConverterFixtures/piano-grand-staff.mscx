@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.6">
+  <Score>
+    <Part>
+      <trackName>Piano</trackName>
+      <Staff id="1"/>
+      <Staff id="2"/>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <Clef><concertClefType>G</concertClefType></Clef>
+        <Chord>
+          <durationType>whole</durationType>
+          <Note><pitch>72</pitch></Note>
+        </Chord>
+      </Measure>
+    </Staff>
+    <Staff id="2">
+      <Measure>
+        <Clef><concertClefType>F</concertClefType></Clef>
+        <Chord>
+          <durationType>whole</durationType>
+          <Note><pitch>48</pitch></Note>
+        </Chord>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
