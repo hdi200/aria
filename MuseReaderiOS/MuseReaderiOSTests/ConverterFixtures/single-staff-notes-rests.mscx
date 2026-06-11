@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.6">
+  <Score>
+    <metaTag name="workTitle">Fixture Title</metaTag>
+    <metaTag name="composer">Fixture Composer</metaTag>
+    <Part>
+      <trackName>Violin</trackName>
+      <Staff id="1"/>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <KeySig><accidental>2</accidental></KeySig>
+        <TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>
+        <Clef><concertClefType>G</concertClefType></Clef>
+        <Chord>
+          <durationType>quarter</durationType>
+          <Note><pitch>60</pitch></Note>
+        </Chord>
+        <Rest>
+          <durationType>quarter</durationType>
+        </Rest>
+        <Chord>
+          <durationType>quarter</durationType>
+          <Note><pitch>62</pitch></Note>
+        </Chord>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
