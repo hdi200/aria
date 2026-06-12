@@ -1,90 +1,132 @@
-# ![MuseScore Studio](share/icons/musescore_logo_full.png)
+# Aria
 
-Music notation and composition software
+Aria is an iOS score reader and editor for MuseScore and MusicXML files. It pairs a SwiftUI library/reader interface with a MuseScore Studio-derived render core so scores can be opened, rendered, edited, played back, saved, and exported on iPhone and iPad.
+
+Aria is not affiliated with, sponsored by, or endorsed by MuseScore, Muse Group, or MuseScore Studio. MuseScore names are used descriptively to identify supported file formats and the upstream codebase this project derives from.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
-[![Coverage](https://s3.us-east-1.amazonaws.com/extensions.musescore.org/test/code_coverage/coverage_badge.svg?)](https://github.com/musescore/MuseScore/actions/workflows/check_unit_tests.yml)
 
-MuseScore Studio is an open source and free music notation software. For support, contribution, and bug reports visit MuseScore.org. Fork and make pull requests!
+## What Is Here
 
-## Features
+- `MuseReaderiOS/`: the iOS app, Xcode project, SwiftUI views, document library, import flow, playback, editing state, legal resources, tests, and Objective-C++ bridge.
+- `sandbox/engraving/`: the reusable MuseScore-derived render core used by the app for page rendering, score edits, playback data, MusicXML export, and saving.
+- `src/`, `thirdparty/`, and other MuseScore Studio source folders: the upstream-derived code needed by the render core build.
+- `MuseReaderiOS/THIRD_PARTY_NOTICES.md`: third-party notices for MuseScore-derived code, bundled fonts, SoundFonts, FluidSynth, FreeType, Opus, Qt, and other dependencies.
+- `MuseReaderiOS/OPEN_SOURCE_COMPLIANCE.md`: release checklist for publishing corresponding source, notices, and build inputs.
 
-- WYSIWYG design, notes are entered on a "virtual notepaper"
-- TrueType font(s) for printing & display allows for high quality scaling to all sizes
-- Easy & fast note entry
-- Many editing functions
-- MusicXML import/export
-- MIDI (SMF) import/export
-- MEI import/export
-- MuseData import
-- MIDI input for note entry
-- Integrated sequencer and software synthesizer to play the score
-- Print or create PDF files
+## Supported Files
 
-## More info
+Aria can import and open:
 
-- [MuseScore Homepage](https://musescore.org)
-- [MuseScore Git workflow instructions](https://musescore.org/en/developers-handbook/git-workflow)
-- [How to compile MuseScore?](https://github.com/musescore/MuseScore/wiki/Set-up-developer-environment)
+- `.mscz`
+- `.mscx`
+- `.mxl`
+- `.musicxml`
+- `.xml`
 
-## License
+The app stores imported scores in its visible iOS Documents area under `Scores/`, keeps a private index in Application Support, and autosaves supported edits back to the managed score file.
 
-MuseScore Studio is licensed under GPL version 3.0. See [license file](https://github.com/musescore/MuseScore/blob/master/LICENSE.txt) in the same directory.
+## Architecture
 
-## Packages
+At a high level:
 
-See [Code Structure on Wiki](https://github.com/musescore/MuseScore/wiki/CodeStructure)
+1. `MuseReaderiOSApp` launches the SwiftUI app and shows `LibraryView`.
+2. `MuseReaderAppModel` handles imports, recent scores, setlists, score creation, and opening sessions.
+3. `MuseScoreSessionService` inspects the package, reads embedded previews, and opens a live render session when the render core is available.
+4. `ScoreReaderView` owns `ScoreReaderState`, which coordinates page loading, selection, editing, playback, parts, concert pitch, export, and autosave.
+5. `LiveScoreRenderSession` is a Swift actor wrapping `MSRRenderSession`.
+6. `MuseScoreRenderCoreBridge.mm` maps Swift/Objective-C calls into `msr::render::ScoreRenderSession`.
+7. `sandbox/engraving/score_render_core.*` uses MuseScore Studio engraving, MusicXML, playback, and save APIs for the actual notation behavior.
 
-## Building
+Edits are intentionally routed through the MuseScore-derived engine. The Swift layer manages UI state, page cache invalidation, playback invalidation, and save timing around the edit state returned by the render core.
 
-**Read the [Compilation section](https://github.com/musescore/MuseScore/wiki/Set-up-developer-environment) of the [MuseScore Wiki](https://github.com/musescore/MuseScore/wiki) for a complete build walkthrough and a list of dependencies.**
+## Getting The Source
 
-### Getting sources
+This repository uses Git LFS for the required iOS SoundFont:
 
-If using git to download repo of entire code history, type:
+```sh
+git clone https://github.com/hdi200/aria.git
+cd aria
+git lfs pull
+```
 
-    git clone https://github.com/musescore/MuseScore.git
-    cd MuseScore
+Confirm that the required `.sf2` file is present as a real binary file, not an LFS pointer:
 
-Otherwise, you can just download the latest source release tarball from the [Releases page](https://github.com/musescore/MuseScore/releases), and then from your download directory type:
+```sh
+git lfs ls-files
+wc -c MuseReaderiOS/MuseReaderiOS/Resources/MuseScore_General.sf2
+```
 
-    tar xzf MuseScore-x.x.x.tar.gz
-    cd MuseScore-x.x.x
+`MuseReaderiOS/MuseReaderiOS/Resources/MuseScore_General.sf2` is required for current iOS playback. Do not remove it or replace it with only an `.sf3` file; the iOS audio path depends on the `.sf2` SoundFont.
 
-### Release Build
+## Build Requirements
 
-To compile MuseScore Studio for release, type:
+- macOS with Xcode and the iOS SDK.
+- CMake.
+- Ninja.
+- Git LFS.
+- Qt for iOS and a matching host Qt SDK for the Qt build tools.
 
-    cmake -P build.cmake -DCMAKE_BUILD_TYPE=Release
+The Xcode project is:
 
-If something goes wrong, append the word "clean" to the above command to delete the build subdirectory:
+```text
+MuseReaderiOS/Aria.xcodeproj
+```
 
-    cmake -P build.cmake -DCMAKE_BUILD_TYPE=Release clean
+Use the shared scheme:
 
-Then try running the first command again.
+```text
+Aria
+```
 
-### Running
+The app target bundle identifier is:
 
-To start MuseScore Studio, type:
+```text
+com.hdi200.ariascore
+```
 
-    cmake -P build.cmake -DCMAKE_BUILD_TYPE=Release run
+The Xcode build phase builds `sandbox/engraving` into a `MuseScoreRenderCore` static library with CMake/Ninja. The project currently expects these build settings to point at local Qt installs:
 
-Or run the compiled executable directly.
+```text
+MUSEREADER_QT_IOS_SDK_DIR
+MUSEREADER_QT_HOST_SDK_DIR
+```
 
-### Debug Build
+For example:
 
-A debug version can be built and run by replacing `-DCMAKE_BUILD_TYPE=Release`
-with `-DCMAKE_BUILD_TYPE=Debug` in the above commands.
+```sh
+export MUSEREADER_QT_IOS_SDK_DIR="$HOME/Qt/6.11.0/ios"
+export MUSEREADER_QT_HOST_SDK_DIR="$HOME/Qt/6.11.0/macos"
+open MuseReaderiOS/Aria.xcodeproj
+```
 
-If you omit the `-DCMAKE_BUILD_TYPE` option entirely then `RelWithDebInfo` is
-used by default, as it provides a useful compromise between Release and Debug.
+Build directories are created under `/tmp`:
 
-### Testing
+- `/tmp/musescore-score-render-core-ios`
+- `/tmp/musescore-score-render-core-simulator`
 
-See the [Unit tests section](https://github.com/musescore/MuseScore/wiki/Unit-tests) of the [MuseScore Wiki](https://github.com/musescore/MuseScore/wiki) for instructions on how to run the test suite.
+If you build for Simulator, make sure an iOS Simulator runtime is installed. A physical device build does not require a local Simulator runtime.
 
-### Code Formatting
+## Tests
 
-Run `./hooks/install.sh` to install a pre-commit hook that will format your staged files. Requires that you install `uncrustify`.
+The iOS test target includes parser, package inspection, session-opening, and render-core bridge coverage:
 
-If you have problems, please report them. To uninstall, run `./hooks/uninstall.sh`.
+```sh
+xcodebuild test -project MuseReaderiOS/Aria.xcodeproj -scheme Aria
+```
+
+Some tests require the render core and its Qt dependencies to build successfully first.
+
+## Legal
+
+Aria includes GPLv3-covered MuseScore Studio-derived code. See `LICENSE.txt` for the GPLv3 license text and `MuseReaderiOS/THIRD_PARTY_NOTICES.md` for third-party notices.
+
+The bundled MuseScore General SoundFont files include their own license metadata and license files in `MuseReaderiOS/MuseReaderiOS/Resources/Legal/`.
+
+If you distribute builds, publish the corresponding source for the exact version you distribute, including the iOS app source, bridge code, render-core source, build scripts, third-party notices, and the MuseScore-derived source snapshot used for the build.
+
+## Development Notes
+
+- Keep local build products, `DerivedData`, `.DS_Store`, `xcuserdata`, and personal backup folders out of Git.
+- The app has local backup ignores for nested Git histories from earlier development; the public repo tracks `MuseReaderiOS/` and `sandbox/` as normal folders.
+- Demo/export scratch files under `demos/All_Dudes pre_export.mscz` and `demos/Demos Pre IOS Export/` are intentionally ignored.
