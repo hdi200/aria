@@ -91,5 +91,9 @@ compile_commands.json
 # Local backups of nested repository metadata kept before flattening.
 /.local-git-backups/
 
+# Local demo export scratch files; do not include in public release commits.
+/demos/All_Dudes pre_export.mscz
+/demos/Demos Pre IOS Export/
+
 # QML language server
 **/.qmlls.ini
