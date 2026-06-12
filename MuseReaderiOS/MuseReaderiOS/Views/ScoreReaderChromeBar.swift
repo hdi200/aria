@@ -40,12 +40,21 @@ struct ScoreReaderChromeBar: View {
             let isPhoneLandscape = isPhoneHeader && proxy.size.width > proxy.size.height
             let isTightPhoneLandscape = isPhoneLandscape && proxy.size.width < 780
             let isCompactHeader = proxy.size.width < 920
-            // iPhone: one continuous glass bar in portrait and landscape. iPad: floating islands.
-            let usesFloatingIslands = !isPhoneHeader
+            // iPhone and iPad share separated floating islands; phone uses tighter controls.
+            let usesPhoneFloatingIslands = isPhoneHeader
             let showsPlaybackTimeOnPhone = !isPhoneLandscape || proxy.size.width >= 780
 
             Group {
-                if usesFloatingIslands {
+                if usesPhoneFloatingIslands {
+                    phoneFloatingIslandHeader(
+                        availableWidth: proxy.size.width,
+                        isPhoneLandscape: isPhoneLandscape,
+                        showsPlaybackTime: showsPlaybackTimeOnPhone
+                    )
+                        .padding(.horizontal, isPhoneLandscape ? 10 : 12)
+                        .padding(.top, 8)
+                        .padding(.bottom, 8)
+                } else {
                     floatingIslandHeader(
                         isCompactHeader: isCompactHeader,
                         isPhoneLandscape: isPhoneLandscape,
@@ -54,13 +63,6 @@ struct ScoreReaderChromeBar: View {
                         .padding(.horizontal, isPhoneLandscape ? 10 : (isCompactHeader ? 10 : 18))
                         .padding(.top, 10)
                         .padding(.bottom, 10)
-                } else {
-                    compactPhoneHeader(showsPlaybackTime: showsPlaybackTimeOnPhone)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                        .padding(.bottom, 8)
-                        .frame(maxWidth: .infinity)
-                        .scoreReaderTopBarBackground()
                 }
             }
         }
@@ -337,57 +339,67 @@ struct ScoreReaderChromeBar: View {
             .scoreReaderChromeIslandBackground(cornerRadius: 18)
     }
 
-    private func compactPhoneHeader(showsPlaybackTime: Bool) -> some View {
-        HStack(spacing: 8) {
-            Button(action: closeAction) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 34, height: 34)
+    private func phoneFloatingIslandHeader(availableWidth: CGFloat, isPhoneLandscape: Bool, showsPlaybackTime: Bool) -> some View {
+        let hasTrailingExtras = showsConcertPitchControl || parts.count > 1
+        let showsCenteredPlaybackTime = showsPlaybackTime && (!hasTrailingExtras || availableWidth >= 620)
+        let showsTitle = isPhoneLandscape && availableWidth >= 620
+
+        return ZStack {
+            HStack {
+                floatingIsland(horizontalPadding: showsTitle ? 8 : 5) {
+                    Button(action: closeAction) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 18, weight: .semibold))
+
+                            if showsTitle {
+                                Text(scoreTitle)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                        .scoreReaderChromeTapTarget(minWidth: showsTitle ? 44 : 40)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back")
+                }
+                .frame(maxWidth: showsTitle ? max(96, availableWidth * 0.28) : nil, alignment: .leading)
+                .fixedSize(horizontal: !showsTitle, vertical: false)
+
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
 
             if supportsPlayback {
-                compactPlaybackControls(showsElapsedTime: showsPlaybackTime)
+                floatingIsland(horizontalPadding: 6) {
+                    compactPlaybackControls(showsElapsedTime: showsCenteredPlaybackTime)
+                }
+                .fixedSize(horizontal: true, vertical: false)
             }
 
-            Spacer(minLength: 4)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
 
-            if showsConcertPitchControl {
-                Button(action: toggleConcertPitchAction) {
-                    Text("Concert")
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.68)
-                        .padding(.horizontal, 8)
-                        .frame(height: 32)
-                        .foregroundStyle(concertPitchEnabled ? Color.blue : Color.black.opacity(0.78))
-                        .background(Color.white.opacity(concertPitchEnabled ? 0.96 : 0.74), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .stroke(concertPitchEnabled ? Color.blue.opacity(0.42) : Color.black.opacity(0.08), lineWidth: 1)
+                if hasTrailingExtras {
+                    floatingIsland(horizontalPadding: 6) {
+                        HStack(spacing: 6) {
+                            if showsConcertPitchControl {
+                                concertPitchIslandButton(isCompactHeader: true, iconOnly: true)
+                            }
+
+                            if parts.count > 1 {
+                                partsIslandButton(iconOnly: true)
+                            }
                         }
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
-                .buttonStyle(.plain)
-                .disabled(!supportsEditing || isEditingBusy)
-                .opacity(supportsEditing ? 1 : 0.45)
-            }
 
-            if parts.count > 1 {
-                Button(action: togglePartsPanel) {
-                    Image(systemName: "list.bullet.indent")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isPartsPanelPresented ? Color.blue : Color.black.opacity(0.82))
-                        .frame(width: 28, height: 34)
+                floatingIsland(horizontalPadding: 5) {
+                    exportIslandButton(fontSize: 18, minWidth: 40)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Parts")
-                .popover(isPresented: $isPartsPanelPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-                    partsPanelContent
-                }
+                .fixedSize(horizontal: true, vertical: false)
             }
-
-            exportIslandButton(fontSize: 18, minWidth: 28)
         }
         .font(.system(size: 14, weight: .medium))
         .foregroundStyle(Color.black.opacity(0.84))

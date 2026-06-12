@@ -97,3 +97,6 @@ compile_commands.json
 
 # QML language server
 **/.qmlls.ini
+
+# Local App Store screenshot editor and exports.
+/screenshots/
