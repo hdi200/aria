@@ -18,7 +18,7 @@
 			</array>
 		</dict>
 	</array>
-	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
@@ -92,7 +92,5 @@
 			</dict>
 		</dict>
 	</array>
-	<key>UIFileSharingEnabled</key>
-	<true/>
 </dict>
 </plist>
