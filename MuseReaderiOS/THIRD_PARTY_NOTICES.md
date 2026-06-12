@@ -37,7 +37,7 @@ Aria includes code and assets from the MuseScore Studio source tree and several 
 
 ## MuseScore General SoundFonts
 
-- Components: `MuseScore_General.sf3` and `MS Basic.sf3`.
+- Components: `MuseScore_General.sf2`, `MuseScore_General.sf3`, and `MS Basic.sf3`.
 - Location: `MuseReaderiOS/MuseReaderiOS/Resources`.
 - Notice embedded in the SoundFont metadata: MuseScore General is by Frank Wen, Michael Cowgill, and S. Christian Collins and is released under the MIT license.
 - Bundled license files: `MuseScore_General-License.md` and `MuseScore_General_HQ-License.md`.
