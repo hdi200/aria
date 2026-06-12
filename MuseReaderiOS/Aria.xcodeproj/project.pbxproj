@@ -428,7 +428,6 @@
 				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					"/tmp/musescore-score-render-core-ios",
@@ -586,7 +585,7 @@
 					AudioToolbox,
 					"-lm",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.aria;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -609,7 +608,6 @@
 				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					"/tmp/musescore-score-render-core-ios",
@@ -767,7 +765,7 @@
 					AudioToolbox,
 					"-lm",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.aria;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
