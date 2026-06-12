@@ -371,7 +371,7 @@ struct ScoreReaderChromeBar: View {
             }
 
             if supportsPlayback {
-                floatingIsland(horizontalPadding: 6) {
+                floatingIsland(horizontalPadding: 10) {
                     compactPlaybackControls(showsElapsedTime: showsCenteredPlaybackTime)
                 }
                 .fixedSize(horizontal: true, vertical: false)
