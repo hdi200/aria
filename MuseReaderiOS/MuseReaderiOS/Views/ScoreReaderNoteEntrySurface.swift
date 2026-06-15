@@ -118,7 +118,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 detailToolbar
 
                 if selectedToolCategory != .chord && selectedToolCategory != .lyrics {
-                    pitchKeyboardRow
+                    pitchInputArea
                 }
             }
             .padding(.top, 14)
@@ -176,7 +176,7 @@ struct ScoreReaderNoteEntrySurface: View {
             if selectedToolCategory != .chord && selectedToolCategory != .lyrics {
                 compactPanelDivider
 
-                compactPitchKeyboardRow
+                compactPitchInputArea
                     .padding(.horizontal, 6)
                     .padding(.top, 6)
                     .padding(.bottom, 8)
@@ -256,7 +256,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 }
                 .frame(minWidth: 260, idealWidth: 340, maxWidth: 380)
 
-                compactLandscapePitchKeyboardRow
+                compactLandscapePitchInputArea
                     .padding(.horizontal, 6)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
@@ -311,6 +311,15 @@ struct ScoreReaderNoteEntrySurface: View {
         .padding(.bottom, 18)
     }
 
+    private var pitchInputArea: some View {
+        VStack(spacing: 8) {
+            if showsPercussionUnsupportedNotice {
+                percussionUnsupportedNotice
+            }
+            pitchKeyboardRow
+        }
+    }
+
     private var compactPitchKeyboardRow: some View {
         HStack(alignment: .bottom, spacing: 4) {
             compactUndoRedoColumn
@@ -332,6 +341,15 @@ struct ScoreReaderNoteEntrySurface: View {
             .frame(maxWidth: .infinity)
 
             compactSelectionNavigationColumn
+        }
+    }
+
+    private var compactPitchInputArea: some View {
+        VStack(spacing: 6) {
+            if showsPercussionUnsupportedNotice {
+                percussionUnsupportedNotice
+            }
+            compactPitchKeyboardRow
         }
     }
 
@@ -357,6 +375,28 @@ struct ScoreReaderNoteEntrySurface: View {
 
             compactLandscapeSelectionNavigationColumn
         }
+    }
+
+    private var compactLandscapePitchInputArea: some View {
+        VStack(spacing: 6) {
+            if showsPercussionUnsupportedNotice {
+                percussionUnsupportedNotice
+            }
+            compactLandscapePitchKeyboardRow
+        }
+    }
+
+    private var percussionUnsupportedNotice: some View {
+        Text("Percussion editing is not currently supported. Viewing and playback only.")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Color.black.opacity(0.72))
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.black.opacity(0.06), in: Capsule())
+            .padding(.horizontal, 14)
     }
 
     private var compactUndoRedoColumn: some View {
@@ -916,7 +956,10 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var keyboardEnabled: Bool {
-        editingState.noteInputEnabled
+        guard !editingState.activeStaffIsPercussion else {
+            return false
+        }
+        return editingState.noteInputEnabled
         || editingState.selection?.canChangePitch == true
         || editingState.selection?.kind == .rest
         || editingState.selection?.kind == .measure
@@ -952,9 +995,16 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var pitchEditEnabled: Bool {
-        editingState.selection?.canChangePitch == true
+        guard !editingState.activeStaffIsPercussion else {
+            return false
+        }
+        return editingState.selection?.canChangePitch == true
         || editingState.noteInputEnabled
         || editingState.selection?.kind == .measure
+    }
+
+    private var showsPercussionUnsupportedNotice: Bool {
+        editingState.activeStaffIsPercussion
     }
 
     private var activePitchClass: Int? {

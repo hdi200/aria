@@ -3549,6 +3549,13 @@ msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score)
     } else {
         editState.currentVoice = static_cast<int>(inputState.voice());
     }
+    if (inputState.noteEntryMode()) {
+        const mu::engraving::Staff* staff = inputState.staff();
+        editState.activeStaffIsPercussion = staff && staff->isDrumStaff(inputState.tick());
+    } else if (const mu::engraving::ChordRest* chordRest = selectedChordRest(score)) {
+        const mu::engraving::Staff* staff = score->staff(chordRest->staffIdx());
+        editState.activeStaffIsPercussion = staff && staff->isDrumStaff(chordRest->tick());
+    }
     editState.canUndo = score->undoStack() && score->undoStack()->canUndo();
     editState.canRedo = score->undoStack() && score->undoStack()->canRedo();
     editState.createMultiMeasureRests = score->style().styleB(mu::engraving::Sid::createMultiMeasureRests);

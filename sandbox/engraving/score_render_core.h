@@ -143,6 +143,7 @@ struct ScoreEditState {
     int currentVoice = 0;
     bool canUndo = false;
     bool canRedo = false;
+    bool activeStaffIsPercussion = false;
     bool createMultiMeasureRests = false;
     bool hideEmptyStaves = false;
 };

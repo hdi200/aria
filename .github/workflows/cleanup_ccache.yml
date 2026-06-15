@@ -2,8 +2,6 @@ name: 'Cleanup: CCache'
 
 on: 
   workflow_dispatch:
-  schedule:
-    - cron: '30 * * * *'
 
 jobs:
   cleanup_ccache:

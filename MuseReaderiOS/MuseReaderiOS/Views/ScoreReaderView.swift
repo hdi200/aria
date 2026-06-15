@@ -190,7 +190,7 @@ struct ScoreReaderView: View {
                             isPlaybackBusy: readerState.isPlaybackActionInFlight,
                             playbackPreparationMessage: readerState.playbackPreparationMessage,
                             concertPitchEnabled: readerState.concertPitchEnabled,
-                            showsConcertPitchControl: showsConcertPitchControl,
+                            showsConcertPitchControl: showsChromeConcertPitchControl,
                             closeAction: closeReader,
                             selectModeAction: selectModeFromToolbar,
                             noteInputModeAction: noteInputModeFromToolbar,
@@ -479,6 +479,10 @@ struct ScoreReaderView: View {
         readerState.supportsEditing
             && session.liveRenderSession != nil
             && (readerState.concertPitchEnabled || readerState.hasConcertPitchRelevantTransposition)
+    }
+
+    private var showsChromeConcertPitchControl: Bool {
+        showsConcertPitchControl && !isPhoneInterface
     }
 
     private var isPhoneInterface: Bool {

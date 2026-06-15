@@ -396,6 +396,7 @@ struct ScoreEditingState: Sendable, Equatable {
     var currentVoice: Int
     var canUndo: Bool
     var canRedo: Bool
+    var activeStaffIsPercussion: Bool
     var createMultiMeasureRests: Bool
     var hideEmptyStaves: Bool
     var refreshScope: ScoreEditRefreshScope
@@ -410,6 +411,7 @@ struct ScoreEditingState: Sendable, Equatable {
         currentVoice: 0,
         canUndo: false,
         canRedo: false,
+        activeStaffIsPercussion: false,
         createMultiMeasureRests: false,
         hideEmptyStaves: false,
         refreshScope: .local,

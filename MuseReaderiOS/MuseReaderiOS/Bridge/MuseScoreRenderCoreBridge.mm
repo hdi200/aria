@@ -238,6 +238,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                                       currentVoice:editState.currentVoice
                                            canUndo:editState.canUndo
                                            canRedo:editState.canRedo
+                         activeStaffIsPercussion:editState.activeStaffIsPercussion
                             createMultiMeasureRests:editState.createMultiMeasureRests
                                      hideEmptyStaves:editState.hideEmptyStaves];
 }
@@ -492,6 +493,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                      currentVoice:(NSInteger)currentVoice
                           canUndo:(BOOL)canUndo
                           canRedo:(BOOL)canRedo
+         activeStaffIsPercussion:(BOOL)activeStaffIsPercussion
            createMultiMeasureRests:(BOOL)createMultiMeasureRests
                     hideEmptyStaves:(BOOL)hideEmptyStaves
 {
@@ -505,6 +507,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _currentVoice = currentVoice;
         _canUndo = canUndo;
         _canRedo = canRedo;
+        _activeStaffIsPercussion = activeStaffIsPercussion;
         _createMultiMeasureRests = createMultiMeasureRests;
         _hideEmptyStaves = hideEmptyStaves;
     }

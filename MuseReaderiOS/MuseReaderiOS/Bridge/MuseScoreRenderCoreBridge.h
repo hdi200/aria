@@ -341,6 +341,7 @@ isEditableText:(BOOL)isEditableText
 @property (nonatomic, readonly) NSInteger currentVoice;
 @property (nonatomic, readonly) BOOL canUndo;
 @property (nonatomic, readonly) BOOL canRedo;
+@property (nonatomic, readonly) BOOL activeStaffIsPercussion;
 @property (nonatomic, readonly) BOOL createMultiMeasureRests;
 @property (nonatomic, readonly) BOOL hideEmptyStaves;
 
@@ -352,6 +353,7 @@ isEditableText:(BOOL)isEditableText
                       currentVoice:(NSInteger)currentVoice
                            canUndo:(BOOL)canUndo
                            canRedo:(BOOL)canRedo
+             activeStaffIsPercussion:(BOOL)activeStaffIsPercussion
              createMultiMeasureRests:(BOOL)createMultiMeasureRests
                       hideEmptyStaves:(BOOL)hideEmptyStaves NS_DESIGNATED_INITIALIZER;
 

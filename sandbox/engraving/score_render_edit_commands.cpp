@@ -1682,6 +1682,11 @@
         }
         normalizePointInputPositionForPutNote(staff, position);
         biasDuplicatePointInputAwayFromExistingChord(score, page, staff, pagePoint, position);
+        mu::engraving::Measure* affectedMeasure = position.segment ? position.segment->measure() : nullptr;
+        const mu::engraving::staff_idx_t affectedStaffIdx = position.staffIdx;
+        const mu::engraving::track_idx_t requestedTrack = affectedStaffIdx * mu::engraving::VOICES + inputState.voice();
+        inputState.setTrack(requestedTrack);
+        inputState.setSegment(position.segment);
 
         std::optional<mu::engraving::AccidentalType> requestedAccidentalType;
         const mu::engraving::AccidentalType previousAccidentalType = inputState.accidentalType();
@@ -1715,6 +1720,9 @@
             }
         }
         appendMeasureIfInputCursorReachedEnd(score);
+        if (affectedMeasure) {
+            affectedMeasure->checkMultiVoices(affectedStaffIdx);
+        }
 
         score->endCmd();
         refreshAfterEdit();
