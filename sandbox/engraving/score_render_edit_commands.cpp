@@ -1644,6 +1644,49 @@
         return true;
     }
 
+    bool insertMIDIChordAtCursor(const std::vector<int>& midiPitches,
+                                 const bool preferFlats,
+                                 msr::render::ScoreEditState& output,
+                                 std::string& errorMessage)
+    {
+        if (midiPitches.empty()) {
+            errorMessage = "MuseReader received an empty MIDI chord.";
+            return false;
+        }
+
+        msr::render::ScoreEditState intermediateState;
+        for (size_t index = 0; index < midiPitches.size(); ++index) {
+            const int midiPitch = midiPitches.at(index);
+            if (!mu::engraving::pitchIsValid(midiPitch)) {
+                errorMessage = "MuseReader received an unsupported MIDI pitch.";
+                return false;
+            }
+
+            if (!insertMIDIPitchAtCursor(midiPitch, preferFlats, index > 0, true, intermediateState, errorMessage)) {
+                return false;
+            }
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::Chord* chord = nullptr;
+        if (mu::engraving::Note* selectedNote = currentSelectedNote(score)) {
+            chord = selectedNote->chord();
+        }
+        if (!chord) {
+            if (mu::engraving::ChordRest* chordRest = selectedChordRest(score); chordRest && chordRest->isChord()) {
+                chord = mu::engraving::toChord(chordRest);
+            }
+        }
+
+        if (chord) {
+            score->nextInputPos(chord, false);
+            appendMeasureIfInputCursorReachedEnd(score);
+        }
+
+        output = makeEditState(score);
+        return true;
+    }
+
     bool insertNoteWithPitch(const int pageIndex,
                              const double normalizedX,
                              const double normalizedY,

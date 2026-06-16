@@ -275,6 +275,7 @@ public:
     bool noteEntryPreview(int pageIndex, double normalizedX, double normalizedY, int durationCode, bool rest, int accidentalKind, NoteEntryPreviewState& output, std::string& errorMessage);
     bool insertPitchAtCursor(int pitchClass, bool preferFlats, bool addToCurrentChord, ScoreEditState& output, std::string& errorMessage);
     bool insertMIDIPitchAtCursor(int midiPitch, bool preferFlats, bool addToCurrentChord, ScoreEditState& output, std::string& errorMessage);
+    bool insertMIDIChordAtCursor(const std::vector<int>& midiPitches, bool preferFlats, ScoreEditState& output, std::string& errorMessage);
     bool deleteSelection(ScoreEditState& output, std::string& errorMessage);
     bool selectMeasureRange(int pageIndex, double startNormalizedX, double startNormalizedY, double endNormalizedX, double endNormalizedY, ScoreEditState& output, std::string& errorMessage);
     bool clearSelectedMeasure(ScoreEditState& output, std::string& errorMessage);

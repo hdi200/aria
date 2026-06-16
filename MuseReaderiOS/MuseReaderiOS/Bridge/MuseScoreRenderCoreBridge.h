@@ -496,6 +496,9 @@ isEditableText:(BOOL)isEditableText
                                         preferFlats:(BOOL)preferFlats
                                  addToCurrentChord:(BOOL)addToCurrentChord
                                               error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(insertMIDIPitchAtCursor(_:preferFlats:addToCurrentChord:));
+- (nullable MSREditState *)insertMIDIChordAtCursor:(NSArray<NSNumber *> *)midiPitches
+                                       preferFlats:(BOOL)preferFlats
+                                             error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(insertMIDIChordAtCursor(_:preferFlats:));
 - (nullable MSRNoteEntryPreviewInfo *)noteEntryPreviewAtPageIndex:(NSInteger)pageIndex
                                                       normalizedX:(double)normalizedX
                                                       normalizedY:(double)normalizedY

@@ -45,6 +45,7 @@ final class ScoreReaderState: ObservableObject {
     let midiInputController = MIDIInputController()
     let prefetchDistance = 1
     let playbackMonitorInterval = Duration.milliseconds(50)
+    let midiChordCaptureDelay = Duration.milliseconds(120)
     var loadTasks: [Int: Task<Void, Never>] = [:]
     var staleLivePageIndices: Set<Int> = []
     var playbackMonitorTask: Task<Void, Never>?

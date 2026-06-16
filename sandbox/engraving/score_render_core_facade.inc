@@ -394,6 +394,14 @@ bool msr::render::ScoreRenderSession::insertMIDIPitchAtCursor(const int midiPitc
     return m_impl->insertMIDIPitchAtCursor(midiPitch, preferFlats, addToCurrentChord, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::insertMIDIChordAtCursor(const std::vector<int>& midiPitches,
+                                                              const bool preferFlats,
+                                                              ScoreEditState& output,
+                                                              std::string& errorMessage)
+{
+    return m_impl->insertMIDIChordAtCursor(midiPitches, preferFlats, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::deleteSelection(ScoreEditState& output, std::string& errorMessage)
 {
     return m_impl->deleteSelection(output, errorMessage);

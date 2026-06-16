@@ -596,6 +596,16 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func insertMIDIChordAtCursor(_ midiPitches: [Int], preferFlats: Bool) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.insertMIDIChordAtCursor(midiPitches.map { NSNumber(value: $0) }, preferFlats: preferFlats))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func noteEntryPreview(pageIndex: Int, normalizedPoint: CGPoint, duration: ScoreNoteDuration, isRest: Bool, accidentalKind: ScoreAccidentalKind?) throws -> ScoreNoteEntryPreview? {
         guard supportsEditing else {
             return nil

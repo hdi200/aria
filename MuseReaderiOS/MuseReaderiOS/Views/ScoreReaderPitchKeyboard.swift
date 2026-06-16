@@ -83,6 +83,12 @@ struct ScoreReaderWidePitchKeyboard: View {
             .offset(x: leadingBufferOffset + dragTranslation)
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.black.opacity(0.10), lineWidth: 0.75)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: Color.black.opacity(0.06), radius: 6, y: 2)
             .contentShape(Rectangle())
             .gesture(keyboardGesture(geometry: geometry, naturalKeys: renderedKeys, blackKeys: blackKeys, whiteWidth: whiteWidth, blackWidth: blackWidth, visibleNaturalKeyCount: visibleNaturalKeyCount))
             .onChange(of: activeMIDIPitch) { _, newValue in

@@ -1190,12 +1190,8 @@ extension ScoreReaderState {
             return
         }
 
-        if stackedChordInputEnabled && !editingState.noteInputInsertsRests {
-            pendingMIDIChordPitches.insert(midiPitch)
-            scheduleMIDIChordCapture()
-        } else {
-            handleMIDIPitchInput(midiPitch)
-        }
+        pendingMIDIChordPitches.insert(midiPitch)
+        scheduleMIDIChordCapture()
     }
 
     func handleMIDINoteOff(_ midiPitch: Int) {
@@ -1214,12 +1210,17 @@ extension ScoreReaderState {
     private func scheduleMIDIChordCapture() {
         midiChordCaptureTask?.cancel()
         midiChordCaptureTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 45_000_000)
+            try? await Task.sleep(for: self?.midiChordCaptureDelay ?? .milliseconds(120))
             self?.commitPendingMIDIChordCapture()
         }
     }
 
     private func commitPendingMIDIChordCapture() {
+        guard !isEditingActionInFlight else {
+            scheduleMIDIChordCapture()
+            return
+        }
+
         let midiPitches = pendingMIDIChordPitches.sorted()
         pendingMIDIChordPitches.removeAll()
         midiChordCaptureTask = nil
@@ -1273,19 +1274,9 @@ extension ScoreReaderState {
                     }
                 }
 
-                var insertedState: ScoreEditingState?
-                for (index, midiPitch) in validPitches.enumerated() {
-                    insertedState = try await liveRenderSession.insertMIDIPitchAtCursor(
-                        midiPitch,
-                        preferFlats: preferFlats,
-                        addToCurrentChord: index > 0
-                    )
-                }
-
-                if let insertedState {
-                    self?.hasContinuousNoteInputCursor = true
-                    self?.refreshAfterScoreMutation(with: insertedState, auditionNote: true, revealActiveNotation: true)
-                }
+                let insertedState = try await liveRenderSession.insertMIDIChordAtCursor(validPitches, preferFlats: preferFlats)
+                self?.hasContinuousNoteInputCursor = true
+                self?.refreshAfterScoreMutation(with: insertedState, auditionNote: true, revealActiveNotation: true)
             } catch {
                 self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
