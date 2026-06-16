@@ -100,3 +100,6 @@ compile_commands.json
 
 # Local App Store screenshot editor and exports.
 /screenshots/
+
+# Standalone privacy policy website; tracked in its own repository.
+/privacy-site/

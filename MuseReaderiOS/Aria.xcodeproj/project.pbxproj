@@ -424,7 +424,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -461,7 +461,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				MUSEREADER_QT_HOST_SDK_DIR = /path/to/Qt/6.11.0/macos;
 				MUSEREADER_QT_IOS_SDK_DIR = /path/to/Qt/6.11.0/ios;
 				OTHER_LDFLAGS = "$(inherited)";
@@ -585,7 +585,7 @@
 					AudioToolbox,
 					"-lm",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.aria;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -604,7 +604,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -641,7 +641,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				MUSEREADER_QT_HOST_SDK_DIR = /path/to/Qt/6.11.0/macos;
 				MUSEREADER_QT_IOS_SDK_DIR = /path/to/Qt/6.11.0/ios;
 				OTHER_LDFLAGS = "$(inherited)";
@@ -765,7 +765,7 @@
 					AudioToolbox,
 					"-lm",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.aria;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

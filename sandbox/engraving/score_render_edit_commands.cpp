@@ -1589,6 +1589,9 @@
             score->select(replacementNote, mu::engraving::SelectType::SINGLE, replacementNote->staffIdx());
             if (addToCurrentChord && replacementNote->chord()) {
                 configureInputCursorForChordRest(score, replacementNote->chord(), false);
+            } else {
+                score->nextInputPos(replacementNote->chord(), false);
+                appendMeasureIfInputCursorReachedEnd(score);
             }
             score->endCmd();
             refreshAfterEdit();

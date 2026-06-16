@@ -8,6 +8,7 @@ import Foundation
 
 final class MIDIInputController {
     var noteOnHandler: ((Int) -> Void)?
+    var noteOffHandler: ((Int) -> Void)?
 
     private var client = MIDIClientRef()
     private var inputPort = MIDIPortRef()
@@ -137,6 +138,8 @@ final class MIDIInputController {
                 index += 2
                 if messageType == 0x90, velocity > 0 {
                     emitNoteOn(Int(note))
+                } else {
+                    emitNoteOff(Int(note))
                 }
             case 0xA0, 0xB0, 0xE0:
                 index += min(2, count - index)
@@ -154,6 +157,12 @@ final class MIDIInputController {
     private func emitNoteOn(_ midiPitch: Int) {
         DispatchQueue.main.async { [weak self] in
             self?.noteOnHandler?(midiPitch)
+        }
+    }
+
+    private func emitNoteOff(_ midiPitch: Int) {
+        DispatchQueue.main.async { [weak self] in
+            self?.noteOffHandler?(midiPitch)
         }
     }
 }

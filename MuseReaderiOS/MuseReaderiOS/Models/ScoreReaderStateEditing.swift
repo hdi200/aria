@@ -1166,11 +1166,40 @@ extension ScoreReaderState {
             return
         }
 
+        activeMIDIPitches.removeAll()
+        pendingMIDIChordPitches.removeAll()
+        midiChordCaptureTask?.cancel()
+        midiChordCaptureTask = nil
         midiInputController.start()
     }
 
     func stopMIDIInput() {
         midiInputController.stop()
+        activeMIDIPitches.removeAll()
+        pendingMIDIChordPitches.removeAll()
+        midiChordCaptureTask?.cancel()
+        midiChordCaptureTask = nil
+    }
+
+    func handleMIDINoteOn(_ midiPitch: Int) {
+        guard (0...127).contains(midiPitch) else {
+            return
+        }
+
+        guard activeMIDIPitches.insert(midiPitch).inserted else {
+            return
+        }
+
+        if stackedChordInputEnabled && !editingState.noteInputInsertsRests {
+            pendingMIDIChordPitches.insert(midiPitch)
+            scheduleMIDIChordCapture()
+        } else {
+            handleMIDIPitchInput(midiPitch)
+        }
+    }
+
+    func handleMIDINoteOff(_ midiPitch: Int) {
+        activeMIDIPitches.remove(midiPitch)
     }
 
     func handleMIDIPitchInput(_ midiPitch: Int) {
@@ -1180,6 +1209,87 @@ extension ScoreReaderState {
 
         let pitchClass = normalizedPitchClass(midiPitch)
         handleKeyboardPitch(pitchClass, midiPitch: midiPitch, preferFlats: pendingPreferFlats, exactMIDIPitch: true)
+    }
+
+    private func scheduleMIDIChordCapture() {
+        midiChordCaptureTask?.cancel()
+        midiChordCaptureTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 45_000_000)
+            self?.commitPendingMIDIChordCapture()
+        }
+    }
+
+    private func commitPendingMIDIChordCapture() {
+        let midiPitches = pendingMIDIChordPitches.sorted()
+        pendingMIDIChordPitches.removeAll()
+        midiChordCaptureTask = nil
+
+        guard !midiPitches.isEmpty else {
+            return
+        }
+
+        guard midiPitches.count > 1 else {
+            handleMIDIPitchInput(midiPitches[0])
+            return
+        }
+
+        insertMIDIChordAtCursor(midiPitches, preferFlats: pendingPreferFlats)
+    }
+
+    private func insertMIDIChordAtCursor(_ midiPitches: [Int], preferFlats: Bool) {
+        guard
+            supportsEditing,
+            let liveRenderSession = session.liveRenderSession,
+            !isEditingActionInFlight
+        else {
+            return
+        }
+
+        let validPitches = midiPitches.filter { (0...127).contains($0) }
+        guard !validPitches.isEmpty else {
+            return
+        }
+
+        pendingMIDIPitch = validPitches.first
+        pendingPitchClass = validPitches.first.map(normalizedPitchClass)
+        pendingPreferFlats = preferFlats
+        pendingAccidentalKind = nil
+
+        isEditingActionInFlight = true
+        editingErrorMessage = nil
+        let noteInputWasEnabled = editingState.noteInputEnabled
+        let preferredVoice = editingState.currentVoice
+
+        Task { @MainActor [weak self] in
+            defer {
+                self?.isEditingActionInFlight = false
+            }
+
+            do {
+                if !noteInputWasEnabled {
+                    let enabledState = try await liveRenderSession.setNoteInputEnabled(true)
+                    if enabledState.currentVoice != preferredVoice {
+                        _ = try await liveRenderSession.setCurrentVoice(preferredVoice)
+                    }
+                }
+
+                var insertedState: ScoreEditingState?
+                for (index, midiPitch) in validPitches.enumerated() {
+                    insertedState = try await liveRenderSession.insertMIDIPitchAtCursor(
+                        midiPitch,
+                        preferFlats: preferFlats,
+                        addToCurrentChord: index > 0
+                    )
+                }
+
+                if let insertedState {
+                    self?.hasContinuousNoteInputCursor = true
+                    self?.refreshAfterScoreMutation(with: insertedState, auditionNote: true, revealActiveNotation: true)
+                }
+            } catch {
+                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
     }
 
     private func normalizedPitchClass(_ midiPitch: Int) -> Int {

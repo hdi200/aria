@@ -66,6 +66,9 @@ final class ScoreReaderState: ObservableObject {
     var partSelectionErrorMessage: String?
     var hasContinuousNoteInputCursor = false
     var shouldEditSelectedPitchBeforeContinuingKeyboardInput = false
+    var activeMIDIPitches: Set<Int> = []
+    var pendingMIDIChordPitches: Set<Int> = []
+    var midiChordCaptureTask: Task<Void, Never>?
 
     // Tracks the most recent Pencil aim (hover/fine-tune) so a note-entry tap can
     // commit exactly where the live preview ghost was shown, rather than the tap's
@@ -119,7 +122,12 @@ final class ScoreReaderState: ObservableObject {
             : .unavailable
         midiInputController.noteOnHandler = { [weak self] midiPitch in
             Task { @MainActor [weak self] in
-                self?.handleMIDIPitchInput(midiPitch)
+                self?.handleMIDINoteOn(midiPitch)
+            }
+        }
+        midiInputController.noteOffHandler = { [weak self] midiPitch in
+            Task { @MainActor [weak self] in
+                self?.handleMIDINoteOff(midiPitch)
             }
         }
     }
@@ -133,6 +141,7 @@ final class ScoreReaderState: ObservableObject {
         autosaveTask?.cancel()
         deferredPagePrefetchTask?.cancel()
         noteEntryPreviewTask?.cancel()
+        midiChordCaptureTask?.cancel()
     }
 
 
