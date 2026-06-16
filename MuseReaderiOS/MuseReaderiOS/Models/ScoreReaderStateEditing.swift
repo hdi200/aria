@@ -1186,16 +1186,23 @@ extension ScoreReaderState {
             return
         }
 
+        if activeMIDIPitches.isEmpty, !pendingMIDIChordPitches.isEmpty {
+            commitPendingMIDIChordCapture()
+        }
+
         guard activeMIDIPitches.insert(midiPitch).inserted else {
             return
         }
 
         pendingMIDIChordPitches.insert(midiPitch)
-        scheduleMIDIChordCapture()
+        scheduleMIDIChordCaptureIfNeeded(after: midiChordMaxHoldDelay)
     }
 
     func handleMIDINoteOff(_ midiPitch: Int) {
         activeMIDIPitches.remove(midiPitch)
+        if activeMIDIPitches.isEmpty, !pendingMIDIChordPitches.isEmpty {
+            scheduleMIDIChordCapture(after: midiChordReleaseSettleDelay)
+        }
     }
 
     func handleMIDIPitchInput(_ midiPitch: Int) {
@@ -1207,17 +1214,25 @@ extension ScoreReaderState {
         handleKeyboardPitch(pitchClass, midiPitch: midiPitch, preferFlats: pendingPreferFlats, exactMIDIPitch: true)
     }
 
-    private func scheduleMIDIChordCapture() {
+    private func scheduleMIDIChordCaptureIfNeeded(after delay: Duration) {
+        guard midiChordCaptureTask == nil else {
+            return
+        }
+
+        scheduleMIDIChordCapture(after: delay)
+    }
+
+    private func scheduleMIDIChordCapture(after delay: Duration) {
         midiChordCaptureTask?.cancel()
         midiChordCaptureTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: self?.midiChordCaptureDelay ?? .milliseconds(120))
+            try? await Task.sleep(for: delay)
             self?.commitPendingMIDIChordCapture()
         }
     }
 
     private func commitPendingMIDIChordCapture() {
         guard !isEditingActionInFlight else {
-            scheduleMIDIChordCapture()
+            scheduleMIDIChordCapture(after: midiChordReleaseSettleDelay)
             return
         }
 
