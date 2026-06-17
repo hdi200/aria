@@ -1,0 +1,10 @@
+// Shared build settings for Aria.
+//
+// Copy Local.example.xcconfig to Local.xcconfig and update the values for
+// your machine. Local.xcconfig is ignored by git.
+
+DEVELOPMENT_TEAM =
+MUSEREADER_QT_HOST_SDK_DIR =
+MUSEREADER_QT_IOS_SDK_DIR =
+
+#include? "../Local.xcconfig"

@@ -4,4 +4,4 @@ DerivedData/
 xcuserdata/
 *.moved-aside
 *.xcscmblueprint
-
+Local.xcconfig

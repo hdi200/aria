@@ -25,6 +25,8 @@
 
 /* Begin PBXFileReference section */
 		6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Aria-Info.plist"; sourceTree = "<group>"; };
+		6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
+		6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
 		6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aria.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AriaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AriaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -77,6 +79,8 @@
 			isa = PBXGroup;
 			children = (
 				6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */,
+				6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */,
+				6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */,
 				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
 				6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */,
 				6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */,
@@ -298,6 +302,7 @@
 /* Begin XCBuildConfiguration section */
 		6D8D1FE32F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -331,7 +336,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -362,6 +366,7 @@
 		};
 		6D8D1FE42F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -395,7 +400,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -420,12 +424,12 @@
 		};
 		6D8D1FE62F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -461,9 +465,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
-				MUSEREADER_QT_HOST_SDK_DIR = /path/to/Qt/6.11.0/macos;
-				MUSEREADER_QT_IOS_SDK_DIR = /path/to/Qt/6.11.0/ios;
+				MARKETING_VERSION = 1.3;
 				OTHER_LDFLAGS = "$(inherited)";
 				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"$(inherited)",
@@ -600,12 +602,12 @@
 		};
 		6D8D1FE72F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -641,9 +643,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
-				MUSEREADER_QT_HOST_SDK_DIR = /path/to/Qt/6.11.0/macos;
-				MUSEREADER_QT_IOS_SDK_DIR = /path/to/Qt/6.11.0/ios;
+				MARKETING_VERSION = 1.3;
 				OTHER_LDFLAGS = "$(inherited)";
 				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"$(inherited)",
@@ -780,11 +780,11 @@
 		};
 		6D8D1FE92F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -802,11 +802,11 @@
 		};
 		6D8D1FEA2F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -824,10 +824,10 @@
 		};
 		6D8D1FEC2F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
@@ -845,10 +845,10 @@
 		};
 		6D8D1FED2F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = PUBLIC_TEAM_ID;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
