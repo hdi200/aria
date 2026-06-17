@@ -461,7 +461,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				MUSEREADER_QT_HOST_SDK_DIR = /path/to/Qt/6.11.0/macos;
 				MUSEREADER_QT_IOS_SDK_DIR = /path/to/Qt/6.11.0/ios;
 				OTHER_LDFLAGS = "$(inherited)";
@@ -641,7 +641,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				MUSEREADER_QT_HOST_SDK_DIR = /path/to/Qt/6.11.0/macos;
 				MUSEREADER_QT_IOS_SDK_DIR = /path/to/Qt/6.11.0/ios;
 				OTHER_LDFLAGS = "$(inherited)";
