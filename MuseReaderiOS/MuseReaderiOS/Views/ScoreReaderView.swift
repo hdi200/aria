@@ -61,7 +61,7 @@ struct ScoreReaderView: View {
             } else {
                 readerCanvas
                     .overlay(alignment: .bottom) {
-                        if readerState.supportsEditing {
+                        if readerState.supportsEditing && !plainTextEditorIsActive {
                             ScoreReaderNoteEntrySurface(
                                 editingState: readerState.editingState,
                                 pendingPitchClass: readerState.pendingPitchClass,
@@ -659,6 +659,14 @@ struct ScoreReaderView: View {
         selectedToolCategory == .chord || selectedToolCategory == .lyrics
     }
 
+    private var plainTextEditorIsActive: Bool {
+        guard let textEditorDraft else {
+            return false
+        }
+
+        return !textEditorDraft.isChordText && !textEditorDraft.isLyrics
+    }
+
     /// Whether auto-scroll should keep the selected bar inside the unobstructed
     /// viewport. Active for chord/lyric entry and for continuous note input,
     /// where the bottom note-entry keyboard can otherwise hide the active bar.
@@ -672,6 +680,10 @@ struct ScoreReaderView: View {
 
     private func scrollContentBottomInset(isCompactPhoneLayout: Bool, isPhoneLandscapeLayout: Bool) -> CGFloat {
         guard readerState.supportsEditing else {
+            return 40
+        }
+
+        if plainTextEditorIsActive {
             return 40
         }
 
