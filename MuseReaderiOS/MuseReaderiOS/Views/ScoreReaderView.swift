@@ -1196,6 +1196,7 @@ struct ScoreReaderView: View {
             return
         }
         selectedToolCategory = .notes
+        readerState.noteInputWasActivatedByPencil = true
         if !readerState.editingState.noteInputEnabled {
             readerState.setNoteInputEnabled(true)
         }
@@ -1203,12 +1204,14 @@ struct ScoreReaderView: View {
 
     private func selectModeFromToolbar() {
         pencilAutoNoteEntryAllowed = false
+        readerState.noteInputWasActivatedByPencil = false
         readerState.setNoteInputEnabled(false)
         exitTextEntryFocusIfNeeded()
     }
 
     private func noteInputModeFromToolbar() {
         pencilAutoNoteEntryAllowed = true
+        readerState.noteInputWasActivatedByPencil = false
         readerState.setNoteInputEnabled(true)
         exitTextEntryFocusIfNeeded()
     }

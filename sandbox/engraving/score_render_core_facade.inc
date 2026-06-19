@@ -176,6 +176,11 @@ bool msr::render::ScoreRenderSession::toggleRest(ScoreEditState& output, std::st
     return m_impl->toggleRest(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::enterRestAtCursor(ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->enterRestAtCursor(output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::toggleTie(ScoreEditState& output, std::string& errorMessage)
 {
     return m_impl->toggleTie(output, errorMessage);

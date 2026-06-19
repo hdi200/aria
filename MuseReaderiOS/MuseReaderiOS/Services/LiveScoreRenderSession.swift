@@ -289,6 +289,16 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func enterRestAtCursor() throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.enterRestAtCursor())
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func toggleTie() throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()

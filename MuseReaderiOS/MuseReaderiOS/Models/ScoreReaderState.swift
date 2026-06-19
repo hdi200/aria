@@ -66,6 +66,7 @@ final class ScoreReaderState: ObservableObject {
     var partSelectionTask: Task<Void, Never>?
     var partSelectionErrorMessage: String?
     var hasContinuousNoteInputCursor = false
+    var noteInputWasActivatedByPencil = false
     var shouldEditSelectedPitchBeforeContinuingKeyboardInput = false
     var activeMIDIPitches: Set<Int> = []
     var pendingMIDIChordPitches: Set<Int> = []

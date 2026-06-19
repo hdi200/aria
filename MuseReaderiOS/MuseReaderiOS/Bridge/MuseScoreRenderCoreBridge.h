@@ -417,6 +417,7 @@ isEditableText:(BOOL)isEditableText
                                         error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(applyDuration(code:));
 - (nullable MSREditState *)toggleDotWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(toggleDot());
 - (nullable MSREditState *)toggleRestWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(toggleRest());
+- (nullable MSREditState *)enterRestAtCursorWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(enterRestAtCursor());
 - (nullable MSREditState *)toggleTieWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(toggleTie());
 - (nullable MSREditState *)addTuplet:(NSInteger)tupletCount
                                 error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addTuplet(_:));

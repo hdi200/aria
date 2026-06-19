@@ -113,11 +113,6 @@
         mu::engraving::Score* score = activeScore();
         mu::engraving::InputState& inputState = score->inputState();
         if (inputState.noteEntryMode()) {
-            if (!inputState.isValid()) {
-                errorMessage = "Tap a standard staff position before inserting a rest.";
-                return false;
-            }
-
             inputState.setRest(!inputState.rest());
         } else if (mu::engraving::ChordRest* chordRest = selectedOrMeasureChordRest(score)) {
             if (!selectedChordRest(score)) {
@@ -138,6 +133,58 @@
         } else {
             errorMessage.clear();
         }
+
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool enterRestAtCursor(msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::InputState& inputState = score->inputState();
+        if (!inputState.noteEntryMode()) {
+            errorMessage = "Enable note input before entering rests at the cursor.";
+            return false;
+        }
+
+        if (!inputState.isValid()) {
+            errorMessage = "Tap a standard staff position before entering a rest.";
+            return false;
+        }
+
+        normalizeNoteEntryDuration(inputState);
+        if (!inputState.duration().isValid() || inputState.duration().isZero() || inputState.duration().isMeasure()) {
+            errorMessage = "Choose a standard duration before entering a rest.";
+            return false;
+        }
+
+        mu::engraving::Staff* staff = inputState.staff();
+        if (!isStandardStaff(staff, inputState.tick())) {
+            errorMessage = "Rest entry currently works only on standard staves.";
+            return false;
+        }
+
+        const mu::engraving::TDuration duration = inputState.duration();
+        mu::engraving::Segment* targetSegment = inputState.segment();
+        const mu::engraving::track_idx_t targetTrack = inputState.track();
+        inputState.setRest(true);
+        score->cmdEnterRest(duration);
+        if (targetSegment && targetTrack != muse::nidx) {
+            if (mu::engraving::EngravingItem* insertedItem = targetSegment->element(targetTrack)) {
+                if (insertedItem->isChordRest()) {
+                    if (mu::engraving::EngravingItem* selectableItem = noteOrRestSelectionItem(mu::engraving::toChordRest(insertedItem))) {
+                        score->select(selectableItem, mu::engraving::SelectType::SINGLE, selectableItem->staffIdx());
+                    }
+                }
+            }
+        }
+        appendMeasureIfInputCursorReachedEnd(score);
+        refreshAfterEdit();
 
         output = makeEditState(score);
         return true;

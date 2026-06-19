@@ -466,6 +466,7 @@ extension ScoreReaderState {
                 }
                 if !targetValue {
                     self?.hasContinuousNoteInputCursor = false
+                    self?.noteInputWasActivatedByPencil = false
                     self?.stackedChordInputEnabled = false
                     self?.updateNoteEntryPreview(pageIndex: self?.selectedPageIndex ?? 0, normalizedPoint: nil)
                 }
@@ -489,8 +490,12 @@ extension ScoreReaderState {
         if !editingState.noteInputInsertsRests {
             stackedChordInputEnabled = false
         }
+        let shouldEnterRestAtCursor = editingState.noteInputEnabled && !noteInputWasActivatedByPencil
         performEditingAction(mutatesScore: editingState.noteInputEnabled || editingState.selection != nil) { liveRenderSession in
-            try await liveRenderSession.toggleRest()
+            if shouldEnterRestAtCursor {
+                return try await liveRenderSession.enterRestAtCursor()
+            }
+            return try await liveRenderSession.toggleRest()
         }
     }
 
@@ -1056,6 +1061,7 @@ extension ScoreReaderState {
         pendingMIDIPitch = midiPitch
         pendingPreferFlats = preferFlats
         pendingAccidentalKind = nil
+        noteInputWasActivatedByPencil = false
 
         if shouldEditSelectedPitchBeforeContinuingKeyboardInput,
            editingState.selection?.canChangePitch == true {

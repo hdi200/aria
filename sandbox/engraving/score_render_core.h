@@ -236,6 +236,7 @@ public:
     bool applyDuration(int durationCode, ScoreEditState& output, std::string& errorMessage);
     bool toggleDot(ScoreEditState& output, std::string& errorMessage);
     bool toggleRest(ScoreEditState& output, std::string& errorMessage);
+    bool enterRestAtCursor(ScoreEditState& output, std::string& errorMessage);
     bool toggleTie(ScoreEditState& output, std::string& errorMessage);
     bool addTuplet(int tupletCount, ScoreEditState& output, std::string& errorMessage);
     bool addText(const std::string& textKind, ScoreEditState& output, std::string& errorMessage);
