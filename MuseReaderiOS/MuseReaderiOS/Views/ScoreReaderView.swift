@@ -584,7 +584,7 @@ struct ScoreReaderView: View {
                                     )
                                 },
                                 pencilInteractionStartAction: activatePencilNoteEntryMode,
-                                pencilDoubleTapAction: readerState.toggleNoteInput
+                                pencilDoubleTapAction: toggleNoteInputFromPencilDoubleTap
                             )
                             .id(pageIndex)
                             .onAppear {
@@ -1199,6 +1199,14 @@ struct ScoreReaderView: View {
         pencilAutoNoteEntryAllowed = true
         readerState.setNoteInputEnabled(true)
         exitTextEntryFocusIfNeeded()
+    }
+
+    private func toggleNoteInputFromPencilDoubleTap() {
+        if readerState.editingState.noteInputEnabled {
+            selectModeFromToolbar()
+        } else {
+            noteInputModeFromToolbar()
+        }
     }
 
     private func dismissSelectionCommandMenu(identity: String) {

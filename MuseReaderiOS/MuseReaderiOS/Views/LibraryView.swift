@@ -262,7 +262,7 @@ struct LibraryView: View {
         .sheet(isPresented: $isOpenSourceLegalPresented) {
             OpenSourceLegalView()
         }
-        .sheet(item: $scoreInfoEditorSession) { session in
+        .fullScreenCover(item: $scoreInfoEditorSession) { session in
             LibraryScoreInfoEditorSheet(
                 metadata: $editableScoreInfo,
                 isSaving: isSavingScoreInfo,
@@ -1534,7 +1534,6 @@ private struct LibraryScoreInfoEditorSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
     }
 }
 

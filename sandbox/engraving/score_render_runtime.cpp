@@ -714,6 +714,7 @@ bool isEditableTextItem(const mu::engraving::EngravingItem* item)
                     || item->isText()
                     || item->isStaffText()
                     || item->isSystemText()
+                    || item->isTextBase()
                     || item->isDynamic()
                     || item->isTempoText()
                     || item->isJump()
@@ -2605,6 +2606,38 @@ mu::engraving::Page* pageForItem(mu::engraving::EngravingItem* item)
     return system ? system->page() : nullptr;
 }
 
+mu::engraving::Page* pageForItem(const mu::engraving::Score* score, mu::engraving::EngravingItem* item)
+{
+    if (mu::engraving::Page* page = pageForItem(item)) {
+        return page;
+    }
+
+    if (!score || !item || !isEditableTextItem(item)) {
+        return nullptr;
+    }
+
+    const mu::engraving::RectF itemRect = item->pageBoundingRect();
+    for (mu::engraving::Page* page : score->pages()) {
+        if (!page) {
+            continue;
+        }
+
+        const std::vector<mu::engraving::EngravingItem*> elements = page->elements();
+        if (std::find(elements.begin(), elements.end(), item) != elements.end()) {
+            return page;
+        }
+
+        if (itemRect.width() > 0.0 && itemRect.height() > 0.0) {
+            const std::vector<mu::engraving::EngravingItem*> items = page->items(itemRect);
+            if (std::find(items.begin(), items.end(), item) != items.end()) {
+                return page;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 muse::midi::Program midiProgramForSetup(const muse::mpe::PlaybackSetupData& setupData);
 
 mu::engraving::RectF paddedSelectionRect(mu::engraving::RectF rect, const double spatium)
@@ -3115,7 +3148,7 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     const bool tempoSelection = selectedItem->isTempoText();
     mu::engraving::Spanner* expressionSpanner = expressionSpannerForItem(selectedItem);
 
-    mu::engraving::Page* page = pageForItem(displayItem);
+    mu::engraving::Page* page = pageForItem(score, displayItem);
     if (!page || page->width() <= 0.0 || page->height() <= 0.0) {
         return selectionState;
     }
