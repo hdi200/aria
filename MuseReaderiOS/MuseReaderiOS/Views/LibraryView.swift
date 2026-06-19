@@ -16,6 +16,10 @@ struct LibraryView: View {
     @State private var selectedCategory: LibraryCategory = .allScores
     @State private var readerPresentation: LibraryReaderPresentation?
     @State private var scorePendingDeletion: ReaderRecentDocument?
+    @State private var scoreInfoEditorSession: ScoreSession?
+    @State private var editableScoreInfo = ScoreEditableMetadata()
+    @State private var isSavingScoreInfo = false
+    @State private var scoreInfoSaveErrorMessage: String?
     @State private var isNewSetlistPresented = false
     @State private var newSetlistName = ""
     @State private var folderPendingRename: LibrarySetlistFolder?
@@ -83,6 +87,7 @@ struct LibraryView: View {
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
                     openAction: openScore,
+                    editInfoAction: presentScoreInfoEditor,
                     deleteAction: { scorePendingDeletion = $0 },
                     createFolderAction: {
                         newSetlistName = ""
@@ -144,6 +149,7 @@ struct LibraryView: View {
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
                     openAction: openScore,
+                    editInfoAction: presentScoreInfoEditor,
                     deleteAction: { scorePendingDeletion = $0 },
                     openSourceAction: {
                         isOpenSourceLegalPresented = true
@@ -195,6 +201,11 @@ struct LibraryView: View {
             }
         } message: {
             Text("This removes the score from your library.")
+        }
+        .alert("Could Not Save Score Info", isPresented: scoreInfoSaveErrorIsPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(scoreInfoSaveErrorMessage ?? "Aria could not save these score details.")
         }
         .alert("New Folder", isPresented: $isNewSetlistPresented) {
             TextField("Folder name", text: $newSetlistName)
@@ -251,6 +262,21 @@ struct LibraryView: View {
         .sheet(isPresented: $isOpenSourceLegalPresented) {
             OpenSourceLegalView()
         }
+        .sheet(item: $scoreInfoEditorSession) { session in
+            LibraryScoreInfoEditorSheet(
+                metadata: $editableScoreInfo,
+                isSaving: isSavingScoreInfo,
+                cancelAction: {
+                    guard !isSavingScoreInfo else {
+                        return
+                    }
+                    scoreInfoEditorSession = nil
+                },
+                saveAction: {
+                    saveEditedScoreInfo(for: session)
+                }
+            )
+        }
         // Re-assert a visible status bar so the top safe-area inset is restored
         // after the reader cover (which hides it) is dismissed.
         .statusBarHidden(false)
@@ -285,6 +311,16 @@ struct LibraryView: View {
         }
     }
 
+    private var scoreInfoSaveErrorIsPresented: Binding<Bool> {
+        Binding {
+            scoreInfoSaveErrorMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                scoreInfoSaveErrorMessage = nil
+            }
+        }
+    }
+
     private func openScore(_ recent: ReaderRecentDocument) {
         Task {
             guard let session = await model.readerSession(for: recent) else {
@@ -292,6 +328,43 @@ struct LibraryView: View {
             }
 
             readerPresentation = LibraryReaderPresentation(session: session, startPageIndex: 0)
+        }
+    }
+
+    private func presentScoreInfoEditor(for recent: ReaderRecentDocument) {
+        Task {
+            guard let session = await model.readerSession(for: recent) else {
+                return
+            }
+
+            editableScoreInfo = ScoreEditableMetadata(document: session.document)
+            scoreInfoSaveErrorMessage = nil
+            scoreInfoEditorSession = session
+        }
+    }
+
+    private func saveEditedScoreInfo(for session: ScoreSession) {
+        guard !isSavingScoreInfo else {
+            return
+        }
+
+        isSavingScoreInfo = true
+        scoreInfoSaveErrorMessage = nil
+        let metadata = editableScoreInfo
+
+        Task {
+            do {
+                try await model.saveMetadata(metadata, for: session)
+                await MainActor.run {
+                    isSavingScoreInfo = false
+                    scoreInfoEditorSession = nil
+                }
+            } catch {
+                await MainActor.run {
+                    scoreInfoSaveErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    isSavingScoreInfo = false
+                }
+            }
         }
     }
 }
@@ -590,6 +663,7 @@ private struct PhoneLibraryView: View {
     let createAction: () -> Void
     let importAction: () -> Void
     let openAction: (ReaderRecentDocument) -> Void
+    let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
@@ -677,6 +751,7 @@ private struct PhoneLibraryView: View {
                     PhoneScoreList(
                         scores: scores,
                         openAction: openAction,
+                        editInfoAction: editInfoAction,
                         deleteAction: deleteAction
                     )
                 }
@@ -869,6 +944,7 @@ private struct PhoneSetlistContent: View {
 private struct PhoneScoreList: View {
     let scores: [ReaderRecentDocument]
     let openAction: (ReaderRecentDocument) -> Void
+    let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
 
     var body: some View {
@@ -877,6 +953,7 @@ private struct PhoneScoreList: View {
                 PhoneScoreListRow(
                     score: score,
                     openAction: { openAction(score) },
+                    editInfoAction: { editInfoAction(score) },
                     deleteAction: { deleteAction(score) }
                 )
 
@@ -900,6 +977,7 @@ private struct PhoneScoreList: View {
 private struct PhoneScoreListRow: View {
     let score: ReaderRecentDocument
     let openAction: () -> Void
+    let editInfoAction: () -> Void
     let deleteAction: () -> Void
 
     var body: some View {
@@ -937,6 +1015,9 @@ private struct PhoneScoreListRow: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button(action: editInfoAction) {
+                Label("Edit Info", systemImage: "square.and.pencil")
+            }
             Button(role: .destructive, action: deleteAction) {
                 Label("Delete Score", systemImage: "trash")
             }
@@ -990,6 +1071,7 @@ private struct LibraryDashboardView: View {
     let createAction: () -> Void
     let importAction: () -> Void
     let openAction: (ReaderRecentDocument) -> Void
+    let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
     let openSourceAction: () -> Void
 
@@ -1020,6 +1102,7 @@ private struct LibraryDashboardView: View {
                                 score: score,
                                 paletteIndex: index,
                                 openAction: { openAction(score) },
+                                editInfoAction: { editInfoAction(score) },
                                 deleteAction: { deleteAction(score) }
                             )
                         }
@@ -1178,6 +1261,7 @@ private struct LibraryScoreCard: View {
     let score: ReaderRecentDocument
     let paletteIndex: Int
     let openAction: () -> Void
+    let editInfoAction: () -> Void
     let deleteAction: () -> Void
 
     @State private var isInfoPresented = false
@@ -1216,13 +1300,10 @@ private struct LibraryScoreCard: View {
                 }
             }
             .buttonStyle(.plain)
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.55)
-                    .onEnded { _ in
-                        deleteAction()
-                    }
-            )
             .contextMenu {
+                Button(action: editInfoAction) {
+                    Label("Edit Info", systemImage: "square.and.pencil")
+                }
                 Button(role: .destructive, action: deleteAction) {
                     Label("Delete Score", systemImage: "trash")
                 }
@@ -1410,6 +1491,50 @@ private struct ScoreInfoRow: View {
                 .foregroundStyle(LibraryPalette.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+private struct LibraryScoreInfoEditorSheet: View {
+    @Binding var metadata: ScoreEditableMetadata
+    let isSaving: Bool
+    let cancelAction: () -> Void
+    let saveAction: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Title Page") {
+                    TextField("Title", text: $metadata.title)
+                    TextField("Subtitle", text: $metadata.subtitle)
+                }
+
+                Section("Credits") {
+                    TextField("Composer", text: $metadata.composer)
+                    TextField("Arranger", text: $metadata.arranger)
+                    TextField("Lyricist", text: $metadata.lyricist)
+                }
+
+                Section {
+                    Text("Changes save back to this score in your Aria library.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Edit Score Info")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: cancelAction)
+                        .disabled(isSaving)
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving..." : "Save", action: saveAction)
+                        .disabled(isSaving)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
