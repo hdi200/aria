@@ -433,6 +433,11 @@ bool msr::render::ScoreRenderSession::addMeasures(const int count, ScoreEditStat
     return m_impl->addMeasures(count, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::resetTemplateMeasures(const int count, ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->resetTemplateMeasures(count, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::setRegularMeasureCount(const int count, ScoreEditState& output, std::string& errorMessage)
 {
     return m_impl->setRegularMeasureCount(count, output, errorMessage);

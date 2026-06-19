@@ -442,6 +442,16 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func resetTemplateMeasures(_ count: Int) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.resetTemplateMeasures(count), refreshScope: .all)
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func updateStaffSpacing(_ staffDistanceSpatium: Double) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()

@@ -1934,6 +1934,56 @@
         return true;
     }
 
+    bool resetTemplateMeasures(const int count, msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+        if (count <= 0 || count > 256) {
+            errorMessage = "Choose between 1 and 256 measures.";
+            return false;
+        }
+
+        mu::engraving::Score* structuralScore = m_masterScore.get();
+        if (!structuralScore || !structuralScore->firstMeasure()) {
+            errorMessage = "This score has no measures.";
+            return false;
+        }
+
+        structuralScore->startCmd(muse::TranslatableString::untranslatable("MuseReader reset template measures"));
+        structuralScore->clearSystemLocks();
+
+        if (mu::engraving::Measure* first = structuralScore->firstMeasure()) {
+            structuralScore->deleteMeasures(first, structuralScore->lastMeasure());
+        }
+
+        mu::engraving::MeasureBase* firstInserted = nullptr;
+        mu::engraving::MeasureBase* lastInserted = nullptr;
+        for (int index = 0; index < count; ++index) {
+            mu::engraving::MeasureBase* inserted = structuralScore->insertMeasure(mu::engraving::ElementType::MEASURE, nullptr);
+            if (!inserted) {
+                structuralScore->endCmd(true);
+                errorMessage = "MuseScore could not create fresh template measures.";
+                return false;
+            }
+            if (!firstInserted) {
+                firstInserted = inserted;
+            }
+            lastInserted = inserted;
+        }
+
+        structuralScore->endCmd();
+        refreshAfterEdit();
+
+        mu::engraving::Score* score = activeScore();
+        if (firstInserted && lastInserted && firstInserted->isMeasure() && lastInserted->isMeasure()) {
+            ::selectMeasureRange(score, mu::engraving::toMeasure(firstInserted), mu::engraving::toMeasure(firstInserted));
+        }
+        output = makeEditState(score);
+        return true;
+    }
+
     bool setRegularMeasureCount(const int count, msr::render::ScoreEditState& output, std::string& errorMessage)
     {
         if (!supportsEditing()) {

@@ -281,6 +281,7 @@ public:
     bool clearSelectedMeasure(ScoreEditState& output, std::string& errorMessage);
     bool removeSelectedMeasure(ScoreEditState& output, std::string& errorMessage);
     bool addMeasures(int count, ScoreEditState& output, std::string& errorMessage);
+    bool resetTemplateMeasures(int count, ScoreEditState& output, std::string& errorMessage);
     bool setRegularMeasureCount(int count, ScoreEditState& output, std::string& errorMessage);
     bool firstMeasurePickupState(PickupMeasureState& output, std::string& errorMessage);
     bool setFirstMeasurePickup(int numerator, int denominator, ScoreEditState& output, std::string& errorMessage);

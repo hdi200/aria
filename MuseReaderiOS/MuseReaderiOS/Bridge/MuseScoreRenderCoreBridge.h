@@ -510,6 +510,8 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)removeSelectedMeasureWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(removeSelectedMeasure());
 - (nullable MSREditState *)addMeasures:(NSInteger)count
                                   error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addMeasures(_:));
+- (nullable MSREditState *)resetTemplateMeasures:(NSInteger)count
+                                           error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(resetTemplateMeasures(_:));
 - (nullable MSREditState *)setRegularMeasureCount:(NSInteger)count
                                             error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setRegularMeasureCount(_:));
 - (nullable MSRPickupMeasureInfo *)firstMeasurePickupStateWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(firstMeasurePickupState());

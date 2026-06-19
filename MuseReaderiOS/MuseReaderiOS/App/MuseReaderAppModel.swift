@@ -163,6 +163,7 @@ final class MuseReaderAppModel: ObservableObject {
                 if shouldReplaceQuickTemplateInstruments {
                     _ = try await liveRenderSession.replaceInstruments(draft.selectedInstruments.map(\.instrumentID))
                 }
+                _ = try await liveRenderSession.resetTemplateMeasures(draft.measureCount)
                 try await liveRenderSession.updateMetadata(draft.metadata)
                 try await liveRenderSession.updateInitialKeySignature(draft.keySignature.keyValue)
                 _ = try await liveRenderSession.updateTimeSignature(draft.timeSignature.scoreValue, fromStart: true)
