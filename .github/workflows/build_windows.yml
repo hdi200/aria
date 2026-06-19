@@ -60,7 +60,7 @@ jobs:
     runs-on: windows-2025
     steps:
     - name: Clone repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
     - name: Configure workflow
       shell: bash
       env:
@@ -250,7 +250,7 @@ jobs:
     runs-on: windows-2025
     steps:
     - name: Clone repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
     - name: Configure workflow
       shell: bash
       env:
@@ -390,7 +390,7 @@ jobs:
   #   runs-on: windows-2025
   #   steps:
   #   - name: Clone repository
-  #     uses: actions/checkout@v6
+  #     uses: actions/checkout@v7
   #   - name: Sign test
   #     shell: cmd
   #     run: |

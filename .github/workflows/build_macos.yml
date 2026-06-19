@@ -53,7 +53,7 @@ jobs:
     runs-on: macos-26
     steps:
     - name: Clone repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     - name: Configure workflow
       env:

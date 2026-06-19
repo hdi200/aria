@@ -84,7 +84,7 @@ jobs:
             dump-symbols-arch: aarch64
     steps:
     - name: Clone repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
     - name: Configure workflow
       env:
         pull_request_title: ${{ github.event.pull_request.title }}
