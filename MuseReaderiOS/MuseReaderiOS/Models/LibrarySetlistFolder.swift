@@ -2,7 +2,6 @@
 //  LibrarySetlistFolder.swift
 //  MuseReaderiOS
 //
-//  Created on 5/25/26.
 //
 
 import Foundation

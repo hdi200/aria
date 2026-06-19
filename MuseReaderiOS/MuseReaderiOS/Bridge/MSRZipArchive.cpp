@@ -2,7 +2,6 @@
 //  MSRZipArchive.cpp
 //  MuseReaderiOS
 //
-//  Created on 4/13/26.
 //
 
 #include "MSRZipArchive.hpp"

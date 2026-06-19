@@ -2,7 +2,6 @@
 //  MSRZipArchive.hpp
 //  MuseReaderiOS
 //
-//  Created on 4/13/26.
 //
 
 #pragma once

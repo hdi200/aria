@@ -2,7 +2,6 @@
 //  MusicNotationFont.swift
 //  MuseReaderiOS
 //
-//  Created on 5/5/26.
 //
 
 import CoreText

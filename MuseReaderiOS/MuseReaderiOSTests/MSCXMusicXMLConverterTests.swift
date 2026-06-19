@@ -2,7 +2,6 @@
 //  MSCXMusicXMLConverterTests.swift
 //  MuseReaderiOSTests
 //
-//  Created on 5/20/26.
 //
 
 import Foundation

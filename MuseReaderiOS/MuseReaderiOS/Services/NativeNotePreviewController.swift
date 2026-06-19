@@ -2,7 +2,6 @@
 //  NativeNotePreviewController.swift
 //  MuseReaderiOS
 //
-//  Created on 5/13/26.
 //
 
 import AVFoundation

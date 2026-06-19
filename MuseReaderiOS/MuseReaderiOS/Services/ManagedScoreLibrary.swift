@@ -2,7 +2,6 @@
 //  ManagedScoreLibrary.swift
 //  MuseReaderiOS
 //
-//  Created on 4/14/26.
 //
 
 import Foundation

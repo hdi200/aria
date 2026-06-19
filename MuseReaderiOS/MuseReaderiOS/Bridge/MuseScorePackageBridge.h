@@ -2,7 +2,6 @@
 //  MuseScorePackageBridge.h
 //  MuseReaderiOS
 //
-//  Created on 4/13/26.
 //
 
 #import <Foundation/Foundation.h>

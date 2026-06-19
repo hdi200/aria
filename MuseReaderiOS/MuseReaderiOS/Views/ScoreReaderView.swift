@@ -2,7 +2,6 @@
 //  ScoreReaderView.swift
 //  MuseReaderiOS
 //
-//  Created on 4/13/26.
 //
 
 import SwiftUI

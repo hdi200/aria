@@ -2,7 +2,6 @@
 //  NewScoreInstrumentCatalog.swift
 //  MuseReaderiOS
 //
-//  Created on 5/22/26.
 //
 
 import Foundation
