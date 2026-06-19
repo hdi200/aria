@@ -531,12 +531,7 @@ private struct ScoreReaderSelectedNoteRestActions: View {
 
     private func actionPosition(in size: CGSize) -> CGPoint {
         let rect = actionAnchorCGRect(in: size)
-        let rawX = rect.maxX + 20
-        let rawY = rect.minY - 28
-        return CGPoint(
-            x: min(max(rawX, 24), max(size.width - 24, 24)),
-            y: min(max(rawY, 24), max(size.height - 24, 24))
-        )
+        return CGPoint(x: rect.maxX + 20, y: rect.minY - 28)
     }
 
     private func actionAnchorRect() -> ScoreNormalizedRect {
@@ -889,12 +884,7 @@ struct ScoreReaderSelectedMeasureActions: View {
 
     private func actionPosition(in size: CGSize) -> CGPoint {
         let rect = actionAnchorCGRect(in: size)
-        let rawX = rect.maxX + 20
-        let rawY = rect.minY - 28
-        return CGPoint(
-            x: min(max(rawX, 24), max(size.width - 24, 24)),
-            y: min(max(rawY, 24), max(size.height - 24, 24))
-        )
+        return CGPoint(x: rect.maxX + 20, y: rect.minY - 28)
     }
 
     private func actionAnchorRect() -> ScoreNormalizedRect {

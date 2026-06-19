@@ -300,7 +300,12 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         func publishViewport(from scrollView: UIScrollView) {
-            let origin = zoomView.map { scrollView.convert(.zero, from: $0) } ?? CGPoint(
+            let origin = zoomView.map {
+                CGPoint(
+                    x: $0.frame.minX - scrollView.contentOffset.x,
+                    y: $0.frame.minY - scrollView.contentOffset.y
+                )
+            } ?? CGPoint(
                 x: -scrollView.contentOffset.x,
                 y: -scrollView.contentOffset.y
             )
