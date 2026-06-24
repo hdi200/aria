@@ -576,6 +576,12 @@ extension ScoreReaderState {
         }
     }
 
+    func addSlur() {
+        performEditingAction(mutatesScore: true) { liveRenderSession in
+            try await liveRenderSession.addExpression("slur")
+        }
+    }
+
     func addTuplet(_ tupletCount: Int) {
         guard (2...9).contains(tupletCount) else {
             editingErrorMessage = "Choose a tuplet from 2 through 9."

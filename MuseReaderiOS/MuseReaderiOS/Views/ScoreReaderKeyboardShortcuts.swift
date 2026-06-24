@@ -18,6 +18,16 @@ enum ScoreReaderKeyboardShortcut {
     case clearSelection
     case selectPrevious
     case selectNext
+    case toggleNoteInput
+    case enterPitch(Int)
+    case applyDuration(ScoreNoteDuration)
+    case enterRest
+    case toggleDot
+    case toggleTie
+    case addSlur
+    case movePitch(up: Bool)
+    case shiftOctave(Int)
+    case shiftSemitone(Int)
 }
 
 struct ScoreReaderKeyboardShortcutView: UIViewRepresentable {
@@ -66,10 +76,34 @@ final class KeyboardShortcutHostingView: UIView {
             command(UIKeyCommand.inputDelete, title: "Delete"),
             command(" ", title: "Play/Pause"),
             command(UIKeyCommand.inputEscape, title: "Clear Selection"),
+            command("n", title: "Toggle Note Input"),
+            command("a", title: "Enter A"),
+            command("b", title: "Enter B"),
+            command("c", title: "Enter C"),
+            command("d", title: "Enter D"),
+            command("e", title: "Enter E"),
+            command("f", title: "Enter F"),
+            command("g", title: "Enter G"),
+            command("0", title: "Enter Rest"),
+            command("3", title: "Sixteenth Note"),
+            command("4", title: "Eighth Note"),
+            command("5", title: "Quarter Note"),
+            command("6", title: "Half Note"),
+            command("7", title: "Whole Note"),
+            command(".", title: "Toggle Dot"),
+            command("+", title: "Tie"),
+            command("=", modifiers: .shift, title: "Tie"),
+            command("s", title: "Slur"),
             command(UIKeyCommand.inputLeftArrow, title: "Previous Element"),
-            command(UIKeyCommand.inputUpArrow, title: "Previous Element"),
+            command(UIKeyCommand.inputUpArrow, title: "Move Pitch Up"),
             command(UIKeyCommand.inputRightArrow, title: "Next Element"),
-            command(UIKeyCommand.inputDownArrow, title: "Next Element")
+            command(UIKeyCommand.inputDownArrow, title: "Move Pitch Down"),
+            command(UIKeyCommand.inputUpArrow, modifiers: .alternate, title: "Octave Up"),
+            command(UIKeyCommand.inputDownArrow, modifiers: .alternate, title: "Octave Down"),
+            command(UIKeyCommand.inputUpArrow, modifiers: .command, title: "Half Step Up"),
+            command(UIKeyCommand.inputDownArrow, modifiers: .command, title: "Half Step Down"),
+            command(UIKeyCommand.inputUpArrow, modifiers: .shift, title: "Half Step Up"),
+            command(UIKeyCommand.inputDownArrow, modifiers: .shift, title: "Half Step Down")
         ]
     }
 
@@ -150,10 +184,56 @@ final class KeyboardShortcutHostingView: UIView {
             return .togglePlayback
         case (UIKeyCommand.inputEscape, []):
             return .clearSelection
-        case (UIKeyCommand.inputLeftArrow, []), (UIKeyCommand.inputUpArrow, []):
+        case ("n", []):
+            return .toggleNoteInput
+        case ("a", []):
+            return .enterPitch(9)
+        case ("b", []):
+            return .enterPitch(11)
+        case ("c", []):
+            return .enterPitch(0)
+        case ("d", []):
+            return .enterPitch(2)
+        case ("e", []):
+            return .enterPitch(4)
+        case ("f", []):
+            return .enterPitch(5)
+        case ("g", []):
+            return .enterPitch(7)
+        case ("0", []):
+            return .enterRest
+        case ("3", []):
+            return .applyDuration(.sixteenth)
+        case ("4", []):
+            return .applyDuration(.eighth)
+        case ("5", []):
+            return .applyDuration(.quarter)
+        case ("6", []):
+            return .applyDuration(.half)
+        case ("7", []):
+            return .applyDuration(.whole)
+        case (".", []):
+            return .toggleDot
+        case ("+", []), ("=", .shift):
+            return .toggleTie
+        case ("s", []):
+            return .addSlur
+        case (UIKeyCommand.inputLeftArrow, []):
             return .selectPrevious
-        case (UIKeyCommand.inputRightArrow, []), (UIKeyCommand.inputDownArrow, []):
+        case (UIKeyCommand.inputRightArrow, []):
             return .selectNext
+        case (UIKeyCommand.inputUpArrow, []):
+            return .movePitch(up: true)
+        case (UIKeyCommand.inputDownArrow, []):
+            return .movePitch(up: false)
+        case (UIKeyCommand.inputUpArrow, .alternate):
+            return .shiftOctave(1)
+        case (UIKeyCommand.inputDownArrow, .alternate):
+            return .shiftOctave(-1)
+        case (UIKeyCommand.inputUpArrow, .command), (UIKeyCommand.inputUpArrow, .shift):
+            return .shiftSemitone(1)
+        case (UIKeyCommand.inputDownArrow, .command), (UIKeyCommand.inputDownArrow, .shift):
+            return .shiftSemitone(-1)
         default:
             return nil
         }
@@ -165,15 +245,23 @@ final class KeyboardShortcutHostingView: UIView {
         }
 
         let normalizedModifiers = key.modifierFlags.intersection([.command, .shift, .alternate, .control])
-        guard normalizedModifiers.isEmpty else {
-            return nil
-        }
-
-        switch key.keyCode {
-        case .keyboardLeftArrow, .keyboardUpArrow:
+        switch (key.keyCode, normalizedModifiers) {
+        case (.keyboardLeftArrow, []):
             return .selectPrevious
-        case .keyboardRightArrow, .keyboardDownArrow:
+        case (.keyboardRightArrow, []):
             return .selectNext
+        case (.keyboardUpArrow, []):
+            return .movePitch(up: true)
+        case (.keyboardDownArrow, []):
+            return .movePitch(up: false)
+        case (.keyboardUpArrow, .alternate):
+            return .shiftOctave(1)
+        case (.keyboardDownArrow, .alternate):
+            return .shiftOctave(-1)
+        case (.keyboardUpArrow, .command), (.keyboardUpArrow, .shift):
+            return .shiftSemitone(1)
+        case (.keyboardDownArrow, .command), (.keyboardDownArrow, .shift):
+            return .shiftSemitone(-1)
         default:
             return nil
         }

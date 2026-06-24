@@ -818,6 +818,26 @@ struct ScoreReaderView: View {
             readerState.selectPreviousElement()
         case .selectNext:
             readerState.selectNextElement()
+        case .toggleNoteInput:
+            readerState.toggleNoteInput()
+        case .enterPitch(let pitchClass):
+            readerState.handleKeyboardPitch(pitchClass, midiPitch: nil, preferFlats: false)
+        case .applyDuration(let duration):
+            readerState.applyDuration(duration)
+        case .enterRest:
+            readerState.toggleRest()
+        case .toggleDot:
+            readerState.toggleDot()
+        case .toggleTie:
+            readerState.toggleTie()
+        case .addSlur:
+            readerState.addSlur()
+        case .movePitch(let up):
+            readerState.movePitch(up: up)
+        case .shiftOctave(let octaveDelta):
+            readerState.shiftPitchByOctaves(octaveDelta)
+        case .shiftSemitone(let semitoneDelta):
+            readerState.shiftPitchBySemitones(semitoneDelta)
         }
     }
 
