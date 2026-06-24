@@ -20,16 +20,38 @@ struct ContentView: View {
                 appModel.handleOpenURL(url)
             }
             .onChangeCompatible(of: scenePhase) { phase in
-                guard phase == .active,
-                      reviewRequestTracker.shouldRequestReviewAfterAppOpen()
-                else {
+                guard phase == .active else {
+                    return
+                }
+
+                reviewRequestTracker.recordActiveSession()
+            }
+            .onChangeCompatible(of: appModel.currentSession?.id) { _ in
+                guard appModel.currentSession != nil else {
                     return
                 }
 
                 Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    guard appModel.currentSession != nil,
+                          !appModel.isLoading,
+                          !appModel.isImportingPresented,
+                          !appModel.isCreateScorePresented,
+                          appModel.errorAlert == nil,
+                          reviewRequestTracker.shouldRequestReviewAfterSuccessfulScoreOpen()
+                    else {
+                        return
+                    }
+
                     requestReview()
                 }
+            }
+            .onChangeCompatible(of: appModel.errorAlert?.id) { _ in
+                guard appModel.errorAlert != nil else {
+                    return
+                }
+
+                reviewRequestTracker.recordFrictionEvent()
             }
     }
 }

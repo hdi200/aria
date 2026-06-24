@@ -3205,7 +3205,11 @@ bool renderNoteEntryPreviewOverlay(msr::render::NoteEntryPreviewState& previewSt
     return true;
 }
 
+mu::engraving::Fraction currentTimeSignatureForSelection(const mu::engraving::Score* score, const mu::engraving::Measure* measure);
 int currentKeyForSelection(const mu::engraving::Score* score, const mu::engraving::Measure* measure);
+int currentKeyForSelection(const mu::engraving::Score* score,
+                           const mu::engraving::Measure* measure,
+                           mu::engraving::staff_idx_t preferredStaffStart);
 
 bool supportsBowingArticulations(const mu::engraving::Staff* staff, const mu::engraving::Fraction& tick)
 {
@@ -3347,17 +3351,21 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         selectionState.hasSelection = true;
         selectionState.isMeasure = true;
         selectionState.isSingleMeasure = rangeStart == rangeEnd;
-        if (rangeStart == rangeEnd && rangeStart) {
-            const mu::engraving::Measure* firstMeasure = score->firstMeasure();
-            const mu::engraving::Fraction nominal = rangeStart->timesig();
-            const mu::engraving::Fraction actual = rangeStart->ticks();
-            selectionState.isFirstMeasure = rangeStart == firstMeasure;
-            selectionState.pickupActualNumerator = actual.numerator();
-            selectionState.pickupActualDenominator = actual.denominator();
-            selectionState.pickupNominalNumerator = nominal.numerator();
-            selectionState.pickupNominalDenominator = nominal.denominator();
-            selectionState.isPickupMeasure = selectionState.isFirstMeasure
-                && (rangeStart->excludeFromNumbering() || actual < nominal);
+        if (rangeStart) {
+            const mu::engraving::Fraction nominal = currentTimeSignatureForSelection(score, rangeStart);
+            selectionState.currentTimeSignatureNumerator = nominal.numerator();
+            selectionState.currentTimeSignatureDenominator = nominal.denominator();
+            if (rangeStart == rangeEnd) {
+                const mu::engraving::Measure* firstMeasure = score->firstMeasure();
+                const mu::engraving::Fraction actual = rangeStart->ticks();
+                selectionState.isFirstMeasure = rangeStart == firstMeasure;
+                selectionState.pickupActualNumerator = actual.numerator();
+                selectionState.pickupActualDenominator = actual.denominator();
+                selectionState.pickupNominalNumerator = nominal.numerator();
+                selectionState.pickupNominalDenominator = nominal.denominator();
+                selectionState.isPickupMeasure = selectionState.isFirstMeasure
+                    && (rangeStart->excludeFromNumbering() || actual < nominal);
+            }
         }
         selectionState.canFillWithSlashes = !selectedMeasureRangeHasVoiceOneContent(score, rangeStart, rangeEnd);
         selectionState.supportsBowingArticulations = supportsBowingArticulations(
@@ -3380,7 +3388,7 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             selectionState.actionNormalizedWidth = primaryRect.normalizedWidth;
             selectionState.actionNormalizedHeight = primaryRect.normalizedHeight;
         }
-        selectionState.currentKey = currentKeyForSelection(score, rangeStart);
+        selectionState.currentKey = currentKeyForSelection(score, rangeStart, staffStart);
         return selectionState;
     }
 
@@ -3461,10 +3469,14 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     selectionState.isHairpin = expressionSpanner ? expressionSpanner->isHairpin() : false;
     selectionState.isEditableText = editableTextSelection;
     selectionState.isChordText = selectedItem->isHarmony();
-    selectionState.currentKey = currentKeyForSelection(score, measure);
+    selectionState.currentKey = currentKeyForSelection(
+        score,
+        measure,
+        staff ? staff->idx() : static_cast<mu::engraving::staff_idx_t>(0)
+    );
     if (measure) {
         const mu::engraving::Measure* firstMeasure = score->firstMeasure();
-        const mu::engraving::Fraction nominal = measure->timesig();
+        const mu::engraving::Fraction nominal = currentTimeSignatureForSelection(score, measure);
         const mu::engraving::Fraction actual = measure->ticks();
         selectionState.isFirstMeasure = measure == firstMeasure;
         selectionState.pickupActualNumerator = actual.numerator();
@@ -3834,16 +3846,43 @@ std::optional<mu::engraving::AccidentalType> accidentalTypeForKind(const int acc
     }
 }
 
+mu::engraving::Fraction currentTimeSignatureForSelection(const mu::engraving::Score* score, const mu::engraving::Measure* measure)
+{
+    if (!measure) {
+        return mu::engraving::Fraction(4, 4);
+    }
+
+    if (!score || !score->sigmap()) {
+        return measure->timesig();
+    }
+
+    const mu::engraving::Fraction nominal = score->sigmap()->timesig(measure->tick()).nominal();
+    return nominal.isValid() ? nominal : measure->timesig();
+}
+
 int currentKeyForSelection(const mu::engraving::Score* score, const mu::engraving::Measure* measure)
+{
+    if (!score) {
+        return 0;
+    }
+
+    const mu::engraving::staff_idx_t staffStart = score->selection().isRange()
+        ? std::min(score->selection().staffStart(), score->nstaves() > 0 ? score->nstaves() - 1 : 0)
+        : 0;
+    return currentKeyForSelection(score, measure, staffStart);
+}
+
+int currentKeyForSelection(const mu::engraving::Score* score,
+                           const mu::engraving::Measure* measure,
+                           const mu::engraving::staff_idx_t preferredStaffStart)
 {
     if (!score || !measure || score->nstaves() == 0) {
         return 0;
     }
 
-    const mu::engraving::staff_idx_t staffStart = score->selection().isRange()
-        ? std::min(score->selection().staffStart(), score->nstaves() - 1)
-        : 0;
-    for (mu::engraving::staff_idx_t staffIdx = staffStart; staffIdx < score->nstaves(); ++staffIdx) {
+    const mu::engraving::staff_idx_t staffStart = std::min(preferredStaffStart, score->nstaves() - 1);
+    for (mu::engraving::staff_idx_t offset = 0; offset < score->nstaves(); ++offset) {
+        const mu::engraving::staff_idx_t staffIdx = (staffStart + offset) % score->nstaves();
         const mu::engraving::Staff* staff = score->staff(staffIdx);
         if (staff && staff->isPitchedStaff(measure->tick())) {
             return static_cast<int>(staff->concertKey(measure->tick()));

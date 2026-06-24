@@ -21,7 +21,17 @@ private:
                 continue;
             }
 
-            if (excerpt->initialPartId() == part->id() || excerpt->containsPart(part)) {
+            if (excerpt->initialPartId() == part->id()) {
+                return excerpt;
+            }
+        }
+
+        for (mu::engraving::Excerpt* excerpt : m_masterScore->excerpts()) {
+            if (!excerpt || excerpt->initialPartId().isValid()) {
+                continue;
+            }
+
+            if (excerpt->containsPart(part)) {
                 return excerpt;
             }
         }

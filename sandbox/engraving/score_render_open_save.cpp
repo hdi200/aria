@@ -131,7 +131,11 @@ public:
                 continue;
             }
 
-            std::string name = part->partName().toStdString();
+            const mu::engraving::Excerpt* excerpt = excerptForPart(part);
+            std::string name = excerpt ? excerpt->name().toStdString() : std::string();
+            if (name.empty()) {
+                name = part->partName().toStdString();
+            }
             if (name.empty()) {
                 name = part->longName().toStdString();
             }

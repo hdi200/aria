@@ -144,9 +144,12 @@ struct ScoreMetadataParser {
             return musicXMLParts
         }
 
-        let blocks = captureGroups(pattern: #"<Part\b[^>]*>(.*?)</Part>"#, in: masterScoreXML)
+        let excerptNamesByPartID = excerptNamesByInitialPartID(in: xml)
+        let blocks = captureGroups(pattern: #"(<Part\b[^>]*>.*?</Part>)"#, in: masterScoreXML)
         return blocks.enumerated().map { index, block in
-            let name = cleaned(captureFirstGroup(pattern: #"<trackName>\s*(.*?)\s*</trackName>"#, in: block))
+            let partID = captureFirstGroup(pattern: #"<Part\b[^>]*\bid="([^"]+)""#, in: block)
+            let name = partID.flatMap { excerptNamesByPartID[$0] }
+                ?? cleaned(captureFirstGroup(pattern: #"<trackName>\s*(.*?)\s*</trackName>"#, in: block))
                 ?? cleaned(captureFirstGroup(pattern: #"<longName>\s*(.*?)\s*</longName>"#, in: block))
                 ?? cleaned(captureFirstGroup(pattern: #"<shortName>\s*(.*?)\s*</shortName>"#, in: block))
                 ?? "Part \(index + 1)"
@@ -158,6 +161,25 @@ struct ScoreMetadataParser {
                 clef: ScorePartClef.inferred(for: name)
             )
         }
+    }
+
+    nonisolated private func excerptNamesByInitialPartID(in xml: String) -> [String: String] {
+        let scoreBlocks = captureGroups(pattern: #"<Score\b[^>]*>(.*?)</Score>"#, in: xml)
+        var namesByPartID: [String: String] = [:]
+
+        for block in scoreBlocks {
+            guard
+                let partID = cleaned(captureFirstGroup(pattern: #"<initialPartId>\s*(.*?)\s*</initialPartId>"#, in: block)),
+                let name = cleaned(captureFirstGroup(pattern: #"<name>\s*(.*?)\s*</name>"#, in: block)
+                    ?? captureFirstGroup(pattern: #"<metaTag\b[^>]*name="partName"[^>]*>\s*(.*?)\s*</metaTag>"#, in: block))
+            else {
+                continue
+            }
+
+            namesByPartID[partID] = name
+        }
+
+        return namesByPartID
     }
 
     nonisolated private func musicXMLParts(in xml: String) -> [ScorePart] {
