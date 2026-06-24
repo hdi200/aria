@@ -587,6 +587,8 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)copySelectedMeasureRangeWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(copySelectedMeasureRange());
 - (nullable MSREditState *)cutSelectedMeasureRangeWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(cutSelectedMeasureRange());
 - (nullable MSREditState *)pasteMeasureRangeWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(pasteMeasureRange());
+- (nullable MSREditState *)selectAllWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(selectAll());
+- (nullable MSREditState *)clearSelectionWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(clearSelection());
 - (nullable MSREditState *)transposeSelectedMeasureRangeWithMode:(NSInteger)mode
                                                        direction:(NSInteger)direction
                                                         interval:(NSInteger)interval

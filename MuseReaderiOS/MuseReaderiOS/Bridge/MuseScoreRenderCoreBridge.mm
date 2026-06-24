@@ -2788,6 +2788,62 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (MSREditState *)selectAllWithError:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->selectAll(editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not select the score."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)clearSelectionWithError:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->clearSelection(editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not clear the selection."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
 - (MSREditState *)transposeSelectedMeasureRangeWithMode:(NSInteger)mode
                                               direction:(NSInteger)direction
                                                interval:(NSInteger)interval

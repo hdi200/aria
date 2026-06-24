@@ -1097,6 +1097,28 @@ extension ScoreReaderState {
         }
     }
 
+    func selectAll() {
+        performEditingAction(mutatesScore: false) { liveRenderSession in
+            try await liveRenderSession.selectAll()
+        }
+    }
+
+    func clearSelection() {
+        if editingState.noteInputEnabled || hasContinuousNoteInputCursor {
+            setNoteInputEnabled(false)
+            return
+        }
+
+        guard editingState.selection != nil else {
+            editingErrorMessage = nil
+            return
+        }
+
+        performEditingAction(mutatesScore: false) { liveRenderSession in
+            try await liveRenderSession.clearSelection()
+        }
+    }
+
     func transposeSelectedMeasureRange(_ request: ScoreTransposeRequest) {
         guard let selection = editingState.selection,
               selection.kind == .measure || selection.kind == .note || selection.kind == .rest else {

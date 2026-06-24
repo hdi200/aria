@@ -504,6 +504,13 @@ struct ScoreReaderView: View {
         // SwiftUI to re-push preferredStatusBarHidden. Otherwise the bar can stay
         // collapsed after unlock and the library underlaps the status bar.
         .statusBarHidden(scenePhase == .active)
+        .background(
+            ScoreReaderKeyboardShortcutView(
+                isEnabled: keyboardShortcutsAreEnabled,
+                action: handleKeyboardShortcut
+            )
+            .frame(width: 0, height: 0)
+        )
     }
 
     private var floatingToolCategory: ScoreReaderToolCategory? {
@@ -757,6 +764,61 @@ struct ScoreReaderView: View {
         }
 
         return !textEditorDraft.isChordText && !textEditorDraft.isLyrics
+    }
+
+    private var keyboardShortcutsAreEnabled: Bool {
+        !isClosingScore
+            && !textEntryFocusIsActive
+            && textEditorDraft == nil
+            && !isPartsPanelPresented
+            && !isExportPanelPresented
+            && sharedExportItems == nil
+            && !isTempoEditorPresented
+            && !isTimeSignaturePresented
+            && !isKeySignaturePresented
+            && !isScoreSetupPresented
+            && !isPageSettingsPresented
+            && !isInstrumentLayoutPresented
+            && transposeSheetContext == nil
+            && !isAddMeasuresPresented
+            && !isAutoBreaksPresented
+            && !isAddInstrumentPresented
+            && !isClefPickerPresented
+            && readerState.pickupEditorContext == nil
+            && exportErrorMessage == nil
+            && readerState.editingErrorMessage == nil
+    }
+
+    private func handleKeyboardShortcut(_ shortcut: ScoreReaderKeyboardShortcut) {
+        guard keyboardShortcutsAreEnabled else {
+            return
+        }
+
+        switch shortcut {
+        case .undo:
+            readerState.undoEdit()
+        case .redo:
+            readerState.redoEdit()
+        case .copy:
+            readerState.copySelectedMeasureRange()
+        case .cut:
+            readerState.cutSelectedMeasureRange()
+        case .paste:
+            readerState.pasteMeasureRange()
+        case .selectAll:
+            readerState.selectAll()
+        case .delete:
+            readerState.deleteSelection()
+        case .togglePlayback:
+            readerState.togglePlayback()
+        case .clearSelection:
+            clearSelectionCommandMenu()
+            readerState.clearSelection()
+        case .selectPrevious:
+            readerState.selectPreviousElement()
+        case .selectNext:
+            readerState.selectNextElement()
+        }
     }
 
     /// Whether auto-scroll should keep the selected bar inside the unobstructed

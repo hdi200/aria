@@ -319,6 +319,8 @@ public:
     bool copySelectedMeasureRange(ScoreEditState& output, std::string& errorMessage);
     bool cutSelectedMeasureRange(ScoreEditState& output, std::string& errorMessage);
     bool pasteMeasureRange(ScoreEditState& output, std::string& errorMessage);
+    bool selectAll(ScoreEditState& output, std::string& errorMessage);
+    bool clearSelection(ScoreEditState& output, std::string& errorMessage);
     bool transposeSelectedMeasureRange(int mode, int direction, int interval, int targetKey, ScoreEditState& output, std::string& errorMessage);
     bool moveSelectionPitch(bool up, ScoreEditState& output, std::string& errorMessage);
     bool shiftSelectionPitchBySemitones(int semitoneDelta, ScoreEditState& output, std::string& errorMessage);

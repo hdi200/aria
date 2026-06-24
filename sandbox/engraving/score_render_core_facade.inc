@@ -521,6 +521,16 @@ bool msr::render::ScoreRenderSession::pasteMeasureRange(ScoreEditState& output, 
     return m_impl->pasteMeasureRange(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::selectAll(ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->selectAll(output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::clearSelection(ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->clearSelection(output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::transposeSelectedMeasureRange(const int mode,
                                                                     const int direction,
                                                                     const int interval,

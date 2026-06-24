@@ -864,6 +864,22 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func selectAll() throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        return try makeEditingState(from: bridgeSession.selectAll())
+    }
+
+    func clearSelection() throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        return try makeEditingState(from: bridgeSession.clearSelection())
+    }
+
     func transposeSelectedMeasureRange(_ request: ScoreTransposeRequest) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()

@@ -2737,6 +2737,32 @@
         return true;
     }
 
+    bool selectAll(msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        score->cmdSelectAll();
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool clearSelection(msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        score->deselectAll();
+        output = makeEditState(score);
+        return true;
+    }
+
     bool changeSelectionEnharmonicSpelling(msr::render::ScoreEditState& output,
                                            std::string& errorMessage)
     {

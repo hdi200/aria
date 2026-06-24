@@ -258,7 +258,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"$ACTION\" = \"indexbuild\" ]; then\n  exit 0\nfi\n\nset -eu\n\nSOURCE_DIR=\"$SRCROOT/../sandbox/engraving\"\nSIMULATOR_BUILD_DIR=\"/tmp/musescore-score-render-core-simulator\"\nDEVICE_BUILD_DIR=\"/tmp/musescore-score-render-core-ios\"\nTOOL_PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nQT_IOS_SDK_DIR=\"${MUSEREADER_QT_IOS_SDK_DIR:-}\"\nQT_HOST_SDK_DIR=\"${MUSEREADER_QT_HOST_SDK_DIR:-}\"\nBUILD_TYPE=Release\nCMAKE_ARCHS=\"$(printf '%s' \"${ARCHS:-arm64}\" | tr ' ' ';')\"\n\nif [ \"$CONFIGURATION\" = \"Debug\" ]; then\n  BUILD_TYPE=Debug\nfi\n\nfind_tool() {\n  tool_name=\"$1\"\n\n  for candidate in \\\n    \"/opt/homebrew/bin/$tool_name\" \\\n    \"/usr/local/bin/$tool_name\" \\\n    \"$(command -v \\\"$tool_name\\\" 2>/dev/null || true)\"\n  do\n    if [ -n \"$candidate\" ] && [ -x \"$candidate\" ]; then\n      printf '%s' \"$candidate\"\n      return 0\n    fi\n  done\n\n  echo \"error: $tool_name is required for the MuseScore render build phase. Install it with Homebrew or update the build script path.\" >&2\n  exit 1\n}\n\nconfigure_common_env() {\n  /usr/bin/env -i HOME=\"$HOME\" PATH=\"$TOOL_PATH\" TMPDIR=\"${TMPDIR:-/tmp}\" DEVELOPER_DIR=\"$DEVELOPER_DIR\" \"$@\"\n}\n\nbuild_render_core() {\n  sysroot=\"$1\"\n  build_dir=\"$2\"\n\n  configure_common_env \"$CMAKE_BIN\" -S \"$SOURCE_DIR\" -B \"$build_dir\" -G Ninja -DCMAKE_MAKE_PROGRAM=\"$NINJA_BIN\" -DCMAKE_BUILD_TYPE=\"$BUILD_TYPE\" -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=\"$sysroot\" -DCMAKE_OSX_DEPLOYMENT_TARGET=\"${IPHONEOS_DEPLOYMENT_TARGET:-17.0}\" -DCMAKE_OSX_ARCHITECTURES=\"$CMAKE_ARCHS\" -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH -DCMAKE_PREFIX_PATH=\"$QT_IOS_SDK_DIR;$QT_HOST_SDK_DIR\" -DQt6_DIR=\"$QT_IOS_SDK_DIR/lib/cmake/Qt6\" -DQT_HOST_PATH=\"$QT_HOST_SDK_DIR\" -DQT_ADDITIONAL_HOST_PACKAGES_PREFIX_PATH=\"$QT_HOST_SDK_DIR\" -DQt6HostInfo_DIR=\"$QT_HOST_SDK_DIR/lib/cmake/Qt6HostInfo\" -DQt6CoreTools_DIR=\"$QT_HOST_SDK_DIR/lib/cmake/Qt6CoreTools\" -DSCORE_RENDER_QT_TARGET_ROOT=\"$QT_IOS_SDK_DIR\" -DSCORE_RENDER_QT_HOST_ROOT=\"$QT_HOST_SDK_DIR\"\n  configure_common_env \"$CMAKE_BIN\" --build \"$build_dir\" --target MuseScoreRenderCore\n}\n\nCMAKE_BIN=\"$(find_tool cmake)\"\nNINJA_BIN=\"$(find_tool ninja)\"\n\nif [ -z \"$QT_IOS_SDK_DIR\" ] || [ ! -f \"$QT_IOS_SDK_DIR/lib/cmake/Qt6/Qt6Config.cmake\" ]; then\n  echo \"error: MUSEREADER_QT_IOS_SDK_DIR must point to a Qt for iOS SDK root with lib/cmake/Qt6/Qt6Config.cmake.\" >&2\n  exit 1\nfi\n\nif [ -z \"$QT_HOST_SDK_DIR\" ] || [ ! -f \"$QT_HOST_SDK_DIR/lib/cmake/Qt6/Qt6Config.cmake\" ]; then\n  echo \"error: MUSEREADER_QT_HOST_SDK_DIR must point to the matching host Qt SDK root used for Qt build tools.\" >&2\n  exit 1\nfi\n\nif [ \"$PLATFORM_NAME\" = \"iphonesimulator\" ]; then\n  build_render_core iphonesimulator \"$SIMULATOR_BUILD_DIR\"\n  exit 0\nfi\n\nif [ \"$PLATFORM_NAME\" = \"iphoneos\" ]; then\n  build_render_core iphoneos \"$DEVICE_BUILD_DIR\"\n  exit 0\nfi\n\nexit 0\n";
+			shellScript = "if [ \"$ACTION\" = \"indexbuild\" ]; then\n  exit 0\nfi\n\nset -eu\n\nSOURCE_DIR=\"$SRCROOT/../sandbox/engraving\"\nSIMULATOR_BUILD_DIR=\"/tmp/musescore-score-render-core-simulator\"\nDEVICE_BUILD_DIR=\"/tmp/musescore-score-render-core-ios\"\nTOOL_PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nQT_IOS_SDK_DIR=\"${MUSEREADER_QT_IOS_SDK_DIR:-}\"\nQT_HOST_SDK_DIR=\"${MUSEREADER_QT_HOST_SDK_DIR:-}\"\nBUILD_TYPE=Release\nCMAKE_ARCHS=\"$(printf '%s' \"${ARCHS:-arm64}\" | tr ' ' ';')\"\n\nif [ \"$CONFIGURATION\" = \"Debug\" ]; then\n  BUILD_TYPE=Debug\nfi\n\nfind_tool() {\n  tool_name=\"$1\"\n\n  for candidate in \\\n    \"/opt/homebrew/bin/$tool_name\" \\\n    \"/usr/local/bin/$tool_name\" \\\n    \"$(command -v \\\"$tool_name\\\" 2>/dev/null || true)\"\n  do\n    if [ -n \"$candidate\" ] && [ -x \"$candidate\" ]; then\n      printf '%s' \"$candidate\"\n      return 0\n    fi\n  done\n\n  echo \"error: $tool_name is required for the MuseScore render build phase. Install it with Homebrew or update the build script path.\" >&2\n  exit 1\n}\n\nconfigure_common_env() {\n  /usr/bin/env -i HOME=\"$HOME\" PATH=\"$TOOL_PATH\" TMPDIR=\"${TMPDIR:-/tmp}\" DEVELOPER_DIR=\"$DEVELOPER_DIR\" \"$@\"\n}\n\nbuild_render_core() {\n  sysroot=\"$1\"\n  build_dir=\"$2\"\n\n  configure_common_env \"$CMAKE_BIN\" -S \"$SOURCE_DIR\" -B \"$build_dir\" -G Ninja -DCMAKE_MAKE_PROGRAM=\"$NINJA_BIN\" -DCMAKE_BUILD_TYPE=\"$BUILD_TYPE\" -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=\"$sysroot\" -DCMAKE_OSX_DEPLOYMENT_TARGET=\"${IPHONEOS_DEPLOYMENT_TARGET:-16.0}\" -DCMAKE_OSX_ARCHITECTURES=\"$CMAKE_ARCHS\" -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH -DCMAKE_PREFIX_PATH=\"$QT_IOS_SDK_DIR;$QT_HOST_SDK_DIR\" -DQt6_DIR=\"$QT_IOS_SDK_DIR/lib/cmake/Qt6\" -DQT_HOST_PATH=\"$QT_HOST_SDK_DIR\" -DQT_ADDITIONAL_HOST_PACKAGES_PREFIX_PATH=\"$QT_HOST_SDK_DIR\" -DQt6HostInfo_DIR=\"$QT_HOST_SDK_DIR/lib/cmake/Qt6HostInfo\" -DQt6CoreTools_DIR=\"$QT_HOST_SDK_DIR/lib/cmake/Qt6CoreTools\" -DSCORE_RENDER_QT_TARGET_ROOT=\"$QT_IOS_SDK_DIR\" -DSCORE_RENDER_QT_HOST_ROOT=\"$QT_HOST_SDK_DIR\"\n  configure_common_env \"$CMAKE_BIN\" --build \"$build_dir\" --target MuseScoreRenderCore\n}\n\nCMAKE_BIN=\"$(find_tool cmake)\"\nNINJA_BIN=\"$(find_tool ninja)\"\n\nif [ -z \"$QT_IOS_SDK_DIR\" ] || [ ! -f \"$QT_IOS_SDK_DIR/lib/cmake/Qt6/Qt6Config.cmake\" ]; then\n  echo \"error: MUSEREADER_QT_IOS_SDK_DIR must point to a Qt for iOS SDK root with lib/cmake/Qt6/Qt6Config.cmake.\" >&2\n  exit 1\nfi\n\nif [ -z \"$QT_HOST_SDK_DIR\" ] || [ ! -f \"$QT_HOST_SDK_DIR/lib/cmake/Qt6/Qt6Config.cmake\" ]; then\n  echo \"error: MUSEREADER_QT_HOST_SDK_DIR must point to the matching host Qt SDK root used for Qt build tools.\" >&2\n  exit 1\nfi\n\nif [ \"$PLATFORM_NAME\" = \"iphonesimulator\" ]; then\n  build_render_core iphonesimulator \"$SIMULATOR_BUILD_DIR\"\n  exit 0\nfi\n\nif [ \"$PLATFORM_NAME\" = \"iphoneos\" ]; then\n  build_render_core iphoneos \"$DEVICE_BUILD_DIR\"\n  exit 0\nfi\n\nexit 0\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -353,7 +353,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -411,7 +411,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -786,7 +786,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -808,7 +808,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -829,7 +829,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -850,7 +850,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
