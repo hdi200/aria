@@ -1,0 +1,5 @@
+// Copy this file to Local.xcconfig and update the values for your machine.
+
+DEVELOPMENT_TEAM =
+MUSEREADER_QT_HOST_SDK_DIR = /path/to/Qt/6.11.0/macos
+MUSEREADER_QT_IOS_SDK_DIR = /path/to/Qt/6.11.0/ios

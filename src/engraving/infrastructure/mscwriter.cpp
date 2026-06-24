@@ -1,0 +1,610 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#include "mscwriter.h"
+
+#include <string>
+#include <vector>
+
+#include "containers.h"
+#include "io/buffer.h"
+#include "io/file.h"
+#include "io/fileinfo.h"
+#include "io/dir.h"
+#include "serialization/xmlstreamwriter.h"
+#include "serialization/zipwriter.h"
+#include "serialization/textstream.h"
+
+#include "log.h"
+
+using namespace mu;
+using namespace muse;
+using namespace muse::io;
+using namespace mu::engraving;
+
+namespace {
+constexpr const char* MSC_COMPAT_VERSION = "4.70";
+constexpr const char* MSC_COMPAT_PROGRAM_VERSION = "4.7.2";
+constexpr const char* MSC_COMPAT_PROGRAM_REVISION = "69af3e1";
+
+const std::vector<std::string> MSC_COMPAT_UNSUPPORTED_STYLE_TAGS = {
+    "groupBracketAlign",
+    "groupBracketColor",
+    "groupBracketDistanceToGroupBracket",
+    "groupBracketDistanceToNames",
+    "groupBracketFontFace",
+    "groupBracketFontSize",
+    "groupBracketFontSpatiumDependent",
+    "groupBracketFontStyle",
+    "groupBracketFrameBgColor",
+    "groupBracketFrameFgColor",
+    "groupBracketFramePadding",
+    "groupBracketFrameRound",
+    "groupBracketFrameType",
+    "groupBracketFrameWidth",
+    "groupBracketHangTextIntoMargin",
+    "groupBracketHookLen",
+    "groupBracketLineSpacing",
+    "groupBracketLineWidth",
+    "groupBracketMusicalSymbolSize",
+    "groupBracketOffset",
+    "groupBracketPosition",
+    "groupBracketTextAlign",
+    "groupBracketTextOrientation",
+    "instrumentNamesAlignIncludeGroupBrackets",
+    "instrumentNamesAlignLong",
+    "instrumentNamesAlignShort",
+    "instrumentNamesCustomFormatLong",
+    "instrumentNamesCustomFormatShort",
+    "instrumentNamesFormatLong",
+    "instrumentNamesFormatShort",
+    "instrumentNamesShowTranspositionLong",
+    "instrumentNamesShowTranspositionShort",
+    "instrumentNamesStackVertically",
+    "othersNameByGroup",
+    "stringsNameByGroup",
+    "vocalsNameByGroup",
+    "windsNameByGroup"
+};
+
+bool hasTag(const std::string& xml, const std::string& tag)
+{
+    return xml.find(tag) != std::string::npos;
+}
+
+void replaceTag(std::string& xml, const std::string& open, const std::string& close, const std::string& replacement)
+{
+    const size_t start = xml.find(open);
+    if (start == std::string::npos) {
+        return;
+    }
+
+    const size_t end = xml.find(close, start);
+    if (end == std::string::npos) {
+        return;
+    }
+
+    xml.replace(start, end + close.size() - start, replacement);
+}
+
+void replaceMuseScoreHeader(std::string& xml)
+{
+    const size_t versionStart = xml.find("<museScore version=\"");
+    if (versionStart == std::string::npos) {
+        return;
+    }
+
+    const size_t versionEnd = xml.find("\">", versionStart);
+    if (versionEnd != std::string::npos) {
+        xml.replace(versionStart, versionEnd + 2 - versionStart,
+                    std::string("<museScore version=\"") + MSC_COMPAT_VERSION + "\">");
+    }
+}
+
+void removeTag(std::string& xml, const std::string& tag)
+{
+    const std::string open = "<" + tag + ">";
+    const std::string close = "</" + tag + ">";
+    size_t start = xml.find(open);
+    while (start != std::string::npos) {
+        size_t eraseStart = start;
+        if (eraseStart > 0 && xml[eraseStart - 1] == '\n') {
+            while (eraseStart > 0 && (xml[eraseStart - 1] == ' ' || xml[eraseStart - 1] == '\t')) {
+                --eraseStart;
+            }
+        }
+
+        const size_t end = xml.find(close, start);
+        if (end == std::string::npos) {
+            return;
+        }
+
+        size_t eraseEnd = end + close.size();
+        if (eraseEnd < xml.size() && xml[eraseEnd] == '\n') {
+            ++eraseEnd;
+        }
+
+        xml.erase(eraseStart, eraseEnd - eraseStart);
+        start = xml.find(open, eraseStart);
+    }
+}
+
+ByteArray dataWithMuseScore47CompatibilityVersion(const ByteArray& data, bool filterStyleTags)
+{
+    if (data.empty()) {
+        return data;
+    }
+
+    std::string xml(data.constChar(), data.size());
+    if (xml.find("<museScore version=\"") == std::string::npos) {
+        return data;
+    }
+
+    replaceMuseScoreHeader(xml);
+
+    replaceTag(xml, "<programVersion>", "</programVersion>",
+               std::string("<programVersion>") + MSC_COMPAT_PROGRAM_VERSION + "</programVersion>");
+    replaceTag(xml, "<programRevision>", "</programRevision>",
+               std::string("<programRevision>") + MSC_COMPAT_PROGRAM_REVISION + "</programRevision>");
+
+    if (filterStyleTags) {
+        for (const std::string& tag : MSC_COMPAT_UNSUPPORTED_STYLE_TAGS) {
+            removeTag(xml, tag);
+        }
+    }
+
+    if (hasTag(xml, "<harmonyInfo>") && !hasTag(xml, std::string("<museScore version=\"") + MSC_COMPAT_VERSION + "\">")) {
+        LOGE() << "score data with harmonyInfo was not saved with the MuseScore 4.7 compatibility header";
+    }
+
+    return ByteArray(xml.data(), xml.size());
+}
+
+ByteArray scoreDataWithMuseScore47CompatibilityVersion(const ByteArray& data)
+{
+    return dataWithMuseScore47CompatibilityVersion(data, false);
+}
+
+ByteArray styleDataWithMuseScore47CompatibilityVersion(const ByteArray& data)
+{
+    return dataWithMuseScore47CompatibilityVersion(data, true);
+}
+}
+
+MscWriter::MscWriter(const Params& params)
+    : m_params(params)
+{
+}
+
+MscWriter::~MscWriter()
+{
+    close();
+}
+
+void MscWriter::setParams(const Params& params)
+{
+    IF_ASSERT_FAILED(!isOpened()) {
+        return;
+    }
+
+    if (m_writer) {
+        m_hadError = m_writer->hasError();
+        delete m_writer;
+        m_writer = nullptr;
+    }
+
+    m_params = params;
+}
+
+const MscWriter::Params& MscWriter::params() const
+{
+    return m_params;
+}
+
+Ret MscWriter::open()
+{
+    return writer()->open(m_params.device, m_params.filePath);
+}
+
+void MscWriter::close()
+{
+    if (m_writer) {
+        if (m_writer->isOpened()) {
+            writeMeta();
+            m_writer->close();
+        }
+
+        m_hadError = m_writer->hasError();
+        delete m_writer;
+        m_writer = nullptr;
+    }
+}
+
+bool MscWriter::isOpened() const
+{
+    return m_writer ? m_writer->isOpened() : false;
+}
+
+bool MscWriter::hasError() const
+{
+    return m_writer ? m_writer->hasError() : m_hadError;
+}
+
+MscWriter::IWriter* MscWriter::writer() const
+{
+    if (!m_writer) {
+        switch (m_params.mode) {
+        case MscIoMode::Zip:
+            m_writer = new ZipFileWriter();
+            break;
+        case MscIoMode::Dir:
+            m_writer = new DirWriter();
+            break;
+        case MscIoMode::XmlFile:
+            m_writer = new XmlFileWriter();
+            break;
+        case MscIoMode::Unknown:
+            UNREACHABLE;
+            break;
+        }
+    }
+
+    return m_writer;
+}
+
+bool MscWriter::addFileData(const String& fileName, const ByteArray& data)
+{
+    if (!writer()->addFileData(fileName, data)) {
+        LOGE() << "failed write file: " << fileName;
+        return false;
+    }
+
+    m_meta.addFile(fileName);
+
+    return true;
+}
+
+void MscWriter::writeStyleFile(const ByteArray& data)
+{
+    addFileData(u"score_style.mss", styleDataWithMuseScore47CompatibilityVersion(data));
+}
+
+String MscWriter::mainFileName() const
+{
+    if (!m_params.mainFileName.isEmpty()) {
+        return m_params.mainFileName;
+    }
+
+    String name = u"score.mscx";
+    if (m_params.filePath.empty()) {
+        return name;
+    }
+
+    String completeBaseName = FileInfo(m_params.filePath).completeBaseName();
+    if (completeBaseName.isEmpty()) {
+        return name;
+    }
+
+    return completeBaseName + u".mscx";
+}
+
+void MscWriter::writeScoreFile(const ByteArray& data)
+{
+    addFileData(mainFileName(), scoreDataWithMuseScore47CompatibilityVersion(data));
+}
+
+void MscWriter::addExcerptStyleFile(const String& excerptFileName, const ByteArray& data)
+{
+    String fileName = excerptFileName + u".mss";
+    addFileData(u"Excerpts/" + excerptFileName + u"/" + fileName, styleDataWithMuseScore47CompatibilityVersion(data));
+}
+
+void MscWriter::addExcerptFile(const String& excerptFileName, const ByteArray& data)
+{
+    String fileName = excerptFileName + u".mscx";
+    addFileData(u"Excerpts/" + excerptFileName + u"/" + fileName, scoreDataWithMuseScore47CompatibilityVersion(data));
+}
+
+void MscWriter::writeChordListFile(const ByteArray& data)
+{
+    addFileData(u"chordlist.xml", data);
+}
+
+void MscWriter::writeThumbnailFile(const ByteArray& data)
+{
+    addFileData(u"Thumbnails/thumbnail.png", data);
+}
+
+void MscWriter::addImageFile(const String& fileName, const ByteArray& data)
+{
+    addFileData(u"Pictures/" + fileName, data);
+}
+
+void MscWriter::writeAudioFile(const ByteArray& data)
+{
+    addFileData(u"audio.ogg", data);
+}
+
+void MscWriter::writeAudioSettingsJsonFile(const ByteArray& data, const muse::io::path_t& pathPrefix)
+{
+    addFileData(pathPrefix.toString() + u"audiosettings.json", data);
+}
+
+void MscWriter::writeViewSettingsJsonFile(const ByteArray& data, const muse::io::path_t& pathPrefix)
+{
+    addFileData(pathPrefix.toString() + u"viewsettings.json", data);
+}
+
+void MscWriter::writeAutomationJsonFile(const muse::ByteArray& data)
+{
+    addFileData(u"automation.json", data);
+}
+
+void MscWriter::writeMeta()
+{
+    if (m_meta.isWritten) {
+        return;
+    }
+
+    writeContainer(m_meta.files);
+
+    m_meta.isWritten = true;
+}
+
+void MscWriter::writeContainer(const std::vector<String>& paths)
+{
+    ByteArray data;
+    auto buf = Buffer::opened(IODevice::WriteOnly, &data);
+    XmlStreamWriter xml(&buf);
+    xml.startDocument();
+    xml.startElement("container");
+    xml.startElement("rootfiles");
+
+    for (const String& f : paths) {
+        xml.element("rootfile", { { "full-path", f } });
+    }
+
+    xml.endElement();
+    xml.endElement();
+    xml.flush();
+
+    addFileData(u"META-INF/container.xml", data);
+}
+
+bool MscWriter::Meta::contains(const String& file) const
+{
+    if (std::find(files.begin(), files.end(), file) != files.end()) {
+        return true;
+    }
+    return false;
+}
+
+void MscWriter::Meta::addFile(const String& file)
+{
+    if (!contains(file)) {
+        files.push_back(file);
+    }
+}
+
+// =======================================================================
+// Writers
+// =======================================================================
+
+MscWriter::ZipFileWriter::~ZipFileWriter()
+{
+    delete m_zip;
+}
+
+Ret MscWriter::ZipFileWriter::open(io::IODevice* device, const path_t&)
+{
+    IF_ASSERT_FAILED(device) {
+        return make_ret(Ret::Code::InternalError);
+    }
+    m_device = device;
+
+    if (!m_device->isOpen()) {
+        if (!m_device->open(IODevice::WriteOnly)) {
+            LOGE() << "failed to open device for writing";
+            return make_ret(m_device->error(), m_device->errorString());
+        }
+    }
+
+    m_zip = new ZipWriter(m_device);
+
+    return true;
+}
+
+void MscWriter::ZipFileWriter::close()
+{
+    if (m_zip) {
+        m_zip->close();
+    }
+
+    if (m_device) {
+        m_device->close();
+    }
+}
+
+bool MscWriter::ZipFileWriter::isOpened() const
+{
+    return m_device ? m_device->isOpen() : false;
+}
+
+bool MscWriter::ZipFileWriter::hasError() const
+{
+    return (m_device ? m_device->hasError() : false) || (m_zip ? m_zip->hasError() : false);
+}
+
+bool MscWriter::ZipFileWriter::addFileData(const String& fileName, const ByteArray& data)
+{
+    IF_ASSERT_FAILED(m_zip) {
+        return false;
+    }
+
+    m_zip->addFile(fileName.toStdString(), data);
+    if (m_zip->hasError()) {
+        LOGE() << "failed write files to zip";
+        return false;
+    }
+
+    return true;
+}
+
+Ret MscWriter::DirWriter::open(io::IODevice* device, const muse::io::path_t& filePath)
+{
+    IF_ASSERT_FAILED(!device) {
+        m_hasError = true;
+        return make_ret(Ret::Code::InternalError);
+    }
+
+    if (filePath.empty()) {
+        LOGE() << "file path is empty";
+        m_hasError = true;
+        return false;
+    }
+
+    m_rootPath = containerPath(filePath);
+
+    Dir dir(m_rootPath);
+    Ret ret = dir.removeRecursively();
+    if (!ret) {
+        LOGE() << "failed clear dir: " << dir.absolutePath();
+        m_hasError = true;
+        return ret;
+    }
+
+    ret = dir.mkpath(dir.absolutePath());
+    if (!ret) {
+        LOGE() << "failed make path: " << dir.absolutePath();
+        m_hasError = true;
+        return ret;
+    }
+
+    return true;
+}
+
+void MscWriter::DirWriter::close()
+{
+    // noop
+}
+
+bool MscWriter::DirWriter::isOpened() const
+{
+    return FileInfo::exists(m_rootPath);
+}
+
+bool MscWriter::DirWriter::hasError() const
+{
+    return m_hasError;
+}
+
+bool MscWriter::DirWriter::addFileData(const String& fileName, const ByteArray& data)
+{
+    muse::io::path_t filePath = m_rootPath + "/" + fileName;
+
+    Dir fileDir(FileInfo(filePath).absolutePath());
+    if (!fileDir.exists()) {
+        if (!fileDir.mkpath(fileDir.absolutePath())) {
+            LOGE() << "failed make path: " << fileDir.absolutePath();
+            m_hasError = true;
+            return false;
+        }
+    }
+
+    const Ret ret = File::writeFile(filePath, data);
+    if (!ret) {
+        LOGE() << "failed to write file: " << filePath;
+        m_hasError = true;
+        return false;
+    }
+
+    return true;
+}
+
+MscWriter::XmlFileWriter::~XmlFileWriter()
+{
+    delete m_stream;
+}
+
+Ret MscWriter::XmlFileWriter::open(io::IODevice* device, const path_t&)
+{
+    IF_ASSERT_FAILED(device) {
+        return make_ret(Ret::Code::InternalError);
+    }
+    m_device = device;
+
+    if (!m_device->isOpen()) {
+        if (!m_device->open(IODevice::WriteOnly)) {
+            LOGE() << "failed to open device for writing";
+            return make_ret(m_device->error(), m_device->errorString());
+        }
+    }
+
+    m_stream = new TextStream(m_device);
+
+    // Write header
+    *m_stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+    *m_stream << "<files>\n";
+
+    return true;
+}
+
+void MscWriter::XmlFileWriter::close()
+{
+    if (m_stream) {
+        *m_stream << "</files>\n";
+        m_stream->flush();
+        m_device->close();
+    }
+}
+
+bool MscWriter::XmlFileWriter::isOpened() const
+{
+    return m_device ? m_device->isOpen() : false;
+}
+
+bool MscWriter::XmlFileWriter::hasError() const
+{
+    return m_device ? m_device->hasError() : false;
+}
+
+bool MscWriter::XmlFileWriter::addFileData(const String& fileName, const ByteArray& data)
+{
+    if (!m_stream) {
+        return false;
+    }
+
+    static const std::vector<String> supportedExts = { u"mscx", u"json", u"mss" };
+    String ext = FileInfo::suffix(fileName);
+    if (!muse::contains(supportedExts, ext)) {
+        NOT_SUPPORTED << fileName;
+        return true; // not error
+    }
+
+    TextStream& ts = *m_stream;
+    ts << "<file name=\"" << fileName << "\">\n";
+    ts << "<![CDATA[";
+    ts << data;
+    ts << "]]>\n";
+    ts << "</file>\n";
+
+    return true;
+}

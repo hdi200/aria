@@ -1,0 +1,38 @@
+{
+    "master": {
+        "balance": 0,
+        "fxChain": {
+        },
+        "muted": false,
+        "solo": false,
+        "volumeDb": 0
+    },
+    "tracks": [
+        {
+            "instrumentId": "metronome",
+            "partId": "999"
+        },
+        {
+            "in": {
+                "resourceMeta": {
+                    "hasNativeEditorSupport": false,
+                    "id": "MuseScore_General",
+                    "type": "fluid_soundfont",
+                    "vendor": "Fluid"
+                },
+                "unitConfiguration": {
+                }
+            },
+            "instrumentId": "piano",
+            "out": {
+                "balance": 0,
+                "fxChain": {
+                },
+                "muted": false,
+                "solo": false,
+                "volumeDb": 0
+            },
+            "partId": "1"
+        }
+    ]
+}

@@ -1,0 +1,119 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2023 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+pragma ComponentBehavior: Bound
+
+import QtQuick
+
+import Muse.Ui
+import Muse.UiComponents
+import MuseScore.Project
+
+Item {
+    id: root
+
+    property string path: ""
+    property string suffix: ""
+    property string thumbnailUrl: ""
+
+    ScoreThumbnailLoader {
+        id: thumbnailLoader
+
+        scorePath: root.path
+    }
+
+    Image {
+        id: image
+        anchors.fill: parent
+        visible: status == Image.Ready
+        source: root.thumbnailUrl
+    }
+
+    Loader {
+        anchors.fill: parent
+        visible: !image.visible
+        active: visible
+
+        sourceComponent: {
+            if (thumbnailLoader.isThumbnailValid) {
+                return scoreThumbnailComp
+            }
+
+            return genericThumbnailComp
+        }
+
+        Component {
+            id: scoreThumbnailComp
+
+            PixmapScoreThumbnailView {
+                anchors.fill: parent
+                thumbnail: thumbnailLoader.thumbnail
+            }
+        }
+
+        Component {
+            id: genericThumbnailComp
+
+            Rectangle {
+                anchors.fill: parent
+                color: "white"
+
+                Image {
+                    anchors.centerIn: parent
+
+                    width: 80/172 * parent.width
+                    height: 110/80 * width
+
+                    source: {
+                        switch (root.suffix) {
+                        case "gtp":
+                        case "gp3":
+                        case "gp4":
+                        case "gp5":
+                        case "gpx":
+                        case "gp":
+                        case "ptb":
+                            return "images/Placeholder_GP.png"
+                        case "mid":
+                        case "midi":
+                        case "kar":
+                            return "images/Placeholder_MIDI.png"
+                        case "mxl":
+                        case "musicxml":
+                        case "xml":
+                            return "images/Placeholder_MXML.png"
+                        case "mei":
+                            return "images/Placeholder_MEI.png"
+                        default:
+                            return "images/Placeholder_Other.png"
+                        }
+                    }
+
+                    fillMode: Image.PreserveAspectFit
+
+                    // Prevent image from looking pixelated on low-res screens
+                    mipmap: true
+                }
+            }
+        }
+    }
+}

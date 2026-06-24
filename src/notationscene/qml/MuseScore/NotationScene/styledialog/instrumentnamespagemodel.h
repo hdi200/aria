@@ -1,0 +1,69 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-CLA-applies
+ *
+ * MuseScore
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited and others
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#pragma once
+
+#include "abstractstyledialogmodel.h"
+
+namespace mu::notation {
+class InstrumentNamesPageModel : public AbstractStyleDialogModel
+{
+    Q_OBJECT
+
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesAlignLong READ instrumentNamesAlignLong CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesAlignShort READ instrumentNamesAlignShort CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesStackVertically READ instrumentNamesStackVertically CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * windsNameByGroup READ windsNameByGroup CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * vocalsNameByGroup READ vocalsNameByGroup CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * stringsNameByGroup READ stringsNameByGroup CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * othersNameByGroup READ othersNameByGroup CONSTANT)
+
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesShowTranspositionLong READ instrumentNamesShowTranspositionLong CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesShowTranspositionShort READ instrumentNamesShowTranspositionShort CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesFormatLong READ instrumentNamesFormatLong CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesCustomFormatLong READ instrumentNamesCustomFormatLong CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesFormatShort READ instrumentNamesFormatShort CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesCustomFormatShort READ instrumentNamesCustomFormatShort CONSTANT)
+    Q_PROPERTY(mu::notation::StyleItem * instrumentNamesAlignIncludeGroupBrackets READ instrumentNamesAlignIncludeGroupBrackets CONSTANT)
+
+    QML_ELEMENT
+
+public:
+    explicit InstrumentNamesPageModel(QObject* parent = nullptr);
+
+    StyleItem* instrumentNamesAlignLong() const;
+    StyleItem* instrumentNamesAlignShort() const;
+    StyleItem* instrumentNamesStackVertically() const;
+    StyleItem* windsNameByGroup() const;
+    StyleItem* vocalsNameByGroup() const;
+    StyleItem* stringsNameByGroup() const;
+    StyleItem* othersNameByGroup() const;
+
+    StyleItem* instrumentNamesShowTranspositionLong() const;
+    StyleItem* instrumentNamesShowTranspositionShort() const;
+    StyleItem* instrumentNamesFormatLong() const;
+    StyleItem* instrumentNamesCustomFormatLong() const;
+    StyleItem* instrumentNamesFormatShort() const;
+    StyleItem* instrumentNamesCustomFormatShort() const;
+    StyleItem* instrumentNamesAlignIncludeGroupBrackets() const;
+};
+}

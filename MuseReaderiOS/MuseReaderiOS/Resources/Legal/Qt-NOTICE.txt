@@ -1,0 +1,12 @@
+Qt Framework Notice
+
+Aria is built with Qt libraries and tools.
+
+The applicable Qt license terms depend on the exact Qt distribution used for
+the release build. Public releases must preserve the notices and license terms
+that apply to that Qt distribution, including any commercial Qt notices or, when
+Qt is used under open-source terms, the applicable LGPL/GPL license text,
+source-code offer, and user-rights notices required by those licenses.
+
+Qt is developed by The Qt Company and the Qt Project.
+Qt licensing information: https://www.qt.io/licensing

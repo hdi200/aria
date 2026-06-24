@@ -1,0 +1,105 @@
+.*,
+*~
+*.swp
+*.autosave
+.qped
+.directory
+.idea
+.qtcreator
+.vscode/
+/builds
+build
+/build_overrides.cmake
+build.release
+build.debug
+build.install
+build.tooldata
+build.qtc
+build-*
+build
+win32build
+win32install
+win64build
+win64install
+build.xcode
+applebuild
+build.artifacts
+build.symbols
+vtest.artifacts
+MuseScorePortable
+/*.config
+/*.creator
+/*.files
+/*.includes
+*.user
+/share/locale/*placeholder.ts
+/share/locale/*.qm
+/share/instruments/tsv
+Doc
+DocLib
+*.sfd~
+/.project
+mscore/revision.h
+local_build_revision.env
+.DS_Store
+CMakeLists.txt.user.*
+*.qmlc
+*.jsc
+vtest/html
+vtest/compare
+thirdparty/mupdf-qt
+vtest/LOG
+vtest/META-INF
+vtest/Thumbnails
+vtest/Pictures
+.vs
+dependencies
+
+# Downloaded files during build process
+VERSION
+/mscore/data/mscore.aps
+/msvc.*
+
+# Backup Files created by Merging Softwares (Example: Meld)
+*.orig
+
+temp_*
+
+*.local.cmake
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pdm-python
+
+**/_deps/*
+
+# Stuff from 3.x builds
+/share/sound/MuseScore_General*
+
+# User overrides of SetupBuildEnvironment
+/buildscripts/cmake/SetupBuildEnvironment.user.cmake
+
+# CMake User presets
+CMakeUserPresets.json
+
+# Compile commands json
+compile_commands.json
+.cache
+
+# Local backups of nested repository metadata kept before flattening.
+/.local-git-backups/
+
+# Local demo export scratch files; do not include in public release commits.
+/demos/All_Dudes pre_export.mscz
+/demos/Demos Pre IOS Export/
+
+# QML language server
+**/.qmlls.ini
+
+# Local App Store screenshot editor and exports.
+/screenshots/
+
+# Standalone privacy policy website; tracked in its own repository.
+/privacy-site/

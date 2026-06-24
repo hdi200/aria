@@ -1,0 +1,255 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#include "masterpalette.h"
+
+#include "translation.h"
+
+#include "palettewidget.h"
+#include "keyedit.h"
+#include "timedialog.h"
+#include "symboldialog.h"
+
+#include "internal/palettecreator.h"
+
+#include "engraving/infrastructure/smufl.h"
+#include "ui/view/widgetstatestore.h"
+
+#include "log.h"
+
+using namespace mu::palette;
+using namespace muse::ui;
+using namespace mu::engraving;
+
+void MasterPalette::setSelectedPaletteName(const QString& name)
+{
+    for (int idx = 0; idx < treeWidget->topLevelItemCount(); ++idx) {
+        if (treeWidget->topLevelItem(idx)->text(0) == name) {
+            treeWidget->setCurrentItem(treeWidget->topLevelItem(idx));
+            emit selectedPaletteNameChanged(name);
+            break;
+        }
+    }
+}
+
+QString MasterPalette::selectedPaletteName() const
+{
+    return treeWidget->currentItem()->text(0);
+}
+
+//---------------------------------------------------------
+//   addPalette
+//---------------------------------------------------------
+
+void MasterPalette::addPalette(PalettePtr palette)
+{
+    TRACEFUNC;
+
+    PaletteWidget* widget = new PaletteWidget(this);
+    widget->setReadOnly(true);
+    widget->setPalette(palette);
+
+    PaletteScrollArea* psa = new PaletteScrollArea(widget);
+    psa->setRestrictHeight(false);
+    QTreeWidgetItem* item = new QTreeWidgetItem(QStringList(widget->name()));
+    item->setData(0, Qt::UserRole, stack->count());
+    item->setText(0, muse::qtrc("palette", widget->name().toUtf8().data()).replace("&&", "&"));
+    stack->addWidget(psa);
+    treeWidget->addTopLevelItem(item);
+}
+
+//---------------------------------------------------------
+//   MasterPalette
+//---------------------------------------------------------
+
+MasterPalette::MasterPalette(QWidget* parent)
+    : TopLevelDialog(parent)
+{
+    TRACEFUNC;
+
+    setObjectName("MasterPalette");
+    setupUi(this);
+}
+
+void MasterPalette::componentComplete()
+{
+    TopLevelDialog::componentComplete();
+
+    treeWidget->clear();
+
+    PaletteCreator creator(iocContext());
+
+    addPalette(creator.newClefsPalette());
+    m_keyEditor = new KeyEditor(this);
+
+    m_keyItem = new QTreeWidgetItem();
+    m_keyItem->setData(0, Qt::UserRole, stack->count());
+    stack->addWidget(m_keyEditor);
+    treeWidget->addTopLevelItem(m_keyItem);
+
+    m_timeItem = new QTreeWidgetItem();
+    m_timeItem->setData(0, Qt::UserRole, stack->count());
+    m_timeEditor = new TimeEditor(this);
+    stack->addWidget(m_timeEditor);
+    treeWidget->addTopLevelItem(m_timeItem);
+
+    addPalette(creator.newBracketsPalette());
+    addPalette(creator.newAccidentalsPalette());
+    addPalette(creator.newArticulationsPalette());
+    addPalette(creator.newOrnamentsPalette());
+    addPalette(creator.newBreathPalette());
+    addPalette(creator.newGraceNotePalette());
+    addPalette(creator.newNoteHeadsPalette());
+    addPalette(creator.newLinesPalette());
+    addPalette(creator.newBarLinePalette());
+    addPalette(creator.newArpeggioPalette());
+    addPalette(creator.newTremoloPalette());
+    addPalette(creator.newTextPalette());
+    addPalette(creator.newTempoPalette());
+    addPalette(creator.newDynamicsPalette());
+    addPalette(creator.newFingeringPalette());
+    addPalette(creator.newRepeatsPalette());
+    addPalette(creator.newFretboardDiagramPalette());
+    addPalette(creator.newAccordionPalette());
+    addPalette(creator.newBagpipeEmbellishmentPalette());
+    addPalette(creator.newLayoutPalette());
+    addPalette(creator.newBeamPalette());
+
+    m_symbolItem = new QTreeWidgetItem();
+    m_idxAllSymbols = stack->count();
+    m_symbolItem->setData(0, Qt::UserRole, m_idxAllSymbols);
+    m_symbolItem->setText(0, QT_TRANSLATE_NOOP("palette", "Symbols"));
+    treeWidget->addTopLevelItem(m_symbolItem);
+    stack->addWidget(new SymbolDialog(Smufl::SMUFL_ALL_SYMBOLS, this));
+
+    // Add "All symbols" entry to be first in the list of categories
+    QTreeWidgetItem* child = new QTreeWidgetItem({ Smufl::SMUFL_ALL_SYMBOLS });
+    child->setData(0, Qt::UserRole, m_idxAllSymbols);
+    m_symbolItem->addChild(child);
+
+    int idx = 0;
+    for (const auto& [rangeName, _] : Smufl::smuflRanges()) {
+        ++idx;
+
+        if (rangeName == Smufl::SMUFL_ALL_SYMBOLS) {
+            continue;
+        }
+
+        QTreeWidgetItem* chld = new QTreeWidgetItem({ rangeName });
+        chld->setData(0, Qt::UserRole, m_idxAllSymbols + idx);
+
+        m_symbolItem->addChild(chld);
+    }
+
+    connect(treeWidget, &QTreeWidget::currentItemChanged, this, &MasterPalette::currentChanged);
+    connect(treeWidget, &QTreeWidget::itemClicked, this, &MasterPalette::clicked);
+    retranslate(true);
+}
+
+//---------------------------------------------------------
+//   retranslate
+//---------------------------------------------------------
+
+void MasterPalette::retranslate(bool firstTime)
+{
+    m_keyItem->setText(0, muse::qtrc("palette", "Key signatures"));
+    m_timeItem->setText(0, muse::qtrc("palette", "Time signatures"));
+    m_symbolItem->setText(0, muse::qtrc("palette", "Symbols"));
+    if (!firstTime) {
+        retranslateUi(this);
+    }
+}
+
+//---------------------------------------------------------
+//   currentChanged
+//---------------------------------------------------------
+
+void MasterPalette::currentChanged(QTreeWidgetItem* item, QTreeWidgetItem*)
+{
+    int idx = item->data(0, Qt::UserRole).toInt();
+
+    if (idx > m_idxAllSymbols) {
+        if (!m_symbolWidgets.contains(idx)) {
+            String rangeName = std::next(Smufl::smuflRanges().cbegin(), idx - m_idxAllSymbols - 1)->first;
+            SymbolDialog* dialog = new SymbolDialog(rangeName.toQString());
+            m_symbolWidgets[idx] = dialog;
+            stack->addWidget(dialog);
+        }
+
+        stack->setCurrentWidget(m_symbolWidgets[idx]);
+        return;
+    }
+
+    if (idx != -1) {
+        stack->setCurrentIndex(idx);
+    }
+}
+
+//---------------------------------------------------------
+//   clicked
+//---------------------------------------------------------
+
+void MasterPalette::clicked(QTreeWidgetItem* item, int)
+{
+    int idx = item->data(0, Qt::UserRole).toInt();
+    if (idx == m_idxAllSymbols) {
+        item->setExpanded(!item->isExpanded());
+        if (idx != -1) {
+            stack->setCurrentIndex(idx);
+        }
+    }
+}
+
+//---------------------------------------------------------
+//   closeEvent
+//---------------------------------------------------------
+
+void MasterPalette::showEvent(QShowEvent* event)
+{
+    WidgetStateStore::restoreGeometry(this);
+    TopLevelDialog::showEvent(event);
+}
+
+void MasterPalette::closeEvent(QCloseEvent* event)
+{
+    WidgetStateStore::saveGeometry(this);
+    if (m_timeEditor->dirty()) {
+        m_timeEditor->save();
+    }
+    if (m_keyEditor->dirty()) {
+        m_keyEditor->save();
+    }
+    setResult(QDialog::Accepted);
+    QWidget::closeEvent(event);
+}
+
+//---------------------------------------------------------
+//   changeEvent
+//---------------------------------------------------------
+
+void MasterPalette::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::LanguageChange) {
+        retranslate();
+    }
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.6">
+  <Score>
+    <Part>
+      <trackName>Flute</trackName>
+      <Staff id="1"/>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+        <Chord>
+          <durationType>quarter</durationType>
+          <voice>1</voice>
+          <Note><pitch>72</pitch></Note>
+        </Chord>
+        <Chord>
+          <location>480</location>
+          <durationType>quarter</durationType>
+          <voice>2</voice>
+          <Note><pitch>67</pitch></Note>
+        </Chord>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>

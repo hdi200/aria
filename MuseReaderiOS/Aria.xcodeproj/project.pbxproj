@@ -1,0 +1,909 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		6D8D1FD22F8D3F3E00DD6DE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6D8D1FC32F8D3F3C00DD6DE1;
+			remoteInfo = MuseReaderiOS;
+		};
+		6D8D1FDC2F8D3F3E00DD6DE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6D8D1FC32F8D3F3C00DD6DE1;
+			remoteInfo = MuseReaderiOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Aria-Info.plist"; sourceTree = "<group>"; };
+		6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
+		6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
+		6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aria.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AriaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AriaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MuseReaderiOS;
+			sourceTree = "<group>";
+		};
+		6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MuseReaderiOSTests;
+			sourceTree = "<group>";
+		};
+		6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MuseReaderiOSUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		6D8D1FC12F8D3F3C00DD6DE1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D8D1FCE2F8D3F3E00DD6DE1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D8D1FD82F8D3F3E00DD6DE1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		6D8D1FBB2F8D3F3C00DD6DE1 = {
+			isa = PBXGroup;
+			children = (
+				6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */,
+				6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */,
+				6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */,
+				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
+				6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */,
+				6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */,
+				6D8D1FC52F8D3F3C00DD6DE1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6D8D1FC52F8D3F3C00DD6DE1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */,
+				6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */,
+				6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6D8D1FC32F8D3F3C00DD6DE1 /* Aria */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D8D1FE52F8D3F3E00DD6DE1 /* Build configuration list for PBXNativeTarget "Aria" */;
+			buildPhases = (
+				6D8D20012F8D4F7E00DD6DE1 /* Build MuseScore Render Artifacts */,
+				6D8D1FC02F8D3F3C00DD6DE1 /* Sources */,
+				6D8D1FC12F8D3F3C00DD6DE1 /* Frameworks */,
+				6D8D1FC22F8D3F3C00DD6DE1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
+			);
+			name = Aria;
+			packageProductDependencies = (
+			);
+			productName = MuseReaderiOS;
+			productReference = 6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */;
+			productType = "com.apple.product-type.application";
+		};
+		6D8D1FD02F8D3F3E00DD6DE1 /* AriaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D8D1FE82F8D3F3E00DD6DE1 /* Build configuration list for PBXNativeTarget "AriaTests" */;
+			buildPhases = (
+				6D8D1FCD2F8D3F3E00DD6DE1 /* Sources */,
+				6D8D1FCE2F8D3F3E00DD6DE1 /* Frameworks */,
+				6D8D1FCF2F8D3F3E00DD6DE1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6D8D1FD32F8D3F3E00DD6DE1 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */,
+			);
+			name = AriaTests;
+			packageProductDependencies = (
+			);
+			productName = MuseReaderiOSTests;
+			productReference = 6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		6D8D1FDA2F8D3F3E00DD6DE1 /* AriaUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D8D1FEB2F8D3F3E00DD6DE1 /* Build configuration list for PBXNativeTarget "AriaUITests" */;
+			buildPhases = (
+				6D8D1FD72F8D3F3E00DD6DE1 /* Sources */,
+				6D8D1FD82F8D3F3E00DD6DE1 /* Frameworks */,
+				6D8D1FD92F8D3F3E00DD6DE1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6D8D1FDD2F8D3F3E00DD6DE1 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */,
+			);
+			name = AriaUITests;
+			packageProductDependencies = (
+			);
+			productName = MuseReaderiOSUITests;
+			productReference = 6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					6D8D1FC32F8D3F3C00DD6DE1 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					6D8D1FD02F8D3F3E00DD6DE1 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 6D8D1FC32F8D3F3C00DD6DE1;
+					};
+					6D8D1FDA2F8D3F3E00DD6DE1 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 6D8D1FC32F8D3F3C00DD6DE1;
+					};
+				};
+			};
+			buildConfigurationList = 6D8D1FBF2F8D3F3C00DD6DE1 /* Build configuration list for PBXProject "Aria" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 6D8D1FBB2F8D3F3C00DD6DE1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 6D8D1FC52F8D3F3C00DD6DE1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6D8D1FC32F8D3F3C00DD6DE1 /* Aria */,
+				6D8D1FD02F8D3F3E00DD6DE1 /* AriaTests */,
+				6D8D1FDA2F8D3F3E00DD6DE1 /* AriaUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		6D8D1FC22F8D3F3C00DD6DE1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D8D1FCF2F8D3F3E00DD6DE1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D8D1FD92F8D3F3E00DD6DE1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		6D8D20012F8D4F7E00DD6DE1 /* Build MuseScore Render Artifacts */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../sandbox/engraving/CMakeLists.txt",
+				"$(SRCROOT)/../sandbox/engraving/score_render_core.cpp",
+				"$(SRCROOT)/../sandbox/engraving/score_render_core.h",
+			);
+			name = "Build MuseScore Render Artifacts";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$ACTION\" = \"indexbuild\" ]; then\n  exit 0\nfi\n\nset -eu\n\nSOURCE_DIR=\"$SRCROOT/../sandbox/engraving\"\nSIMULATOR_BUILD_DIR=\"/tmp/musescore-score-render-core-simulator\"\nDEVICE_BUILD_DIR=\"/tmp/musescore-score-render-core-ios\"\nTOOL_PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\nQT_IOS_SDK_DIR=\"${MUSEREADER_QT_IOS_SDK_DIR:-}\"\nQT_HOST_SDK_DIR=\"${MUSEREADER_QT_HOST_SDK_DIR:-}\"\nBUILD_TYPE=Release\nCMAKE_ARCHS=\"$(printf '%s' \"${ARCHS:-arm64}\" | tr ' ' ';')\"\n\nif [ \"$CONFIGURATION\" = \"Debug\" ]; then\n  BUILD_TYPE=Debug\nfi\n\nfind_tool() {\n  tool_name=\"$1\"\n\n  for candidate in \\\n    \"/opt/homebrew/bin/$tool_name\" \\\n    \"/usr/local/bin/$tool_name\" \\\n    \"$(command -v \\\"$tool_name\\\" 2>/dev/null || true)\"\n  do\n    if [ -n \"$candidate\" ] && [ -x \"$candidate\" ]; then\n      printf '%s' \"$candidate\"\n      return 0\n    fi\n  done\n\n  echo \"error: $tool_name is required for the MuseScore render build phase. Install it with Homebrew or update the build script path.\" >&2\n  exit 1\n}\n\nconfigure_common_env() {\n  /usr/bin/env -i HOME=\"$HOME\" PATH=\"$TOOL_PATH\" TMPDIR=\"${TMPDIR:-/tmp}\" DEVELOPER_DIR=\"$DEVELOPER_DIR\" \"$@\"\n}\n\nbuild_render_core() {\n  sysroot=\"$1\"\n  build_dir=\"$2\"\n\n  configure_common_env \"$CMAKE_BIN\" -S \"$SOURCE_DIR\" -B \"$build_dir\" -G Ninja -DCMAKE_MAKE_PROGRAM=\"$NINJA_BIN\" -DCMAKE_BUILD_TYPE=\"$BUILD_TYPE\" -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=\"$sysroot\" -DCMAKE_OSX_DEPLOYMENT_TARGET=\"${IPHONEOS_DEPLOYMENT_TARGET:-17.0}\" -DCMAKE_OSX_ARCHITECTURES=\"$CMAKE_ARCHS\" -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH -DCMAKE_PREFIX_PATH=\"$QT_IOS_SDK_DIR;$QT_HOST_SDK_DIR\" -DQt6_DIR=\"$QT_IOS_SDK_DIR/lib/cmake/Qt6\" -DQT_HOST_PATH=\"$QT_HOST_SDK_DIR\" -DQT_ADDITIONAL_HOST_PACKAGES_PREFIX_PATH=\"$QT_HOST_SDK_DIR\" -DQt6HostInfo_DIR=\"$QT_HOST_SDK_DIR/lib/cmake/Qt6HostInfo\" -DQt6CoreTools_DIR=\"$QT_HOST_SDK_DIR/lib/cmake/Qt6CoreTools\" -DSCORE_RENDER_QT_TARGET_ROOT=\"$QT_IOS_SDK_DIR\" -DSCORE_RENDER_QT_HOST_ROOT=\"$QT_HOST_SDK_DIR\"\n  configure_common_env \"$CMAKE_BIN\" --build \"$build_dir\" --target MuseScoreRenderCore\n}\n\nCMAKE_BIN=\"$(find_tool cmake)\"\nNINJA_BIN=\"$(find_tool ninja)\"\n\nif [ -z \"$QT_IOS_SDK_DIR\" ] || [ ! -f \"$QT_IOS_SDK_DIR/lib/cmake/Qt6/Qt6Config.cmake\" ]; then\n  echo \"error: MUSEREADER_QT_IOS_SDK_DIR must point to a Qt for iOS SDK root with lib/cmake/Qt6/Qt6Config.cmake.\" >&2\n  exit 1\nfi\n\nif [ -z \"$QT_HOST_SDK_DIR\" ] || [ ! -f \"$QT_HOST_SDK_DIR/lib/cmake/Qt6/Qt6Config.cmake\" ]; then\n  echo \"error: MUSEREADER_QT_HOST_SDK_DIR must point to the matching host Qt SDK root used for Qt build tools.\" >&2\n  exit 1\nfi\n\nif [ \"$PLATFORM_NAME\" = \"iphonesimulator\" ]; then\n  build_render_core iphonesimulator \"$SIMULATOR_BUILD_DIR\"\n  exit 0\nfi\n\nif [ \"$PLATFORM_NAME\" = \"iphoneos\" ]; then\n  build_render_core iphoneos \"$DEVICE_BUILD_DIR\"\n  exit 0\nfi\n\nexit 0\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6D8D1FC02F8D3F3C00DD6DE1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D8D1FCD2F8D3F3E00DD6DE1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D8D1FD72F8D3F3E00DD6DE1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6D8D1FD32F8D3F3E00DD6DE1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6D8D1FC32F8D3F3C00DD6DE1 /* Aria */;
+			targetProxy = 6D8D1FD22F8D3F3E00DD6DE1 /* PBXContainerItemProxy */;
+		};
+		6D8D1FDD2F8D3F3E00DD6DE1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6D8D1FC32F8D3F3C00DD6DE1 /* Aria */;
+			targetProxy = 6D8D1FDC2F8D3F3E00DD6DE1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		6D8D1FE32F8D3F3E00DD6DE1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		6D8D1FE42F8D3F3E00DD6DE1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		6D8D1FE62F8D3F3E00DD6DE1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"/tmp/musescore-score-render-core-ios",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib",
+				);
+				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"/tmp/musescore-score-render-core-simulator",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"MUSEREADER_USE_SCORE_RENDER_CORE=1",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"MUSEREADER_USE_SCORE_RENDER_CORE=1",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Aria-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Aria;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.5;
+				OTHER_LDFLAGS = "$(inherited)";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-lz",
+					"-framework",
+					MuseScoreRenderCore,
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/global/libmuse_global.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/draw/libmuse_draw.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/engraving/libengraving.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/musicxml/libiex_musicxml.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtCore.framework/QtCore_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtGui.framework/QtGui_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtSvg.framework/QtSvg_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtQml.framework/QtQml_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtNetwork.framework/QtNetwork_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/platforms/libqios_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/networkinformation/libqapplenetworkinformation_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/tls/libqsecuretransportbackend_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledHarfbuzz_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledFreetype_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibpng_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibjpeg_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledPcre2_debug.a",
+					"-framework",
+					UIKit,
+					"-framework",
+					Foundation,
+					"-framework",
+					CoreFoundation,
+					"-framework",
+					CoreGraphics,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					Metal,
+					"-framework",
+					OpenGLES,
+					"-framework",
+					ImageIO,
+					"-framework",
+					Photos,
+					"-framework",
+					CFNetwork,
+					"-framework",
+					Network,
+					"-framework",
+					Security,
+					"-framework",
+					CoreText,
+					"-framework",
+					Accelerate,
+					"-framework",
+					IOKit,
+					"-framework",
+					UniformTypeIdentifiers,
+					"-framework",
+					MobileCoreServices,
+					"-framework",
+					AudioToolbox,
+					"-lm",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-lz",
+					"-framework",
+					MuseScoreRenderCore,
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/global/libmuse_global.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/draw/libmuse_draw.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/engraving/libengraving.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/musicxml/libiex_musicxml.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtCore.framework/QtCore_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtGui.framework/QtGui_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtSvg.framework/QtSvg_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtQml.framework/QtQml_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtNetwork.framework/QtNetwork_debug",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/platforms/libqios_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/networkinformation/libqapplenetworkinformation_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/tls/libqsecuretransportbackend_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledHarfbuzz_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledFreetype_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibpng_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibjpeg_debug.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledPcre2_debug.a",
+					"-framework",
+					UIKit,
+					"-framework",
+					Foundation,
+					"-framework",
+					CoreFoundation,
+					"-framework",
+					CoreGraphics,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					Metal,
+					"-framework",
+					OpenGLES,
+					"-framework",
+					ImageIO,
+					"-framework",
+					Photos,
+					"-framework",
+					CFNetwork,
+					"-framework",
+					Network,
+					"-framework",
+					Security,
+					"-framework",
+					CoreText,
+					"-framework",
+					Accelerate,
+					"-framework",
+					IOKit,
+					"-framework",
+					UniformTypeIdentifiers,
+					"-framework",
+					MobileCoreServices,
+					"-framework",
+					AudioToolbox,
+					"-lm",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "MuseReaderiOS/Bridge/MuseReaderiOS-Bridging-Header.h";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6D8D1FE72F8D3F3E00DD6DE1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"/tmp/musescore-score-render-core-ios",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib",
+				);
+				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"/tmp/musescore-score-render-core-simulator",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"MUSEREADER_USE_SCORE_RENDER_CORE=1",
+				);
+				"GCC_PREPROCESSOR_DEFINITIONS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"MUSEREADER_USE_SCORE_RENDER_CORE=1",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Aria-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Aria;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.5;
+				OTHER_LDFLAGS = "$(inherited)";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"-lz",
+					"-framework",
+					MuseScoreRenderCore,
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/global/libmuse_global.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/draw/libmuse_draw.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/engraving/libengraving.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-ios/musicxml/libiex_musicxml.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtCore.framework/QtCore",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtGui.framework/QtGui",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtSvg.framework/QtSvg",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtQml.framework/QtQml",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtNetwork.framework/QtNetwork",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/platforms/libqios.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/networkinformation/libqapplenetworkinformation.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/tls/libqsecuretransportbackend.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledHarfbuzz.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledFreetype.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibpng.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibjpeg.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledPcre2.a",
+					"-framework",
+					UIKit,
+					"-framework",
+					Foundation,
+					"-framework",
+					CoreFoundation,
+					"-framework",
+					CoreGraphics,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					Metal,
+					"-framework",
+					OpenGLES,
+					"-framework",
+					ImageIO,
+					"-framework",
+					Photos,
+					"-framework",
+					CFNetwork,
+					"-framework",
+					Network,
+					"-framework",
+					Security,
+					"-framework",
+					CoreText,
+					"-framework",
+					Accelerate,
+					"-framework",
+					IOKit,
+					"-framework",
+					UniformTypeIdentifiers,
+					"-framework",
+					MobileCoreServices,
+					"-framework",
+					AudioToolbox,
+					"-lm",
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"-lz",
+					"-framework",
+					MuseScoreRenderCore,
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/global/libmuse_global.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/draw/libmuse_draw.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/engraving/libengraving.a",
+					"-Wl,-force_load,/tmp/musescore-score-render-core-simulator/musicxml/libiex_musicxml.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtCore.framework/QtCore",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtGui.framework/QtGui",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtSvg.framework/QtSvg",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtQml.framework/QtQml",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/QtNetwork.framework/QtNetwork",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/platforms/libqios.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/networkinformation/libqapplenetworkinformation.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/plugins/tls/libqsecuretransportbackend.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledHarfbuzz.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledFreetype.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibpng.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledLibjpeg.a",
+					"$(MUSEREADER_QT_IOS_SDK_DIR)/lib/libQt6BundledPcre2.a",
+					"-framework",
+					UIKit,
+					"-framework",
+					Foundation,
+					"-framework",
+					CoreFoundation,
+					"-framework",
+					CoreGraphics,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					Metal,
+					"-framework",
+					OpenGLES,
+					"-framework",
+					ImageIO,
+					"-framework",
+					Photos,
+					"-framework",
+					CFNetwork,
+					"-framework",
+					Network,
+					"-framework",
+					Security,
+					"-framework",
+					CoreText,
+					"-framework",
+					Accelerate,
+					"-framework",
+					IOKit,
+					"-framework",
+					UniformTypeIdentifiers,
+					"-framework",
+					MobileCoreServices,
+					"-framework",
+					AudioToolbox,
+					"-lm",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "MuseReaderiOS/Bridge/MuseReaderiOS-Bridging-Header.h";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6D8D1FE92F8D3F3E00DD6DE1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aria.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aria";
+			};
+			name = Debug;
+		};
+		6D8D1FEA2F8D3F3E00DD6DE1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Aria.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Aria";
+			};
+			name = Release;
+		};
+		6D8D1FEC2F8D3F3E00DD6DE1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Aria;
+			};
+			name = Debug;
+		};
+		6D8D1FED2F8D3F3E00DD6DE1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Aria;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6D8D1FBF2F8D3F3C00DD6DE1 /* Build configuration list for PBXProject "Aria" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6D8D1FE32F8D3F3E00DD6DE1 /* Debug */,
+				6D8D1FE42F8D3F3E00DD6DE1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6D8D1FE52F8D3F3E00DD6DE1 /* Build configuration list for PBXNativeTarget "Aria" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6D8D1FE62F8D3F3E00DD6DE1 /* Debug */,
+				6D8D1FE72F8D3F3E00DD6DE1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6D8D1FE82F8D3F3E00DD6DE1 /* Build configuration list for PBXNativeTarget "AriaTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6D8D1FE92F8D3F3E00DD6DE1 /* Debug */,
+				6D8D1FEA2F8D3F3E00DD6DE1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6D8D1FEB2F8D3F3E00DD6DE1 /* Build configuration list for PBXNativeTarget "AriaUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6D8D1FEC2F8D3F3E00DD6DE1 /* Debug */,
+				6D8D1FED2F8D3F3E00DD6DE1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */;
+}

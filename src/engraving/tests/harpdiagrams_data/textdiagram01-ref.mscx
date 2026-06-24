@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="5.00">
+  <Score>
+    <eid>B_B</eid>
+    <Division>480</Division>
+    <Style>
+      <windsNameByGroup>0</windsNameByGroup>
+      <vocalsNameByGroup>0</vocalsNameByGroup>
+      <maskBarlinesForText>0</maskBarlinesForText>
+      <dividerLeftAlignToSystemBarline>0</dividerLeftAlignToSystemBarline>
+      <dividerRightAlignToSystemBarline>0</dividerRightAlignToSystemBarline>
+      <scaleRythmicSpacingForSmallNotes>0</scaleRythmicSpacingForSmallNotes>
+      <verticallyAlignChordSymbols>0</verticallyAlignChordSymbols>
+      <pageNumberFontSize>9</pageNumberFontSize>
+      <pageNumberFontStyle>0</pageNumberFontStyle>
+      <pageNumberMusicalSymbolSize>9</pageNumberMusicalSymbolSize>
+      <changesBeforeBarlineRepeats>0</changesBeforeBarlineRepeats>
+      <changesBeforeBarlineOtherJumps>0</changesBeforeBarlineOtherJumps>
+      <showCourtesiesRepeats>0</showCourtesiesRepeats>
+      <showCourtesiesOtherJumps>0</showCourtesiesOtherJumps>
+      <showCourtesiesAfterCancellingRepeats>0</showCourtesiesAfterCancellingRepeats>
+      <showCourtesiesAfterCancellingOtherJumps>0</showCourtesiesAfterCancellingOtherJumps>
+      <repeatPlayCountShow>0</repeatPlayCountShow>
+      <spatium>1.74978</spatium>
+      </Style>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer">Composer / arranger</metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="subtitle">Subtitle</metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle">Untitled score</metaTag>
+    <Order id="orchestral">
+      <name>Orchestral</name>
+      <instrument id="harp">
+        <family id="harps">Harps</family>
+        </instrument>
+      <section id="woodwind" brackets="true" barLineSpan="true" thinBrackets="true">
+        <family>flutes</family>
+        <family>oboes</family>
+        <family>clarinets</family>
+        <family>saxophones</family>
+        <family>bassoons</family>
+        <unsorted group="woodwinds"/>
+        </section>
+      <section id="brass" brackets="true" barLineSpan="true" thinBrackets="true">
+        <family>horns</family>
+        <family>trumpets</family>
+        <family>cornets</family>
+        <family>flugelhorns</family>
+        <family>trombones</family>
+        <family>tubas</family>
+        </section>
+      <section id="timpani" brackets="true" barLineSpan="true" thinBrackets="true">
+        <family>timpani</family>
+        </section>
+      <section id="percussion" brackets="true" barLineSpan="true" thinBrackets="true">
+        <family>keyboard-percussion</family>
+        <family>drums</family>
+        <family>unpitched-metal-percussion</family>
+        <family>unpitched-wooden-percussion</family>
+        <family>other-percussion</family>
+        </section>
+      <family>keyboards</family>
+      <family>harps</family>
+      <family>organs</family>
+      <family>synths</family>
+      <soloists/>
+      <section id="voices" brackets="true" barLineSpan="false" thinBrackets="true">
+        <family>voices</family>
+        <family>voice-groups</family>
+        </section>
+      <section id="strings" brackets="true" barLineSpan="true" thinBrackets="true">
+        <family>orchestral-strings</family>
+        </section>
+      <unsorted/>
+      </Order>
+    <Part id="1">
+      <Staff>
+        <eid>C_C</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        <BracketItem>
+          <type>Brace</type>
+          <bracketSpan>2</bracketSpan>
+          <level>0</level>
+          </BracketItem>
+        <barLineSpan>1</barLineSpan>
+        </Staff>
+      <Staff>
+        <eid>D_D</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        <defaultClef>F</defaultClef>
+        </Staff>
+      <Instrument id="harp">
+        <InstrumentLabel>
+          <longName>Harp</longName>
+          <shortName>Hrp.</shortName>
+          </InstrumentLabel>
+        <trackName>Harp</trackName>
+        <minPitchP>23</minPitchP>
+        <maxPitchP>104</maxPitchP>
+        <minPitchA>23</minPitchA>
+        <maxPitchA>104</maxPitchA>
+        <instrumentId>pluck.harp</instrumentId>
+        <clef staff="2">F</clef>
+        <Channel>
+          <program value="46"/>
+          </Channel>
+        <Channel name="staccato">
+          <program value="45"/>
+          </Channel>
+        <Channel name="flageoletti">
+          <program value="11"/>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <Measure>
+        <eid>E_E</eid>
+        <voice>
+          <TimeSig>
+            <eid>F_F</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <HarpPedalDiagram>
+            <isDiagram>0</isDiagram>
+            <pedalState>
+              <string name="0">1</string>
+              <string name="1">1</string>
+              <string name="2">1</string>
+              <string name="3">1</string>
+              <string name="4">1</string>
+              <string name="5">1</string>
+              <string name="6">1</string>
+              </pedalState>
+            <eid>G_G</eid>
+            <style>harp_pedal_text_diagram</style>
+            <text>E<sym>csymAccidentalNatural</sym> F<sym>csymAccidentalNatural</sym> G<sym>csymAccidentalNatural</sym> A<sym>csymAccidentalNatural</sym> <br/>D<sym>csymAccidentalNatural</sym> C<sym>csymAccidentalNatural</sym> B<sym>csymAccidentalNatural</sym> </text>
+            </HarpPedalDiagram>
+          <Rest>
+            <eid>H_H</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>I_I</eid>
+        <voice>
+          <HarpPedalDiagram>
+            <isDiagram>0</isDiagram>
+            <pedalState>
+              <string name="0">1</string>
+              <string name="1">2</string>
+              <string name="2">1</string>
+              <string name="3">1</string>
+              <string name="4">2</string>
+              <string name="5">1</string>
+              <string name="6">1</string>
+              </pedalState>
+            <eid>J_J</eid>
+            <style>harp_pedal_text_diagram</style>
+            <text>F<sym>csymAccidentalSharp</sym> <br/>C<sym>csymAccidentalSharp</sym> </text>
+            </HarpPedalDiagram>
+          <Rest>
+            <eid>K_K</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>L_L</eid>
+        <voice>
+          <HarpPedalDiagram>
+            <isDiagram>0</isDiagram>
+            <pedalState>
+              <string name="0">1</string>
+              <string name="1">2</string>
+              <string name="2">1</string>
+              <string name="3">1</string>
+              <string name="4">2</string>
+              <string name="5">1</string>
+              <string name="6">1</string>
+              </pedalState>
+            <eid>M_M</eid>
+            <style>harp_pedal_text_diagram</style>
+            <text>F<sym>csymAccidentalSharp</sym> <br/>C<sym>csymAccidentalSharp</sym> </text>
+            </HarpPedalDiagram>
+          <Rest>
+            <eid>N_N</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <eid>O_O</eid>
+        <voice>
+          <HarpPedalDiagram>
+            <isDiagram>0</isDiagram>
+            <pedalState>
+              <string name="0">1</string>
+              <string name="1">2</string>
+              <string name="2">1</string>
+              <string name="3">1</string>
+              <string name="4">2</string>
+              <string name="5">2</string>
+              <string name="6">1</string>
+              </pedalState>
+            <eid>P_P</eid>
+            <style>harp_pedal_text_diagram</style>
+            <text>G<sym>csymAccidentalSharp</sym> <br/></text>
+            </HarpPedalDiagram>
+          <Rest>
+            <eid>Q_Q</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      </Staff>
+    <Staff id="2">
+      <Measure>
+        <voice>
+          <TimeSig>
+            <eid>R_R</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Rest>
+            <eid>S_S</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <voice>
+          <Rest>
+            <eid>T_T</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <voice>
+          <Rest>
+            <eid>U_U</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      <Measure>
+        <voice>
+          <Rest>
+            <eid>V_V</eid>
+            <durationType>measure</durationType>
+            <duration>4/4</duration>
+            </Rest>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

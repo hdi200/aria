@@ -1,0 +1,126 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2025 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#pragma once
+
+#include "undo.h"
+
+#include "../dom/note.h"
+
+namespace mu::engraving {
+enum class SymId;
+enum class AccidentalType : unsigned char;
+enum class UpDownMode : char;
+enum class Key : signed char;
+class Score;
+class EngravingItem;
+class Articulation;
+
+class EditNote
+{
+public:
+    static void toggleOrnament(Score* score, SymId attr);
+    static void toggleAccidental(Score* score, AccidentalType at);
+    static void applyAccidentalToInputNotes(Score* score, AccidentalType accidentalType);
+    static void changeAccidental(Score* score, AccidentalType idx);
+    static void changeAccidental(Score* score, Note* note, AccidentalType accidental);
+    static void undoChangePitch(Score* score, Note* note, int pitch, int tpc1, int tpc2);
+    static void undoChangeFretting(Score* score, Note* note, int pitch, int string, int fret, int tpc1, int tpc2);
+    static void upDown(Score* score, bool up, UpDownMode mode);
+private:
+    static void changeAccidental2(Note* n, int pitch, int tpc);
+    static void upDownChromatic(bool up, int pitch, Note* n, Key key, int tpc1, int tpc2, int& newPitch, int& newTpc1, int& newTpc2);
+};
+
+class ChangeVelocity : public UndoCommand
+{
+    OBJECT_ALLOCATOR(engraving, ChangeVelocity)
+
+    Note* note = nullptr;
+    int userVelocity = 0;
+
+    void flip(EditData*) override;
+
+public:
+    ChangeVelocity(Note*, int);
+
+    UNDO_TYPE(CommandType::ChangeVelocity)
+    UNDO_NAME("ChangeVelocity")
+    UNDO_CHANGED_OBJECTS({ note })
+};
+
+class ChangeNoteEventList : public UndoCommand
+{
+    OBJECT_ALLOCATOR(engraving, ChangeNoteEventList)
+
+    Note* note = nullptr;
+    NoteEventList newEvents;
+    PlayEventType newPetype;
+
+    void flip(EditData*) override;
+
+public:
+    ChangeNoteEventList(Note* n, NoteEventList& ne)
+        : note(n), newEvents(ne), newPetype(PlayEventType::User) {}
+    UNDO_NAME("ChangeNoteEventList")
+    UNDO_CHANGED_OBJECTS({ note });
+};
+
+class ChangeNoteEvent : public UndoCommand
+{
+    OBJECT_ALLOCATOR(engraving, ChangeNoteEvent)
+
+    Note* note = nullptr;
+    NoteEvent* oldEvent = nullptr;
+    NoteEvent newEvent;
+    PlayEventType newPetype;
+
+    void flip(EditData*) override;
+
+public:
+    ChangeNoteEvent(Note* n, NoteEvent* oe, const NoteEvent& ne)
+        : note(n), oldEvent(oe), newEvent(ne), newPetype(PlayEventType::User) {}
+    UNDO_NAME("ChangeNoteEvent")
+    UNDO_CHANGED_OBJECTS({ note })
+};
+
+class ChangeChordPlayEventType : public UndoCommand
+{
+    OBJECT_ALLOCATOR(engraving, ChangeChordPlayEventType)
+
+    Chord* chord = nullptr;
+    PlayEventType petype;
+    std::vector<NoteEventList> events;
+
+    void flip(EditData*) override;
+
+public:
+    ChangeChordPlayEventType(Chord* c, PlayEventType pet)
+        : chord(c), petype(pet)
+    {
+        events = c->getNoteEventLists();
+    }
+
+    UNDO_NAME("ChangeChordPlayEventType")
+    UNDO_CHANGED_OBJECTS({ chord });
+};
+}

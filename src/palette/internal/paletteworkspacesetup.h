@@ -1,0 +1,52 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-Studio-CLA-applies
+ *
+ * MuseScore Studio
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2021 MuseScore Limited
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#ifndef MU_PALETTE_PALETTEWORKSPACESETUP_H
+#define MU_PALETTE_PALETTEWORKSPACESETUP_H
+
+#include "modularity/ioc.h"
+#include "workspace/iworkspacesdataprovider.h"
+#include "ipaletteprovider.h"
+#include "async/asyncable.h"
+#include "engraving/ipalettescoreprovider.h"
+
+namespace mu::palette {
+class PaletteWorkspaceSetup : public muse::async::Asyncable, public muse::Contextable
+{
+    muse::ContextInject<muse::workspace::IWorkspacesDataProvider> workspacesDataProvider = { this };
+    muse::ContextInject<IPaletteProvider> paletteProvider = { this };
+    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { this };
+public:
+
+    explicit PaletteWorkspaceSetup(const muse::modularity::ContextPtr& iocCtx)
+        : muse::Contextable(iocCtx)
+    {
+    }
+
+    void setup();
+
+private:
+    PaletteTreePtr readPalette(const muse::ByteArray& data, const muse::modularity::ContextPtr& iocCtx);
+    void writePalette(const PaletteTreePtr& tree, QByteArray& data);
+};
+}
+
+#endif // MU_PALETTE_PALETTEWORKSPACESETUP_H
