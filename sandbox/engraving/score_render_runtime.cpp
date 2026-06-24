@@ -3965,6 +3965,7 @@ struct SynthNoteEvent {
 
 struct SynthChannelProgram {
     int channel = 0;
+    muse::mpe::layer_idx_t layerIdx = 0;
     muse::midi::Program program;
     std::string setup;
 };
@@ -4026,6 +4027,23 @@ std::unordered_map<int, ActiveSynthNote> activeSynthNotesAtFrame(const std::vect
 }
 
 struct EventExtractionStats {
+    struct LayerDebugStats {
+        int channel = -1;
+        std::string setup;
+        bool useDynamicEvents = false;
+        int noteCount = 0;
+        int velocityMin = 128;
+        int velocityMax = 0;
+        long long velocitySum = 0;
+        int nominalMin = std::numeric_limits<int>::max();
+        int nominalMax = std::numeric_limits<int>::min();
+        int expressionCurveMin = std::numeric_limits<int>::max();
+        int expressionCurveMax = std::numeric_limits<int>::min();
+        int notesWithExpressionCurve = 0;
+        int notesWithVelocityOverride = 0;
+        int dynamicControllerCount = 0;
+    };
+
     int trackCount = 0;
     int invalidTrackCount = 0;
     int playbackModelTimestampCount = 0;
@@ -4043,6 +4061,7 @@ struct EventExtractionStats {
     int dynamicControllerEventCount = 0;
     int pitchBendCurveEventCount = 0;
     bool usedEngravingFallback = false;
+    std::map<muse::mpe::layer_idx_t, LayerDebugStats> layerDebug;
 };
 
 SynthNoteEvent makeNoteSynthEvent(const int frame,
@@ -4195,7 +4214,16 @@ bool isPitchBendArticulation(const muse::mpe::ArticulationType type)
     }
 }
 
-int velocityForNoteEvent(const muse::mpe::NoteEvent& noteEvent, const bool useDynamicEvents)
+int expressionLevelForDynamicLevel(muse::mpe::dynamic_level_t dynamicLevel);
+
+int velocityForDynamicLevel(const muse::mpe::dynamic_level_t dynamicLevel)
+{
+    return expressionLevelForDynamicLevel(dynamicLevel);
+}
+
+int velocityForNoteEvent(const muse::mpe::NoteEvent& noteEvent,
+                         const bool useDynamicEvents,
+                         const bool useNominalDynamicFloor)
 {
     const muse::mpe::ExpressionContext& expression = noteEvent.expressionCtx();
     if (expression.velocityOverride.has_value()) {
@@ -4216,10 +4244,14 @@ int velocityForNoteEvent(const muse::mpe::NoteEvent& noteEvent, const bool useDy
             0.0,
             1.0
         );
-        return std::clamp(static_cast<int>(std::llround(24.0 + (dynamicFraction * 103.0))), 1, 127);
+        const int curveVelocity = std::clamp(static_cast<int>(std::llround(24.0 + (dynamicFraction * 103.0))), 1, 127);
+        if (useNominalDynamicFloor) {
+            return std::max(curveVelocity, velocityForDynamicLevel(expression.nominalDynamicLevel));
+        }
+        return curveVelocity;
     }
 
-    return 90;
+    return useNominalDynamicFloor ? velocityForDynamicLevel(expression.nominalDynamicLevel) : 90;
 }
 
 int expressionLevelForDynamicLevel(const muse::mpe::dynamic_level_t dynamicLevel)
@@ -4393,23 +4425,75 @@ void appendPitchCurveEvents(const muse::mpe::NoteEvent& noteEvent,
     }
 }
 
-void appendDynamicControllerEvents(const muse::mpe::DynamicLevelLayers& dynamics,
+void recordLayerDynamicController(EventExtractionStats& stats, const muse::mpe::layer_idx_t layerIdx)
+{
+    stats.layerDebug[layerIdx].dynamicControllerCount += 1;
+}
+
+void recordLayerNote(EventExtractionStats& stats,
+                     const muse::mpe::layer_idx_t layerIdx,
+                     const muse::mpe::NoteEvent& noteEvent,
+                     const int velocity)
+{
+    EventExtractionStats::LayerDebugStats& layerStats = stats.layerDebug[layerIdx];
+    const muse::mpe::ExpressionContext& expression = noteEvent.expressionCtx();
+    const int nominalLevel = static_cast<int>(expression.nominalDynamicLevel);
+    layerStats.noteCount += 1;
+    layerStats.velocityMin = std::min(layerStats.velocityMin, velocity);
+    layerStats.velocityMax = std::max(layerStats.velocityMax, velocity);
+    layerStats.velocitySum += velocity;
+    layerStats.nominalMin = std::min(layerStats.nominalMin, nominalLevel);
+    layerStats.nominalMax = std::max(layerStats.nominalMax, nominalLevel);
+    if (!expression.expressionCurve.empty()) {
+        const int expressionCurveLevel = static_cast<int>(expression.expressionCurve.maxAmplitudeLevel());
+        layerStats.expressionCurveMin = std::min(layerStats.expressionCurveMin, expressionCurveLevel);
+        layerStats.expressionCurveMax = std::max(layerStats.expressionCurveMax, expressionCurveLevel);
+        layerStats.notesWithExpressionCurve += 1;
+    }
+    if (expression.velocityOverride.has_value()) {
+        layerStats.notesWithVelocityOverride += 1;
+    }
+}
+
+void appendDynamicControllerEvents(const muse::mpe::DynamicLevelMap& dynamics,
+                                   const muse::mpe::layer_idx_t layerIdx,
                                    const int channel,
                                    std::vector<SynthNoteEvent>& synthEvents,
                                    EventExtractionStats& stats)
 {
-    for (const auto& layer : dynamics) {
-        for (const auto& dynamic : layer.second) {
-            synthEvents.push_back(makeControlSynthEvent(
-                frameForMpeTimestamp(dynamic.first),
-                channel,
-                11,
-                expressionLevelForDynamicLevel(dynamic.second)
-            ));
-            stats.dynamicControllerEventCount += 1;
-            stats.controllerEventCount += 1;
-        }
+    for (const auto& dynamic : dynamics) {
+        synthEvents.push_back(makeControlSynthEvent(
+            frameForMpeTimestamp(dynamic.first),
+            channel,
+            11,
+            expressionLevelForDynamicLevel(dynamic.second)
+        ));
+        stats.dynamicControllerEventCount += 1;
+        stats.controllerEventCount += 1;
+        recordLayerDynamicController(stats, layerIdx);
     }
+}
+
+muse::mpe::layer_idx_t layerIndexForPlaybackEvent(const muse::mpe::PlaybackEvent& event)
+{
+    if (std::holds_alternative<muse::mpe::NoteEvent>(event)) {
+        const muse::mpe::ArrangementContext& arrangement = std::get<muse::mpe::NoteEvent>(event).arrangementCtx();
+        return muse::mpe::makeLayerIdx(arrangement.staffLayerIndex, arrangement.voiceLayerIndex);
+    }
+    if (std::holds_alternative<muse::mpe::ControllerChangeEvent>(event)) {
+        return std::get<muse::mpe::ControllerChangeEvent>(event).layerIdx;
+    }
+    if (std::holds_alternative<muse::mpe::SoundPresetChangeEvent>(event)) {
+        return std::get<muse::mpe::SoundPresetChangeEvent>(event).layerIdx;
+    }
+    if (std::holds_alternative<muse::mpe::TextArticulationEvent>(event)) {
+        return std::get<muse::mpe::TextArticulationEvent>(event).layerIdx;
+    }
+    if (std::holds_alternative<muse::mpe::SyllableEvent>(event)) {
+        return std::get<muse::mpe::SyllableEvent>(event).layerIdx;
+    }
+
+    return 0;
 }
 
 // Returns the new channel program when this event changes the active sound,
@@ -4531,44 +4615,73 @@ void appendPlaybackModelSynthEvents(mu::engraving::PlaybackModel& playbackModel,
             stats.invalidTrackCount += 1;
         }
 
-        int channel = 9;
-        if (!isMetronomeTrack(trackId)) {
-            channel = nextMelodicChannel;
-            if (nextMelodicChannel == 9) {
-                channel = 10;
-            }
-            nextMelodicChannel = channel + 1;
-        }
-
         const muse::midi::Program baseProgram = midiProgramForSetup(playbackData.setupData);
-        channelPrograms.push_back({
-            channel,
-            baseProgram,
-            playbackData.setupData.toString().toStdString()
-        });
-        stats.trackCount += 1;
+        const std::string setupDataString = playbackData.setupData.toString().toStdString();
         stats.playbackModelTimestampCount += static_cast<int>(playbackData.originEvents.size());
         const bool isChordSymbolsTrack = playbackModel.isChordSymbolsTrack(trackId);
-        const bool useDynamicEvents = playbackData.setupData.supportsSingleNoteDynamics;
-        if (useDynamicEvents) {
-            synthEvents.push_back(makeControlSynthEvent(0, channel, 11, expressionLevelForDynamicLevel(
-                muse::mpe::dynamicLevelFromType(muse::mpe::DynamicType::Natural)
-            )));
-            stats.dynamicControllerEventCount += 1;
-            stats.controllerEventCount += 1;
-            appendDynamicControllerEvents(playbackData.dynamics, channel, synthEvents, stats);
-        }
+        const bool isKeyboardSetup = setupDataString.rfind("keyboards.", 0) == 0;
+        // FluidSynth piano responds very strongly to stacked note velocity and
+        // channel expression. Use MuseScore's per-note expression for keyboard
+        // instruments so independent piano voices do not get double-attenuated.
+        const bool useDynamicEvents = playbackData.setupData.supportsSingleNoteDynamics && !isKeyboardSetup;
+        std::map<muse::mpe::layer_idx_t, int> channelsByLayer;
+        std::map<int, muse::midi::Program> currentProgramsByChannel;
+        std::map<int, bool> programFromArticulationByChannel;
+        auto channelForLayer = [&](const muse::mpe::layer_idx_t layerIdx) {
+            auto existing = channelsByLayer.find(layerIdx);
+            if (existing != channelsByLayer.end()) {
+                return existing->second;
+            }
 
-        // Track the active program on this channel so per-note articulation
-        // overrides (e.g. pizzicato) and sound-flag/text-articulation changes
-        // do not fight each other or emit redundant program changes.
-        muse::midi::Program currentProgram = baseProgram;
-        bool programFromArticulation = false;
+            int channel = 9;
+            if (!isMetronomeTrack(trackId)) {
+                channel = nextMelodicChannel;
+                if (nextMelodicChannel == 9) {
+                    channel = 10;
+                }
+                nextMelodicChannel = channel + 1;
+            }
+
+            channelsByLayer.emplace(layerIdx, channel);
+            currentProgramsByChannel.emplace(channel, baseProgram);
+            programFromArticulationByChannel.emplace(channel, false);
+            channelPrograms.push_back({
+                channel,
+                layerIdx,
+                baseProgram,
+                setupDataString
+            });
+            EventExtractionStats::LayerDebugStats& layerStats = stats.layerDebug[layerIdx];
+            layerStats.channel = channel;
+            layerStats.setup = setupDataString;
+            layerStats.useDynamicEvents = useDynamicEvents;
+            stats.trackCount += 1;
+            if (useDynamicEvents) {
+                synthEvents.push_back(makeControlSynthEvent(0, channel, 11, expressionLevelForDynamicLevel(
+                    muse::mpe::dynamicLevelFromType(muse::mpe::DynamicType::Natural)
+                )));
+                stats.dynamicControllerEventCount += 1;
+                stats.controllerEventCount += 1;
+                recordLayerDynamicController(stats, layerIdx);
+            }
+            return channel;
+        };
+
+        if (useDynamicEvents) {
+            for (const auto& layer : playbackData.dynamics) {
+                const int channel = channelForLayer(layer.first);
+                appendDynamicControllerEvents(layer.second, layer.first, channel, synthEvents, stats);
+            }
+        }
 
         for (const auto& pair : playbackData.originEvents) {
             const int eventFrame = frameForMpeTimestamp(pair.first);
             stats.playbackModelEventCount += static_cast<int>(pair.second.size());
             for (const muse::mpe::PlaybackEvent& event : pair.second) {
+                const muse::mpe::layer_idx_t layerIdx = layerIndexForPlaybackEvent(event);
+                const int channel = channelForLayer(layerIdx);
+                muse::midi::Program& currentProgram = currentProgramsByChannel.find(channel)->second;
+                bool& programFromArticulation = programFromArticulationByChannel.find(channel)->second;
                 if (!std::holds_alternative<muse::mpe::NoteEvent>(event)) {
                     const std::optional<muse::midi::Program> auxProgram
                         = appendAuxiliaryPlaybackEvent(event, eventFrame, channel, baseProgram, synthEvents, stats);
@@ -4622,9 +4735,10 @@ void appendPlaybackModelSynthEvents(mu::engraving::PlaybackModel& playbackModel,
                     programFromArticulation = false;
                 }
 
-                const int velocity = velocityForNoteEvent(noteEvent, useDynamicEvents);
+                const int velocity = velocityForNoteEvent(noteEvent, useDynamicEvents, isKeyboardSetup);
                 synthEvents.push_back(makeNoteSynthEvent(noteStartFrame, channel, key, velocity, true, !isChordSymbolsTrack));
                 synthEvents.push_back(makeNoteSynthEvent(noteStartFrame + noteDurationFrames, channel, key, 0, false, !isChordSymbolsTrack));
+                recordLayerNote(stats, layerIdx, noteEvent, velocity);
                 stats.noteEventCount += 1;
             }
         }
@@ -4642,6 +4756,7 @@ void appendMetronomeFallbackSynthEvents(mu::engraving::Score* score,
     if (!hasChannelProgram(channelPrograms, 9)) {
         channelPrograms.push_back({
             9,
+            0,
             muse::midi::Program(0, 0),
             "MuseReader metronome fallback"
         });
@@ -4745,6 +4860,7 @@ void appendEngravingFallbackSynthEvents(mu::engraving::Score* score,
                         harmonyProgramsByPartId.emplace(partId, program.program);
                         channelPrograms.push_back({
                             channel,
+                            0,
                             program,
                             setupData.toString().toStdString()
                         });
@@ -4791,6 +4907,7 @@ void appendEngravingFallbackSynthEvents(mu::engraving::Score* score,
                         programsByPartId.emplace(partId, program.program);
                         channelPrograms.push_back({
                             channel,
+                            0,
                             program,
                             setupData.toString().toStdString()
                         });
@@ -4995,6 +5112,7 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
         fluid_synth_program_change(synth.get(), channelProgram.channel, channelProgram.program.program);
         std::cout << "MuseReader event playback routing: channel="
                   << channelProgram.channel
+                  << " layer=" << static_cast<int>(channelProgram.layerIdx)
                   << " bank=" << channelProgram.program.bank
                   << " program=" << channelProgram.program.program
                   << " setup=" << channelProgram.setup
@@ -5124,6 +5242,32 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
               << " duration=" << durationSeconds
               << " build=" << elapsedSecondsSince(started)
               << "s" << std::endl;
+
+    for (const auto& layerPair : stats.layerDebug) {
+        const EventExtractionStats::LayerDebugStats& layerStats = layerPair.second;
+        const double averageVelocity = layerStats.noteCount > 0
+            ? static_cast<double>(layerStats.velocitySum) / static_cast<double>(layerStats.noteCount)
+            : 0.0;
+        std::cout << "MuseReader event playback layer dynamics: layer="
+                  << static_cast<int>(layerPair.first)
+                  << " channel=" << layerStats.channel
+                  << " setup=" << layerStats.setup
+                  << " dynamicCC=" << (layerStats.useDynamicEvents ? "on" : "off")
+                  << " dynamicEvents=" << layerStats.dynamicControllerCount
+                  << " notes=" << layerStats.noteCount
+                  << " velocityMin=" << (layerStats.noteCount > 0 ? layerStats.velocityMin : 0)
+                  << " velocityMax=" << (layerStats.noteCount > 0 ? layerStats.velocityMax : 0)
+                  << " velocityAvg=" << averageVelocity
+                  << " nominalMin=" << (layerStats.noteCount > 0 ? layerStats.nominalMin : 0)
+                  << " nominalMax=" << (layerStats.noteCount > 0 ? layerStats.nominalMax : 0)
+                  << " curveNotes=" << layerStats.notesWithExpressionCurve
+                  << " curveMin="
+                  << (layerStats.notesWithExpressionCurve > 0 ? layerStats.expressionCurveMin : 0)
+                  << " curveMax="
+                  << (layerStats.notesWithExpressionCurve > 0 ? layerStats.expressionCurveMax : 0)
+                  << " velocityOverrides=" << layerStats.notesWithVelocityOverride
+                  << std::endl;
+    }
 
     return true;
 }
