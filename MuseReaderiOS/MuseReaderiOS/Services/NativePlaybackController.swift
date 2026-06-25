@@ -32,8 +32,9 @@ final class NativePlaybackController {
         }
     }
 
-    private let chunkDurationSeconds: TimeInterval = 2.0
-    private let prebufferChunks = 4
+    private let chunkDurationSeconds: TimeInterval = 6.0
+    private let prebufferChunks = 2
+    private let edgeFadeSeconds: TimeInterval = 0.0015
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
     private var liveRenderSession: LiveScoreRenderSession?
@@ -48,7 +49,7 @@ final class NativePlaybackController {
     private var isPaused = false
     private var isScheduling = false
     private var schedulingTask: Task<Void, Never>?
-    private var scheduledChunkCount = 0
+    private var scheduledBufferCount = 0
 
     var isLoaded: Bool {
         engine != nil && playerNode != nil && liveRenderSession != nil
@@ -71,7 +72,7 @@ final class NativePlaybackController {
             throw PlaybackError.audioSessionUnavailable(error.localizedDescription)
         }
 
-        let firstChunk = try await liveRenderSession.playbackAudioChunk(
+        let audioData = try await liveRenderSession.playbackAudioChunk(
             startTimeSeconds: pendingStartSeconds,
             durationSeconds: chunkDurationSeconds,
             metronomeEnabled: metronomeEnabled
@@ -80,15 +81,15 @@ final class NativePlaybackController {
         guard prepareRevision == revision else {
             throw CancellationError()
         }
-        log("prepare firstChunk sampleRate=\(firstChunk.sampleRate) channels=\(firstChunk.channelCount) bytes=\(firstChunk.interleavedFloat32Samples.count) duration=\(formatSeconds(firstChunk.durationSeconds))")
-        guard firstChunk.channelCount == 2, !firstChunk.interleavedFloat32Samples.isEmpty else {
-            throw PlaybackError.sequenceLoadFailed("The first live playback chunk was empty or unsupported.")
+        log("prepare audio sampleRate=\(audioData.sampleRate) channels=\(audioData.channelCount) bytes=\(audioData.interleavedFloat32Samples.count) duration=\(formatSeconds(audioData.durationSeconds))")
+        guard audioData.channelCount == 2, !audioData.interleavedFloat32Samples.isEmpty else {
+            throw PlaybackError.sequenceLoadFailed("The live playback render was empty or unsupported.")
         }
 
         guard let format = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
-            sampleRate: Double(firstChunk.sampleRate),
-            channels: AVAudioChannelCount(firstChunk.channelCount),
+            sampleRate: Double(audioData.sampleRate),
+            channels: AVAudioChannelCount(audioData.channelCount),
             interleaved: false
         ) else {
             throw PlaybackError.playerInitializationFailed("The live playback audio format could not be created.")
@@ -113,15 +114,15 @@ final class NativePlaybackController {
         self.engine = engine
         self.playerNode = playerNode
         self.liveRenderSession = liveRenderSession
-        self.sampleRate = Double(firstChunk.sampleRate)
-        self.durationSeconds = max(durationSeconds, firstChunk.durationSeconds)
+        self.sampleRate = Double(audioData.sampleRate)
+        self.durationSeconds = max(durationSeconds, audioData.durationSeconds)
         self.queuedUntilSeconds = pendingStartSeconds
         self.scheduledStartSeconds = pendingStartSeconds
         self.playbackStartedAt = nil
         self.isPaused = false
-        self.scheduledChunkCount = 0
+        self.scheduledBufferCount = 0
 
-        try schedule(audioData: firstChunk, startsAt: pendingStartSeconds, revision: prepareRevision)
+        try schedule(audioData: audioData, startsAt: pendingStartSeconds, revision: prepareRevision)
         fillPlaybackQueue(revision: prepareRevision)
         log("prepare ready duration=\(formatSeconds(self.durationSeconds)) queuedUntil=\(formatSeconds(queuedUntilSeconds)) revision=\(revision)")
     }
@@ -174,10 +175,7 @@ final class NativePlaybackController {
         }
 
         pendingStartSeconds = currentPositionSeconds()
-        playerNode.stop()
-        cancelSchedulingTask()
-        revision += 1
-        queuedUntilSeconds = pendingStartSeconds
+        playerNode.pause()
         playbackStartedAt = nil
         isPaused = true
         log("pause position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
@@ -229,7 +227,7 @@ final class NativePlaybackController {
         playbackStartedAt = nil
         isPaused = false
         isScheduling = false
-        scheduledChunkCount = 0
+        scheduledBufferCount = 0
         metronomeEnabled = false
         log("invalidate revision=\(revision)")
     }
@@ -268,7 +266,7 @@ final class NativePlaybackController {
         playbackStartedAt = nil
         isPaused = !wasPlaying
         isScheduling = false
-        scheduledChunkCount = 0
+        scheduledBufferCount = 0
         fillPlaybackQueue(revision: revision)
 
         if wasPlaying {
@@ -315,7 +313,7 @@ final class NativePlaybackController {
                     try Task.checkCancellation()
                     try self.schedule(audioData: audioData, startsAt: startTime, revision: revision)
                 } catch {
-                    print("MuseReader live playback chunk failed: \(error.localizedDescription)")
+                    print("MuseReader live playback render failed: \(error.localizedDescription)")
                     return
                 }
             }
@@ -336,24 +334,26 @@ final class NativePlaybackController {
         }
 
         guard let buffer = makeBuffer(from: audioData) else {
-            throw PlaybackError.sequenceLoadFailed("A live playback chunk could not be converted to an audio buffer.")
+            throw PlaybackError.sequenceLoadFailed("The live playback render could not be converted to an audio buffer.")
         }
 
-        let chunkDuration = Double(buffer.frameLength) / buffer.format.sampleRate
-        scheduledChunkCount += 1
-        log("schedule chunk=\(scheduledChunkCount) start=\(formatSeconds(startTime)) duration=\(formatSeconds(chunkDuration)) frames=\(buffer.frameLength) revision=\(revision)")
+        let bufferDuration = Double(buffer.frameLength) / buffer.format.sampleRate
+        applyEdgeFade(to: buffer, startsAt: startTime, duration: bufferDuration)
+        scheduledBufferCount += 1
+        log("schedule buffer=\(scheduledBufferCount) start=\(formatSeconds(startTime)) duration=\(formatSeconds(bufferDuration)) frames=\(buffer.frameLength) revision=\(revision)")
         playerNode.scheduleBuffer(buffer, at: nil, options: []) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, revision == self.revision else {
                     return
                 }
-                self.pendingStartSeconds = self.bounded(startTime + chunkDuration)
-                self.log("chunk complete start=\(self.formatSeconds(startTime)) nextPending=\(self.formatSeconds(self.pendingStartSeconds)) revision=\(revision)")
+                self.pendingStartSeconds = self.bounded(startTime + bufferDuration)
+                self.isPaused = false
+                self.log("buffer complete start=\(self.formatSeconds(startTime)) nextPending=\(self.formatSeconds(self.pendingStartSeconds)) revision=\(revision)")
                 self.fillPlaybackQueue(revision: revision)
             }
         }
 
-        queuedUntilSeconds = max(queuedUntilSeconds, startTime + chunkDuration)
+        queuedUntilSeconds = max(queuedUntilSeconds, startTime + bufferDuration)
     }
 
     private func makeBuffer(from audioData: MSRPlaybackAudioData) -> AVAudioPCMBuffer? {
@@ -391,7 +391,18 @@ final class NativePlaybackController {
     }
 
     private func currentPositionSeconds() -> TimeInterval {
-        if let playbackStartedAt, playerNode?.isPlaying == true {
+        if let playerNode,
+           playerNode.isPlaying,
+           let nodeTime = playerNode.lastRenderTime,
+           let playerTime = playerNode.playerTime(forNodeTime: nodeTime) {
+            return bounded(scheduledStartSeconds + (Double(playerTime.sampleTime) / playerTime.sampleRate))
+        }
+
+        if playerNode?.isPlaying == true {
+            return bounded(scheduledStartSeconds)
+        }
+
+        if let playbackStartedAt {
             return bounded(scheduledStartSeconds + Date().timeIntervalSince(playbackStartedAt))
         }
 
@@ -408,7 +419,7 @@ final class NativePlaybackController {
         playbackStartedAt = nil
         isPaused = false
         isScheduling = false
-        scheduledChunkCount = 0
+        scheduledBufferCount = 0
         log("stop revision=\(revision)")
     }
 
@@ -417,6 +428,37 @@ final class NativePlaybackController {
             return min(max(positionSeconds, 0), durationSeconds)
         }
         return max(positionSeconds, 0)
+    }
+
+    private func applyEdgeFade(to buffer: AVAudioPCMBuffer, startsAt startTime: TimeInterval, duration: TimeInterval) {
+        guard let channels = buffer.floatChannelData else {
+            return
+        }
+
+        let frameCount = Int(buffer.frameLength)
+        guard frameCount > 0 else {
+            return
+        }
+
+        let sampleRate = buffer.format.sampleRate
+        let fadeFrames = min(frameCount / 2, max(1, Int(edgeFadeSeconds * sampleRate)))
+        let shouldFadeIn = startTime > 0.001
+        let shouldFadeOut = durationSeconds <= 0 || startTime + duration < durationSeconds - 0.001
+
+        for channel in 0..<Int(buffer.format.channelCount) {
+            let channelData = channels[channel]
+            if shouldFadeIn {
+                for frame in 0..<fadeFrames {
+                    channelData[frame] *= Float(frame) / Float(fadeFrames)
+                }
+            }
+            if shouldFadeOut {
+                for frame in 0..<fadeFrames {
+                    let index = frameCount - 1 - frame
+                    channelData[index] *= Float(frame) / Float(fadeFrames)
+                }
+            }
+        }
     }
 
     private func log(_ message: String) {

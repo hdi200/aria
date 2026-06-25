@@ -1,5 +1,7 @@
 import Foundation
 
+private let playbackVisualSyncTrimSeconds: TimeInterval = 0.05
+
 @MainActor
 extension ScoreReaderState {
     func startPlaybackMonitoring() {
@@ -507,8 +509,8 @@ extension ScoreReaderState {
             return rawPositionSeconds
         }
 
-        let compensationSeconds = playbackController?.visualLatencyCompensationSeconds() ?? 0
-        return min(rawPositionSeconds + compensationSeconds, playbackState.durationSeconds)
+        let compensationSeconds = (playbackController?.visualLatencyCompensationSeconds() ?? 0) + playbackVisualSyncTrimSeconds
+        return min(max(rawPositionSeconds - compensationSeconds, 0), playbackState.durationSeconds)
     }
 
 }

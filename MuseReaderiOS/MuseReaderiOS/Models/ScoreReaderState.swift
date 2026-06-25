@@ -44,7 +44,7 @@ final class ScoreReaderState: ObservableObject {
     let notePreviewController = NativeNotePreviewController()
     let midiInputController = MIDIInputController()
     let prefetchDistance = 1
-    let playbackMonitorInterval = Duration.milliseconds(50)
+    let playbackMonitorInterval = Duration.milliseconds(25)
     let midiChordReleaseSettleDelay = Duration.milliseconds(35)
     let midiChordMaxHoldDelay = Duration.milliseconds(700)
     var loadTasks: [Int: Task<Void, Never>] = [:]
