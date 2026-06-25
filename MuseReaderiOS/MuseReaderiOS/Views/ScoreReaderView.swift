@@ -206,7 +206,7 @@ struct ScoreReaderView: View {
                             playbackState: readerState.playbackState,
                             metronomeEnabled: readerState.metronomeEnabled,
                             isEditingBusy: readerState.isEditingActionInFlight || isClosingScore,
-                            isPlaybackBusy: readerState.isPlaybackActionInFlight,
+                            isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
                             playbackPreparationMessage: readerState.playbackPreparationMessage,
                             concertPitchEnabled: readerState.concertPitchEnabled,
                             showsConcertPitchControl: showsChromeConcertPitchControl,
@@ -1054,7 +1054,7 @@ struct ScoreReaderView: View {
     private func writeWAVExport(to exportURL: URL,
                                 durationSeconds: TimeInterval,
                                 liveRenderSession: LiveScoreRenderSession) async throws {
-        let chunkDurationSeconds: TimeInterval = 10
+        let chunkDurationSeconds: TimeInterval = 30
         var nextStartSeconds: TimeInterval = 0
         var audioFile: AVAudioFile?
         var audioFormat: AVAudioFormat?
@@ -1079,7 +1079,7 @@ struct ScoreReaderView: View {
             }
 
             try audioFile?.write(from: buffer)
-            nextStartSeconds += requestedDuration
+            nextStartSeconds += max(audioData.durationSeconds, requestedDuration)
         }
     }
 

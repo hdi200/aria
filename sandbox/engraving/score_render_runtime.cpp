@@ -4946,6 +4946,470 @@ void appendEngravingFallbackSynthEvents(mu::engraving::Score* score,
     }
 }
 
+struct FluidSynthPlaybackSequence {
+    std::vector<SynthNoteEvent> synthEvents;
+    std::vector<SynthChannelProgram> channelPrograms;
+    EventExtractionStats stats;
+};
+
+int frameForSeconds(const double seconds)
+{
+    return std::max(0, static_cast<int>(std::llround(seconds * kFluidSynthSampleRate)));
+}
+
+int alignFrameUp(const int frame, const int alignment)
+{
+    if (alignment <= 1) {
+        return frame;
+    }
+    const int remainder = frame % alignment;
+    return remainder == 0 ? frame : frame + (alignment - remainder);
+}
+
+int requiredMidiChannelCount(const std::vector<SynthNoteEvent>& synthEvents,
+                             const std::vector<SynthChannelProgram>& channelPrograms)
+{
+    int requiredMidiChannels = 16;
+    for (const SynthChannelProgram& channelProgram : channelPrograms) {
+        requiredMidiChannels = std::max(requiredMidiChannels, channelProgram.channel + 1);
+    }
+    for (const SynthNoteEvent& event : synthEvents) {
+        requiredMidiChannels = std::max(requiredMidiChannels, event.channel + 1);
+    }
+    return requiredMidiChannels;
+}
+
+FluidSynthPlaybackSequence makeFluidSynthPlaybackSequence(mu::engraving::Score* score,
+                                                          const muse::modularity::ContextPtr& context,
+                                                          const std::optional<std::uint64_t> activePartId,
+                                                          const bool metronomeEnabled,
+                                                          const double startTimeSeconds,
+                                                          const double durationSeconds)
+{
+    mu::engraving::PlaybackModel playbackModel(context);
+    playbackModel.setIsMetronomeEnabled(metronomeEnabled);
+    playbackModel.load(score);
+
+    FluidSynthPlaybackSequence sequence;
+    appendPlaybackModelSynthEvents(playbackModel, activePartId, sequence.synthEvents, sequence.channelPrograms, sequence.stats);
+
+    std::vector<SynthNoteEvent> metronomeSynthEvents;
+    std::copy_if(sequence.synthEvents.cbegin(), sequence.synthEvents.cend(), std::back_inserter(metronomeSynthEvents), [](const SynthNoteEvent& event) {
+        return event.channel == 9 && (event.kind == SynthNoteEvent::Kind::NoteOn || event.kind == SynthNoteEvent::Kind::NoteOff);
+    });
+    std::vector<SynthChannelProgram> metronomeChannelPrograms;
+    std::copy_if(sequence.channelPrograms.cbegin(), sequence.channelPrograms.cend(), std::back_inserter(metronomeChannelPrograms),
+                 [](const SynthChannelProgram& channelProgram) {
+        return channelProgram.channel == 9;
+    });
+
+    if (metronomeEnabled && metronomeSynthEvents.empty()) {
+        appendMetronomeFallbackSynthEvents(score, sequence.synthEvents, sequence.channelPrograms);
+        std::copy_if(sequence.synthEvents.cbegin(), sequence.synthEvents.cend(), std::back_inserter(metronomeSynthEvents), [](const SynthNoteEvent& event) {
+            return event.channel == 9 && (event.kind == SynthNoteEvent::Kind::NoteOn || event.kind == SynthNoteEvent::Kind::NoteOff);
+        });
+        std::copy_if(sequence.channelPrograms.cbegin(), sequence.channelPrograms.cend(), std::back_inserter(metronomeChannelPrograms),
+                     [](const SynthChannelProgram& channelProgram) {
+            return channelProgram.channel == 9;
+        });
+    }
+
+    std::vector<SynthNoteEvent> fallbackSynthEvents;
+    std::vector<SynthChannelProgram> fallbackChannelPrograms;
+    EventExtractionStats fallbackStats;
+    appendEngravingFallbackSynthEvents(score, activePartId, fallbackSynthEvents, fallbackChannelPrograms, fallbackStats);
+
+    if (!fallbackSynthEvents.empty() && fallbackStats.noteEventCount > sequence.stats.noteEventCount) {
+        const int metronomeNoteEventCount = static_cast<int>(metronomeSynthEvents.size() / 2);
+        if (!metronomeSynthEvents.empty()) {
+            fallbackSynthEvents.insert(fallbackSynthEvents.end(), metronomeSynthEvents.cbegin(), metronomeSynthEvents.cend());
+            fallbackStats.noteEventCount += metronomeNoteEventCount;
+            for (const SynthChannelProgram& metronomeChannelProgram : metronomeChannelPrograms) {
+                if (!hasChannelProgram(fallbackChannelPrograms, metronomeChannelProgram.channel)) {
+                    fallbackChannelPrograms.push_back(metronomeChannelProgram);
+                }
+            }
+        }
+        std::cout << "MuseReader event playback extraction: using engraving fallback"
+                  << " modelTracks=" << sequence.stats.trackCount
+                  << " invalidTracks=" << sequence.stats.invalidTrackCount
+                  << " modelTimestamps=" << sequence.stats.playbackModelTimestampCount
+                  << " modelEvents=" << sequence.stats.playbackModelEventCount
+                  << " modelNotes=" << sequence.stats.noteEventCount
+                  << " soundPresets=" << sequence.stats.soundPresetEventCount
+                  << " textArticulations=" << sequence.stats.textArticulationEventCount
+                  << " controllers=" << sequence.stats.controllerEventCount
+                  << " mergedMetronomeNotes=" << metronomeNoteEventCount
+                  << " fallbackRepeats=" << fallbackStats.fallbackRepeatSegmentCount
+                  << " fallbackChords=" << fallbackStats.fallbackChordCount
+                  << " fallbackNotes=" << fallbackStats.fallbackPlayableNoteCount
+                  << " fallbackHarmonies=" << fallbackStats.fallbackHarmonyCount
+                  << " fallbackHarmonyNotes=" << fallbackStats.fallbackHarmonyPlayableNoteCount
+                  << " skippedTieBacks=" << fallbackStats.fallbackSkippedTieBackCount
+                  << " fallbackSynthEvents=" << fallbackSynthEvents.size()
+                  << " start=" << startTimeSeconds
+                  << " duration=" << durationSeconds
+                  << std::endl;
+        sequence.synthEvents = std::move(fallbackSynthEvents);
+        sequence.channelPrograms = std::move(fallbackChannelPrograms);
+        fallbackStats.trackCount = std::max(fallbackStats.trackCount, static_cast<int>(sequence.channelPrograms.size()));
+        sequence.stats = fallbackStats;
+    }
+
+    std::sort(sequence.synthEvents.begin(), sequence.synthEvents.end());
+    return sequence;
+}
+
+struct FluidSettingsDeleter {
+    void operator()(fluid_settings_t* settings) const
+    {
+        if (settings) {
+            delete_fluid_settings(settings);
+        }
+    }
+};
+
+struct FluidSynthDeleter {
+    void operator()(fluid_synth_t* synth) const
+    {
+        if (synth) {
+            delete_fluid_synth(synth);
+        }
+    }
+};
+
+class FluidSynthPlaybackStream {
+public:
+    FluidSynthPlaybackStream(mu::engraving::Score* score,
+                             std::string soundFontPath,
+                             const std::optional<std::uint64_t> activePartId,
+                             const bool metronomeEnabled,
+                             const int revision)
+        : m_score(score),
+          m_soundFontPath(std::move(soundFontPath)),
+          m_activePartId(activePartId),
+          m_metronomeEnabled(metronomeEnabled),
+          m_revision(revision)
+    {
+    }
+
+    bool matches(mu::engraving::Score* score,
+                 const std::string& soundFontPath,
+                 const std::optional<std::uint64_t> activePartId,
+                 const bool metronomeEnabled,
+                 const int revision) const
+    {
+        return m_score == score
+               && m_soundFontPath == soundFontPath
+               && m_activePartId == activePartId
+               && m_metronomeEnabled == metronomeEnabled
+               && m_revision == revision;
+    }
+
+    bool canRenderFrom(const int startFrame) const
+    {
+        if (m_empty) {
+            return true;
+        }
+        return startFrame + 2 >= m_currentFrame
+               && startFrame <= m_currentFrame + kFluidSynthRenderBlockFrames;
+    }
+
+    bool initialize(mu::engraving::Score* score,
+                    const muse::modularity::ContextPtr& context,
+                    const int startFrame,
+                    const double startTimeSeconds,
+                    const double durationSeconds,
+                    std::string& errorMessage)
+    {
+        m_sequence = makeFluidSynthPlaybackSequence(score, context, m_activePartId, m_metronomeEnabled, startTimeSeconds, durationSeconds);
+        if (m_sequence.synthEvents.empty()) {
+            m_empty = true;
+            m_currentFrame = startFrame;
+            m_lastEventFrame = startFrame;
+            return true;
+        }
+
+        const int requiredMidiChannels = requiredMidiChannelCount(m_sequence.synthEvents, m_sequence.channelPrograms);
+        m_settings.reset(new_fluid_settings());
+        if (!m_settings) {
+            errorMessage = "FluidSynth could not allocate settings.";
+            return false;
+        }
+
+        fluid_settings_setnum(m_settings.get(), "synth.sample-rate", kFluidSynthSampleRate);
+        fluid_settings_setnum(m_settings.get(), "synth.gain", 1.0);
+        fluid_settings_setint(m_settings.get(), "synth.audio-channels", 1);
+        fluid_settings_setint(m_settings.get(), "synth.midi-channels", requiredMidiChannels);
+        fluid_settings_setint(m_settings.get(), "synth.polyphony", 512);
+        fluid_settings_setint(m_settings.get(), "synth.dynamic-sample-loading", 1);
+        fluid_settings_setint(m_settings.get(), "synth.threadsafe-api", 0);
+        fluid_settings_setint(m_settings.get(), "synth.lock-memory", 0);
+        fluid_settings_setint(m_settings.get(), "synth.reverb.active", 0);
+        fluid_settings_setint(m_settings.get(), "synth.chorus.active", 0);
+        fluid_settings_setstr(m_settings.get(), "audio.sample-format", "float");
+
+        m_synth.reset(new_fluid_synth(m_settings.get()));
+        if (!m_synth) {
+            errorMessage = "FluidSynth could not allocate the synthesizer.";
+            return false;
+        }
+
+        const int soundFontId = fluid_synth_sfload(m_synth.get(), m_soundFontPath.c_str(), 1);
+        if (soundFontId == FLUID_FAILED) {
+            errorMessage = "FluidSynth could not load the bundled SoundFont.";
+            return false;
+        }
+
+        for (const SynthChannelProgram& channelProgram : m_sequence.channelPrograms) {
+            fluid_synth_bank_select(m_synth.get(), channelProgram.channel, channelProgram.program.bank);
+            fluid_synth_program_change(m_synth.get(), channelProgram.channel, channelProgram.program.program);
+            std::cout << "MuseReader event playback routing: channel="
+                      << channelProgram.channel
+                      << " layer=" << static_cast<int>(channelProgram.layerIdx)
+                      << " bank=" << channelProgram.program.bank
+                      << " program=" << channelProgram.program.program
+                      << " setup=" << channelProgram.setup
+                      << std::endl;
+        }
+
+        m_lastEventFrame = m_sequence.synthEvents.back().frame + (kFluidSynthTailSeconds * kFluidSynthSampleRate);
+        const int prerollFrames = static_cast<int>(std::ceil(kFluidSynthChunkPrerollSeconds * kFluidSynthSampleRate));
+        const int renderStartFrame = std::max(0, startFrame - prerollFrames);
+        const std::unordered_map<int, ActiveSynthNote> activeNotes
+            = activeSynthNotesAtFrame(m_sequence.synthEvents, renderStartFrame, m_eventIndex);
+        for (size_t prerollEventIndex = 0; prerollEventIndex < m_eventIndex; ++prerollEventIndex) {
+            const SynthNoteEvent& event = m_sequence.synthEvents[prerollEventIndex];
+            if (event.kind != SynthNoteEvent::Kind::NoteOn && event.kind != SynthNoteEvent::Kind::NoteOff) {
+                applySynthEvent(event);
+            }
+        }
+        for (const auto& pair : activeNotes) {
+            const int channel = (pair.first >> 8) & 0xff;
+            const int key = pair.first & 0xff;
+            fluid_synth_noteon(m_synth.get(), channel, key, pair.second.velocity);
+        }
+
+        m_currentFrame = renderStartFrame;
+        m_activeNotesAtRenderStart = static_cast<int>(activeNotes.size());
+        return true;
+    }
+
+    bool render(const int requestedStartFrame,
+                const double startTimeSeconds,
+                const double durationSeconds,
+                const bool streamReset,
+                const SteadyClock::time_point started,
+                msr::render::PlaybackAudioData& output,
+                std::string& errorMessage)
+    {
+        int startFrame = requestedStartFrame;
+        if (m_currentFrame > startFrame && m_currentFrame - startFrame <= 2) {
+            startFrame = m_currentFrame;
+        }
+
+        if (m_empty) {
+            makeSilentPlaybackAudio(durationSeconds, output);
+            const int requestedFrames = durationSeconds > 0.0
+                ? std::max(1, static_cast<int>(std::ceil(durationSeconds * kFluidSynthSampleRate)))
+                : 1;
+            m_currentFrame = std::max(m_currentFrame, startFrame + requestedFrames);
+            logRender(startFrame, startFrame, 0, streamReset, started, output);
+            return true;
+        }
+
+        const int requestedFrames = durationSeconds > 0.0
+            ? std::max(1, static_cast<int>(std::ceil(durationSeconds * kFluidSynthSampleRate)))
+            : std::max(1, m_lastEventFrame - startFrame);
+        int endFrame = std::min(std::max(startFrame + requestedFrames, 1), m_lastEventFrame);
+        if (endFrame < m_lastEventFrame) {
+            endFrame = std::min(alignFrameUp(endFrame, kFluidSynthRenderBlockFrames), m_lastEventFrame);
+        }
+
+        if (startFrame >= endFrame) {
+            makeSilentPlaybackAudio(durationSeconds, output);
+            std::cout << "MuseReader event playback render: silent tail chunk"
+                      << " tracks=" << m_sequence.stats.trackCount
+                      << " noteEvents=" << m_sequence.stats.noteEventCount
+                      << " firstEventFrame=" << m_sequence.synthEvents.front().frame
+                      << " lastEventFrame=" << m_sequence.synthEvents.back().frame
+                      << " startFrame=" << startFrame
+                      << " endFrame=" << endFrame
+                      << " start=" << startTimeSeconds
+                      << " duration=" << durationSeconds
+                      << " persistent=" << (streamReset ? "reset" : "reuse")
+                      << " build=" << elapsedSecondsSince(started)
+                      << "s" << std::endl;
+            return true;
+        }
+
+        if (startFrame < m_currentFrame) {
+            errorMessage = "Persistent FluidSynth stream was asked to render before its current position.";
+            return false;
+        }
+
+        std::vector<float> left(kFluidSynthRenderBlockFrames);
+        std::vector<float> right(kFluidSynthRenderBlockFrames);
+        std::vector<float> samples;
+        samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
+
+        while (m_currentFrame < endFrame) {
+            while (m_eventIndex < m_sequence.synthEvents.size() && m_sequence.synthEvents[m_eventIndex].frame <= m_currentFrame) {
+                const SynthNoteEvent& event = m_sequence.synthEvents[m_eventIndex];
+                applySynthEvent(event);
+                m_eventIndex += 1;
+            }
+
+            std::fill(left.begin(), left.end(), 0.0f);
+            std::fill(right.begin(), right.end(), 0.0f);
+            if (fluid_synth_write_float(m_synth.get(), kFluidSynthRenderBlockFrames,
+                                        left.data(), 0, 1,
+                                        right.data(), 0, 1) != FLUID_OK) {
+                errorMessage = "FluidSynth failed while rendering MuseScore playback events.";
+                return false;
+            }
+
+            const int blockStartFrame = m_currentFrame;
+            const int blockEndFrame = m_currentFrame + kFluidSynthRenderBlockFrames;
+            const int copyStartFrame = std::max(startFrame, blockStartFrame);
+            const int copyEndFrame = std::min(endFrame, blockEndFrame);
+            if (copyStartFrame < copyEndFrame) {
+                for (int absoluteFrame = copyStartFrame; absoluteFrame < copyEndFrame; ++absoluteFrame) {
+                    const int blockFrame = absoluteFrame - blockStartFrame;
+                    samples.push_back(left[blockFrame]);
+                    samples.push_back(right[blockFrame]);
+                }
+            }
+
+            m_currentFrame = blockEndFrame;
+        }
+
+        if (samples.empty()) {
+            errorMessage = "FluidSynth rendered no audio samples from MuseScore playback events.";
+            return false;
+        }
+
+        output.sampleRate = kFluidSynthSampleRate;
+        output.channelCount = kFluidSynthChannelCount;
+        output.durationSeconds = static_cast<double>(samples.size() / kFluidSynthChannelCount) / static_cast<double>(kFluidSynthSampleRate);
+        output.interleavedSamples = std::move(samples);
+
+        logRender(startFrame, endFrame, output.interleavedSamples.size() / kFluidSynthChannelCount, streamReset, started, output);
+        return true;
+    }
+
+private:
+    void applySynthEvent(const SynthNoteEvent& event)
+    {
+        switch (event.kind) {
+        case SynthNoteEvent::Kind::ProgramChange:
+            fluid_synth_bank_select(m_synth.get(), event.channel, event.program.bank);
+            fluid_synth_program_change(m_synth.get(), event.channel, event.program.program);
+            break;
+        case SynthNoteEvent::Kind::ControlChange:
+            fluid_synth_cc(m_synth.get(), event.channel, event.controller, event.value);
+            break;
+        case SynthNoteEvent::Kind::PitchBend:
+            fluid_synth_pitch_bend(m_synth.get(), event.channel, event.value);
+            break;
+        case SynthNoteEvent::Kind::NoteOn:
+            fluid_synth_noteon(m_synth.get(), event.channel, event.key, event.velocity);
+            break;
+        case SynthNoteEvent::Kind::NoteOff:
+            fluid_synth_noteoff(m_synth.get(), event.channel, event.key);
+            break;
+        }
+    }
+
+    void logRender(const int startFrame,
+                   const int endFrame,
+                   const size_t copiedFrames,
+                   const bool streamReset,
+                   const SteadyClock::time_point started,
+                   const msr::render::PlaybackAudioData& output) const
+    {
+        if (m_sequence.synthEvents.empty()) {
+            std::cout << "MuseReader event playback render: silent chunk, playback model note events=0"
+                      << " tracks=" << m_sequence.stats.trackCount
+                      << " invalidTracks=" << m_sequence.stats.invalidTrackCount
+                      << " modelTimestamps=" << m_sequence.stats.playbackModelTimestampCount
+                      << " modelEvents=" << m_sequence.stats.playbackModelEventCount
+                      << " soundPresets=" << m_sequence.stats.soundPresetEventCount
+                      << " textArticulations=" << m_sequence.stats.textArticulationEventCount
+                      << " controllers=" << m_sequence.stats.controllerEventCount
+                      << " fallbackRepeats=" << m_sequence.stats.fallbackRepeatSegmentCount
+                      << " fallbackChords=" << m_sequence.stats.fallbackChordCount
+                      << " fallbackNotes=" << m_sequence.stats.fallbackPlayableNoteCount
+                      << " fallbackHarmonies=" << m_sequence.stats.fallbackHarmonyCount
+                      << " fallbackHarmonyNotes=" << m_sequence.stats.fallbackHarmonyPlayableNoteCount
+                      << " persistent=" << (streamReset ? "reset" : "reuse")
+                      << " build=" << elapsedSecondsSince(started)
+                      << "s" << std::endl;
+            return;
+        }
+
+        std::cout << "MuseReader event playback render: tracks="
+                  << m_sequence.stats.trackCount
+                  << " invalidTracks=" << m_sequence.stats.invalidTrackCount
+                  << " modelTimestamps=" << m_sequence.stats.playbackModelTimestampCount
+                  << " modelEvents=" << m_sequence.stats.playbackModelEventCount
+                  << " noteEvents=" << m_sequence.stats.noteEventCount
+                  << " synthEvents=" << m_sequence.synthEvents.size()
+                  << " fallback=" << (m_sequence.stats.usedEngravingFallback ? "engraving" : "playbackModel")
+                  << " firstEventFrame=" << m_sequence.synthEvents.front().frame
+                  << " lastEventFrame=" << m_sequence.synthEvents.back().frame
+                  << " startFrame=" << startFrame
+                  << " endFrame=" << endFrame
+                  << " activeNotesAtRenderStart=" << m_activeNotesAtRenderStart
+                  << " copiedFrames=" << copiedFrames
+                  << " outputDuration=" << output.durationSeconds
+                  << " persistent=" << (streamReset ? "reset" : "reuse")
+                  << " currentFrame=" << m_currentFrame
+                  << " build=" << elapsedSecondsSince(started)
+                  << "s" << std::endl;
+
+        for (const auto& layerPair : m_sequence.stats.layerDebug) {
+            const EventExtractionStats::LayerDebugStats& layerStats = layerPair.second;
+            const double averageVelocity = layerStats.noteCount > 0
+                ? static_cast<double>(layerStats.velocitySum) / static_cast<double>(layerStats.noteCount)
+                : 0.0;
+            std::cout << "MuseReader event playback layer dynamics: layer="
+                      << static_cast<int>(layerPair.first)
+                      << " channel=" << layerStats.channel
+                      << " setup=" << layerStats.setup
+                      << " dynamicCC=" << (layerStats.useDynamicEvents ? "on" : "off")
+                      << " dynamicEvents=" << layerStats.dynamicControllerCount
+                      << " notes=" << layerStats.noteCount
+                      << " velocityMin=" << (layerStats.noteCount > 0 ? layerStats.velocityMin : 0)
+                      << " velocityMax=" << (layerStats.noteCount > 0 ? layerStats.velocityMax : 0)
+                      << " velocityAvg=" << averageVelocity
+                      << " nominalMin=" << (layerStats.noteCount > 0 ? layerStats.nominalMin : 0)
+                      << " nominalMax=" << (layerStats.noteCount > 0 ? layerStats.nominalMax : 0)
+                      << " curveNotes=" << layerStats.notesWithExpressionCurve
+                      << " curveMin="
+                      << (layerStats.notesWithExpressionCurve > 0 ? layerStats.expressionCurveMin : 0)
+                      << " curveMax="
+                      << (layerStats.notesWithExpressionCurve > 0 ? layerStats.expressionCurveMax : 0)
+                      << " velocityOverrides=" << layerStats.notesWithVelocityOverride
+                      << std::endl;
+        }
+    }
+
+    mu::engraving::Score* m_score = nullptr;
+    std::string m_soundFontPath;
+    std::optional<std::uint64_t> m_activePartId;
+    bool m_metronomeEnabled = false;
+    int m_revision = 0;
+    bool m_empty = false;
+    FluidSynthPlaybackSequence m_sequence;
+    std::unique_ptr<fluid_settings_t, FluidSettingsDeleter> m_settings;
+    std::unique_ptr<fluid_synth_t, FluidSynthDeleter> m_synth;
+    size_t m_eventIndex = 0;
+    int m_currentFrame = 0;
+    int m_lastEventFrame = 0;
+    int m_activeNotesAtRenderStart = 0;
+};
+
 bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
                                     const muse::modularity::ContextPtr& context,
                                     const std::string& soundFontPath,
@@ -4953,6 +5417,8 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
                                     const double startTimeSeconds,
                                     const double durationSeconds,
                                     const bool metronomeEnabled,
+                                    const int playbackRevision,
+                                    std::unique_ptr<FluidSynthPlaybackStream>& playbackStream,
                                     msr::render::PlaybackAudioData& output,
                                     std::string& errorMessage)
 {
@@ -4965,311 +5431,27 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
         return false;
     }
 
-    mu::engraving::PlaybackModel playbackModel(context);
     const SteadyClock::time_point started = SteadyClock::now();
-    playbackModel.setIsMetronomeEnabled(metronomeEnabled);
-    playbackModel.load(score);
-
-    std::vector<SynthNoteEvent> synthEvents;
-    std::vector<SynthChannelProgram> channelPrograms;
-    EventExtractionStats stats;
-    appendPlaybackModelSynthEvents(playbackModel, activePartId, synthEvents, channelPrograms, stats);
-
-    std::vector<SynthNoteEvent> metronomeSynthEvents;
-    std::copy_if(synthEvents.cbegin(), synthEvents.cend(), std::back_inserter(metronomeSynthEvents), [](const SynthNoteEvent& event) {
-        return event.channel == 9 && (event.kind == SynthNoteEvent::Kind::NoteOn || event.kind == SynthNoteEvent::Kind::NoteOff);
-    });
-    std::vector<SynthChannelProgram> metronomeChannelPrograms;
-    std::copy_if(channelPrograms.cbegin(), channelPrograms.cend(), std::back_inserter(metronomeChannelPrograms),
-                 [](const SynthChannelProgram& channelProgram) {
-        return channelProgram.channel == 9;
-    });
-
-    if (metronomeEnabled && metronomeSynthEvents.empty()) {
-        appendMetronomeFallbackSynthEvents(score, synthEvents, channelPrograms);
-        std::copy_if(synthEvents.cbegin(), synthEvents.cend(), std::back_inserter(metronomeSynthEvents), [](const SynthNoteEvent& event) {
-            return event.channel == 9 && (event.kind == SynthNoteEvent::Kind::NoteOn || event.kind == SynthNoteEvent::Kind::NoteOff);
-        });
-        std::copy_if(channelPrograms.cbegin(), channelPrograms.cend(), std::back_inserter(metronomeChannelPrograms),
-                     [](const SynthChannelProgram& channelProgram) {
-            return channelProgram.channel == 9;
-        });
-    }
-
-    std::vector<SynthNoteEvent> fallbackSynthEvents;
-    std::vector<SynthChannelProgram> fallbackChannelPrograms;
-    EventExtractionStats fallbackStats;
-    appendEngravingFallbackSynthEvents(score, activePartId, fallbackSynthEvents, fallbackChannelPrograms, fallbackStats);
-
-    if (!fallbackSynthEvents.empty() && fallbackStats.noteEventCount > stats.noteEventCount) {
-        const int metronomeNoteEventCount = static_cast<int>(metronomeSynthEvents.size() / 2);
-        if (!metronomeSynthEvents.empty()) {
-            fallbackSynthEvents.insert(fallbackSynthEvents.end(), metronomeSynthEvents.cbegin(), metronomeSynthEvents.cend());
-            fallbackStats.noteEventCount += metronomeNoteEventCount;
-            for (const SynthChannelProgram& metronomeChannelProgram : metronomeChannelPrograms) {
-                if (!hasChannelProgram(fallbackChannelPrograms, metronomeChannelProgram.channel)) {
-                    fallbackChannelPrograms.push_back(metronomeChannelProgram);
-                }
-            }
-        }
-        std::cout << "MuseReader event playback extraction: using engraving fallback"
-                  << " modelTracks=" << stats.trackCount
-                  << " invalidTracks=" << stats.invalidTrackCount
-                  << " modelTimestamps=" << stats.playbackModelTimestampCount
-                  << " modelEvents=" << stats.playbackModelEventCount
-                  << " modelNotes=" << stats.noteEventCount
-                  << " soundPresets=" << stats.soundPresetEventCount
-                  << " textArticulations=" << stats.textArticulationEventCount
-                  << " controllers=" << stats.controllerEventCount
-                  << " mergedMetronomeNotes=" << metronomeNoteEventCount
-                  << " fallbackRepeats=" << fallbackStats.fallbackRepeatSegmentCount
-                  << " fallbackChords=" << fallbackStats.fallbackChordCount
-                  << " fallbackNotes=" << fallbackStats.fallbackPlayableNoteCount
-                  << " fallbackHarmonies=" << fallbackStats.fallbackHarmonyCount
-                  << " fallbackHarmonyNotes=" << fallbackStats.fallbackHarmonyPlayableNoteCount
-                  << " skippedTieBacks=" << fallbackStats.fallbackSkippedTieBackCount
-                  << " fallbackSynthEvents=" << fallbackSynthEvents.size()
-                  << " start=" << startTimeSeconds
-                  << " duration=" << durationSeconds
-                  << std::endl;
-        synthEvents = std::move(fallbackSynthEvents);
-        channelPrograms = std::move(fallbackChannelPrograms);
-        fallbackStats.trackCount = std::max(fallbackStats.trackCount, static_cast<int>(channelPrograms.size()));
-        stats = fallbackStats;
-    }
-
-    if (synthEvents.empty()) {
-        makeSilentPlaybackAudio(durationSeconds, output);
-        std::cout << "MuseReader event playback render: silent chunk, playback model note events=0"
-                  << " tracks=" << stats.trackCount
-                  << " invalidTracks=" << stats.invalidTrackCount
-                  << " modelTimestamps=" << stats.playbackModelTimestampCount
-                  << " modelEvents=" << stats.playbackModelEventCount
-                  << " soundPresets=" << stats.soundPresetEventCount
-                  << " textArticulations=" << stats.textArticulationEventCount
-                  << " controllers=" << stats.controllerEventCount
-                  << " fallbackRepeats=" << stats.fallbackRepeatSegmentCount
-                  << " fallbackChords=" << stats.fallbackChordCount
-                  << " fallbackNotes=" << stats.fallbackPlayableNoteCount
-                  << " fallbackHarmonies=" << stats.fallbackHarmonyCount
-                  << " fallbackHarmonyNotes=" << stats.fallbackHarmonyPlayableNoteCount
-                  << " start=" << startTimeSeconds
-                  << " duration=" << durationSeconds
-                  << " build=" << elapsedSecondsSince(started)
-                  << "s" << std::endl;
-        return true;
-    }
-
-    std::sort(synthEvents.begin(), synthEvents.end());
-
-    int requiredMidiChannels = 16;
-    for (const SynthChannelProgram& channelProgram : channelPrograms) {
-        requiredMidiChannels = std::max(requiredMidiChannels, channelProgram.channel + 1);
-    }
-    for (const SynthNoteEvent& event : synthEvents) {
-        requiredMidiChannels = std::max(requiredMidiChannels, event.channel + 1);
-    }
-
-    auto deleteSettings = [](fluid_settings_t* settings) {
-        delete_fluid_settings(settings);
-    };
-    auto deleteSynth = [](fluid_synth_t* synth) {
-        delete_fluid_synth(synth);
-    };
-
-    std::unique_ptr<fluid_settings_t, decltype(deleteSettings)> settings(new_fluid_settings(), deleteSettings);
-    if (!settings) {
-        errorMessage = "FluidSynth could not allocate settings.";
-        return false;
-    }
-
-    fluid_settings_setnum(settings.get(), "synth.sample-rate", kFluidSynthSampleRate);
-    fluid_settings_setnum(settings.get(), "synth.gain", 1.0);
-    fluid_settings_setint(settings.get(), "synth.audio-channels", 1);
-    fluid_settings_setint(settings.get(), "synth.midi-channels", requiredMidiChannels);
-    fluid_settings_setint(settings.get(), "synth.polyphony", 512);
-    fluid_settings_setint(settings.get(), "synth.dynamic-sample-loading", 1);
-    fluid_settings_setint(settings.get(), "synth.threadsafe-api", 0);
-    fluid_settings_setint(settings.get(), "synth.lock-memory", 0);
-    fluid_settings_setint(settings.get(), "synth.reverb.active", 0);
-    fluid_settings_setint(settings.get(), "synth.chorus.active", 0);
-    fluid_settings_setstr(settings.get(), "audio.sample-format", "float");
-
-    std::unique_ptr<fluid_synth_t, decltype(deleteSynth)> synth(new_fluid_synth(settings.get()), deleteSynth);
-    if (!synth) {
-        errorMessage = "FluidSynth could not allocate the synthesizer.";
-        return false;
-    }
-
-    const int soundFontId = fluid_synth_sfload(synth.get(), soundFontPath.c_str(), 1);
-    if (soundFontId == FLUID_FAILED) {
-        errorMessage = "FluidSynth could not load the bundled SoundFont.";
-        return false;
-    }
-
-    for (const SynthChannelProgram& channelProgram : channelPrograms) {
-        fluid_synth_bank_select(synth.get(), channelProgram.channel, channelProgram.program.bank);
-        fluid_synth_program_change(synth.get(), channelProgram.channel, channelProgram.program.program);
-        std::cout << "MuseReader event playback routing: channel="
-                  << channelProgram.channel
-                  << " layer=" << static_cast<int>(channelProgram.layerIdx)
-                  << " bank=" << channelProgram.program.bank
-                  << " program=" << channelProgram.program.program
-                  << " setup=" << channelProgram.setup
-                  << std::endl;
-    }
-
-    auto applySynthEvent = [&synth](const SynthNoteEvent& event) {
-        switch (event.kind) {
-        case SynthNoteEvent::Kind::ProgramChange:
-            fluid_synth_bank_select(synth.get(), event.channel, event.program.bank);
-            fluid_synth_program_change(synth.get(), event.channel, event.program.program);
-            break;
-        case SynthNoteEvent::Kind::ControlChange:
-            fluid_synth_cc(synth.get(), event.channel, event.controller, event.value);
-            break;
-        case SynthNoteEvent::Kind::PitchBend:
-            fluid_synth_pitch_bend(synth.get(), event.channel, event.value);
-            break;
-        case SynthNoteEvent::Kind::NoteOn:
-            fluid_synth_noteon(synth.get(), event.channel, event.key, event.velocity);
-            break;
-        case SynthNoteEvent::Kind::NoteOff:
-            fluid_synth_noteoff(synth.get(), event.channel, event.key);
-            break;
-        }
-    };
-
-    const int startFrame = std::max(0, static_cast<int>(std::floor(startTimeSeconds * kFluidSynthSampleRate)));
-    const int lastEventFrame = synthEvents.back().frame + (kFluidSynthTailSeconds * kFluidSynthSampleRate);
-    const int requestedFrames = durationSeconds > 0.0
-        ? std::max(1, static_cast<int>(std::ceil(durationSeconds * kFluidSynthSampleRate)))
-        : lastEventFrame;
-    const int endFrame = std::min(std::max(startFrame + requestedFrames, 1), lastEventFrame);
-    const int prerollFrames = static_cast<int>(std::ceil(kFluidSynthChunkPrerollSeconds * kFluidSynthSampleRate));
-    const int renderStartFrame = std::max(0, startFrame - prerollFrames);
-
-    if (startFrame >= endFrame) {
-        makeSilentPlaybackAudio(durationSeconds, output);
-        std::cout << "MuseReader event playback render: silent tail chunk"
-                  << " tracks=" << stats.trackCount
-                  << " noteEvents=" << stats.noteEventCount
-                  << " firstEventFrame=" << synthEvents.front().frame
-                  << " lastEventFrame=" << synthEvents.back().frame
-                  << " startFrame=" << startFrame
-                  << " endFrame=" << endFrame
-                  << " start=" << startTimeSeconds
-                  << " duration=" << durationSeconds
-                  << " build=" << elapsedSecondsSince(started)
-                  << "s" << std::endl;
-        return true;
-    }
-
-    std::vector<float> left(kFluidSynthRenderBlockFrames);
-    std::vector<float> right(kFluidSynthRenderBlockFrames);
-    std::vector<float> samples;
-    samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
-    size_t eventIndex = 0;
-    const std::unordered_map<int, ActiveSynthNote> activeNotes = activeSynthNotesAtFrame(synthEvents, renderStartFrame, eventIndex);
-    for (size_t prerollEventIndex = 0; prerollEventIndex < eventIndex; ++prerollEventIndex) {
-        const SynthNoteEvent& event = synthEvents[prerollEventIndex];
-        if (event.kind != SynthNoteEvent::Kind::NoteOn && event.kind != SynthNoteEvent::Kind::NoteOff) {
-            applySynthEvent(event);
-        }
-    }
-    for (const auto& pair : activeNotes) {
-        const int channel = (pair.first >> 8) & 0xff;
-        const int key = pair.first & 0xff;
-        fluid_synth_noteon(synth.get(), channel, key, pair.second.velocity);
-    }
-    int renderedFrames = renderStartFrame;
-
-    while (renderedFrames < endFrame) {
-        while (eventIndex < synthEvents.size() && synthEvents[eventIndex].frame <= renderedFrames) {
-            const SynthNoteEvent& event = synthEvents[eventIndex];
-            applySynthEvent(event);
-            eventIndex += 1;
-        }
-
-        std::fill(left.begin(), left.end(), 0.0f);
-        std::fill(right.begin(), right.end(), 0.0f);
-        if (fluid_synth_write_float(synth.get(), kFluidSynthRenderBlockFrames,
-                                    left.data(), 0, 1,
-                                    right.data(), 0, 1) != FLUID_OK) {
-            errorMessage = "FluidSynth failed while rendering MuseScore playback events.";
+    const int startFrame = frameForSeconds(startTimeSeconds);
+    bool streamReset = false;
+    if (!playbackStream
+        || !playbackStream->matches(score, soundFontPath, activePartId, metronomeEnabled, playbackRevision)
+        || !playbackStream->canRenderFrom(startFrame)) {
+        playbackStream = std::make_unique<FluidSynthPlaybackStream>(
+            score,
+            soundFontPath,
+            activePartId,
+            metronomeEnabled,
+            playbackRevision
+        );
+        streamReset = true;
+        if (!playbackStream->initialize(score, context, startFrame, startTimeSeconds, durationSeconds, errorMessage)) {
+            playbackStream.reset();
             return false;
         }
-
-        const int blockStartFrame = renderedFrames;
-        const int blockEndFrame = renderedFrames + kFluidSynthRenderBlockFrames;
-        const int copyStartFrame = std::max(startFrame, blockStartFrame);
-        const int copyEndFrame = std::min(endFrame, blockEndFrame);
-        if (copyStartFrame < copyEndFrame) {
-            for (int absoluteFrame = copyStartFrame; absoluteFrame < copyEndFrame; ++absoluteFrame) {
-                const int blockFrame = absoluteFrame - blockStartFrame;
-                samples.push_back(left[blockFrame]);
-                samples.push_back(right[blockFrame]);
-            }
-        }
-
-        renderedFrames += kFluidSynthRenderBlockFrames;
     }
 
-    if (samples.empty()) {
-        errorMessage = "FluidSynth rendered no audio samples from MuseScore playback events.";
-        return false;
-    }
-
-    output.sampleRate = kFluidSynthSampleRate;
-    output.channelCount = kFluidSynthChannelCount;
-    output.durationSeconds = static_cast<double>(samples.size() / kFluidSynthChannelCount) / static_cast<double>(kFluidSynthSampleRate);
-    output.interleavedSamples = std::move(samples);
-
-    std::cout << "MuseReader event playback render: tracks="
-              << stats.trackCount
-              << " invalidTracks=" << stats.invalidTrackCount
-              << " modelTimestamps=" << stats.playbackModelTimestampCount
-              << " modelEvents=" << stats.playbackModelEventCount
-              << " noteEvents=" << stats.noteEventCount
-              << " synthEvents=" << synthEvents.size()
-              << " fallback=" << (stats.usedEngravingFallback ? "engraving" : "playbackModel")
-              << " firstEventFrame=" << synthEvents.front().frame
-              << " lastEventFrame=" << synthEvents.back().frame
-              << " renderStartFrame=" << renderStartFrame
-              << " activeNotesAtRenderStart=" << activeNotes.size()
-              << " copiedFrames=" << (output.interleavedSamples.size() / kFluidSynthChannelCount)
-              << " start=" << startTimeSeconds
-              << " duration=" << durationSeconds
-              << " build=" << elapsedSecondsSince(started)
-              << "s" << std::endl;
-
-    for (const auto& layerPair : stats.layerDebug) {
-        const EventExtractionStats::LayerDebugStats& layerStats = layerPair.second;
-        const double averageVelocity = layerStats.noteCount > 0
-            ? static_cast<double>(layerStats.velocitySum) / static_cast<double>(layerStats.noteCount)
-            : 0.0;
-        std::cout << "MuseReader event playback layer dynamics: layer="
-                  << static_cast<int>(layerPair.first)
-                  << " channel=" << layerStats.channel
-                  << " setup=" << layerStats.setup
-                  << " dynamicCC=" << (layerStats.useDynamicEvents ? "on" : "off")
-                  << " dynamicEvents=" << layerStats.dynamicControllerCount
-                  << " notes=" << layerStats.noteCount
-                  << " velocityMin=" << (layerStats.noteCount > 0 ? layerStats.velocityMin : 0)
-                  << " velocityMax=" << (layerStats.noteCount > 0 ? layerStats.velocityMax : 0)
-                  << " velocityAvg=" << averageVelocity
-                  << " nominalMin=" << (layerStats.noteCount > 0 ? layerStats.nominalMin : 0)
-                  << " nominalMax=" << (layerStats.noteCount > 0 ? layerStats.nominalMax : 0)
-                  << " curveNotes=" << layerStats.notesWithExpressionCurve
-                  << " curveMin="
-                  << (layerStats.notesWithExpressionCurve > 0 ? layerStats.expressionCurveMin : 0)
-                  << " curveMax="
-                  << (layerStats.notesWithExpressionCurve > 0 ? layerStats.expressionCurveMax : 0)
-                  << " velocityOverrides=" << layerStats.notesWithVelocityOverride
-                  << std::endl;
-    }
-
-    return true;
+    return playbackStream->render(startFrame, startTimeSeconds, durationSeconds, streamReset, started, output, errorMessage);
 }
 
 void logSaveScoreState(mu::engraving::MasterScore* score, const char* phase)

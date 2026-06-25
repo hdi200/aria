@@ -48,6 +48,8 @@
                                               startTimeSeconds,
                                               durationSeconds,
                                               metronomeEnabled,
+                                              m_playbackStreamRevision,
+                                              m_playbackStream,
                                               output,
                                               errorMessage);
     }

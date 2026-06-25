@@ -34,7 +34,6 @@ final class NativePlaybackController {
 
     private let chunkDurationSeconds: TimeInterval = 6.0
     private let prebufferChunks = 2
-    private let edgeFadeSeconds: TimeInterval = 0.0015
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
     private var liveRenderSession: LiveScoreRenderSession?
@@ -50,9 +49,14 @@ final class NativePlaybackController {
     private var isScheduling = false
     private var schedulingTask: Task<Void, Never>?
     private var scheduledBufferCount = 0
+    private var playWhenBuffered = false
 
     var isLoaded: Bool {
         engine != nil && playerNode != nil && liveRenderSession != nil
+    }
+
+    var isWaitingToStartPlayback: Bool {
+        playWhenBuffered
     }
 
     func prepare(liveRenderSession: LiveScoreRenderSession, durationSeconds: TimeInterval, metronomeEnabled: Bool) async throws {
@@ -133,7 +137,7 @@ final class NativePlaybackController {
         }
 
         var positionSeconds = currentPositionSeconds()
-        var status: ScorePlaybackStatus = playerNode.isPlaying ? .playing : (isPaused ? .paused : .stopped)
+        var status: ScorePlaybackStatus = (playerNode.isPlaying || playWhenBuffered) ? .playing : (isPaused ? .paused : .stopped)
 
         if durationSeconds > 0, positionSeconds >= durationSeconds {
             stopInternally()
@@ -149,26 +153,22 @@ final class NativePlaybackController {
             throw PlaybackError.playerUnavailable
         }
 
-        if !engine.isRunning {
-            try engine.start()
-        }
-
-        guard !playerNode.isPlaying else {
-            return
-        }
-
-        playbackStartedAt = Date()
-        scheduledStartSeconds = pendingStartSeconds
-        playerNode.play()
-        isPaused = false
+        try startPlaybackWhenBuffered(engine: engine, playerNode: playerNode)
         fillPlaybackQueue(revision: revision)
 
-        log("play position=\(formatSeconds(pendingStartSeconds)) duration=\(formatSeconds(durationSeconds)) queuedUntil=\(formatSeconds(queuedUntilSeconds)) revision=\(revision)")
+        log("play requested position=\(formatSeconds(pendingStartSeconds)) duration=\(formatSeconds(durationSeconds)) queuedUntil=\(formatSeconds(queuedUntilSeconds)) armed=\(playWhenBuffered) revision=\(revision)")
     }
 
     func pause() throws {
         guard let playerNode else {
             throw PlaybackError.playerUnavailable
+        }
+        if playWhenBuffered {
+            playWhenBuffered = false
+            playbackStartedAt = nil
+            isPaused = true
+            log("pause armed playback position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
+            return
         }
         guard playerNode.isPlaying else {
             return
@@ -194,7 +194,7 @@ final class NativePlaybackController {
             throw PlaybackError.playerUnavailable
         }
 
-        let wasPlaying = playerNode?.isPlaying == true
+        let wasPlaying = playerNode?.isPlaying == true || playWhenBuffered
         playerNode?.stop()
         cancelSchedulingTask()
         revision += 1
@@ -202,6 +202,7 @@ final class NativePlaybackController {
         scheduledStartSeconds = pendingStartSeconds
         queuedUntilSeconds = pendingStartSeconds
         playbackStartedAt = nil
+        playWhenBuffered = false
         isPaused = !wasPlaying
         fillPlaybackQueue(revision: revision)
         log("seek position=\(formatSeconds(pendingStartSeconds)) wasPlaying=\(wasPlaying) revision=\(revision)")
@@ -228,6 +229,7 @@ final class NativePlaybackController {
         isPaused = false
         isScheduling = false
         scheduledBufferCount = 0
+        playWhenBuffered = false
         metronomeEnabled = false
         log("invalidate revision=\(revision)")
     }
@@ -249,7 +251,7 @@ final class NativePlaybackController {
         }
 
         let wasLoaded = isLoaded
-        let wasPlaying = playerNode?.isPlaying == true
+        let wasPlaying = playerNode?.isPlaying == true || playWhenBuffered
         let currentPosition = currentPositionSeconds()
         metronomeEnabled = enabled
 
@@ -264,16 +266,12 @@ final class NativePlaybackController {
         scheduledStartSeconds = pendingStartSeconds
         queuedUntilSeconds = pendingStartSeconds
         playbackStartedAt = nil
+        playWhenBuffered = false
         isPaused = !wasPlaying
         isScheduling = false
         scheduledBufferCount = 0
+        playWhenBuffered = wasPlaying
         fillPlaybackQueue(revision: revision)
-
-        if wasPlaying {
-            playerNode?.play()
-            playbackStartedAt = Date()
-            isPaused = false
-        }
 
         log("metronome \(enabled ? "enabled" : "disabled") position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
     }
@@ -287,8 +285,10 @@ final class NativePlaybackController {
         isScheduling = true
         schedulingTask = Task { @MainActor [weak self] in
             defer {
-                self?.isScheduling = false
-                self?.schedulingTask = nil
+                if let self, revision == self.revision {
+                    self.isScheduling = false
+                    self.schedulingTask = nil
+                }
             }
 
             guard let self, let liveRenderSession = self.liveRenderSession else {
@@ -312,8 +312,21 @@ final class NativePlaybackController {
                     )
                     try Task.checkCancellation()
                     try self.schedule(audioData: audioData, startsAt: startTime, revision: revision)
+                } catch is CancellationError {
+                    if revision == self.revision {
+                        self.playWhenBuffered = false
+                        self.log("queue fill canceled revision=\(revision)")
+                    } else {
+                        self.log("queue fill canceled stale revision=\(revision) current=\(self.revision)")
+                    }
+                    return
                 } catch {
-                    print("MuseReader live playback render failed: \(error.localizedDescription)")
+                    if revision == self.revision {
+                        self.playWhenBuffered = false
+                        print("MuseReader live playback render failed: \(error.localizedDescription)")
+                    } else {
+                        self.log("queue fill failed stale revision=\(revision) current=\(self.revision): \(error.localizedDescription)")
+                    }
                     return
                 }
             }
@@ -338,7 +351,6 @@ final class NativePlaybackController {
         }
 
         let bufferDuration = Double(buffer.frameLength) / buffer.format.sampleRate
-        applyEdgeFade(to: buffer, startsAt: startTime, duration: bufferDuration)
         scheduledBufferCount += 1
         log("schedule buffer=\(scheduledBufferCount) start=\(formatSeconds(startTime)) duration=\(formatSeconds(bufferDuration)) frames=\(buffer.frameLength) revision=\(revision)")
         playerNode.scheduleBuffer(buffer, at: nil, options: []) { [weak self] in
@@ -354,6 +366,9 @@ final class NativePlaybackController {
         }
 
         queuedUntilSeconds = max(queuedUntilSeconds, startTime + bufferDuration)
+        if playWhenBuffered, queuedUntilSeconds > pendingStartSeconds + 0.001 {
+            try startPlaybackWhenBuffered(playerNode: playerNode)
+        }
     }
 
     private func makeBuffer(from audioData: MSRPlaybackAudioData) -> AVAudioPCMBuffer? {
@@ -420,7 +435,35 @@ final class NativePlaybackController {
         isPaused = false
         isScheduling = false
         scheduledBufferCount = 0
+        playWhenBuffered = false
         log("stop revision=\(revision)")
+    }
+
+    private func startPlaybackWhenBuffered(engine: AVAudioEngine? = nil, playerNode: AVAudioPlayerNode) throws {
+        if let engine, !engine.isRunning {
+            try engine.start()
+        }
+
+        guard !playerNode.isPlaying else {
+            playWhenBuffered = false
+            return
+        }
+
+        guard queuedUntilSeconds > pendingStartSeconds + 0.001 else {
+            playWhenBuffered = true
+            isPaused = false
+            playbackStartedAt = nil
+            scheduledStartSeconds = pendingStartSeconds
+            log("play armed waiting for buffer position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
+            return
+        }
+
+        playbackStartedAt = Date()
+        scheduledStartSeconds = pendingStartSeconds
+        playWhenBuffered = false
+        playerNode.play()
+        isPaused = false
+        log("play started position=\(formatSeconds(pendingStartSeconds)) queuedUntil=\(formatSeconds(queuedUntilSeconds)) revision=\(revision)")
     }
 
     private func bounded(_ positionSeconds: TimeInterval) -> TimeInterval {
@@ -428,37 +471,6 @@ final class NativePlaybackController {
             return min(max(positionSeconds, 0), durationSeconds)
         }
         return max(positionSeconds, 0)
-    }
-
-    private func applyEdgeFade(to buffer: AVAudioPCMBuffer, startsAt startTime: TimeInterval, duration: TimeInterval) {
-        guard let channels = buffer.floatChannelData else {
-            return
-        }
-
-        let frameCount = Int(buffer.frameLength)
-        guard frameCount > 0 else {
-            return
-        }
-
-        let sampleRate = buffer.format.sampleRate
-        let fadeFrames = min(frameCount / 2, max(1, Int(edgeFadeSeconds * sampleRate)))
-        let shouldFadeIn = startTime > 0.001
-        let shouldFadeOut = durationSeconds <= 0 || startTime + duration < durationSeconds - 0.001
-
-        for channel in 0..<Int(buffer.format.channelCount) {
-            let channelData = channels[channel]
-            if shouldFadeIn {
-                for frame in 0..<fadeFrames {
-                    channelData[frame] *= Float(frame) / Float(fadeFrames)
-                }
-            }
-            if shouldFadeOut {
-                for frame in 0..<fadeFrames {
-                    let index = frameCount - 1 - frame
-                    channelData[index] *= Float(frame) / Float(fadeFrames)
-                }
-            }
-        }
     }
 
     private func log(_ message: String) {

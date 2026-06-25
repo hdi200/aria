@@ -111,6 +111,8 @@ private:
 
         m_masterScore->setPlaylistDirty();
         m_maxObservedMasterHarmonyCount = std::max(m_maxObservedMasterHarmonyCount, harmonyCountInScore(m_masterScore.get()));
+        m_playbackStream.reset();
+        ++m_playbackStreamRevision;
         m_totalPageCount = activePageCount();
     }
 
@@ -123,5 +125,7 @@ private:
     std::string m_measureClipboardMimeType;
     int m_totalPageCount = 0;
     int m_maxObservedMasterHarmonyCount = 0;
+    mutable std::unique_ptr<FluidSynthPlaybackStream> m_playbackStream;
+    int m_playbackStreamRevision = 0;
     muse::GlobalInject<mu::engraving::rendering::IScoreRenderer> m_scoreRenderer;
 };

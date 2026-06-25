@@ -4769,6 +4769,18 @@ void TRead::readSystemLock(Score* score, XmlReader& e)
         return;
     }
 
+    if (endMeas->isBefore(startMeas)) {
+        LOGW() << "Skipping invalid system lock with end before start";
+        return;
+    }
+
+    const SystemLocks* systemLocks = score->systemLocks();
+    if (systemLocks->lockContaining(startMeas) || systemLocks->lockContaining(endMeas)
+        || !systemLocks->locksContainedInRange(startMeas, endMeas).empty()) {
+        LOGW() << "Skipping overlapping system lock";
+        return;
+    }
+
     score->addSystemLock(new SystemLock(startMeas, endMeas));
 }
 

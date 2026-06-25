@@ -1,5 +1,6 @@
 import Foundation
 
+private let playbackPreparationStartingMessage = "Preparing playback..."
 private let playbackVisualSyncTrimSeconds: TimeInterval = 0.05
 
 @MainActor
@@ -20,6 +21,7 @@ extension ScoreReaderState {
 
                 let latestPlaybackState = playbackController.state()
                 self.playbackState = latestPlaybackState
+                self.updatePlaybackPreparationMessage(for: playbackController)
                 self.updatePlaybackFollowState(with: latestPlaybackState)
                 try? await Task.sleep(for: self.playbackMonitorInterval)
             }
@@ -58,14 +60,19 @@ extension ScoreReaderState {
             return
         }
 
+        if playbackController.isWaitingToStartPlayback {
+            playbackPreparationMessage = playbackPreparationStartingMessage
+            return
+        }
+
         isPlaybackActionInFlight = true
         playbackErrorMessage = nil
-        playbackPreparationMessage = playbackController.isLoaded ? nil : "Preparing playback..."
+        playbackPreparationMessage = playbackController.isLoaded ? nil : playbackPreparationStartingMessage
 
         Task { @MainActor [weak self] in
             defer {
                 self?.isPlaybackActionInFlight = false
-                self?.playbackPreparationMessage = nil
+                self?.updatePlaybackPreparationMessage(for: playbackController)
             }
 
             do {
@@ -86,7 +93,11 @@ extension ScoreReaderState {
 
                 let currentState = playbackController.state()
                 if currentState.status == .playing {
-                    try playbackController.pause()
+                    if playbackController.isWaitingToStartPlayback {
+                        self.playbackPreparationMessage = playbackPreparationStartingMessage
+                    } else {
+                        try playbackController.pause()
+                    }
                 } else if currentState.status == .paused {
                     try playbackController.play()
                 } else {
@@ -162,14 +173,19 @@ extension ScoreReaderState {
             return
         }
 
+        if playbackController.isWaitingToStartPlayback {
+            playbackPreparationMessage = playbackPreparationStartingMessage
+            return
+        }
+
         isPlaybackActionInFlight = true
         playbackErrorMessage = nil
-        playbackPreparationMessage = playbackController.isLoaded ? nil : "Preparing playback..."
+        playbackPreparationMessage = playbackController.isLoaded ? nil : playbackPreparationStartingMessage
 
         Task { @MainActor [weak self] in
             defer {
                 self?.isPlaybackActionInFlight = false
-                self?.playbackPreparationMessage = nil
+                self?.updatePlaybackPreparationMessage(for: playbackController)
             }
 
             do {
@@ -217,12 +233,12 @@ extension ScoreReaderState {
 
         isPlaybackActionInFlight = true
         playbackErrorMessage = nil
-        playbackPreparationMessage = playbackController.isLoaded ? nil : "Preparing playback..."
+        playbackPreparationMessage = playbackController.isLoaded ? nil : playbackPreparationStartingMessage
 
         Task { @MainActor [weak self] in
             defer {
                 self?.isPlaybackActionInFlight = false
-                self?.playbackPreparationMessage = nil
+                self?.updatePlaybackPreparationMessage(for: playbackController)
             }
 
             do {
@@ -397,6 +413,13 @@ extension ScoreReaderState {
         print(String(format: "Aria playback invalidated after edit: elapsed=%.3fs warmup=%@", elapsed, startWarmup.description))
     }
 
+    private func updatePlaybackPreparationMessage(for playbackController: NativePlaybackController) {
+        if playbackController.isWaitingToStartPlayback {
+            playbackPreparationMessage = playbackPreparationStartingMessage
+        } else if !isPlaybackActionInFlight, playbackPreparationMessage == playbackPreparationStartingMessage {
+            playbackPreparationMessage = nil
+        }
+    }
 
     func updatePlaybackFollowState(with playbackState: ScorePlaybackState) {
         guard let activeRegion = activePlaybackMeasureRegion(for: playbackState) else {
