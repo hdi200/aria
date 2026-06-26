@@ -60,7 +60,7 @@ jobs:
     runs-on: windows-2025
     steps:
     - name: Clone repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
     - name: Configure workflow
       shell: bash
       env:
@@ -236,7 +236,7 @@ jobs:
         echo "CCACHE_TIMESTAMP=$(date -u +"%F-%T")" | tee -a $GITHUB_OUTPUT
     - name: Save ccache files
       if: always()
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v6
       with:
         key: ${{ steps.restore-ccache.outputs.cache-primary-key }}${{ steps.prepare-save-ccache.outputs.CCACHE_TIMESTAMP }}
         path: ${{ github.workspace }}/.ccache
@@ -250,7 +250,7 @@ jobs:
     runs-on: windows-2025
     steps:
     - name: Clone repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
     - name: Configure workflow
       shell: bash
       env:
@@ -380,7 +380,7 @@ jobs:
         echo "CCACHE_TIMESTAMP=$(date -u +"%F-%T")" | tee -a $GITHUB_OUTPUT
     - name: Save ccache files
       if: always()
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v6
       with:
         key: ${{ steps.restore-ccache.outputs.cache-primary-key }}${{ steps.prepare-save-ccache.outputs.CCACHE_TIMESTAMP }}
         path: ${{ github.workspace }}/.ccache
@@ -390,7 +390,7 @@ jobs:
   #   runs-on: windows-2025
   #   steps:
   #   - name: Clone repository
-  #     uses: actions/checkout@v6
+  #     uses: actions/checkout@v7
   #   - name: Sign test
   #     shell: cmd
   #     run: |
