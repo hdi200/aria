@@ -19,6 +19,10 @@ struct ScoreReaderPageCanvas: View {
         "active-notation-anchor-\(pageIndex)"
     }
 
+    static func playbackAnchorID(for pageIndex: Int) -> String {
+        "playback-anchor-\(pageIndex)"
+    }
+
     let pageIndex: Int
     let page: ScorePage?
     let isLoading: Bool
@@ -132,6 +136,14 @@ struct ScoreReaderPageCanvas: View {
                     .id(Self.activeNotationAnchorID(for: pageIndex))
                     .accessibilityHidden(true)
             }
+
+            if let anchorY = playbackAnchorY(pageHeight: pageHeight, topPadding: topPadding) {
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .position(x: pageWidth * 0.5, y: anchorY)
+                    .id(Self.playbackAnchorID(for: pageIndex))
+                    .accessibilityHidden(true)
+            }
         }
         .frame(width: pageWidth, height: topPadding + pageHeight + bottomPadding)
         .frame(maxWidth: .infinity, alignment: pageAlignment)
@@ -185,6 +197,20 @@ struct ScoreReaderPageCanvas: View {
         let bottomProtectedOffset = targetBottomY - safeBottomY
         let targetOffset = max(centeredOffset, bottomProtectedOffset)
         return min(max(targetOffset, 0), topPadding + pageHeight)
+    }
+
+    private func playbackAnchorY(pageHeight: CGFloat, topPadding: CGFloat) -> CGFloat? {
+        guard
+            let playbackHighlight,
+            playbackHighlight.pageIndex == pageIndex,
+            viewportSize.height > 0
+        else {
+            return nil
+        }
+
+        let targetCenterY = topPadding + CGFloat(playbackHighlight.normalizedRect.center.y) * pageHeight
+        let desiredViewportY = viewportSize.height * 0.38
+        return min(max(targetCenterY - desiredViewportY, 0), topPadding + pageHeight)
     }
 
     private func preferredHeight(for width: CGFloat) -> CGFloat {

@@ -138,6 +138,7 @@ EngravingObject* SpannerSegment::propertyDelegate(Pid pid) const
     switch (pid) {
     case Pid::PLAY:
     case Pid::COLOR:
+    case Pid::Z:
     case Pid::VISIBLE:
     case Pid::PLACEMENT:
     case Pid::EXCLUDE_FROM_OTHER_PARTS:
@@ -311,6 +312,18 @@ void SpannerSegment::setColor(const Color& col)
 }
 
 //---------------------------------------------------------
+//   setZ
+//---------------------------------------------------------
+
+void SpannerSegment::setZ(int val)
+{
+    if (m_spanner) {
+        m_spanner->setZ(val);
+    }
+    EngravingItem::setZ(val);
+}
+
+//---------------------------------------------------------
 //   nextSegmentElement
 //---------------------------------------------------------
 
@@ -461,6 +474,7 @@ void Spanner::add(EngravingItem* e)
     ls->setSelected(selected());
     ls->setTrack(track());
 //      ls->setAutoplace(autoplace());
+    ls->EngravingItem::setZ(z());
     m_segments.push_back(ls);
     e->added();
 }
@@ -1222,6 +1236,18 @@ void Spanner::setColor(const Color& col)
         ss->setColor(col);
     }
     m_color = col;
+}
+
+//---------------------------------------------------------
+//   setZ
+//---------------------------------------------------------
+
+void Spanner::setZ(int val)
+{
+    for (SpannerSegment* ss : spannerSegments()) {
+        ss->EngravingItem::setZ(val);
+    }
+    EngravingItem::setZ(val);
 }
 
 //---------------------------------------------------------

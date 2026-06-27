@@ -181,6 +181,7 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.activeNotationTopInset = activeNotationTopInset
         context.coordinator.activeNotationBottomInset = activeNotationBottomInset
         context.coordinator.activeNotationViewportHeight = activeNotationViewportHeight
+        context.coordinator.playbackHighlight = playbackHighlight
         context.coordinator.zoomScale = $zoomScale
         context.coordinator.zoomViewport = $zoomViewport
         context.coordinator.contentView?.configure(image: image, pdfData: pdfData, contentSize: contentSize)
@@ -209,6 +210,7 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.layoutIfNeeded()
         context.coordinator.updateActiveNotationContentInsets(in: scrollView)
         context.coordinator.scrollActiveNotationIntoViewIfNeeded(in: scrollView)
+        context.coordinator.scrollPlaybackIntoViewIfNeeded(in: scrollView)
         context.coordinator.publishViewport(from: scrollView)
     }
 
@@ -231,7 +233,15 @@ struct ZoomableImageView: UIViewRepresentable {
         var activeNotationTopInset: CGFloat = 0
         var activeNotationBottomInset: CGFloat = 0
         var activeNotationViewportHeight: CGFloat = 0
+        var playbackHighlight: ScorePlaybackMeasureHighlight? {
+            didSet {
+                if playbackHighlight == nil {
+                    lastHandledPlaybackRect = nil
+                }
+            }
+        }
         private var lastHandledActiveNotationAutoScrollRevision = 0
+        private var lastHandledPlaybackRect: ScoreNormalizedRect?
         weak var zoomView: UIView?
         weak var contentView: ScorePageContentView?
         weak var overlayView: ScorePageOverlayView?
@@ -293,6 +303,7 @@ struct ZoomableImageView: UIViewRepresentable {
             }
             updateActiveNotationContentInsets(in: scrollView)
             scrollActiveNotationIntoViewIfNeeded(in: scrollView)
+            scrollPlaybackIntoViewIfNeeded(in: scrollView)
 
             let currentZoomScale = scrollView.zoomScale
             if abs(zoomScale.wrappedValue - currentZoomScale) > 0.01 {
@@ -462,6 +473,70 @@ struct ZoomableImageView: UIViewRepresentable {
                 y: min(max(targetOffset.y, minOffset.y), maxOffset.y)
             )
             lastHandledActiveNotationAutoScrollRevision = activeNotationAutoScrollRevision
+            guard hypot(scrollView.contentOffset.x - clampedOffset.x, scrollView.contentOffset.y - clampedOffset.y) > 4 else {
+                return
+            }
+            scrollView.setContentOffset(clampedOffset, animated: true)
+        }
+
+        func scrollPlaybackIntoViewIfNeeded(in scrollView: UIScrollView) {
+            guard
+                scrollView.zoomScale > 1.01,
+                !isUserZooming,
+                !scrollView.isTracking,
+                !scrollView.isDragging,
+                !scrollView.isDecelerating,
+                let playbackHighlight,
+                playbackHighlight.normalizedRect != lastHandledPlaybackRect,
+                let targetFrame = overlayView?.playbackFrame
+            else {
+                return
+            }
+
+            scrollView.layoutIfNeeded()
+            guard
+                scrollView.bounds.width > 0,
+                scrollView.bounds.height > 0,
+                scrollView.contentSize.width > 0,
+                scrollView.contentSize.height > 0
+            else {
+                return
+            }
+
+            let scale = scrollView.zoomScale
+            let scaledTargetFrame = CGRect(
+                x: targetFrame.minX * scale,
+                y: targetFrame.minY * scale,
+                width: targetFrame.width * scale,
+                height: targetFrame.height * scale
+            )
+            let visibleBounds = CGRect(origin: scrollView.contentOffset, size: scrollView.bounds.size)
+            let safeViewport = visibleBounds.insetBy(
+                dx: min(visibleBounds.width * 0.16, 84),
+                dy: min(visibleBounds.height * 0.18, 110)
+            )
+
+            lastHandledPlaybackRect = playbackHighlight.normalizedRect
+            let targetCenter = CGPoint(x: scaledTargetFrame.midX, y: scaledTargetFrame.midY)
+            guard !safeViewport.contains(targetCenter) else {
+                return
+            }
+
+            let targetOffset = CGPoint(
+                x: scaledTargetFrame.midX - scrollView.bounds.width * 0.5,
+                y: scaledTargetFrame.midY - scrollView.bounds.height * 0.42
+            )
+            let adjustedInset = scrollView.adjustedContentInset
+            let minOffset = CGPoint(x: -adjustedInset.left, y: -adjustedInset.top)
+            let maxOffset = CGPoint(
+                x: max(scrollView.contentSize.width - scrollView.bounds.width + adjustedInset.right, minOffset.x),
+                y: max(scrollView.contentSize.height - scrollView.bounds.height + adjustedInset.bottom, minOffset.y)
+            )
+            let clampedOffset = CGPoint(
+                x: min(max(targetOffset.x, minOffset.x), maxOffset.x),
+                y: min(max(targetOffset.y, minOffset.y), maxOffset.y)
+            )
+
             guard hypot(scrollView.contentOffset.x - clampedOffset.x, scrollView.contentOffset.y - clampedOffset.y) > 4 else {
                 return
             }
@@ -1085,6 +1160,21 @@ final class ScorePageOverlayView: UIView {
 
             applyOverlayState()
         }
+    }
+
+    var playbackFrame: CGRect? {
+        guard
+            let playbackHighlight,
+            bounds.width > 0,
+            bounds.height > 0,
+            imageSize.width > 0,
+            imageSize.height > 0
+        else {
+            return nil
+        }
+
+        let imageRect = AVMakeRect(aspectRatio: imageSize, insideRect: bounds)
+        return frame(for: playbackHighlight.normalizedRect, inside: imageRect)
     }
 
     var selection: ScoreSelectedElement? {

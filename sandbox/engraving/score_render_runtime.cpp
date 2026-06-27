@@ -4554,19 +4554,45 @@ bool isMetronomeTrack(const mu::engraving::InstrumentTrackId& trackId)
     return trackId.instrumentId.toStdString() == "metronome";
 }
 
-bool shouldIncludePlaybackTrack(const mu::engraving::InstrumentTrackId& trackId,
+const mu::engraving::Part* playbackPartForTrack(mu::engraving::Score* score, const mu::engraving::InstrumentTrackId& trackId)
+{
+    if (!score) {
+        return nullptr;
+    }
+
+    for (const mu::engraving::Part* part : score->parts()) {
+        if (part && part->id() == trackId.partId) {
+            return part;
+        }
+    }
+
+    return nullptr;
+}
+
+bool shouldIncludePlaybackTrack(mu::engraving::Score* score,
+                                const mu::engraving::InstrumentTrackId& trackId,
                                 const std::optional<std::uint64_t> activePartId)
 {
-    return !activePartId.has_value()
-           || isMetronomeTrack(trackId)
-           || trackId.partId.toUint64() == *activePartId;
+    if (isMetronomeTrack(trackId)) {
+        return true;
+    }
+
+    const mu::engraving::Part* part = playbackPartForTrack(score, trackId);
+    if (!part || !part->show()) {
+        return false;
+    }
+
+    return !activePartId.has_value() || trackId.partId.toUint64() == *activePartId;
 }
 
 bool shouldIncludePlaybackPart(const mu::engraving::Part* part,
                                const std::optional<std::uint64_t> activePartId)
 {
-    return !activePartId.has_value()
-           || (part && part->id().toUint64() == *activePartId);
+    if (!part || !part->show()) {
+        return false;
+    }
+
+    return !activePartId.has_value() || part->id().toUint64() == *activePartId;
 }
 
 void makeSilentPlaybackAudio(const double durationSeconds, msr::render::PlaybackAudioData& output)
@@ -4596,7 +4622,8 @@ int channelForPartId(const mu::engraving::ID partId, std::unordered_map<std::uin
     return channel;
 }
 
-void appendPlaybackModelSynthEvents(mu::engraving::PlaybackModel& playbackModel,
+void appendPlaybackModelSynthEvents(mu::engraving::Score* score,
+                                    mu::engraving::PlaybackModel& playbackModel,
                                     const std::optional<std::uint64_t> activePartId,
                                     std::vector<SynthNoteEvent>& synthEvents,
                                     std::vector<SynthChannelProgram>& channelPrograms,
@@ -4606,7 +4633,7 @@ void appendPlaybackModelSynthEvents(mu::engraving::PlaybackModel& playbackModel,
     std::set<std::string> emittedPedalRanges;
 
     for (const mu::engraving::InstrumentTrackId& trackId : playbackModel.existingTrackIdSet()) {
-        if (!shouldIncludePlaybackTrack(trackId, activePartId)) {
+        if (!shouldIncludePlaybackTrack(score, trackId, activePartId)) {
             continue;
         }
 
@@ -4991,7 +5018,7 @@ FluidSynthPlaybackSequence makeFluidSynthPlaybackSequence(mu::engraving::Score* 
     playbackModel.load(score);
 
     FluidSynthPlaybackSequence sequence;
-    appendPlaybackModelSynthEvents(playbackModel, activePartId, sequence.synthEvents, sequence.channelPrograms, sequence.stats);
+    appendPlaybackModelSynthEvents(score, playbackModel, activePartId, sequence.synthEvents, sequence.channelPrograms, sequence.stats);
 
     std::vector<SynthNoteEvent> metronomeSynthEvents;
     std::copy_if(sequence.synthEvents.cbegin(), sequence.synthEvents.cend(), std::back_inserter(metronomeSynthEvents), [](const SynthNoteEvent& event) {

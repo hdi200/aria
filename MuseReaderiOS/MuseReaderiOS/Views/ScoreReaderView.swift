@@ -13,6 +13,11 @@ private struct ScoreReaderTransposeSheetContext: Identifiable {
     let currentKey: Int
 }
 
+private struct ScoreReaderPlaybackScrollTarget: Equatable {
+    let pageIndex: Int
+    let normalizedRect: ScoreNormalizedRect
+}
+
 struct ScoreReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -518,12 +523,13 @@ struct ScoreReaderView: View {
             return nil
         }
 
-        if selectedToolCategory == .chord || selectedToolCategory == .lyrics {
-            return nil
-        }
-
-        if selectedToolCategory != .select {
+        switch selectedToolCategory {
+        case .notes, .repeats, .text, .expression:
             return selectedToolCategory
+        case .chord, .lyrics, .layout, .more:
+            return nil
+        case .select:
+            break
         }
 
         guard let selection = readerState.editingState.selection else {
@@ -540,9 +546,9 @@ struct ScoreReaderView: View {
         case .text, .chordText:
             return .text
         case .tempo, .timeSignature, .keySignature:
-            return .more
+            return nil
         case .layoutBreak:
-            return .layout
+            return nil
         case .dynamic, .expressionSpanner, .tie, .marker:
             return .expression
         case .other:
@@ -728,6 +734,20 @@ struct ScoreReaderView: View {
                         revealActiveNotation(using: proxy)
                     }
                 }
+                .onChangeCompatible(of: playbackScrollTarget) { target in
+                    guard
+                        target != nil,
+                        readerState.playbackState.status == .playing,
+                        zoomScale <= 1.01
+                    else {
+                        return
+                    }
+
+                    revealPlayback(using: proxy)
+                    DispatchQueue.main.async {
+                        revealPlayback(using: proxy)
+                    }
+                }
                 .onChangeCompatible(of: selectedToolCategory) { oldValue, newValue in
                     handleToolCategoryChange(from: oldValue, to: newValue)
                 }
@@ -747,6 +767,30 @@ struct ScoreReaderView: View {
             } else {
                 proxy.scrollTo(readerState.selectedPageIndex, anchor: .center)
             }
+        }
+    }
+
+    private var playbackScrollTarget: ScoreReaderPlaybackScrollTarget? {
+        guard let highlight = readerState.playbackMeasureHighlight else {
+            return nil
+        }
+
+        return ScoreReaderPlaybackScrollTarget(
+            pageIndex: highlight.pageIndex,
+            normalizedRect: highlight.normalizedRect
+        )
+    }
+
+    private func revealPlayback(using proxy: ScrollViewProxy) {
+        guard let target = playbackScrollTarget else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.22)) {
+            proxy.scrollTo(
+                ScoreReaderPageCanvas.playbackAnchorID(for: target.pageIndex),
+                anchor: .top
+            )
         }
     }
 
