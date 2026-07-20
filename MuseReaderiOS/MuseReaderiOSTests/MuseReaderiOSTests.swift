@@ -432,6 +432,44 @@ struct MuseReaderiOSTests {
         #expect(paletteAlignedInsets.right == 0)
     }
 
+    @Test
+    func viewModeCentersPagesWithoutReservingTheEditPaletteGutter() {
+        let viewContinuous = ScoreReaderPageLayoutPolicy(
+            isEditing: false,
+            fitsPageToViewport: false,
+            isPortrait: true,
+            isCompactPhoneLayout: false,
+            floatingPaletteDockedLeft: true
+        )
+        let editContinuous = ScoreReaderPageLayoutPolicy(
+            isEditing: true,
+            fitsPageToViewport: false,
+            isPortrait: true,
+            isCompactPhoneLayout: false,
+            floatingPaletteDockedLeft: true
+        )
+        let pageTurn = ScoreReaderPageLayoutPolicy(
+            isEditing: false,
+            fitsPageToViewport: true,
+            isPortrait: true,
+            isCompactPhoneLayout: false,
+            floatingPaletteDockedLeft: true
+        )
+
+        #expect(viewContinuous.reservedPaletteGutter == 0)
+        #expect(viewContinuous.horizontalAlignment == .center)
+        #expect(viewContinuous.usesFullCanvasZoom == true)
+        #expect(viewContinuous.topPagePadding == 0)
+        #expect(editContinuous.reservedPaletteGutter == 92)
+        #expect(editContinuous.horizontalAlignment == .trailing)
+        #expect(editContinuous.usesFullCanvasZoom == true)
+        #expect(editContinuous.topPagePadding == 90)
+        #expect(pageTurn.reservedPaletteGutter == 0)
+        #expect(pageTurn.horizontalAlignment == .center)
+        #expect(pageTurn.usesFullCanvasZoom == true)
+        #expect(pageTurn.topPagePadding == 0)
+    }
+
     private func fixtureURL(_ relativePath: String) -> URL {
         repositoryRoot.appendingPathComponent(relativePath)
     }

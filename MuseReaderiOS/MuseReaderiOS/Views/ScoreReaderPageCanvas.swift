@@ -31,9 +31,51 @@ struct ScorePageRenderSurfaceIdentity: Hashable {
 }
 
 struct ScoreReaderBackground: View {
+    let usesImmersiveWhite: Bool
+
     var body: some View {
-        Color(red: 0.965, green: 0.965, blue: 0.955)
+        Group {
+            if usesImmersiveWhite {
+                Color.white
+            } else {
+                Color(red: 0.965, green: 0.965, blue: 0.955)
+            }
+        }
             .ignoresSafeArea()
+    }
+}
+
+struct ScoreReaderPageLayoutPolicy: Equatable {
+    let reservedPaletteGutter: CGFloat
+    let horizontalAlignment: ScoreReaderPageHorizontalAlignment
+    let usesFullCanvasZoom: Bool
+    let topPagePadding: CGFloat
+
+    init(
+        isEditing: Bool,
+        fitsPageToViewport: Bool,
+        isPortrait: Bool,
+        isCompactPhoneLayout: Bool,
+        floatingPaletteDockedLeft: Bool
+    ) {
+        usesFullCanvasZoom = true
+
+        if fitsPageToViewport || !isEditing {
+            topPagePadding = 0
+        } else if isPortrait {
+            topPagePadding = isCompactPhoneLayout ? 18 : 90
+        } else {
+            topPagePadding = 6
+        }
+
+        guard isEditing, !fitsPageToViewport, isPortrait, !isCompactPhoneLayout else {
+            reservedPaletteGutter = 0
+            horizontalAlignment = .center
+            return
+        }
+
+        reservedPaletteGutter = 92
+        horizontalAlignment = floatingPaletteDockedLeft ? .trailing : .leading
     }
 }
 
@@ -103,8 +145,12 @@ struct ScoreReaderPageCanvas: View {
         let fittedPageSize = fittedPageSize
         let pageWidth = fittedPageSize.width
         let pageHeight = fittedPageSize.height
-        let zoomViewportWidth = max(availableWidth, pageWidth)
-        let zoomViewportHeight = fitsPageToViewport ? max(viewportSize.height, pageHeight) : pageHeight
+        let zoomViewportWidth = pageLayoutPolicy.usesFullCanvasZoom
+            ? max(availableWidth, pageWidth)
+            : pageWidth
+        let zoomViewportHeight = pageLayoutPolicy.usesFullCanvasZoom && fitsPageToViewport
+            ? max(viewportSize.height, pageHeight)
+            : pageHeight
         let topPadding = topPagePadding
         let bottomPadding: CGFloat = fitsPageToViewport ? 0 : 6
         let usesActiveNotationFocus = selectedElement?.pageIndex == pageIndex
@@ -196,6 +242,7 @@ struct ScoreReaderPageCanvas: View {
             }
         }
         .frame(width: zoomViewportWidth, height: topPadding + zoomViewportHeight + bottomPadding)
+        .frame(maxWidth: .infinity, alignment: outerCanvasAlignment)
     }
 
     private var isPortrait: Bool {
@@ -203,32 +250,36 @@ struct ScoreReaderPageCanvas: View {
     }
 
     private var reservedPaletteGutter: CGFloat {
-        if fitsPageToViewport {
-            return 0
-        }
-        return isPortrait && !isCompactPhoneLayout ? 92 : 0
+        pageLayoutPolicy.reservedPaletteGutter
     }
 
     private var zoomPageHorizontalAlignment: ScoreReaderPageHorizontalAlignment {
-        if fitsPageToViewport {
-            return .center
-        }
-        if isCompactPhoneLayout {
-            return .center
-        }
+        pageLayoutPolicy.horizontalAlignment
+    }
 
-        if !isPortrait {
-            return .center
-        }
-
-        return floatingPaletteDockedLeft ? .trailing : .leading
+    private var pageLayoutPolicy: ScoreReaderPageLayoutPolicy {
+        ScoreReaderPageLayoutPolicy(
+            isEditing: allowsEditingInteractions,
+            fitsPageToViewport: fitsPageToViewport,
+            isPortrait: isPortrait,
+            isCompactPhoneLayout: isCompactPhoneLayout,
+            floatingPaletteDockedLeft: floatingPaletteDockedLeft
+        )
     }
 
     private var topPagePadding: CGFloat {
-        if fitsPageToViewport {
-            return 0
+        pageLayoutPolicy.topPagePadding
+    }
+
+    private var outerCanvasAlignment: Alignment {
+        switch pageLayoutPolicy.horizontalAlignment {
+        case .leading:
+            return .topLeading
+        case .center:
+            return .top
+        case .trailing:
+            return .topTrailing
         }
-        return isPortrait ? (isCompactPhoneLayout ? 18 : 90) : 6
     }
 
     private var fittedPageSize: CGSize {
@@ -373,6 +424,8 @@ struct ScoreReaderPageSurface: View {
                         activeNotationViewportHeight: activeNotationViewportHeight,
                         pageHorizontalAlignment: pageHorizontalAlignment,
                         centersPageVertically: centersPageVertically,
+                        allowsContentOverflow: allowsEditingInteractions,
+                        showsPageBoundary: allowsEditingInteractions,
                         allowsEditingInteractions: allowsEditingInteractions,
                         allowsPlaybackFollow: allowsPlaybackFollow,
                         allowsPencilInsertionFineTune: allowsPencilInsertionFineTune,
@@ -403,7 +456,11 @@ struct ScoreReaderPageSurface: View {
                     )
                     .frame(width: displayedPageSize.width, height: displayedPageSize.height)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .shadow(color: Color.black.opacity(0.15), radius: 12, y: 6)
+                    .shadow(
+                        color: allowsEditingInteractions ? Color.black.opacity(0.15) : Color.clear,
+                        radius: allowsEditingInteractions ? 12 : 0,
+                        y: allowsEditingInteractions ? 6 : 0
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: placeholderAlignment)
                 }
             }

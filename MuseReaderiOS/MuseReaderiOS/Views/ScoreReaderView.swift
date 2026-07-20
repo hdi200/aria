@@ -79,7 +79,7 @@ struct ScoreReaderView: View {
         self.initialRememberedState = rememberedState
         _zoomScale = State(
             initialValue: initialInteractionMode == .view
-                ? CGFloat(min(max(rememberedState.zoomScale, Double(ScoreReaderZoomLimits.minimumScale)), 3.0))
+                ? ScoreReaderZoomLimits.minimumScale
                 : (UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0)
         )
         _selectedToolCategory = State(initialValue: initialToolCategory)
@@ -96,7 +96,7 @@ struct ScoreReaderView: View {
 
     var body: some View {
         ZStack {
-            ScoreReaderBackground()
+            ScoreReaderBackground(usesImmersiveWhite: readerState.interactionMode == .view)
 
             if readerState.pageCount == 0 {
                 ScoreReaderUnavailableView(detailText: session.renderPipeline.detailText)
@@ -462,6 +462,9 @@ struct ScoreReaderView: View {
                 selectedToolCategory = .select
                 clearSelectionCommandMenu()
                 zoomScaleBeforeTextEntry = nil
+            }
+            if mode == .view {
+                zoomScale = 1
             }
         }
         .onChangeCompatible(of: readerState.selectedPageIndex) { _ in

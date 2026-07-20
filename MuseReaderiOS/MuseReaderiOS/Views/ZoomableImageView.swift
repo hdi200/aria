@@ -18,7 +18,7 @@ enum ScoreReaderZoomLimits {
     static let minimumScale: CGFloat = 1
 }
 
-enum ScoreReaderPageHorizontalAlignment {
+enum ScoreReaderPageHorizontalAlignment: Equatable {
     case leading
     case center
     case trailing
@@ -94,6 +94,8 @@ struct ZoomableImageView: UIViewRepresentable {
     var activeNotationViewportHeight: CGFloat = 0
     var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
     var centersPageVertically = false
+    var allowsContentOverflow = false
+    var showsPageBoundary = true
     var allowsEditingInteractions = true
     var allowsPlaybackFollow = true
     var allowsPencilInsertionFineTune = false
@@ -150,9 +152,11 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.backgroundColor = .clear
         scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.clipsToBounds = !allowsContentOverflow
 
         let containerView = ScorePageZoomContainerView()
         containerView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.setShowsPageBoundary(showsPageBoundary)
 
         let contentView = ScorePageContentView()
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -270,6 +274,8 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.activeNotationViewportHeight = activeNotationViewportHeight
         context.coordinator.pageHorizontalAlignment = pageHorizontalAlignment
         context.coordinator.centersPageVertically = centersPageVertically
+        scrollView.clipsToBounds = !allowsContentOverflow
+        (context.coordinator.zoomView as? ScorePageZoomContainerView)?.setShowsPageBoundary(showsPageBoundary)
         context.coordinator.playbackHighlight = playbackHighlight
         context.coordinator.zoomScale = $zoomScale
         context.coordinator.zoomViewport = $zoomViewport
@@ -482,12 +488,14 @@ struct ZoomableImageView: UIViewRepresentable {
             if usesActiveNotationFocus {
                 nextInset.bottom += activeNotationBottomScrollInset(for: scrollView)
             }
-            guard scrollView.contentInset != nextInset else {
-                return
+            if scrollView.contentInset != nextInset {
+                scrollView.contentInset = nextInset
+                scrollView.scrollIndicatorInsets = nextInset
             }
 
-            scrollView.contentInset = nextInset
-            scrollView.scrollIndicatorInsets = nextInset
+            // SwiftUI may update the representable repeatedly at 1x. The
+            // update path clears contentOffset before recomputing layout, so
+            // re-clamp even when the inset values themselves did not change.
             clampContentOffsetIfNeeded(in: scrollView, animated: false)
         }
 
@@ -1196,7 +1204,17 @@ private final class ScorePageZoomContainerView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+        if layer.shadowOpacity > 0 {
+            layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+        } else {
+            layer.shadowPath = nil
+        }
+    }
+
+    func setShowsPageBoundary(_ showsPageBoundary: Bool) {
+        layer.cornerRadius = showsPageBoundary ? 4 : 0
+        layer.shadowOpacity = showsPageBoundary ? 0.15 : 0
+        setNeedsLayout()
     }
 }
 
