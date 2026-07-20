@@ -30,7 +30,9 @@ struct ScoreReaderZoomLayout {
         pageSize: CGSize,
         zoomScale: CGFloat,
         horizontalAlignment: ScoreReaderPageHorizontalAlignment,
-        centersVertically: Bool
+        centersVertically: Bool,
+        restingHorizontalEdgePadding: CGFloat = 0,
+        restingTopInset: CGFloat = 0
     ) -> UIEdgeInsets {
         let horizontalSpace = max(viewportSize.width - pageSize.width * zoomScale, 0)
         let verticalSpace = max(viewportSize.height - pageSize.height * zoomScale, 0)
@@ -39,18 +41,20 @@ struct ScoreReaderZoomLayout {
 
         switch horizontalAlignment {
         case .leading:
-            left = 0
-            right = horizontalSpace
+            left = min(restingHorizontalEdgePadding, horizontalSpace)
+            right = horizontalSpace - left
         case .center:
             left = horizontalSpace * 0.5
             right = horizontalSpace * 0.5
         case .trailing:
-            left = horizontalSpace
-            right = 0
+            right = min(restingHorizontalEdgePadding, horizontalSpace)
+            left = horizontalSpace - right
         }
 
         let verticalInset = centersVertically ? verticalSpace * 0.5 : 0
-        return UIEdgeInsets(top: verticalInset, left: left, bottom: verticalInset, right: right)
+        let restingInsetProgress = max(0, min(1, 2 - zoomScale))
+        let top = centersVertically ? verticalInset : restingTopInset * restingInsetProgress
+        return UIEdgeInsets(top: top, left: left, bottom: verticalInset, right: right)
     }
 
     static func clampedContentOffset(
@@ -111,6 +115,8 @@ struct ZoomableImageView: UIViewRepresentable {
     var activeNotationViewportHeight: CGFloat = 0
     var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
     var centersPageVertically = false
+    var restingHorizontalEdgePadding: CGFloat = 0
+    var restingTopInset: CGFloat = 0
     var showsPageBoundary = true
     var allowsEditingInteractions = true
     var allowsPlaybackFollow = true
@@ -289,6 +295,8 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.activeNotationViewportHeight = activeNotationViewportHeight
         context.coordinator.pageHorizontalAlignment = pageHorizontalAlignment
         context.coordinator.centersPageVertically = centersPageVertically
+        context.coordinator.restingHorizontalEdgePadding = restingHorizontalEdgePadding
+        context.coordinator.restingTopInset = restingTopInset
         (context.coordinator.zoomView as? ScorePageZoomContainerView)?.setShowsPageBoundary(showsPageBoundary)
         context.coordinator.playbackHighlight = playbackHighlight
         context.coordinator.zoomScale = $zoomScale
@@ -375,6 +383,8 @@ struct ZoomableImageView: UIViewRepresentable {
         var isUserZooming = false
         var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
         var centersPageVertically = false
+        var restingHorizontalEdgePadding: CGFloat = 0
+        var restingTopInset: CGFloat = 0
         private var selectedNoteDragStartPoint: CGPoint?
         private var selectedChordTextDragStartPoint: CGPoint?
         private var expressionEndpointDragIsStart: Bool?
@@ -508,7 +518,9 @@ struct ZoomableImageView: UIViewRepresentable {
                 pageSize: pageSize,
                 zoomScale: scrollView.zoomScale,
                 horizontalAlignment: pageHorizontalAlignment,
-                centersVertically: centersPageVertically
+                centersVertically: centersPageVertically,
+                restingHorizontalEdgePadding: restingHorizontalEdgePadding,
+                restingTopInset: restingTopInset
             )
             // Keep extra scroll room in edit mode so programmatic note-entry
             // focus can lift the active bar above the bottom panel.

@@ -781,9 +781,9 @@ struct ScoreReaderView: View {
                             }
                         }
                     }
-                    .padding(.top, readerState.isEditingMode ? (isCompactPhoneLayout ? 82 : 104) : 24)
+                    .padding(.top, readerState.isEditingMode ? 0 : 24)
                     .padding(.bottom, scrollContentBottomInset(isCompactPhoneLayout: isCompactPhoneLayout, isPhoneLandscapeLayout: isPhoneLandscapeLayout))
-                    .padding(.horizontal, isCompactPhoneLayout ? 0 : 24)
+                    .padding(.horizontal, readerState.isEditingMode || isCompactPhoneLayout ? 0 : 24)
                 }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 8)
@@ -872,7 +872,9 @@ struct ScoreReaderView: View {
             selectedElement: editingEnabled ? readerState.selectedElement(for: pageIndex) : nil,
             noteEntryPreview: editingEnabled ? readerState.noteEntryPreview(for: pageIndex) : nil,
             zoomScale: $zoomScale,
-            availableWidth: isPageTurn ? pageTurnViewport.width : geometry.size.width - (isCompactPhoneLayout ? 0 : 48),
+            availableWidth: isPageTurn || editingEnabled
+                ? (isPageTurn ? pageTurnViewport.width : geometry.size.width)
+                : geometry.size.width - (isCompactPhoneLayout ? 0 : 48),
             viewportSize: isPageTurn ? pageTurnViewport : geometry.size,
             isCompactPhoneLayout: isCompactPhoneLayout,
             floatingPaletteDockedLeft: floatingPaletteDockedLeft,

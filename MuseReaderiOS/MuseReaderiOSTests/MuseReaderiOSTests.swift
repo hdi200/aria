@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+import UIKit
 @testable import MuseReaderiOS
 
 struct MuseReaderiOSTests {
@@ -423,6 +424,24 @@ struct MuseReaderiOSTests {
             horizontalAlignment: .trailing,
             centersVertically: false
         )
+        let editRestingInsets = ScoreReaderZoomLayout.contentInsets(
+            viewportSize: CGSize(width: 1_024, height: 768),
+            pageSize: CGSize(width: 884, height: 1_140),
+            zoomScale: 1,
+            horizontalAlignment: .trailing,
+            centersVertically: false,
+            restingHorizontalEdgePadding: 24,
+            restingTopInset: 194
+        )
+        let editZoomedInsets = ScoreReaderZoomLayout.contentInsets(
+            viewportSize: CGSize(width: 1_024, height: 768),
+            pageSize: CGSize(width: 884, height: 1_140),
+            zoomScale: 2,
+            horizontalAlignment: .trailing,
+            centersVertically: false,
+            restingHorizontalEdgePadding: 24,
+            restingTopInset: 194
+        )
 
         #expect(fittedInsets.left == 162)
         #expect(fittedInsets.right == 162)
@@ -430,6 +449,12 @@ struct MuseReaderiOSTests {
         #expect(zoomedInsets.right == 0)
         #expect(paletteAlignedInsets.left == 92)
         #expect(paletteAlignedInsets.right == 0)
+        #expect(editRestingInsets.left == 116)
+        #expect(editRestingInsets.right == 24)
+        #expect(editRestingInsets.top == 194)
+        #expect(editZoomedInsets.left == 0)
+        #expect(editZoomedInsets.right == 0)
+        #expect(editZoomedInsets.top == 0)
 
         let recenteredOffset = ScoreReaderZoomLayout.clampedContentOffset(
             .zero,
@@ -469,10 +494,14 @@ struct MuseReaderiOSTests {
         #expect(viewContinuous.horizontalAlignment == .center)
         #expect(viewContinuous.usesFullCanvasZoom == true)
         #expect(viewContinuous.topPagePadding == 0)
+        #expect(viewContinuous.viewportEdgePadding == 0)
+        #expect(viewContinuous.restingTopInset == 0)
         #expect(editContinuous.reservedPaletteGutter == 92)
         #expect(editContinuous.horizontalAlignment == .trailing)
         #expect(editContinuous.usesFullCanvasZoom == true)
-        #expect(editContinuous.topPagePadding == 90)
+        #expect(editContinuous.topPagePadding == 0)
+        #expect(editContinuous.viewportEdgePadding == 24)
+        #expect(editContinuous.restingTopInset == 194)
         #expect(pageTurn.reservedPaletteGutter == 0)
         #expect(pageTurn.horizontalAlignment == .center)
         #expect(pageTurn.usesFullCanvasZoom == true)

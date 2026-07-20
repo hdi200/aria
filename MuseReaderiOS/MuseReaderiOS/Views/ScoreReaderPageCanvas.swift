@@ -50,6 +50,8 @@ struct ScoreReaderPageLayoutPolicy: Equatable {
     let horizontalAlignment: ScoreReaderPageHorizontalAlignment
     let usesFullCanvasZoom: Bool
     let topPagePadding: CGFloat
+    let viewportEdgePadding: CGFloat
+    let restingTopInset: CGFloat
 
     init(
         isEditing: Bool,
@@ -59,13 +61,15 @@ struct ScoreReaderPageLayoutPolicy: Equatable {
         floatingPaletteDockedLeft: Bool
     ) {
         usesFullCanvasZoom = true
+        viewportEdgePadding = isEditing && !isCompactPhoneLayout ? 24 : 0
 
-        if fitsPageToViewport || !isEditing {
-            topPagePadding = 0
+        topPagePadding = 0
+        if !isEditing || fitsPageToViewport {
+            restingTopInset = 0
         } else if isPortrait {
-            topPagePadding = isCompactPhoneLayout ? 18 : 90
+            restingTopInset = (isCompactPhoneLayout ? 82 : 104) + (isCompactPhoneLayout ? 18 : 90)
         } else {
-            topPagePadding = 6
+            restingTopInset = (isCompactPhoneLayout ? 82 : 104) + 6
         }
 
         guard isEditing, !fitsPageToViewport, isPortrait, !isCompactPhoneLayout else {
@@ -171,6 +175,8 @@ struct ScoreReaderPageCanvas: View {
                 displayedPageSize: fittedPageSize,
                 pageHorizontalAlignment: zoomPageHorizontalAlignment,
                 centersPageVertically: fitsPageToViewport,
+                viewportEdgePadding: pageLayoutPolicy.viewportEdgePadding,
+                restingTopInset: pageLayoutPolicy.restingTopInset,
                 allowsPencilInsertionFineTune: allowsPencilInsertionFineTune,
                 noteEntryPreviewPitchClass: noteEntryPreviewPitchClass,
                 noteEntryPreviewIsRest: noteEntryPreviewIsRest,
@@ -284,7 +290,13 @@ struct ScoreReaderPageCanvas: View {
 
     private var fittedPageSize: CGSize {
         guard fitsPageToViewport else {
-            let width = min(max(availableWidth - reservedPaletteGutter, 320), 980)
+            let width = min(
+                max(
+                    availableWidth - reservedPaletteGutter - pageLayoutPolicy.viewportEdgePadding * 2,
+                    320
+                ),
+                980
+            )
             return CGSize(width: width, height: preferredHeight(for: width))
         }
 
@@ -362,6 +374,8 @@ struct ScoreReaderPageSurface: View {
     let displayedPageSize: CGSize
     let pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment
     let centersPageVertically: Bool
+    let viewportEdgePadding: CGFloat
+    let restingTopInset: CGFloat
     let allowsPencilInsertionFineTune: Bool
     let noteEntryPreviewPitchClass: Int?
     let noteEntryPreviewIsRest: Bool
@@ -424,6 +438,8 @@ struct ScoreReaderPageSurface: View {
                         activeNotationViewportHeight: activeNotationViewportHeight,
                         pageHorizontalAlignment: pageHorizontalAlignment,
                         centersPageVertically: centersPageVertically,
+                        restingHorizontalEdgePadding: viewportEdgePadding,
+                        restingTopInset: restingTopInset,
                         showsPageBoundary: allowsEditingInteractions,
                         allowsEditingInteractions: allowsEditingInteractions,
                         allowsPlaybackFollow: allowsPlaybackFollow,
