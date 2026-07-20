@@ -101,7 +101,7 @@ extension ScoreReaderState {
                 } else if currentState.status == .paused {
                     try playbackController.play()
                 } else {
-                    let shouldUseSelection = self.editingState.selection != nil
+                    let shouldUseSelection = self.isEditingMode && self.editingState.selection != nil
                     let startTimeSeconds = shouldUseSelection
                         ? (self.playbackRegionForCurrentSelection()?.startTimeSeconds ?? 0)
                         : 0
@@ -422,6 +422,10 @@ extension ScoreReaderState {
     }
 
     func updatePlaybackFollowState(with playbackState: ScorePlaybackState) {
+        if playbackState.status != .playing {
+            playbackFollowIsSuspended = false
+        }
+
         guard let activeRegion = activePlaybackMeasureRegion(for: playbackState) else {
             playbackMeasureHighlight = nil
             return
@@ -440,7 +444,10 @@ extension ScoreReaderState {
             progress: playbackProgress
         )
 
-        if playbackState.status == .playing, activeRegion.pageIndex != selectedPageIndex {
+        if playbackState.status == .playing,
+           shouldFollowPlayback,
+           activeRegion.pageIndex != selectedPageIndex
+        {
             updateSelection(to: activeRegion.pageIndex)
         }
     }

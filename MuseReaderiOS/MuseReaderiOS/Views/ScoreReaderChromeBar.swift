@@ -13,12 +13,16 @@ struct ScoreReaderChromeBar: View {
     @Binding var isPartsPanelPresented: Bool
     @Binding var isExportPanelPresented: Bool
     let supportsEditing: Bool
+    let interactionMode: ScoreReaderInteractionMode
+    @Binding var readingStyle: ScoreReaderReadingStyle
+    @Binding var playbackFollowEnabled: Bool
     let supportsPlayback: Bool
     let editingState: ScoreEditingState
     let playbackState: ScorePlaybackState
     let metronomeEnabled: Bool
     let isEditingBusy: Bool
     let isPlaybackBusy: Bool
+    let isExportBusy: Bool
     let playbackPreparationMessage: String?
     let concertPitchEnabled: Bool
     let showsConcertPitchControl: Bool
@@ -30,8 +34,10 @@ struct ScoreReaderChromeBar: View {
     let toggleMetronomeAction: () -> Void
     let toggleConcertPitchAction: () -> Void
     let exportAction: () -> Void
+    let editDoneAction: () -> Void
     let selectPartAction: (Int?) -> Void
     let managePartsAction: () -> Void
+    let allowsManagingParts: Bool
     let exportPanelContent: () -> AnyView
 
     var body: some View {
@@ -113,9 +119,12 @@ struct ScoreReaderChromeBar: View {
 
             Spacer(minLength: 4)
 
-            if showsConcertPitchControl || parts.count > 1 {
+            if interactionMode == .view || showsConcertPitchControl || parts.count > 1 {
                 floatingIsland(horizontalPadding: 6) {
                     HStack(spacing: 6) {
+                        if interactionMode == .view {
+                            readerSettingsIslandMenu(iconOnly: true)
+                        }
                         if showsConcertPitchControl {
                             concertPitchIslandButton(isCompactHeader: true, iconOnly: true)
                         }
@@ -128,7 +137,12 @@ struct ScoreReaderChromeBar: View {
             }
 
             floatingIsland(horizontalPadding: 5) {
-                exportIslandButton(fontSize: 18, minWidth: 40)
+                HStack(spacing: 4) {
+                    exportIslandButton(fontSize: 18, minWidth: 40)
+                    if supportsEditing {
+                        editModeIslandButton(iconOnly: true)
+                    }
+                }
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -166,9 +180,12 @@ struct ScoreReaderChromeBar: View {
             HStack(spacing: 12) {
                 Spacer(minLength: 0)
 
-                if showsConcertPitchControl || parts.count > 1 {
+                if interactionMode == .view || showsConcertPitchControl || parts.count > 1 {
                     floatingIsland {
                         HStack(spacing: isCompactHeader ? 8 : 10) {
+                            if interactionMode == .view {
+                                readerSettingsIslandMenu(iconOnly: isCompactHeader)
+                            }
                             if showsConcertPitchControl {
                                 concertPitchIslandButton(isCompactHeader: isCompactHeader)
                             }
@@ -181,7 +198,12 @@ struct ScoreReaderChromeBar: View {
                 }
 
                 floatingIsland(horizontalPadding: 5) {
-                    exportIslandButton(fontSize: 21, minWidth: 44)
+                    HStack(spacing: 4) {
+                        exportIslandButton(fontSize: 21, minWidth: 44)
+                        if supportsEditing {
+                            editModeIslandButton(iconOnly: isCompactHeader)
+                        }
+                    }
                 }
             }
         }
@@ -291,6 +313,8 @@ struct ScoreReaderChromeBar: View {
             .scoreReaderChromeTapTarget(minWidth: iconOnly ? 40 : 76)
         }
         .buttonStyle(.plain)
+        .disabled(isEditingBusy)
+        .opacity(isEditingBusy ? 0.45 : 1)
         .accessibilityLabel("Parts")
         .popover(isPresented: $isPartsPanelPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             partsPanelContent
@@ -299,16 +323,87 @@ struct ScoreReaderChromeBar: View {
 
     private func exportIslandButton(fontSize: CGFloat, minWidth: CGFloat) -> some View {
         Button(action: exportAction) {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: fontSize, weight: .medium))
-                .scoreReaderChromeTapTarget(minWidth: minWidth)
+            Group {
+                if isExportBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: fontSize, weight: .medium))
+                }
+            }
+            .scoreReaderChromeTapTarget(minWidth: minWidth)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Export Score")
+        .disabled(isExportBusy)
+        .accessibilityLabel(isExportBusy ? "Preparing Share" : "Share Score")
         .popover(isPresented: $isExportPanelPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             exportPanelContent()
                 .presentationCompactPopoverWhenAvailable()
         }
+    }
+
+    private func editModeIslandButton(iconOnly: Bool) -> some View {
+        Button(action: editDoneAction) {
+            Group {
+                if interactionMode == .leavingEdit {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if iconOnly {
+                    Image(systemName: interactionMode == .edit ? "checkmark" : "pencil")
+                        .font(.system(size: 17, weight: .semibold))
+                } else {
+                    HStack(spacing: 7) {
+                        Image(systemName: interactionMode == .edit ? "checkmark" : "pencil")
+                        Text(interactionMode == .edit ? "Done" : "Edit")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                }
+            }
+            .foregroundStyle(interactionMode == .edit ? Color.blue : Color.black.opacity(0.84))
+            .scoreReaderChromeTapTarget(minWidth: iconOnly ? 40 : 72)
+        }
+        .buttonStyle(.plain)
+        .disabled(!supportsEditing || isEditingBusy || interactionMode == .leavingEdit)
+        .opacity(supportsEditing ? 1 : 0.42)
+        .accessibilityLabel(interactionMode == .edit ? "Done editing" : "Edit score")
+    }
+
+    private func readerSettingsIslandMenu(iconOnly: Bool) -> some View {
+        Menu {
+            Section("Reading Style") {
+                ForEach(ScoreReaderReadingStyle.allCases, id: \.rawValue) { style in
+                    Button {
+                        readingStyle = style
+                    } label: {
+                        Label(style.title, systemImage: readingStyle == style ? "checkmark" : style.systemImage)
+                    }
+                }
+            }
+
+            Button {
+                playbackFollowEnabled.toggle()
+            } label: {
+                Label("Follow Score", systemImage: playbackFollowEnabled ? "checkmark" : "location")
+            }
+        } label: {
+            Group {
+                if iconOnly {
+                    Image(systemName: "rectangle.portrait.on.rectangle.portrait")
+                        .font(.system(size: 16, weight: .semibold))
+                } else {
+                    HStack(spacing: 7) {
+                        Image(systemName: "rectangle.portrait.on.rectangle.portrait")
+                        Text("View")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                }
+            }
+            .foregroundStyle(Color.black.opacity(0.80))
+            .scoreReaderChromeTapTarget(minWidth: iconOnly ? 40 : 70)
+        }
+        .disabled(isEditingBusy)
+        .accessibilityLabel("Reader Settings")
     }
 
     private var partsPanelContent: some View {
@@ -317,7 +412,8 @@ struct ScoreReaderChromeBar: View {
             selectedPartID: $selectedPartID,
             isPresented: $isPartsPanelPresented,
             selectPartAction: selectPartAction,
-            managePartsAction: managePartsAction
+            managePartsAction: managePartsAction,
+            allowsManagingParts: allowsManagingParts
         )
         .presentationCompactPopoverWhenAvailable()
     }
@@ -340,7 +436,7 @@ struct ScoreReaderChromeBar: View {
     }
 
     private func phoneFloatingIslandHeader(availableWidth: CGFloat, isPhoneLandscape: Bool, showsPlaybackTime: Bool) -> some View {
-        let hasTrailingExtras = showsConcertPitchControl || parts.count > 1
+        let hasTrailingExtras = interactionMode == .view || showsConcertPitchControl || parts.count > 1
         let showsCenteredPlaybackTime = showsPlaybackTime && (!hasTrailingExtras || availableWidth >= 620)
         let showsTitle = isPhoneLandscape && availableWidth >= 620
 
@@ -383,6 +479,9 @@ struct ScoreReaderChromeBar: View {
                 if hasTrailingExtras {
                     floatingIsland(horizontalPadding: 6) {
                         HStack(spacing: 6) {
+                            if interactionMode == .view {
+                                readerSettingsIslandMenu(iconOnly: true)
+                            }
                             if showsConcertPitchControl {
                                 concertPitchIslandButton(isCompactHeader: true, iconOnly: true)
                             }
@@ -396,7 +495,12 @@ struct ScoreReaderChromeBar: View {
                 }
 
                 floatingIsland(horizontalPadding: 5) {
-                    exportIslandButton(fontSize: 18, minWidth: 40)
+                    HStack(spacing: 4) {
+                        exportIslandButton(fontSize: 18, minWidth: 40)
+                        if supportsEditing {
+                            editModeIslandButton(iconOnly: true)
+                        }
+                    }
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }
@@ -553,6 +657,7 @@ struct ScoreReaderPartsPanel: View {
     @Binding var isPresented: Bool
     let selectPartAction: (Int?) -> Void
     let managePartsAction: () -> Void
+    let allowsManagingParts: Bool
 
     var body: some View {
         VStack(spacing: isPhone ? 8 : 12) {
@@ -614,7 +719,9 @@ struct ScoreReaderPartsPanel: View {
 
             if !isPhone {
                 VStack(spacing: 9) {
-                    partsActionButton(title: "Manage Parts", systemImage: "gearshape", action: managePartsAction)
+                    if allowsManagingParts {
+                        partsActionButton(title: "Manage Parts", systemImage: "gearshape", action: managePartsAction)
+                    }
                 }
                 .padding(.top, 4)
             }

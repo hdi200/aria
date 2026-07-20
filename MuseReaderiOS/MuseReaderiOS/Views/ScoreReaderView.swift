@@ -24,6 +24,7 @@ struct ScoreReaderView: View {
     @AppStorage("ScoreReaderFloatingPaletteDockedLeft") private var floatingPaletteDockedLeft = true
 
     let session: ScoreSession
+    private let initialRememberedState: ScoreReaderRememberedState
 
     @StateObject private var readerState: ScoreReaderState
     @State private var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
@@ -60,11 +61,37 @@ struct ScoreReaderView: View {
     @State private var measuredNoteEntryPanelHeight: CGFloat = 0
     @State private var measuredTopChromeHeight: CGFloat = 0
     @State private var didApplyInitialToolCategory = false
+    @State private var isChromeVisible = true
+    @State private var savedViewModeConfirmationIsVisible = false
+    @State private var readingStyle: ScoreReaderReadingStyle = .pageTurn
+    @State private var viewModeSaveErrorMessage: String?
 
-    init(session: ScoreSession, initialPageIndex: Int, initialToolCategory: ScoreReaderToolCategory = .select) {
+    init(
+        session: ScoreSession,
+        initialPageIndex: Int,
+        initialToolCategory: ScoreReaderToolCategory = .select,
+        initialInteractionMode: ScoreReaderInteractionMode = .view
+    ) {
         self.session = session
+        let rememberedState = initialInteractionMode == .view
+            ? ScoreReaderRememberedStateStore().state(for: session.id)
+            : ScoreReaderRememberedState()
+        self.initialRememberedState = rememberedState
+        _zoomScale = State(
+            initialValue: initialInteractionMode == .view
+                ? CGFloat(min(max(rememberedState.zoomScale, 0.8), 3.0))
+                : (UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0)
+        )
         _selectedToolCategory = State(initialValue: initialToolCategory)
-        _readerState = StateObject(wrappedValue: ScoreReaderState(session: session, initialPageIndex: initialPageIndex))
+        _selectedPartID = State(initialValue: rememberedState.selectedPartID)
+        _readingStyle = State(initialValue: rememberedState.readingStyle)
+        _readerState = StateObject(
+            wrappedValue: ScoreReaderState(
+                session: session,
+                initialPageIndex: initialInteractionMode == .view ? rememberedState.pageIndex : initialPageIndex,
+                initialInteractionMode: initialInteractionMode
+            )
+        )
     }
 
     var body: some View {
@@ -76,8 +103,9 @@ struct ScoreReaderView: View {
                     .padding(28)
             } else {
                 readerCanvas
+                    .animation(.easeInOut(duration: 0.22), value: readerState.interactionMode)
                     .overlay(alignment: .bottom) {
-                        if readerState.supportsEditing && !plainTextEditorIsActive {
+                        if readerState.isEditingMode && !plainTextEditorIsActive {
                             ScoreReaderNoteEntrySurface(
                                 editingState: readerState.editingState,
                                 pendingPitchClass: readerState.pendingPitchClass,
@@ -156,6 +184,7 @@ struct ScoreReaderView: View {
                                 octaveShiftAction: readerState.shiftPitchByOctaves
                             )
                             .padding(.bottom, 0)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                             .background(
                                 GeometryReader { proxy in
                                     Color.clear
@@ -168,7 +197,7 @@ struct ScoreReaderView: View {
                         }
                     }
                     .overlay(alignment: floatingPaletteAlignment) {
-                        if let floatingToolCategory, readerState.supportsEditing, !isPhoneInterface {
+                        if let floatingToolCategory, readerState.isEditingMode, !isPhoneInterface {
                             ScoreReaderFloatingToolPalette(
                                 selectedToolCategory: floatingToolCategory,
                                 isDockedLeft: floatingPaletteDockedLeft,
@@ -199,19 +228,24 @@ struct ScoreReaderView: View {
                         }
                     }
                     .overlay(alignment: .top) {
-                        ScoreReaderChromeBar(
+                        if isChromeVisible || readerState.interactionMode != .view {
+                            ScoreReaderChromeBar(
                             scoreTitle: session.document.primaryTitle,
                             parts: displayedScoreParts,
                             selectedPartID: $selectedPartID,
                             isPartsPanelPresented: $isPartsPanelPresented,
                             isExportPanelPresented: $isExportPanelPresented,
                             supportsEditing: readerState.supportsEditing,
+                            interactionMode: readerState.interactionMode,
+                            readingStyle: $readingStyle,
+                            playbackFollowEnabled: $readerState.playbackFollowEnabled,
                             supportsPlayback: session.capabilities.supportsPlayback,
                             editingState: readerState.editingState,
                             playbackState: readerState.playbackState,
                             metronomeEnabled: readerState.metronomeEnabled,
-                            isEditingBusy: readerState.isEditingActionInFlight || isClosingScore,
+                            isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isPreparingExport,
                             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
+                            isExportBusy: isPreparingExport,
                             playbackPreparationMessage: readerState.playbackPreparationMessage,
                             concertPitchEnabled: readerState.concertPitchEnabled,
                             showsConcertPitchControl: showsChromeConcertPitchControl,
@@ -226,9 +260,18 @@ struct ScoreReaderView: View {
                                 isPartsPanelPresented = false
                                 if !isExportPanelPresented {
                                     exportDraft.exportPartsInConcertPitch = readerState.concertPitchEnabled
+                                    if selectedPartID == "full-score" {
+                                        exportDraft.includesFullScore = true
+                                        exportDraft.includesParts = false
+                                    } else {
+                                        exportDraft.includesFullScore = false
+                                        exportDraft.includesParts = true
+                                        exportDraft.selectedPartIDs = [selectedPartID]
+                                    }
                                 }
                                 isExportPanelPresented.toggle()
                             },
+                            editDoneAction: toggleInteractionMode,
                             selectPartAction: { partIndex in
                                 readerState.selectScorePart(index: partIndex)
                             },
@@ -240,10 +283,12 @@ struct ScoreReaderView: View {
                                 }
                                 isAddInstrumentPresented = true
                             },
+                            allowsManagingParts: readerState.isEditingMode,
                             exportPanelContent: {
                                 AnyView(
                                     ScoreReaderExportPanel(
                                         scoreTitle: session.document.primaryTitle,
+                                        sharingDescription: sharingDescription,
                                         parts: displayedScoreParts,
                                         draft: $exportDraft,
                                         isPreparingExport: isPreparingExport,
@@ -262,11 +307,33 @@ struct ScoreReaderView: View {
                                     }
                             }
                         )
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
                     }
                     .overlay(alignment: .top) {
                         if let playbackPreparationMessage = readerState.playbackPreparationMessage {
                             ScoreReaderPlaybackPreparationHUD(message: playbackPreparationMessage)
                                 .padding(.top, 88)
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        if let viewModeSaveErrorMessage {
+                            HStack(spacing: 12) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.red)
+                                Text(viewModeSaveErrorMessage)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .lineLimit(2)
+                                Button("Retry Save", action: retryViewModeSave)
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                            .foregroundStyle(Color.black.opacity(0.84))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.14), radius: 14, y: 6)
+                            .padding(.top, 76)
+                            .padding(.horizontal, 16)
                         }
                     }
                     .overlay(alignment: .topTrailing) {
@@ -283,7 +350,7 @@ struct ScoreReaderView: View {
                         }
                     }
                     .overlay(alignment: .topLeading) {
-                        if let selectionCommandAnchor, readerState.supportsEditing {
+                        if let selectionCommandAnchor, readerState.isEditingMode {
                             ScoreReaderSelectionCommandOverlay(
                                 anchor: selectionCommandAnchor,
                                 copyAction: readerState.copySelectedMeasureRange,
@@ -313,17 +380,63 @@ struct ScoreReaderView: View {
                             ScoreReaderSavingHUD()
                         }
                     }
+                    .overlay(alignment: .bottom) {
+                        if readerState.interactionMode == .view, readingStyle == .pageTurn, readerState.pageCount > 1 {
+                            Text(readerState.currentPageLabel.replacingOccurrences(of: "Page ", with: ""))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.black.opacity(0.62))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(.bottom, 10)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if savedViewModeConfirmationIsVisible {
+                            Text("Saved · View mode")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.black.opacity(0.82))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(.bottom, 48)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if readerState.interactionMode == .view,
+                           readerState.playbackState.status == .playing,
+                           readerState.playbackFollowEnabled,
+                           readerState.playbackFollowIsSuspended
+                        {
+                            Button(action: readerState.resumePlaybackFollow) {
+                                Label("Resume Follow", systemImage: "location.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 38)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.blue)
+                            .background(.regularMaterial, in: Capsule())
+                            .shadow(color: Color.black.opacity(0.12), radius: 12, y: 5)
+                            .padding(.bottom, 48)
+                        }
+                    }
                     .allowsHitTesting(!isClosingScore)
             }
         }
         .task {
+            readerState.playbackFollowEnabled = initialRememberedState.playbackFollowEnabled
             readerState.loadInitialPages()
             readerState.loadConcertPitchState()
             readerState.startPlaybackMonitoring()
-            readerState.loadEditingState()
-            readerState.startMIDIInput()
+            await readerState.prepareInitialInteractionMode()
+            restoreRememberedPartIfNeeded()
         }
         .onDisappear {
+            saveRememberedReaderState()
             readerState.stopMIDIInput()
             readerState.shutdown()
         }
@@ -344,6 +457,38 @@ struct ScoreReaderView: View {
                 selectedToolCategory = .notes
             } else if selectedToolCategory == .repeats && selectionKind == nil {
                 selectedToolCategory = .select
+            }
+        }
+        .onChangeCompatible(of: readerState.interactionMode) { mode in
+            isChromeVisible = true
+            if mode != .edit {
+                selectedToolCategory = .select
+                clearSelectionCommandMenu()
+                zoomScaleBeforeTextEntry = nil
+            }
+        }
+        .onChangeCompatible(of: readerState.selectedPageIndex) { _ in
+            saveRememberedReaderState()
+        }
+        .onChangeCompatible(of: selectedPartID) { _ in
+            saveRememberedReaderState()
+        }
+        .onChangeCompatible(of: zoomScale) { _ in
+            saveRememberedReaderState()
+        }
+        .onChangeCompatible(of: readingStyle) { _ in
+            zoomScale = 1
+            saveRememberedReaderState()
+        }
+        .onChangeCompatible(of: readerState.playbackFollowEnabled) { enabled in
+            if enabled {
+                readerState.resumePlaybackFollow()
+            }
+            saveRememberedReaderState()
+        }
+        .onChangeCompatible(of: readerState.playbackState.status) { status in
+            if status != .playing {
+                isChromeVisible = true
             }
         }
         .onAppear {
@@ -566,6 +711,14 @@ struct ScoreReaderView: View {
         showsConcertPitchControl && !isPhoneInterface
     }
 
+    private var sharingDescription: String {
+        let scoreOrPart = selectedPartID == "full-score"
+            ? "Full Score"
+            : (displayedScoreParts.first(where: { $0.id == selectedPartID })?.name ?? "Current Part")
+        let pitch = readerState.concertPitchEnabled ? "Concert Pitch" : "Written Pitch"
+        return "\(scoreOrPart) · \(pitch)"
+    }
+
     private var isPhoneInterface: Bool {
         UIDevice.current.userInterfaceIdiom == .phone
     }
@@ -590,7 +743,34 @@ struct ScoreReaderView: View {
         isPhoneInterface ? 72 : 54
     }
 
+    @ViewBuilder
     private var readerCanvas: some View {
+        if readerState.interactionMode == .view, readingStyle == .pageTurn {
+            pageTurnReaderCanvas
+        } else {
+            continuousReaderCanvas
+        }
+    }
+
+    private var pageTurnReaderCanvas: some View {
+        GeometryReader { geometry in
+            scorePageCanvas(
+                pageIndex: readerState.selectedPageIndex,
+                geometry: geometry,
+                isPageTurn: true
+            )
+            .id(readerState.selectedPageIndex)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .padding(12)
+            .transition(.opacity)
+            .animation(.easeInOut(duration: 0.16), value: readerState.selectedPageIndex)
+            .task(id: readerState.selectedPageIndex) {
+                readerState.prefetchPage(readerState.selectedPageIndex)
+            }
+        }
+    }
+
+    private var continuousReaderCanvas: some View {
         GeometryReader { geometry in
             let isCompactPhoneLayout = isPhoneInterface
             let isPhoneLandscapeLayout = isCompactPhoneLayout && geometry.size.width > geometry.size.height
@@ -598,106 +778,23 @@ struct ScoreReaderView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 28) {
                         ForEach(readerState.pageIndices, id: \.self) { pageIndex in
-                            ScoreReaderPageCanvas(
-                                pageIndex: pageIndex,
-                                page: readerState.page(at: pageIndex),
-                                isLoading: readerState.isLoadingPage(pageIndex),
-                                errorText: readerState.pageErrorMessage(for: pageIndex),
-                                playbackHighlight: readerState.playbackMeasureHighlight(for: pageIndex),
-                                selectedElement: readerState.selectedElement(for: pageIndex),
-                                noteEntryPreview: readerState.noteEntryPreview(for: pageIndex),
-                                zoomScale: $zoomScale,
-                                availableWidth: geometry.size.width - (isCompactPhoneLayout ? 0 : 48),
-                                viewportSize: geometry.size,
-                                isCompactPhoneLayout: isCompactPhoneLayout,
-                                floatingPaletteDockedLeft: floatingPaletteDockedLeft,
-                                activeNotationTopInset: activeNotationTopInset(isCompactPhoneLayout: isCompactPhoneLayout),
-                                activeNotationBottomInset: activeNotationBottomInset(isCompactPhoneLayout: isCompactPhoneLayout, isPhoneLandscapeLayout: isPhoneLandscapeLayout),
-                                allowsPencilInsertionFineTune: readerState.editingState.noteInputEnabled,
-                                noteEntryPreviewPitchClass: readerState.pendingPitchClass,
-                                noteEntryPreviewIsRest: readerState.editingState.noteInputInsertsRests,
-                                noteEntryPreviewDuration: readerState.editingState.duration,
-                                showsLayoutMarkers: selectedToolCategory == .layout,
-                                activeNotationAutoScrollRevision: readerState.activeNotationAutoScrollRevision,
-                                editSelectedTextAction: presentTextEditor,
-                                editTempoAction: { isTempoEditorPresented = true },
-                                editTimeSignatureAction: { isTimeSignaturePresented = true },
-                                editKeySignatureAction: { isKeySignaturePresented = true },
-                                deleteSelectionAction: readerState.deleteSelection,
-                                clearSelectedMeasureAction: readerState.clearSelectedMeasure,
-                                removeSelectedMeasureAction: readerState.removeSelectedMeasure,
-                                addMeasureAction: readerState.addMeasure,
-                                addMultipleMeasuresAction: { isAddMeasuresPresented = true },
-                                copySelectedMeasureRangeAction: readerState.copySelectedMeasureRange,
-                                cutSelectedMeasureRangeAction: readerState.cutSelectedMeasureRange,
-                                pasteMeasureRangeAction: readerState.pasteMeasureRange,
-                                transposeSelectedMeasureRangeAction: readerState.transposeSelectedMeasureRange,
-                                changeSelectedEnharmonicSpellingAction: readerState.changeSelectedEnharmonicSpelling,
-                                addExpressionAction: readerState.addExpression,
-                                tapAction: { normalizedPoint, inputKind in
-                                    clearSelectionCommandMenu()
-                                    readerState.handlePageTap(
-                                        pageIndex: pageIndex,
-                                        normalizedPoint: normalizedPoint,
-                                        inputKind: inputKind
-                                    )
-                                },
-                                selectedNoteDragAction: { dropPoint in
-                                    readerState.dragSelectedNote(pageIndex: pageIndex, normalizedPoint: dropPoint)
-                                },
-                                expressionEndpointDragAction: { startEndpoint, dropPoint in
-                                    readerState.retargetSelectedExpressionEndpoint(
-                                        start: startEndpoint,
-                                        pageIndex: pageIndex,
-                                        normalizedPoint: dropPoint
-                                    )
-                                },
-                                selectedChordTextDragAction: { dropPoint in
-                                    readerState.dragSelectedChordText(pageIndex: pageIndex, normalizedPoint: dropPoint)
-                                },
-                                measureRangePreviewAction: { startPoint, endPoint in
-                                    readerState.previewMeasureRange(
-                                        pageIndex: pageIndex,
-                                        startNormalizedPoint: startPoint,
-                                        endNormalizedPoint: endPoint
-                                    )
-                                },
-                                measureRangePreviewEndAction: {
-                                    readerState.clearMeasureRangePreview()
-                                },
-                                measureRangeDragAction: { startPoint, endPoint in
-                                    readerState.selectMeasureRange(
-                                        pageIndex: pageIndex,
-                                        startNormalizedPoint: startPoint,
-                                        endNormalizedPoint: endPoint
-                                    )
-                                },
-                                pencilInsertionFineTuneAction: { startPoint, dropPoint in
-                                    readerState.handlePencilNoteEntryFineTune(
-                                        pageIndex: pageIndex,
-                                        startNormalizedPoint: startPoint,
-                                        dropNormalizedPoint: dropPoint
-                                    )
-                                },
-                                pencilHoverPreviewAction: { normalizedPoint in
-                                    readerState.updateNoteEntryPreview(
-                                        pageIndex: pageIndex,
-                                        normalizedPoint: normalizedPoint
-                                    )
-                                },
-                                pencilInteractionStartAction: activatePencilNoteEntryMode,
-                                pencilDoubleTapAction: toggleNoteInputFromPencilDoubleTap
-                            )
+                            scorePageCanvas(pageIndex: pageIndex, geometry: geometry, isPageTurn: false)
                             .id(pageIndex)
                             .onAppear {
                                 readerState.prefetchPage(pageIndex)
                             }
                         }
                     }
-                    .padding(.top, readerState.supportsEditing ? (isCompactPhoneLayout ? 82 : 104) : 92)
+                    .padding(.top, readerState.isEditingMode ? (isCompactPhoneLayout ? 82 : 104) : 24)
                     .padding(.bottom, scrollContentBottomInset(isCompactPhoneLayout: isCompactPhoneLayout, isPhoneLandscapeLayout: isPhoneLandscapeLayout))
                     .padding(.horizontal, isCompactPhoneLayout ? 0 : 24)
                 }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8)
+                        .onChanged { _ in
+                            readerState.suspendPlaybackFollow()
+                        }
+                )
                 .coordinateSpace(name: ScoreReaderSelectionCommandAnchor.coordinateSpaceName)
                 .onPreferenceChange(ScoreReaderSelectionCommandAnchorPreferenceKey.self) { anchor in
                     if anchor?.identity != dismissedSelectionCommandIdentity {
@@ -720,7 +817,9 @@ struct ScoreReaderView: View {
                         return
                     }
 
-                    guard readerState.playbackState.status == .playing || readerState.isRepairingCorruption else {
+                    guard (readerState.playbackState.status == .playing && readerState.shouldFollowPlayback)
+                        || readerState.isRepairingCorruption
+                    else {
                         return
                     }
 
@@ -738,6 +837,7 @@ struct ScoreReaderView: View {
                     guard
                         target != nil,
                         readerState.playbackState.status == .playing,
+                        readerState.shouldFollowPlayback,
                         zoomScale <= 1.01
                     else {
                         return
@@ -756,6 +856,94 @@ struct ScoreReaderView: View {
                 }
             }
         }
+    }
+
+    private func scorePageCanvas(pageIndex: Int, geometry: GeometryProxy, isPageTurn: Bool) -> some View {
+        let isCompactPhoneLayout = isPhoneInterface
+        let isPhoneLandscapeLayout = isCompactPhoneLayout && geometry.size.width > geometry.size.height
+        let editingEnabled = readerState.isEditingMode
+        let pageTurnViewport = CGSize(
+            width: max(geometry.size.width - 24, 1),
+            height: max(geometry.size.height - 24, 1)
+        )
+
+        return ScoreReaderPageCanvas(
+            pageIndex: pageIndex,
+            page: readerState.page(at: pageIndex),
+            isLoading: readerState.isLoadingPage(pageIndex),
+            errorText: readerState.pageErrorMessage(for: pageIndex),
+            playbackHighlight: readerState.playbackMeasureHighlight(for: pageIndex),
+            selectedElement: editingEnabled ? readerState.selectedElement(for: pageIndex) : nil,
+            noteEntryPreview: editingEnabled ? readerState.noteEntryPreview(for: pageIndex) : nil,
+            zoomScale: $zoomScale,
+            availableWidth: isPageTurn ? pageTurnViewport.width : geometry.size.width - (isCompactPhoneLayout ? 0 : 48),
+            viewportSize: isPageTurn ? pageTurnViewport : geometry.size,
+            isCompactPhoneLayout: isCompactPhoneLayout,
+            floatingPaletteDockedLeft: floatingPaletteDockedLeft,
+            activeNotationTopInset: editingEnabled ? activeNotationTopInset(isCompactPhoneLayout: isCompactPhoneLayout) : 0,
+            activeNotationBottomInset: editingEnabled ? activeNotationBottomInset(isCompactPhoneLayout: isCompactPhoneLayout, isPhoneLandscapeLayout: isPhoneLandscapeLayout) : 0,
+            allowsPencilInsertionFineTune: editingEnabled && readerState.editingState.noteInputEnabled,
+            noteEntryPreviewPitchClass: editingEnabled ? readerState.pendingPitchClass : nil,
+            noteEntryPreviewIsRest: editingEnabled && readerState.editingState.noteInputInsertsRests,
+            noteEntryPreviewDuration: readerState.editingState.duration,
+            showsLayoutMarkers: editingEnabled && selectedToolCategory == .layout,
+            activeNotationAutoScrollRevision: readerState.activeNotationAutoScrollRevision,
+            fitsPageToViewport: isPageTurn,
+            allowsEditingInteractions: editingEnabled,
+            allowsPlaybackFollow: readerState.shouldFollowPlayback,
+            editSelectedTextAction: presentTextEditor,
+            editTempoAction: { isTempoEditorPresented = true },
+            editTimeSignatureAction: { isTimeSignaturePresented = true },
+            editKeySignatureAction: { isKeySignaturePresented = true },
+            deleteSelectionAction: readerState.deleteSelection,
+            clearSelectedMeasureAction: readerState.clearSelectedMeasure,
+            removeSelectedMeasureAction: readerState.removeSelectedMeasure,
+            addMeasureAction: readerState.addMeasure,
+            addMultipleMeasuresAction: { isAddMeasuresPresented = true },
+            copySelectedMeasureRangeAction: readerState.copySelectedMeasureRange,
+            cutSelectedMeasureRangeAction: readerState.cutSelectedMeasureRange,
+            pasteMeasureRangeAction: readerState.pasteMeasureRange,
+            transposeSelectedMeasureRangeAction: readerState.transposeSelectedMeasureRange,
+            changeSelectedEnharmonicSpellingAction: readerState.changeSelectedEnharmonicSpelling,
+            addExpressionAction: readerState.addExpression,
+            tapAction: { normalizedPoint, inputKind in
+                if editingEnabled {
+                    clearSelectionCommandMenu()
+                    readerState.handlePageTap(pageIndex: pageIndex, normalizedPoint: normalizedPoint, inputKind: inputKind)
+                } else if isPageTurn {
+                    handleViewModePageTap(normalizedPoint)
+                } else {
+                    toggleViewChrome()
+                }
+            },
+            selectedNoteDragAction: { dropPoint in
+                readerState.dragSelectedNote(pageIndex: pageIndex, normalizedPoint: dropPoint)
+            },
+            expressionEndpointDragAction: { startEndpoint, dropPoint in
+                readerState.retargetSelectedExpressionEndpoint(start: startEndpoint, pageIndex: pageIndex, normalizedPoint: dropPoint)
+            },
+            selectedChordTextDragAction: { dropPoint in
+                readerState.dragSelectedChordText(pageIndex: pageIndex, normalizedPoint: dropPoint)
+            },
+            measureRangePreviewAction: { startPoint, endPoint in
+                readerState.previewMeasureRange(pageIndex: pageIndex, startNormalizedPoint: startPoint, endNormalizedPoint: endPoint)
+            },
+            measureRangePreviewEndAction: readerState.clearMeasureRangePreview,
+            measureRangeDragAction: { startPoint, endPoint in
+                readerState.selectMeasureRange(pageIndex: pageIndex, startNormalizedPoint: startPoint, endNormalizedPoint: endPoint)
+            },
+            pencilInsertionFineTuneAction: { startPoint, dropPoint in
+                readerState.handlePencilNoteEntryFineTune(pageIndex: pageIndex, startNormalizedPoint: startPoint, dropNormalizedPoint: dropPoint)
+            },
+            pencilHoverPreviewAction: { normalizedPoint in
+                readerState.updateNoteEntryPreview(pageIndex: pageIndex, normalizedPoint: normalizedPoint)
+            },
+            pencilInteractionStartAction: activatePencilNoteEntryMode,
+            pencilDoubleTapAction: toggleNoteInputFromPencilDoubleTap,
+            swipePreviousPageAction: showPreviousPage,
+            swipeNextPageAction: showNextPage,
+            manualScrollAction: readerState.suspendPlaybackFollow
+        )
     }
 
     private func revealActiveNotation(using proxy: ScrollViewProxy) {
@@ -838,6 +1026,13 @@ struct ScoreReaderView: View {
             return
         }
 
+        guard readerState.isEditingMode else {
+            if case .togglePlayback = shortcut {
+                readerState.togglePlayback()
+            }
+            return
+        }
+
         switch shortcut {
         case .undo:
             readerState.undoEdit()
@@ -889,7 +1084,7 @@ struct ScoreReaderView: View {
     /// viewport. Active for chord/lyric entry and for continuous note input,
     /// where the bottom note-entry keyboard can otherwise hide the active bar.
     private var activeNotationFocusIsActive: Bool {
-        guard readerState.supportsEditing else {
+        guard readerState.isEditingMode else {
             return false
         }
 
@@ -897,7 +1092,7 @@ struct ScoreReaderView: View {
     }
 
     private func scrollContentBottomInset(isCompactPhoneLayout: Bool, isPhoneLandscapeLayout: Bool) -> CGFloat {
-        guard readerState.supportsEditing else {
+        guard readerState.isEditingMode else {
             return 40
         }
 
@@ -991,16 +1186,179 @@ struct ScoreReaderView: View {
             return
         }
 
+        saveRememberedReaderState()
         isClosingScore = true
         Task { @MainActor in
-            selectedPartID = "full-score"
             await readerState.resetToFullScoreBeforeClosing()
             let canClose = await readerState.saveBeforeClosing()
-            isClosingScore = false
             if canClose {
                 dismiss()
+            } else {
+                isClosingScore = false
             }
         }
+    }
+
+    private func restoreRememberedPartIfNeeded() {
+        guard
+            readerState.interactionMode == .view,
+            initialRememberedState.selectedPartID != "full-score",
+            let part = displayedScoreParts.first(where: { $0.id == initialRememberedState.selectedPartID })
+        else {
+            if initialRememberedState.selectedPartID != "full-score" {
+                selectedPartID = "full-score"
+            }
+            return
+        }
+
+        selectedPartID = part.id
+        readerState.selectScorePart(index: part.index)
+    }
+
+    private func saveRememberedReaderState() {
+        guard !isClosingScore, readerState.interactionMode != .leavingEdit else {
+            return
+        }
+
+        ScoreReaderRememberedStateStore().save(
+            ScoreReaderRememberedState(
+                pageIndex: readerState.selectedPageIndex,
+                selectedPartID: selectedPartID,
+                zoomScale: Double(min(max(zoomScale, 0.8), 3.0)),
+                readingStyle: readingStyle,
+                playbackFollowEnabled: readerState.playbackFollowEnabled
+            ),
+            for: session.id
+        )
+    }
+
+    private func toggleInteractionMode() {
+        switch readerState.interactionMode {
+        case .view:
+            viewModeSaveErrorMessage = nil
+            isChromeVisible = true
+            selectedToolCategory = .select
+            pencilAutoNoteEntryAllowed = false
+            readerState.enterEditMode()
+        case .edit:
+            finishEditingAndEnterViewMode()
+        case .leavingEdit:
+            break
+        }
+    }
+
+    private func finishEditingAndEnterViewMode() {
+        guard !readerState.isEditingActionInFlight else {
+            return
+        }
+
+        dismissEditingPresentations()
+        Task { @MainActor in
+            let succeeded = await readerState.finishEditingAndEnterViewMode()
+            if succeeded {
+                viewModeSaveErrorMessage = nil
+                showSavedViewModeConfirmation()
+            } else {
+                viewModeSaveErrorMessage = readerState.editingErrorMessage
+                    ?? "Changes could not be saved. The score remains protected in View mode."
+                readerState.editingErrorMessage = nil
+            }
+        }
+    }
+
+    private func dismissEditingPresentations() {
+        textEditorDraft = nil
+        isTempoEditorPresented = false
+        isTimeSignaturePresented = false
+        isKeySignaturePresented = false
+        isScoreSetupPresented = false
+        isPageSettingsPresented = false
+        isInstrumentLayoutPresented = false
+        transposeSheetContext = nil
+        isAddMeasuresPresented = false
+        isAutoBreaksPresented = false
+        isAddInstrumentPresented = false
+        isClefPickerPresented = false
+        readerState.pickupEditorContext = nil
+        clearSelectionCommandMenu()
+        exitTextEntryFocusIfNeeded()
+        selectedToolCategory = .select
+    }
+
+    private func retryViewModeSave() {
+        Task { @MainActor in
+            if await readerState.savePendingChanges() {
+                viewModeSaveErrorMessage = nil
+                readerState.editingErrorMessage = nil
+                showSavedViewModeConfirmation()
+            } else {
+                viewModeSaveErrorMessage = readerState.editingErrorMessage ?? "Changes could not be saved."
+                readerState.editingErrorMessage = nil
+            }
+        }
+    }
+
+    private func showSavedViewModeConfirmation() {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            savedViewModeConfirmationIsVisible = true
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.6))
+            withAnimation(.easeInOut(duration: 0.18)) {
+                savedViewModeConfirmationIsVisible = false
+            }
+        }
+    }
+
+    private func handleViewModePageTap(_ normalizedPoint: CGPoint) {
+        if normalizedPoint.x <= 0.20 {
+            showPreviousPage()
+        } else if normalizedPoint.x >= 0.80 {
+            showNextPage()
+        } else {
+            toggleViewChrome()
+        }
+    }
+
+    private func toggleViewChrome() {
+        guard readerState.interactionMode == .view else {
+            return
+        }
+        guard !isPartsPanelPresented,
+              !isExportPanelPresented,
+              sharedExportItems == nil,
+              !isPreparingExport,
+              readerState.playbackPreparationMessage == nil,
+              readerState.playbackErrorMessage == nil,
+              readerState.editingErrorMessage == nil,
+              exportErrorMessage == nil,
+              viewModeSaveErrorMessage == nil
+        else {
+            isChromeVisible = true
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isChromeVisible.toggle()
+        }
+    }
+
+    private func showPreviousPage() {
+        guard readerState.interactionMode == .view, readerState.selectedPageIndex > 0 else {
+            return
+        }
+        zoomScale = 1
+        readerState.updateSelection(to: readerState.selectedPageIndex - 1)
+    }
+
+    private func showNextPage() {
+        guard readerState.interactionMode == .view,
+              readerState.selectedPageIndex + 1 < readerState.pageCount
+        else {
+            return
+        }
+        zoomScale = 1
+        readerState.updateSelection(to: readerState.selectedPageIndex + 1)
     }
 
     private func exportScore() {
@@ -1013,6 +1371,20 @@ struct ScoreReaderView: View {
 
         Task {
             do {
+                guard await readerState.savePendingChanges(
+                    busyMessage: "Finish the current edit before sharing the score.",
+                    unavailableMessage: "Aria could not save the latest score before sharing.",
+                    waitsForInFlightAction: true
+                ) else {
+                    throw NSError(
+                        domain: "ScoreReaderExport",
+                        code: 2,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: readerState.editingErrorMessage
+                                ?? "Aria could not save the latest score before sharing."
+                        ]
+                    )
+                }
                 let urls = try await prepareExportURLs()
                 await MainActor.run {
                     sharedExportItems = ScoreReaderSharedExportItems(urls: urls)
@@ -1022,6 +1394,7 @@ struct ScoreReaderView: View {
             } catch {
                 await MainActor.run {
                     exportErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    readerState.editingErrorMessage = nil
                     isPreparingExport = false
                 }
             }
@@ -1488,7 +1861,7 @@ struct ScoreReaderView: View {
     }
 
     private func activatePencilNoteEntryMode() {
-        guard readerState.supportsEditing, pencilAutoNoteEntryAllowed else {
+        guard readerState.isEditingMode, pencilAutoNoteEntryAllowed else {
             return
         }
         selectedToolCategory = .notes
@@ -1562,7 +1935,7 @@ struct ScoreReaderView: View {
         }
 
         didApplyInitialToolCategory = true
-        if selectedToolCategory == .notes {
+        if readerState.isEditingMode, selectedToolCategory == .notes {
             noteInputModeFromToolbar()
         }
     }

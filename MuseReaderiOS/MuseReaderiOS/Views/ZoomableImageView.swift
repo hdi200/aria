@@ -50,6 +50,8 @@ struct ZoomableImageView: UIViewRepresentable {
     var activeNotationTopInset: CGFloat = 0
     var activeNotationBottomInset: CGFloat = 0
     var activeNotationViewportHeight: CGFloat = 0
+    var allowsEditingInteractions = true
+    var allowsPlaybackFollow = true
     var allowsPencilInsertionFineTune = false
     var noteEntryPreviewPitchClass: Int? = nil
     var noteEntryPreviewIsRest = false
@@ -66,6 +68,9 @@ struct ZoomableImageView: UIViewRepresentable {
     var onPencilHoverPreview: ((CGPoint?) -> Void)? = nil
     var onPencilInteractionStart: (() -> Void)? = nil
     var onPencilDoubleTap: (() -> Void)? = nil
+    var onSwipePreviousPage: (() -> Void)? = nil
+    var onSwipeNextPage: (() -> Void)? = nil
+    var onManualScroll: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -81,7 +86,10 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilInsertionFineTune: onPencilInsertionFineTune,
             onPencilHoverPreview: onPencilHoverPreview,
             onPencilInteractionStart: onPencilInteractionStart,
-            onPencilDoubleTap: onPencilDoubleTap
+            onPencilDoubleTap: onPencilDoubleTap,
+            onSwipePreviousPage: onSwipePreviousPage,
+            onSwipeNextPage: onSwipeNextPage,
+            onManualScroll: onManualScroll
         )
     }
 
@@ -138,6 +146,22 @@ struct ZoomableImageView: UIViewRepresentable {
         tapGestureRecognizer.onPencilInteractionStart = context.coordinator.onPencilInteractionStart
         overlayView.addGestureRecognizer(tapGestureRecognizer)
 
+        let doubleTapGestureRecognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleReadingDoubleTap(_:)))
+        doubleTapGestureRecognizer.numberOfTapsRequired = 2
+        doubleTapGestureRecognizer.isEnabled = !allowsEditingInteractions
+        overlayView.addGestureRecognizer(doubleTapGestureRecognizer)
+        tapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
+
+        let swipeLeftGestureRecognizer = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleReadingSwipe(_:)))
+        swipeLeftGestureRecognizer.direction = .left
+        swipeLeftGestureRecognizer.isEnabled = !allowsEditingInteractions
+        overlayView.addGestureRecognizer(swipeLeftGestureRecognizer)
+
+        let swipeRightGestureRecognizer = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleReadingSwipe(_:)))
+        swipeRightGestureRecognizer.direction = .right
+        swipeRightGestureRecognizer.isEnabled = !allowsEditingInteractions
+        overlayView.addGestureRecognizer(swipeRightGestureRecognizer)
+
         let noteDragGestureRecognizer = ScorePageLongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleSelectedNoteDrag(_:)))
         noteDragGestureRecognizer.minimumPressDuration = 0.12
         noteDragGestureRecognizer.allowableMovement = 240
@@ -158,6 +182,12 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.overlayView = overlayView
         context.coordinator.tapGestureRecognizer = tapGestureRecognizer
         context.coordinator.noteDragGestureRecognizer = noteDragGestureRecognizer
+        context.coordinator.pencilHoverGestureRecognizer = pencilHoverGestureRecognizer
+        context.coordinator.pencilInteraction = pencilInteraction
+        context.coordinator.doubleTapGestureRecognizer = doubleTapGestureRecognizer
+        context.coordinator.swipeLeftGestureRecognizer = swipeLeftGestureRecognizer
+        context.coordinator.swipeRightGestureRecognizer = swipeRightGestureRecognizer
+        context.coordinator.zoomScrollView = scrollView
 
         return scrollView
     }
@@ -177,6 +207,16 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.noteDragGestureRecognizer?.onPencilInteractionStart = onPencilInteractionStart
         context.coordinator.allowsPencilInsertionFineTune = allowsPencilInsertionFineTune
         context.coordinator.onPencilDoubleTap = onPencilDoubleTap
+        context.coordinator.onSwipePreviousPage = onSwipePreviousPage
+        context.coordinator.onSwipeNextPage = onSwipeNextPage
+        context.coordinator.onManualScroll = onManualScroll
+        context.coordinator.allowsPlaybackFollow = allowsPlaybackFollow
+        context.coordinator.noteDragGestureRecognizer?.isEnabled = allowsEditingInteractions
+        context.coordinator.pencilHoverGestureRecognizer?.isEnabled = allowsEditingInteractions
+        context.coordinator.pencilInteraction?.isEnabled = allowsEditingInteractions
+        context.coordinator.doubleTapGestureRecognizer?.isEnabled = !allowsEditingInteractions
+        context.coordinator.swipeLeftGestureRecognizer?.isEnabled = !allowsEditingInteractions
+        context.coordinator.swipeRightGestureRecognizer?.isEnabled = !allowsEditingInteractions
         context.coordinator.activeNotationAutoScrollRevision = activeNotationAutoScrollRevision
         context.coordinator.activeNotationTopInset = activeNotationTopInset
         context.coordinator.activeNotationBottomInset = activeNotationBottomInset
@@ -196,6 +236,9 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.overlayView?.noteEntryPreviewDuration = noteEntryPreviewDuration
         context.coordinator.overlayView?.showsLayoutMarkers = showsLayoutMarkers
         let clampedZoomScale = min(max(zoomScale, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
+        let allowsReadingSwipe = !allowsEditingInteractions && clampedZoomScale <= 1.01
+        context.coordinator.swipeLeftGestureRecognizer?.isEnabled = allowsReadingSwipe
+        context.coordinator.swipeRightGestureRecognizer?.isEnabled = allowsReadingSwipe
         let allowsInnerPanning = clampedZoomScale > 1.01
         let usesActiveNotationFocus = context.coordinator.usesActiveNotationFocus
 
@@ -228,6 +271,10 @@ struct ZoomableImageView: UIViewRepresentable {
         var onPencilHoverPreview: ((CGPoint?) -> Void)?
         var onPencilInteractionStart: (() -> Void)?
         var onPencilDoubleTap: (() -> Void)?
+        var onSwipePreviousPage: (() -> Void)?
+        var onSwipeNextPage: (() -> Void)?
+        var onManualScroll: (() -> Void)?
+        var allowsPlaybackFollow = true
         var allowsPencilInsertionFineTune = false
         var activeNotationAutoScrollRevision = 0
         var activeNotationTopInset: CGFloat = 0
@@ -247,6 +294,12 @@ struct ZoomableImageView: UIViewRepresentable {
         weak var overlayView: ScorePageOverlayView?
         weak var tapGestureRecognizer: ScorePageTapGestureRecognizer?
         weak var noteDragGestureRecognizer: ScorePageLongPressGestureRecognizer?
+        weak var pencilHoverGestureRecognizer: UIHoverGestureRecognizer?
+        weak var pencilInteraction: UIPencilInteraction?
+        weak var doubleTapGestureRecognizer: UITapGestureRecognizer?
+        weak var swipeLeftGestureRecognizer: UISwipeGestureRecognizer?
+        weak var swipeRightGestureRecognizer: UISwipeGestureRecognizer?
+        weak var zoomScrollView: UIScrollView?
         var isUserZooming = false
         private var selectedNoteDragStartPoint: CGPoint?
         private var selectedChordTextDragStartPoint: CGPoint?
@@ -270,7 +323,10 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilInsertionFineTune: ((CGPoint, CGPoint) -> Void)? = nil,
             onPencilHoverPreview: ((CGPoint?) -> Void)? = nil,
             onPencilInteractionStart: (() -> Void)? = nil,
-            onPencilDoubleTap: (() -> Void)? = nil
+            onPencilDoubleTap: (() -> Void)? = nil,
+            onSwipePreviousPage: (() -> Void)? = nil,
+            onSwipeNextPage: (() -> Void)? = nil,
+            onManualScroll: (() -> Void)? = nil
         ) {
             self.zoomScale = zoomScale
             self.zoomViewport = zoomViewport
@@ -285,6 +341,9 @@ struct ZoomableImageView: UIViewRepresentable {
             self.onPencilHoverPreview = onPencilHoverPreview
             self.onPencilInteractionStart = onPencilInteractionStart
             self.onPencilDoubleTap = onPencilDoubleTap
+            self.onSwipePreviousPage = onSwipePreviousPage
+            self.onSwipeNextPage = onSwipeNextPage
+            self.onManualScroll = onManualScroll
         }
 
         func viewForZooming(in scrollView: UIScrollView) -> UIView? {
@@ -316,6 +375,10 @@ struct ZoomableImageView: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             publishViewport(from: scrollView)
+        }
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            onManualScroll?()
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
@@ -482,6 +545,7 @@ struct ZoomableImageView: UIViewRepresentable {
         func scrollPlaybackIntoViewIfNeeded(in scrollView: UIScrollView) {
             guard
                 scrollView.zoomScale > 1.01,
+                allowsPlaybackFollow,
                 !isUserZooming,
                 !scrollView.isTracking,
                 !scrollView.isDragging,
@@ -563,6 +627,41 @@ struct ZoomableImageView: UIViewRepresentable {
             }
 
             onTap?(normalizedPoint, gestureRecognizer.inputKind)
+        }
+
+        @objc
+        func handleReadingDoubleTap(_ gestureRecognizer: UITapGestureRecognizer) {
+            guard let scrollView = zoomScrollView, let zoomView else {
+                return
+            }
+            if scrollView.zoomScale > 1.01 {
+                scrollView.setZoomScale(1, animated: true)
+                zoomScale.wrappedValue = 1
+                return
+            }
+
+            let targetScale = min(max(2, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
+            let point = gestureRecognizer.location(in: zoomView)
+            let zoomRect = CGRect(
+                x: point.x - scrollView.bounds.width / targetScale / 2,
+                y: point.y - scrollView.bounds.height / targetScale / 2,
+                width: scrollView.bounds.width / targetScale,
+                height: scrollView.bounds.height / targetScale
+            )
+            scrollView.zoom(to: zoomRect, animated: true)
+            zoomScale.wrappedValue = targetScale
+        }
+
+        @objc
+        func handleReadingSwipe(_ gestureRecognizer: UISwipeGestureRecognizer) {
+            guard let scrollView = zoomScrollView, scrollView.zoomScale <= 1.01 else {
+                return
+            }
+            if gestureRecognizer.direction == .left {
+                onSwipeNextPage?()
+            } else if gestureRecognizer.direction == .right {
+                onSwipePreviousPage?()
+            }
         }
 
         @objc

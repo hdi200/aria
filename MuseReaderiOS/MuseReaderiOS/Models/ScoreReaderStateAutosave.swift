@@ -88,12 +88,30 @@ extension ScoreReaderState {
     }
 
     func saveBeforeClosing() async -> Bool {
+        await savePendingChanges(
+            busyMessage: "Finish the current edit before closing the score.",
+            unavailableMessage: "MuseReader could not save this score before closing."
+        )
+    }
+
+    func savePendingChanges(
+        busyMessage: String = "Finish the current edit before saving the score.",
+        unavailableMessage: String = "MuseReader could not save this score.",
+        waitsForInFlightAction: Bool = false
+    ) async -> Bool {
         guard supportsEditing else {
             return true
         }
 
+        if waitsForInFlightAction {
+            let deadline = Date().addingTimeInterval(5)
+            while isEditingActionInFlight, Date() < deadline {
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+        }
+
         guard !isEditingActionInFlight else {
-            editingErrorMessage = "Finish the current edit before closing the score."
+            editingErrorMessage = busyMessage
             return false
         }
 
@@ -105,7 +123,7 @@ extension ScoreReaderState {
         }
 
         guard let liveRenderSession = session.liveRenderSession else {
-            editingErrorMessage = "MuseReader could not save this score before closing."
+            editingErrorMessage = unavailableMessage
             return false
         }
 

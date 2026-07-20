@@ -152,6 +152,7 @@ enum ScoreReaderExportTarget {
 
 struct ScoreReaderExportPanel: View {
     let scoreTitle: String
+    let sharingDescription: String
     let parts: [ScorePart]
     @Binding var draft: ScoreReaderExportDraft
     let isPreparingExport: Bool
@@ -169,6 +170,9 @@ struct ScoreReaderExportPanel: View {
                             .font(.subheadline)
                             .foregroundStyle(Color.black.opacity(0.52))
                     }
+                    Text("Sharing: \(sharingDescription)")
+                        .font(.system(size: isPhone ? 12 : 13, weight: .semibold))
+                        .foregroundStyle(Color.blue.opacity(0.86))
                 }
 
                 VStack(alignment: .leading, spacing: isPhone ? 5 : 8) {

@@ -167,7 +167,7 @@ struct MuseReaderiOSTests {
         #expect(document.title == "Compressed MusicXML")
         #expect(document.rootFilePath == "scores/root.musicxml")
         #expect(document.packageEntries.contains("META-INF/container.xml"))
-        #expect(document.partsCount == 2)
+        #expect(document.partCount == 2)
     }
 
     @Test
@@ -201,7 +201,7 @@ struct MuseReaderiOSTests {
         let inspection = try service.inspectPackage(at: url)
 
         #expect(inspection.embeddedPreviews.first?.path == "thumbnail.png")
-        #expect(inspection.payload.thumbnailData == thumbnailData)
+        #expect(inspection.document.previewImageData == thumbnailData)
     }
 
     @Test
@@ -214,10 +214,10 @@ struct MuseReaderiOSTests {
         #expect(session.capabilities.supportsEmbeddedPreviews)
 
         if session.capabilities.supportsLivePageRendering {
-            #expect(session.pages.first?.source == .liveMuseScoreRenderer)
+            #expect(session.previewPages.first?.source == .liveMuseScoreRenderer)
             #expect(session.renderPipeline == .liveMuseScoreRenderer)
         } else {
-            #expect(session.pages.first?.sourcePath == "Thumbnails/thumbnail.png")
+            #expect(session.previewPages.first?.sourcePath == "Thumbnails/thumbnail.png")
 
             switch session.renderPipeline {
             case .embeddedPackagePreview(let reason):
@@ -278,8 +278,11 @@ struct MuseReaderiOSTests {
             currentVoice: 0,
             canUndo: true,
             canRedo: false,
+            activeStaffIsPercussion: false,
             createMultiMeasureRests: false,
             hideEmptyStaves: false,
+            staffSpacingSpatium: ScorePageSettingsValue.a4.staffSpacingSpatium,
+            pageSettings: .a4,
             refreshScope: .local,
             pageCount: 2
         )
@@ -289,6 +292,64 @@ struct MuseReaderiOSTests {
         #expect(state.pageCount == 2)
         #expect(state.pageIndices == [0, 1])
         #expect(state.selectedPageIndex == 1)
+    }
+
+    @Test
+    @MainActor
+    func existingEditableScoreStartsProtectedInViewMode() {
+        let state = ScoreReaderState(session: testSession(supportsEditing: true), initialPageIndex: 0)
+        defer { state.shutdown() }
+
+        #expect(state.interactionMode == .view)
+        #expect(state.isEditingMode == false)
+    }
+
+    @Test
+    @MainActor
+    func newlyCreatedScoreCanStartInEditMode() {
+        let state = ScoreReaderState(
+            session: testSession(supportsEditing: true),
+            initialPageIndex: 0,
+            initialInteractionMode: .edit
+        )
+        defer { state.shutdown() }
+
+        #expect(state.interactionMode == .edit)
+        #expect(state.isEditingMode)
+    }
+
+    @Test
+    @MainActor
+    func noneditableScoreCannotStartInEditMode() {
+        let state = ScoreReaderState(
+            session: testSession(supportsEditing: false),
+            initialPageIndex: 0,
+            initialInteractionMode: .edit
+        )
+        defer { state.shutdown() }
+
+        #expect(state.interactionMode == .view)
+        #expect(state.isEditingMode == false)
+    }
+
+    @Test
+    func readerPreferencesRoundTripPerScore() throws {
+        let suiteName = "MuseReaderiOSTests.reader-preferences.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = ScoreReaderRememberedStateStore(userDefaults: defaults)
+        let expected = ScoreReaderRememberedState(
+            pageIndex: 4,
+            selectedPartID: "part-0",
+            zoomScale: 1.75,
+            readingStyle: .continuousScroll,
+            playbackFollowEnabled: false
+        )
+
+        store.save(expected, for: "score-a")
+
+        #expect(store.state(for: "score-a") == expected)
+        #expect(store.state(for: "score-b") == ScoreReaderRememberedState())
     }
 
     private func fixtureURL(_ relativePath: String) -> URL {
@@ -326,6 +387,24 @@ struct MuseReaderiOSTests {
         )
     }
 
+    private func testSession(supportsEditing: Bool) -> ScoreSession {
+        ScoreSession(
+            document: testDocument(),
+            previewPages: [],
+            renderPipeline: .embeddedPackagePreview(reason: nil),
+            capabilities: ScoreSessionCapabilities(
+                supportsPackageInspection: false,
+                supportsEmbeddedPreviews: false,
+                supportsLivePageRendering: false,
+                supportsPlayback: false,
+                supportsEditing: supportsEditing
+            ),
+            liveRenderSession: nil,
+            corruptionReport: .clean,
+            totalPageCount: 1
+        )
+    }
+
     private func selectedNote(pageIndex: Int) -> ScoreSelectedElement {
         let rect = ScoreNormalizedRect(x: 0.2, y: 0.3, width: 0.05, height: 0.04)
         return ScoreSelectedElement(
@@ -352,6 +431,8 @@ struct MuseReaderiOSTests {
             accidentalKind: nil,
             diatonicStep: 0,
             currentKey: 0,
+            currentTimeSignatureNumerator: 4,
+            currentTimeSignatureDenominator: 4,
             layoutBreakKind: nil,
             normalizedRect: rect,
             actionRect: rect,
@@ -361,7 +442,8 @@ struct MuseReaderiOSTests {
             attachmentTargets: [],
             highlightRects: [rect],
             overlayNormalizedRect: nil,
-            overlayImageData: nil
+            overlayImageData: nil,
+            overlayPDFData: nil
         )
     }
 

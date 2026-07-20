@@ -8,6 +8,77 @@ import Combine
 import Foundation
 import CoreGraphics
 
+enum ScoreReaderInteractionMode: Equatable {
+    case view
+    case edit
+    case leavingEdit
+
+    var allowsScoreEditing: Bool {
+        self == .edit
+    }
+
+    var isViewOnly: Bool {
+        self != .edit
+    }
+}
+
+enum ScoreReaderReadingStyle: String, CaseIterable, Codable {
+    case pageTurn
+    case continuousScroll
+
+    var title: String {
+        switch self {
+        case .pageTurn:
+            return "Page Turn"
+        case .continuousScroll:
+            return "Continuous Scroll"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pageTurn:
+            return "rectangle.portrait.on.rectangle.portrait"
+        case .continuousScroll:
+            return "scroll"
+        }
+    }
+}
+
+struct ScoreReaderRememberedState: Codable, Equatable {
+    var pageIndex = 0
+    var selectedPartID = "full-score"
+    var zoomScale = 1.0
+    var readingStyle = ScoreReaderReadingStyle.pageTurn
+    var playbackFollowEnabled = true
+}
+
+struct ScoreReaderRememberedStateStore {
+    private let userDefaults: UserDefaults
+    private let keyPrefix = "ScoreReaderRememberedState."
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func state(for scoreID: String) -> ScoreReaderRememberedState {
+        guard
+            let data = userDefaults.data(forKey: keyPrefix + scoreID),
+            let state = try? JSONDecoder().decode(ScoreReaderRememberedState.self, from: data)
+        else {
+            return ScoreReaderRememberedState()
+        }
+        return state
+    }
+
+    func save(_ state: ScoreReaderRememberedState, for scoreID: String) {
+        guard let data = try? JSONEncoder().encode(state) else {
+            return
+        }
+        userDefaults.set(data, forKey: keyPrefix + scoreID)
+    }
+}
+
 @MainActor
 final class ScoreReaderState: ObservableObject {
     let session: ScoreSession
@@ -38,6 +109,9 @@ final class ScoreReaderState: ObservableObject {
     @Published var hasConcertPitchRelevantTransposition = false
     @Published var corruptionReport: ScoreCorruptionReport
     @Published var pickupEditorContext: ScorePickupEditorContext?
+    @Published private(set) var interactionMode: ScoreReaderInteractionMode
+    @Published var playbackFollowIsSuspended = false
+    @Published var playbackFollowEnabled = true
 
     let preferredDPI: Int
     let playbackController: NativePlaybackController?
@@ -113,13 +187,29 @@ final class ScoreReaderState: ObservableObject {
         session.capabilities.supportsEditing && !corruptionReport.isCorrupted
     }
 
+    var isEditingMode: Bool {
+        interactionMode.allowsScoreEditing
+    }
+
+    var shouldFollowPlayback: Bool {
+        playbackFollowEnabled && !playbackFollowIsSuspended
+    }
+
     var isRepairingCorruption: Bool {
         session.liveRenderSession != nil && corruptionReport.isCorrupted
     }
 
-    init(session: ScoreSession, initialPageIndex: Int, preferredDPI: Int = 144) {
+    init(
+        session: ScoreSession,
+        initialPageIndex: Int,
+        initialInteractionMode: ScoreReaderInteractionMode = .view,
+        preferredDPI: Int = 144
+    ) {
         self.session = session
         self.preferredDPI = preferredDPI
+        self.interactionMode = session.capabilities.supportsEditing && !session.corruptionReport.isCorrupted
+            ? initialInteractionMode
+            : .view
         self.activePageCount = session.pageCount
         self.selectedPageIndex = ScoreReaderState.boundedIndex(initialPageIndex, pageCount: session.pageCount)
         self.cachedPagesByIndex = Dictionary(uniqueKeysWithValues: session.previewPages.map { ($0.index, $0) })
@@ -138,6 +228,135 @@ final class ScoreReaderState: ObservableObject {
                 self?.handleMIDINoteOff(midiPitch)
             }
         }
+    }
+
+    func enterEditMode() {
+        guard
+            supportsEditing,
+            interactionMode == .view,
+            let liveRenderSession = session.liveRenderSession
+        else {
+            return
+        }
+
+        interactionMode = .edit
+        editingErrorMessage = nil
+        stopMIDIInput()
+        isEditingActionInFlight = true
+        Task { @MainActor [weak self] in
+            defer {
+                self?.isEditingActionInFlight = false
+            }
+            do {
+                var state = try await liveRenderSession.setNoteInputEnabled(false)
+                state = try await liveRenderSession.clearSelection()
+                self?.applyEditingState(state)
+                self?.startMIDIInput()
+            } catch {
+                self?.interactionMode = .view
+                self?.editingState = .inactive
+                self?.stopMIDIInput()
+                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    func suspendPlaybackFollow() {
+        guard interactionMode == .view, playbackFollowEnabled, playbackState.status == .playing else {
+            return
+        }
+        playbackFollowIsSuspended = true
+    }
+
+    func resumePlaybackFollow() {
+        playbackFollowIsSuspended = false
+        if let playbackMeasureHighlight {
+            updateSelection(to: playbackMeasureHighlight.pageIndex)
+        }
+    }
+
+    func prepareInitialInteractionMode() async {
+        guard supportsEditing, let liveRenderSession = session.liveRenderSession else {
+            interactionMode = .view
+            editingState = .inactive
+            stopMIDIInput()
+            return
+        }
+
+        if interactionMode == .edit {
+            stopMIDIInput()
+            do {
+                var state = try await liveRenderSession.setNoteInputEnabled(false)
+                state = try await liveRenderSession.clearSelection()
+                applyEditingState(state)
+                startMIDIInput()
+            } catch {
+                interactionMode = .view
+                editingState = .inactive
+                stopMIDIInput()
+                editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            return
+        }
+
+        stopMIDIInput()
+        do {
+            var state = try await liveRenderSession.currentEditingState()
+            if state.noteInputEnabled {
+                state = try await liveRenderSession.setNoteInputEnabled(false)
+            }
+            state = try await liveRenderSession.clearSelection()
+            applyEditingState(state)
+        } catch {
+            editingState = .inactive
+            editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func finishEditingAndEnterViewMode() async -> Bool {
+        guard supportsEditing else {
+            interactionMode = .view
+            return true
+        }
+        guard interactionMode == .edit, !isEditingActionInFlight else {
+            return interactionMode == .view
+        }
+
+        interactionMode = .leavingEdit
+        stopMIDIInput()
+        clearMeasureRangePreview()
+        clearPencilAimForModeTransition()
+        noteEntryPreviewTask?.cancel()
+        noteEntryPreviewTask = nil
+        noteEntryPreview = nil
+        pendingAccidentalKind = nil
+        pendingPitchClass = nil
+        pendingMIDIPitch = nil
+        stackedChordInputEnabled = false
+        pickupEditorContext = nil
+
+        var transitionSucceeded = true
+        if let liveRenderSession = session.liveRenderSession {
+            do {
+                if editingState.noteInputEnabled || hasContinuousNoteInputCursor {
+                    let state = try await liveRenderSession.setNoteInputEnabled(false)
+                    applyEditingState(state)
+                }
+                let state = try await liveRenderSession.clearSelection()
+                applyEditingState(state)
+                hasContinuousNoteInputCursor = false
+                noteInputWasActivatedByPencil = false
+            } catch {
+                transitionSucceeded = false
+                editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                editingState = .inactive
+            }
+        }
+
+        let saveSucceeded = transitionSucceeded ? await savePendingChanges() : false
+        interactionMode = .view
+        return transitionSucceeded && saveSucceeded
     }
 
     deinit {
@@ -184,6 +403,10 @@ final class ScoreReaderState: ObservableObject {
     }
 
     func selectedElement(for pageIndex: Int) -> ScoreSelectedElement? {
+        guard isEditingMode else {
+            return nil
+        }
+
         if measureRangePreviewSelection?.pageIndex == pageIndex {
             return measureRangePreviewSelection
         }

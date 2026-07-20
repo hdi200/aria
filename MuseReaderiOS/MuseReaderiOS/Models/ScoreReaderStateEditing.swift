@@ -213,12 +213,21 @@ extension ScoreReaderState {
             }
 
             do {
-                let editingState = try await liveRenderSession.currentEditingState()
+                var editingState = try await liveRenderSession.currentEditingState()
                 guard
                     !Task.isCancelled,
                     let self,
                     self.editingStateRevision == revision
                 else {
+                    return
+                }
+                if !self.isEditingMode {
+                    if editingState.noteInputEnabled {
+                        editingState = try await liveRenderSession.setNoteInputEnabled(false)
+                    }
+                    editingState = try await liveRenderSession.clearSelection()
+                }
+                guard !Task.isCancelled, self.editingStateRevision == revision else {
                     return
                 }
                 self.applyEditingState(editingState)
@@ -234,6 +243,7 @@ extension ScoreReaderState {
     func handlePageTap(pageIndex: Int, normalizedPoint: CGPoint, inputKind: ScorePageTapInputKind = .direct) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -251,7 +261,7 @@ extension ScoreReaderState {
             ? (committedPencilAimPoint(forPage: pageIndex, near: normalizedPoint) ?? normalizedPoint)
             : normalizedPoint
         if shouldInsert && inputKind == .pencil {
-            clearPencilAim()
+            clearPencilAimForModeTransition()
         }
         isEditingActionInFlight = true
         editingErrorMessage = nil
@@ -334,7 +344,7 @@ extension ScoreReaderState {
         return aim
     }
 
-    private func clearPencilAim() {
+    func clearPencilAimForModeTransition() {
         lastPencilAimNormalizedPoint = nil
         lastPencilAimPageIndex = nil
         lastPencilAimTimestamp = nil
@@ -347,6 +357,7 @@ extension ScoreReaderState {
     ) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -381,6 +392,13 @@ extension ScoreReaderState {
     }
 
     func updateNoteEntryPreview(pageIndex: Int, normalizedPoint: CGPoint?) {
+        guard isEditingMode else {
+            noteEntryPreviewTask?.cancel()
+            noteEntryPreview = nil
+            clearPencilAimForModeTransition()
+            return
+        }
+
         if let normalizedPoint {
             lastPencilAimNormalizedPoint = normalizedPoint
             lastPencilAimPageIndex = pageIndex
@@ -430,6 +448,7 @@ extension ScoreReaderState {
     func selectMeasureRange(pageIndex: Int, startNormalizedPoint: CGPoint, endNormalizedPoint: CGPoint) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -463,7 +482,7 @@ extension ScoreReaderState {
     }
 
     func previewMeasureRange(pageIndex: Int, startNormalizedPoint: CGPoint, endNormalizedPoint: CGPoint) {
-        guard supportsEditing, let liveRenderSession = session.liveRenderSession else {
+        guard supportsEditing, isEditingMode, let liveRenderSession = session.liveRenderSession else {
             clearMeasureRangePreview()
             return
         }
@@ -505,6 +524,7 @@ extension ScoreReaderState {
     func setNoteInputEnabled(_ enabled: Bool) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -710,6 +730,7 @@ extension ScoreReaderState {
     func addLayoutBreak(_ breakKind: String) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -741,6 +762,7 @@ extension ScoreReaderState {
     func removeLayoutBreak() {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -879,6 +901,7 @@ extension ScoreReaderState {
     func updateScoreSetupMetadata(_ metadata: ScoreEditableMetadata) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -1023,6 +1046,7 @@ extension ScoreReaderState {
     func presentPickupEditor(createNewMeasure: Bool = false) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -1158,6 +1182,7 @@ extension ScoreReaderState {
     func dragSelectedNote(pageIndex: Int, normalizedPoint: CGPoint) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -1216,6 +1241,10 @@ extension ScoreReaderState {
     }
 
     func handleKeyboardPitchClass(_ pitchClass: Int, preferFlats: Bool) {
+        guard isEditingMode else {
+            return
+        }
+
         pendingPitchClass = pitchClass
         pendingMIDIPitch = nil
         pendingPreferFlats = preferFlats
@@ -1235,6 +1264,10 @@ extension ScoreReaderState {
     }
 
     func handleKeyboardPitch(_ pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
+        guard isEditingMode else {
+            return
+        }
+
         pendingPitchClass = pitchClass
         pendingMIDIPitch = midiPitch
         pendingPreferFlats = preferFlats
@@ -1285,6 +1318,7 @@ extension ScoreReaderState {
     func enableNoteInputThenInsertKeyboardPitch(pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -1325,6 +1359,9 @@ extension ScoreReaderState {
     }
 
     func toggleStackedChordInput() {
+        guard isEditingMode else {
+            return
+        }
         stackedChordInputEnabled.toggle()
         if stackedChordInputEnabled && editingState.noteInputInsertsRests {
             toggleRest()
@@ -1348,7 +1385,7 @@ extension ScoreReaderState {
     }
 
     func startMIDIInput() {
-        guard supportsEditing else {
+        guard supportsEditing, isEditingMode else {
             return
         }
 
@@ -1368,7 +1405,7 @@ extension ScoreReaderState {
     }
 
     func handleMIDINoteOn(_ midiPitch: Int) {
-        guard (0...127).contains(midiPitch) else {
+        guard isEditingMode, (0...127).contains(midiPitch) else {
             return
         }
 
@@ -1385,6 +1422,9 @@ extension ScoreReaderState {
     }
 
     func handleMIDINoteOff(_ midiPitch: Int) {
+        guard isEditingMode else {
+            return
+        }
         activeMIDIPitches.remove(midiPitch)
         if activeMIDIPitches.isEmpty, !pendingMIDIChordPitches.isEmpty {
             scheduleMIDIChordCapture(after: midiChordReleaseSettleDelay)
@@ -1441,6 +1481,7 @@ extension ScoreReaderState {
     private func insertMIDIChordAtCursor(_ midiPitches: [Int], preferFlats: Bool) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -1501,6 +1542,7 @@ extension ScoreReaderState {
     func changeSelectedPitchThenEnterNoteInput(pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -1591,6 +1633,7 @@ extension ScoreReaderState {
     func saveEdits() {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
@@ -1628,6 +1671,7 @@ extension ScoreReaderState {
     ) {
         guard
             supportsEditing,
+            isEditingMode,
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {

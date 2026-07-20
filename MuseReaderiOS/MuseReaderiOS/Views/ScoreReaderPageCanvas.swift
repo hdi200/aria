@@ -43,6 +43,9 @@ struct ScoreReaderPageCanvas: View {
     let noteEntryPreviewDuration: ScoreNoteDuration
     let showsLayoutMarkers: Bool
     let activeNotationAutoScrollRevision: Int
+    var fitsPageToViewport = false
+    var allowsEditingInteractions = true
+    var allowsPlaybackFollow = true
     let editSelectedTextAction: (ScoreSelectedElement) -> Void
     let editTempoAction: () -> Void
     let editTimeSignatureAction: () -> Void
@@ -69,12 +72,16 @@ struct ScoreReaderPageCanvas: View {
     let pencilHoverPreviewAction: (CGPoint?) -> Void
     let pencilInteractionStartAction: () -> Void
     let pencilDoubleTapAction: () -> Void
+    var swipePreviousPageAction: () -> Void = {}
+    var swipeNextPageAction: () -> Void = {}
+    var manualScrollAction: () -> Void = {}
 
     var body: some View {
-        let pageWidth = min(max(availableWidth - reservedPaletteGutter, 320), 980)
-        let pageHeight = preferredHeight(for: pageWidth)
+        let fittedPageSize = fittedPageSize
+        let pageWidth = fittedPageSize.width
+        let pageHeight = fittedPageSize.height
         let topPadding = topPagePadding
-        let bottomPadding: CGFloat = 6
+        let bottomPadding: CGFloat = fitsPageToViewport ? 0 : 6
         let usesActiveNotationFocus = selectedElement?.pageIndex == pageIndex
             && (activeNotationTopInset > 0 || activeNotationBottomInset > 0)
         let zoomActiveNotationTopInset = usesActiveNotationFocus ? activeNotationTopInset : 0
@@ -99,6 +106,8 @@ struct ScoreReaderPageCanvas: View {
                 activeNotationBottomInset: zoomActiveNotationBottomInset,
                 activeNotationViewportHeight: viewportSize.height,
                 activeNotationAutoScrollRevision: activeNotationAutoScrollRevision,
+                allowsEditingInteractions: allowsEditingInteractions,
+                allowsPlaybackFollow: allowsPlaybackFollow,
                 editSelectedTextAction: editSelectedTextAction,
                 editTempoAction: editTempoAction,
                 editTimeSignatureAction: editTimeSignatureAction,
@@ -124,7 +133,10 @@ struct ScoreReaderPageCanvas: View {
                 pencilInsertionFineTuneAction: pencilInsertionFineTuneAction,
                 pencilHoverPreviewAction: pencilHoverPreviewAction,
                 pencilInteractionStartAction: pencilInteractionStartAction,
-                pencilDoubleTapAction: pencilDoubleTapAction
+                pencilDoubleTapAction: pencilDoubleTapAction,
+                swipePreviousPageAction: swipePreviousPageAction,
+                swipeNextPageAction: swipeNextPageAction,
+                manualScrollAction: manualScrollAction
             )
             .frame(width: pageWidth, height: pageHeight)
             .position(x: pageWidth * 0.5, y: topPadding + pageHeight * 0.5)
@@ -154,10 +166,16 @@ struct ScoreReaderPageCanvas: View {
     }
 
     private var reservedPaletteGutter: CGFloat {
-        isPortrait && !isCompactPhoneLayout ? 92 : 0
+        if fitsPageToViewport {
+            return 0
+        }
+        return isPortrait && !isCompactPhoneLayout ? 92 : 0
     }
 
     private var pageAlignment: Alignment {
+        if fitsPageToViewport {
+            return .center
+        }
         if isCompactPhoneLayout {
             return .center
         }
@@ -170,7 +188,27 @@ struct ScoreReaderPageCanvas: View {
     }
 
     private var topPagePadding: CGFloat {
-        isPortrait ? (isCompactPhoneLayout ? 18 : 90) : 6
+        if fitsPageToViewport {
+            return 0
+        }
+        return isPortrait ? (isCompactPhoneLayout ? 18 : 90) : 6
+    }
+
+    private var fittedPageSize: CGSize {
+        guard fitsPageToViewport else {
+            let width = min(max(availableWidth - reservedPaletteGutter, 320), 980)
+            return CGSize(width: width, height: preferredHeight(for: width))
+        }
+
+        let sourceSize = page?.displaySize ?? CGSize(width: 612, height: 792)
+        let safeWidth = max(availableWidth, 1)
+        let safeHeight = max(viewportSize.height, 1)
+        guard sourceSize.width > 0, sourceSize.height > 0 else {
+            return CGSize(width: safeWidth, height: safeHeight)
+        }
+
+        let scale = min(safeWidth / sourceSize.width, safeHeight / sourceSize.height)
+        return CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
     }
 
     private func activeNotationAnchorY(pageHeight: CGFloat, topPadding: CGFloat) -> CGFloat? {
@@ -242,6 +280,8 @@ struct ScoreReaderPageSurface: View {
     let activeNotationBottomInset: CGFloat
     let activeNotationViewportHeight: CGFloat
     let activeNotationAutoScrollRevision: Int
+    let allowsEditingInteractions: Bool
+    let allowsPlaybackFollow: Bool
     let editSelectedTextAction: (ScoreSelectedElement) -> Void
     let editTempoAction: () -> Void
     let editTimeSignatureAction: () -> Void
@@ -268,6 +308,9 @@ struct ScoreReaderPageSurface: View {
     let pencilHoverPreviewAction: (CGPoint?) -> Void
     let pencilInteractionStartAction: () -> Void
     let pencilDoubleTapAction: () -> Void
+    let swipePreviousPageAction: () -> Void
+    let swipeNextPageAction: () -> Void
+    let manualScrollAction: () -> Void
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -287,6 +330,8 @@ struct ScoreReaderPageSurface: View {
                         activeNotationTopInset: activeNotationTopInset,
                         activeNotationBottomInset: activeNotationBottomInset,
                         activeNotationViewportHeight: activeNotationViewportHeight,
+                        allowsEditingInteractions: allowsEditingInteractions,
+                        allowsPlaybackFollow: allowsPlaybackFollow,
                         allowsPencilInsertionFineTune: allowsPencilInsertionFineTune,
                         noteEntryPreviewPitchClass: noteEntryPreviewPitchClass,
                         noteEntryPreviewIsRest: noteEntryPreviewIsRest,
@@ -302,7 +347,10 @@ struct ScoreReaderPageSurface: View {
                         onPencilInsertionFineTune: pencilInsertionFineTuneAction,
                         onPencilHoverPreview: pencilHoverPreviewAction,
                         onPencilInteractionStart: pencilInteractionStartAction,
-                        onPencilDoubleTap: pencilDoubleTapAction
+                        onPencilDoubleTap: pencilDoubleTapAction,
+                        onSwipePreviousPage: swipePreviousPageAction,
+                        onSwipeNextPage: swipeNextPageAction,
+                        onManualScroll: manualScrollAction
                     )
                 } else {
                     ScoreReaderPagePlaceholder(

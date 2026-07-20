@@ -290,7 +290,8 @@ struct LibraryView: View {
                     pendingCreatedReaderPresentation = LibraryReaderPresentation(
                         session: session,
                         startPageIndex: 0,
-                        initialToolCategory: .notes
+                        initialToolCategory: .notes,
+                        initialInteractionMode: .edit
                     )
                     model.isCreateScorePresented = false
                 }
@@ -312,7 +313,8 @@ struct LibraryView: View {
             ScoreReaderView(
                 session: presentation.session,
                 initialPageIndex: presentation.startPageIndex,
-                initialToolCategory: presentation.initialToolCategory
+                initialToolCategory: presentation.initialToolCategory,
+                initialInteractionMode: presentation.initialInteractionMode
             )
                 .onDisappear {
                     Task {
@@ -1831,4 +1833,5 @@ private struct LibraryReaderPresentation: Identifiable {
     let session: ScoreSession
     let startPageIndex: Int
     var initialToolCategory: ScoreReaderToolCategory = .select
+    var initialInteractionMode: ScoreReaderInteractionMode = .view
 }
