@@ -430,6 +430,15 @@ struct MuseReaderiOSTests {
         #expect(zoomedInsets.right == 0)
         #expect(paletteAlignedInsets.left == 92)
         #expect(paletteAlignedInsets.right == 0)
+
+        let recenteredOffset = ScoreReaderZoomLayout.clampedContentOffset(
+            .zero,
+            contentSize: CGSize(width: 800, height: 768),
+            viewportSize: CGSize(width: 1_200, height: 768),
+            contentInset: UIEdgeInsets(top: 0, left: 200, bottom: 0, right: 200)
+        )
+        #expect(recenteredOffset.x == -200)
+        #expect(recenteredOffset.y == 0)
     }
 
     @Test

@@ -52,6 +52,23 @@ struct ScoreReaderZoomLayout {
         let verticalInset = centersVertically ? verticalSpace * 0.5 : 0
         return UIEdgeInsets(top: verticalInset, left: left, bottom: verticalInset, right: right)
     }
+
+    static func clampedContentOffset(
+        _ contentOffset: CGPoint,
+        contentSize: CGSize,
+        viewportSize: CGSize,
+        contentInset: UIEdgeInsets
+    ) -> CGPoint {
+        let minOffset = CGPoint(x: -contentInset.left, y: -contentInset.top)
+        let maxOffset = CGPoint(
+            x: max(contentSize.width - viewportSize.width + contentInset.right, minOffset.x),
+            y: max(contentSize.height - viewportSize.height + contentInset.bottom, minOffset.y)
+        )
+        return CGPoint(
+            x: min(max(contentOffset.x, minOffset.x), maxOffset.x),
+            y: min(max(contentOffset.y, minOffset.y), maxOffset.y)
+        )
+    }
 }
 
 struct ScoreReaderZoomViewport: Equatable {
@@ -94,7 +111,6 @@ struct ZoomableImageView: UIViewRepresentable {
     var activeNotationViewportHeight: CGFloat = 0
     var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
     var centersPageVertically = false
-    var allowsContentOverflow = false
     var showsPageBoundary = true
     var allowsEditingInteractions = true
     var allowsPlaybackFollow = true
@@ -152,7 +168,6 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.backgroundColor = .clear
         scrollView.contentInsetAdjustmentBehavior = .never
-        scrollView.clipsToBounds = !allowsContentOverflow
 
         let containerView = ScorePageZoomContainerView()
         containerView.translatesAutoresizingMaskIntoConstraints = false
@@ -274,7 +289,6 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.activeNotationViewportHeight = activeNotationViewportHeight
         context.coordinator.pageHorizontalAlignment = pageHorizontalAlignment
         context.coordinator.centersPageVertically = centersPageVertically
-        scrollView.clipsToBounds = !allowsContentOverflow
         (context.coordinator.zoomView as? ScorePageZoomContainerView)?.setShowsPageBoundary(showsPageBoundary)
         context.coordinator.playbackHighlight = playbackHighlight
         context.coordinator.zoomScale = $zoomScale
@@ -300,9 +314,6 @@ struct ZoomableImageView: UIViewRepresentable {
         let usesActiveNotationFocus = context.coordinator.usesActiveNotationFocus
 
         scrollView.isScrollEnabled = allowsInnerPanning || usesActiveNotationFocus
-        if !allowsInnerPanning && !usesActiveNotationFocus {
-            scrollView.contentOffset = .zero
-        }
 
         if !context.coordinator.isUserZooming, abs(scrollView.zoomScale - clampedZoomScale) > 0.01 {
             scrollView.setZoomScale(clampedZoomScale, animated: false)
@@ -346,6 +357,8 @@ struct ZoomableImageView: UIViewRepresentable {
         }
         private var lastHandledActiveNotationAutoScrollRevision = 0
         private var lastHandledPlaybackRect: ScoreNormalizedRect?
+        private var pendingZoomViewport: ScoreReaderZoomViewport?
+        private var isZoomViewportPublishScheduled = false
         weak var zoomView: UIView?
         var pageWidthConstraint: NSLayoutConstraint?
         var pageHeightConstraint: NSLayoutConstraint?
@@ -418,9 +431,6 @@ struct ZoomableImageView: UIViewRepresentable {
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             let allowsInnerPanning = scrollView.zoomScale > 1.01
             scrollView.isScrollEnabled = allowsInnerPanning || usesActiveNotationFocus
-            if !allowsInnerPanning && !usesActiveNotationFocus {
-                scrollView.contentOffset = .zero
-            }
             updateActiveNotationContentInsets(in: scrollView)
             scrollActiveNotationIntoViewIfNeeded(in: scrollView)
             scrollPlaybackIntoViewIfNeeded(in: scrollView)
@@ -466,11 +476,28 @@ struct ZoomableImageView: UIViewRepresentable {
                 contentSize: zoomView?.bounds.size ?? .zero,
                 boundsSize: scrollView.bounds.size
             )
-            guard zoomViewport.wrappedValue != nextViewport else {
+            if pendingZoomViewport == nextViewport
+                || (pendingZoomViewport == nil && zoomViewport.wrappedValue == nextViewport) {
                 return
             }
-            DispatchQueue.main.async { [zoomViewport] in
-                zoomViewport.wrappedValue = nextViewport
+            pendingZoomViewport = nextViewport
+            guard !isZoomViewportPublishScheduled else {
+                return
+            }
+
+            isZoomViewportPublishScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.isZoomViewportPublishScheduled = false
+                guard let latestViewport = self.pendingZoomViewport else {
+                    return
+                }
+                self.pendingZoomViewport = nil
+                if self.zoomViewport.wrappedValue != latestViewport {
+                    self.zoomViewport.wrappedValue = latestViewport
+                }
             }
         }
 
@@ -546,14 +573,11 @@ struct ZoomableImageView: UIViewRepresentable {
 
         private func clampContentOffsetIfNeeded(in scrollView: UIScrollView, animated: Bool) {
             let adjustedInset = scrollView.adjustedContentInset
-            let minOffset = CGPoint(x: -adjustedInset.left, y: -adjustedInset.top)
-            let maxOffset = CGPoint(
-                x: max(scrollView.contentSize.width - scrollView.bounds.width + adjustedInset.right, minOffset.x),
-                y: max(scrollView.contentSize.height - scrollView.bounds.height + adjustedInset.bottom, minOffset.y)
-            )
-            let clampedOffset = CGPoint(
-                x: min(max(scrollView.contentOffset.x, minOffset.x), maxOffset.x),
-                y: min(max(scrollView.contentOffset.y, minOffset.y), maxOffset.y)
+            let clampedOffset = ScoreReaderZoomLayout.clampedContentOffset(
+                scrollView.contentOffset,
+                contentSize: scrollView.contentSize,
+                viewportSize: scrollView.bounds.size,
+                contentInset: adjustedInset
             )
 
             guard hypot(scrollView.contentOffset.x - clampedOffset.x, scrollView.contentOffset.y - clampedOffset.y) > 1 else {

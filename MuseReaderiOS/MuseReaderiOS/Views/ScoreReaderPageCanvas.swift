@@ -148,7 +148,7 @@ struct ScoreReaderPageCanvas: View {
         let zoomViewportWidth = pageLayoutPolicy.usesFullCanvasZoom
             ? max(availableWidth, pageWidth)
             : pageWidth
-        let zoomViewportHeight = pageLayoutPolicy.usesFullCanvasZoom && fitsPageToViewport
+        let zoomViewportHeight = pageLayoutPolicy.usesFullCanvasZoom
             ? max(viewportSize.height, pageHeight)
             : pageHeight
         let topPadding = topPagePadding
@@ -424,7 +424,6 @@ struct ScoreReaderPageSurface: View {
                         activeNotationViewportHeight: activeNotationViewportHeight,
                         pageHorizontalAlignment: pageHorizontalAlignment,
                         centersPageVertically: centersPageVertically,
-                        allowsContentOverflow: allowsEditingInteractions,
                         showsPageBoundary: allowsEditingInteractions,
                         allowsEditingInteractions: allowsEditingInteractions,
                         allowsPlaybackFollow: allowsPlaybackFollow,
