@@ -7,6 +7,19 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
+struct ScorePageRenderSurfaceIdentity: Hashable {
+    let pageIndex: Int
+    let pixelWidth: Int
+    let pixelHeight: Int
+
+    init(pageIndex: Int, pageSize: CGSize, displayScale: CGFloat = UIScreen.main.scale) {
+        let safeScale = max(displayScale, 1)
+        self.pageIndex = pageIndex
+        self.pixelWidth = Int((max(pageSize.width, 0) * safeScale).rounded())
+        self.pixelHeight = Int((max(pageSize.height, 0) * safeScale).rounded())
+    }
+}
+
 struct ScoreReaderBackground: View {
     var body: some View {
         Color(red: 0.965, green: 0.965, blue: 0.955)
@@ -137,6 +150,15 @@ struct ScoreReaderPageCanvas: View {
                 swipePreviousPageAction: swipePreviousPageAction,
                 swipeNextPageAction: swipeNextPageAction,
                 manualScrollAction: manualScrollAction
+            )
+            // CATiledLayer renders PDF tiles asynchronously. A viewport-size
+            // identity prevents tiles produced with pre-rotation bounds from
+            // being composited into the resized page surface.
+            .id(
+                ScorePageRenderSurfaceIdentity(
+                    pageIndex: pageIndex,
+                    pageSize: CGSize(width: pageWidth, height: pageHeight)
+                )
             )
             .frame(width: pageWidth, height: pageHeight)
             .position(x: pageWidth * 0.5, y: topPadding + pageHeight * 0.5)

@@ -6,6 +6,19 @@
 import SwiftUI
 import UIKit
 
+struct ScoreReaderHeaderLayoutPolicy: Equatable {
+    let usesCompactTabletControls: Bool
+    let usesCondensedTabletPlayback: Bool
+
+    init(availableWidth: CGFloat) {
+        // Text-labelled utility controls fit comfortably only on wider iPad layouts.
+        usesCompactTabletControls = availableWidth < 1_180
+        // Portrait iPads need the tighter playback buttons to keep the centered
+        // island clear of both the leading and trailing islands.
+        usesCondensedTabletPlayback = availableWidth < 900
+    }
+}
+
 struct ScoreReaderChromeBar: View {
     let scoreTitle: String
     let parts: [ScorePart]
@@ -24,15 +37,12 @@ struct ScoreReaderChromeBar: View {
     let isPlaybackBusy: Bool
     let isExportBusy: Bool
     let playbackPreparationMessage: String?
-    let concertPitchEnabled: Bool
-    let showsConcertPitchControl: Bool
     let closeAction: () -> Void
     let selectModeAction: () -> Void
     let noteInputModeAction: () -> Void
     let togglePlaybackAction: () -> Void
     let stopPlaybackAction: () -> Void
     let toggleMetronomeAction: () -> Void
-    let toggleConcertPitchAction: () -> Void
     let exportAction: () -> Void
     let editDoneAction: () -> Void
     let selectPartAction: (Int?) -> Void
@@ -45,7 +55,8 @@ struct ScoreReaderChromeBar: View {
             let isPhoneHeader = UIDevice.current.userInterfaceIdiom == .phone
             let isPhoneLandscape = isPhoneHeader && proxy.size.width > proxy.size.height
             let isTightPhoneLandscape = isPhoneLandscape && proxy.size.width < 780
-            let isCompactHeader = proxy.size.width < 920
+            let tabletLayout = ScoreReaderHeaderLayoutPolicy(availableWidth: proxy.size.width)
+            let isCompactHeader = tabletLayout.usesCompactTabletControls
             // iPhone and iPad share separated floating islands; phone uses tighter controls.
             let usesPhoneFloatingIslands = isPhoneHeader
             let showsPlaybackTimeOnPhone = !isPhoneLandscape || proxy.size.width >= 780
@@ -64,7 +75,8 @@ struct ScoreReaderChromeBar: View {
                     floatingIslandHeader(
                         isCompactHeader: isCompactHeader,
                         isPhoneLandscape: isPhoneLandscape,
-                        isTightPhoneLandscape: isTightPhoneLandscape
+                        isTightPhoneLandscape: isTightPhoneLandscape,
+                        usesCondensedTabletPlayback: tabletLayout.usesCondensedTabletPlayback
                     )
                         .padding(.horizontal, isPhoneLandscape ? 10 : (isCompactHeader ? 10 : 18))
                         .padding(.top, 10)
@@ -75,7 +87,12 @@ struct ScoreReaderChromeBar: View {
         .frame(height: 62)
     }
 
-    private func floatingIslandHeader(isCompactHeader: Bool, isPhoneLandscape: Bool, isTightPhoneLandscape: Bool) -> some View {
+    private func floatingIslandHeader(
+        isCompactHeader: Bool,
+        isPhoneLandscape: Bool,
+        isTightPhoneLandscape: Bool,
+        usesCondensedTabletPlayback: Bool
+    ) -> some View {
         Group {
             if isPhoneLandscape {
                 phoneLandscapeFloatingHeader(
@@ -83,7 +100,10 @@ struct ScoreReaderChromeBar: View {
                     showsPlaybackTime: !isTightPhoneLandscape
                 )
             } else {
-                tabletStyleFloatingIslandHeader(isCompactHeader: isCompactHeader)
+                tabletStyleFloatingIslandHeader(
+                    isCompactHeader: isCompactHeader,
+                    usesCondensedPlayback: usesCondensedTabletPlayback
+                )
             }
         }
         .font(.system(size: 14, weight: .medium))
@@ -119,14 +139,11 @@ struct ScoreReaderChromeBar: View {
 
             Spacer(minLength: 4)
 
-            if interactionMode == .view || showsConcertPitchControl || parts.count > 1 {
+            if interactionMode == .view || parts.count > 1 {
                 floatingIsland(horizontalPadding: 6) {
                     HStack(spacing: 6) {
                         if interactionMode == .view {
                             readerSettingsIslandMenu(iconOnly: true)
-                        }
-                        if showsConcertPitchControl {
-                            concertPitchIslandButton(isCompactHeader: true, iconOnly: true)
                         }
                         if parts.count > 1 {
                             partsIslandButton(iconOnly: true)
@@ -148,7 +165,10 @@ struct ScoreReaderChromeBar: View {
         }
     }
 
-    private func tabletStyleFloatingIslandHeader(isCompactHeader: Bool) -> some View {
+    private func tabletStyleFloatingIslandHeader(
+        isCompactHeader: Bool,
+        usesCondensedPlayback: Bool
+    ) -> some View {
         ZStack {
             HStack {
                 floatingIsland(horizontalPadding: 10) {
@@ -167,27 +187,30 @@ struct ScoreReaderChromeBar: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Back")
                 }
+                .frame(maxWidth: isCompactHeader ? 220 : 340, alignment: .leading)
 
                 Spacer(minLength: 0)
             }
 
             if supportsPlayback {
-                floatingIsland {
-                    playbackIslandControls(isCompactHeader: isCompactHeader)
+                floatingIsland(horizontalPadding: usesCondensedPlayback ? 10 : 14) {
+                    if usesCondensedPlayback {
+                        compactPlaybackControls(showsElapsedTime: false)
+                    } else {
+                        playbackIslandControls(isCompactHeader: isCompactHeader)
+                    }
                 }
+                .fixedSize(horizontal: true, vertical: false)
             }
 
             HStack(spacing: 12) {
                 Spacer(minLength: 0)
 
-                if interactionMode == .view || showsConcertPitchControl || parts.count > 1 {
+                if interactionMode == .view || parts.count > 1 {
                     floatingIsland {
                         HStack(spacing: isCompactHeader ? 8 : 10) {
                             if interactionMode == .view {
                                 readerSettingsIslandMenu(iconOnly: isCompactHeader)
-                            }
-                            if showsConcertPitchControl {
-                                concertPitchIslandButton(isCompactHeader: isCompactHeader)
                             }
 
                             if parts.count > 1 {
@@ -201,7 +224,7 @@ struct ScoreReaderChromeBar: View {
                     HStack(spacing: 4) {
                         exportIslandButton(fontSize: 21, minWidth: 44)
                         if supportsEditing {
-                            editModeIslandButton(iconOnly: isCompactHeader)
+                            editModeIslandButton(iconOnly: false)
                         }
                     }
                 }
@@ -266,31 +289,6 @@ struct ScoreReaderChromeBar: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
         }
-    }
-
-    private func concertPitchIslandButton(isCompactHeader: Bool, iconOnly: Bool = false) -> some View {
-        Button(action: toggleConcertPitchAction) {
-            Group {
-                if iconOnly {
-                    Image(systemName: "music.quarternote.3")
-                        .font(.system(size: 17, weight: .semibold))
-                } else {
-                    HStack(spacing: 7) {
-                        Image(systemName: "music.quarternote.3")
-                        Text("Concert")
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                    }
-                    .font(.system(size: isCompactHeader ? 13 : 14, weight: .semibold))
-                }
-            }
-            .scoreReaderChromeTapTarget(minWidth: iconOnly ? 40 : (isCompactHeader ? 88 : 96))
-            .foregroundStyle(concertPitchEnabled ? Color.blue : Color.black.opacity(0.78))
-        }
-        .buttonStyle(.plain)
-        .disabled(!supportsEditing || isEditingBusy)
-        .opacity(supportsEditing ? 1 : 0.45)
-        .accessibilityLabel("Concert Pitch")
     }
 
     private func partsIslandButton(iconOnly: Bool = false) -> some View {
@@ -436,7 +434,7 @@ struct ScoreReaderChromeBar: View {
     }
 
     private func phoneFloatingIslandHeader(availableWidth: CGFloat, isPhoneLandscape: Bool, showsPlaybackTime: Bool) -> some View {
-        let hasTrailingExtras = interactionMode == .view || showsConcertPitchControl || parts.count > 1
+        let hasTrailingExtras = interactionMode == .view || parts.count > 1
         let showsCenteredPlaybackTime = showsPlaybackTime && (!hasTrailingExtras || availableWidth >= 620)
         let showsTitle = isPhoneLandscape && availableWidth >= 620
 
@@ -481,9 +479,6 @@ struct ScoreReaderChromeBar: View {
                         HStack(spacing: 6) {
                             if interactionMode == .view {
                                 readerSettingsIslandMenu(iconOnly: true)
-                            }
-                            if showsConcertPitchControl {
-                                concertPitchIslandButton(isCompactHeader: true, iconOnly: true)
                             }
 
                             if parts.count > 1 {

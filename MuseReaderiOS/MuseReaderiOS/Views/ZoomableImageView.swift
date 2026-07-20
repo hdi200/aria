@@ -14,6 +14,10 @@ enum ScorePageTapInputKind {
     case pencil
 }
 
+enum ScoreReaderZoomLimits {
+    static let minimumScale: CGFloat = 1
+}
+
 struct ScoreReaderZoomViewport: Equatable {
     var zoomScale: CGFloat = 1
     var contentOrigin: CGPoint = .zero
@@ -99,9 +103,9 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.shouldBeginPagePan = { [weak coordinator = context.coordinator] panGestureRecognizer, scrollView in
             coordinator?.shouldBeginPagePan(panGestureRecognizer, in: scrollView) ?? true
         }
-        scrollView.minimumZoomScale = 0.8
+        scrollView.minimumZoomScale = ScoreReaderZoomLimits.minimumScale
         scrollView.maximumZoomScale = 6
-        scrollView.bouncesZoom = true
+        scrollView.bouncesZoom = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
         scrollView.backgroundColor = .clear
@@ -924,6 +928,7 @@ private final class ScorePagePDFTileView: UIView {
     private var pdfDocument: CGPDFDocument?
     private var pdfPage: CGPDFPage?
     private var contentSize = CGSize(width: 1, height: 1)
+    private var lastViewportSize = CGSize.zero
 
     override class var layerClass: AnyClass {
         CATiledLayer.self
@@ -944,6 +949,18 @@ private final class ScorePagePDFTileView: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.size != lastViewportSize else {
+            return
+        }
+
+        lastViewportSize = bounds.size
+        // The SwiftUI surface is recreated for viewport changes. This redraw is
+        // a second line of defense for UIKit-only bounds changes within a surface.
+        layer.setNeedsDisplay()
     }
 
     func configure(pdfData: Data, contentSize: CGSize) -> Bool {

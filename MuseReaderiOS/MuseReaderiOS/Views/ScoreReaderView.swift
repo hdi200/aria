@@ -79,7 +79,7 @@ struct ScoreReaderView: View {
         self.initialRememberedState = rememberedState
         _zoomScale = State(
             initialValue: initialInteractionMode == .view
-                ? CGFloat(min(max(rememberedState.zoomScale, 0.8), 3.0))
+                ? CGFloat(min(max(rememberedState.zoomScale, Double(ScoreReaderZoomLimits.minimumScale)), 3.0))
                 : (UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0)
         )
         _selectedToolCategory = State(initialValue: initialToolCategory)
@@ -247,15 +247,12 @@ struct ScoreReaderView: View {
                             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
                             isExportBusy: isPreparingExport,
                             playbackPreparationMessage: readerState.playbackPreparationMessage,
-                            concertPitchEnabled: readerState.concertPitchEnabled,
-                            showsConcertPitchControl: showsChromeConcertPitchControl,
                             closeAction: closeReader,
                             selectModeAction: selectModeFromToolbar,
                             noteInputModeAction: noteInputModeFromToolbar,
                             togglePlaybackAction: readerState.togglePlayback,
                             stopPlaybackAction: readerState.stopPlayback,
                             toggleMetronomeAction: readerState.toggleMetronome,
-                            toggleConcertPitchAction: readerState.toggleConcertPitch,
                             exportAction: {
                                 isPartsPanelPresented = false
                                 if !isExportPanelPresented {
@@ -705,10 +702,6 @@ struct ScoreReaderView: View {
         readerState.supportsEditing
             && session.liveRenderSession != nil
             && (readerState.concertPitchEnabled || readerState.hasConcertPitchRelevantTransposition)
-    }
-
-    private var showsChromeConcertPitchControl: Bool {
-        showsConcertPitchControl && !isPhoneInterface
     }
 
     private var sharingDescription: String {
@@ -1224,7 +1217,7 @@ struct ScoreReaderView: View {
             ScoreReaderRememberedState(
                 pageIndex: readerState.selectedPageIndex,
                 selectedPartID: selectedPartID,
-                zoomScale: Double(min(max(zoomScale, 0.8), 3.0)),
+                zoomScale: Double(min(max(zoomScale, ScoreReaderZoomLimits.minimumScale), 3.0)),
                 readingStyle: readingStyle,
                 playbackFollowEnabled: readerState.playbackFollowEnabled
             ),
@@ -1971,7 +1964,7 @@ struct ScoreReaderView: View {
     }
 
     private func zoomOut() {
-        zoomScale = max(0.8, zoomScale - 0.15)
+        zoomScale = max(ScoreReaderZoomLimits.minimumScale, zoomScale - 0.15)
     }
 }
 

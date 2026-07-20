@@ -352,6 +352,47 @@ struct MuseReaderiOSTests {
         #expect(store.state(for: "score-b") == ScoreReaderRememberedState())
     }
 
+    @Test
+    func pageRenderSurfaceIdentityChangesWithViewportOrientation() {
+        let portrait = ScorePageRenderSurfaceIdentity(
+            pageIndex: 2,
+            pageSize: CGSize(width: 768, height: 1024),
+            displayScale: 2
+        )
+        let landscape = ScorePageRenderSurfaceIdentity(
+            pageIndex: 2,
+            pageSize: CGSize(width: 1024, height: 768),
+            displayScale: 2
+        )
+        let equivalentPortrait = ScorePageRenderSurfaceIdentity(
+            pageIndex: 2,
+            pageSize: CGSize(width: 768.001, height: 1023.999),
+            displayScale: 2
+        )
+
+        #expect(portrait != landscape)
+        #expect(portrait == equivalentPortrait)
+    }
+
+    @Test
+    func scoreReaderHeaderAdaptsBeforeTabletIslandsCanOverlap() {
+        let regularLandscape = ScoreReaderHeaderLayoutPolicy(availableWidth: 1_366)
+        let compactLandscape = ScoreReaderHeaderLayoutPolicy(availableWidth: 1_024)
+        let compactPortrait = ScoreReaderHeaderLayoutPolicy(availableWidth: 834)
+
+        #expect(regularLandscape.usesCompactTabletControls == false)
+        #expect(regularLandscape.usesCondensedTabletPlayback == false)
+        #expect(compactLandscape.usesCompactTabletControls == true)
+        #expect(compactLandscape.usesCondensedTabletPlayback == false)
+        #expect(compactPortrait.usesCompactTabletControls == true)
+        #expect(compactPortrait.usesCondensedTabletPlayback == true)
+    }
+
+    @Test
+    func scoreReaderCannotZoomOutPastTheFittedPage() {
+        #expect(ScoreReaderZoomLimits.minimumScale == 1)
+    }
+
     private func fixtureURL(_ relativePath: String) -> URL {
         repositoryRoot.appendingPathComponent(relativePath)
     }
