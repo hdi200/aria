@@ -96,6 +96,8 @@ final class ScoreReaderState: ObservableObject {
     @Published var editingState: ScoreEditingState = .inactive
     @Published var measureRangePreviewSelection: ScoreSelectedElement?
     @Published var editingErrorMessage: String?
+    @Published var autosaveFailureMessage: String?
+    @Published var hasUnsavedAutosaveChanges = false
     @Published var isEditingActionInFlight = false
     @Published var pendingPitchClass: Int?
     @Published var pendingMIDIPitch: Int?
@@ -135,7 +137,6 @@ final class ScoreReaderState: ObservableObject {
     var noteEntryPreviewRevision = 0
     var measureRangePreviewRevision = 0
     var autosaveRevision = 0
-    var hasUnsavedAutosaveChanges = false
     var playbackWarmupRevision = 0
     var playbackMeasureRegions: [ScorePlaybackMeasureRegion] = []
     var playbackWasExplicitlyStopped = false

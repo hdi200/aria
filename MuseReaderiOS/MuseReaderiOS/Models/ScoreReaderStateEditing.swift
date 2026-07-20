@@ -1663,8 +1663,10 @@ extension ScoreReaderState {
                 try await liveRenderSession.save(to: destinationURL)
                 if self?.autosaveRevision == saveRevision {
                     self?.hasUnsavedAutosaveChanges = false
+                    self?.autosaveFailureMessage = nil
                 }
             } catch {
+                self?.recordSaveFailure(error)
                 self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
         }

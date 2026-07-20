@@ -315,15 +315,21 @@ struct ScoreReaderView: View {
                         }
                     }
                     .overlay(alignment: .top) {
-                        if let viewModeSaveErrorMessage {
+                        if let visibleSaveFailureMessage {
                             HStack(spacing: 12) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundStyle(.red)
-                                Text(viewModeSaveErrorMessage)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .lineLimit(2)
-                                Button("Retry Save", action: retryViewModeSave)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Not Saved")
+                                        .font(.system(size: 13, weight: .bold))
+                                    Text(visibleSaveFailureMessage)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .lineLimit(2)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                Button("Retry Save", action: retryVisibleSaveFailure)
                                     .font(.system(size: 13, weight: .bold))
+                                    .disabled(readerState.isEditingActionInFlight)
                             }
                             .foregroundStyle(Color.black.opacity(0.84))
                             .padding(.horizontal, 14)
@@ -1296,6 +1302,18 @@ struct ScoreReaderView: View {
                 viewModeSaveErrorMessage = readerState.editingErrorMessage ?? "Changes could not be saved."
                 readerState.editingErrorMessage = nil
             }
+        }
+    }
+
+    private var visibleSaveFailureMessage: String? {
+        viewModeSaveErrorMessage ?? readerState.autosaveFailureMessage
+    }
+
+    private func retryVisibleSaveFailure() {
+        if viewModeSaveErrorMessage != nil {
+            retryViewModeSave()
+        } else {
+            readerState.retryAutosave()
         }
     }
 

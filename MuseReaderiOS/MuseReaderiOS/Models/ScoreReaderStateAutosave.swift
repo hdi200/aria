@@ -51,6 +51,7 @@ extension ScoreReaderState {
                              finishedAt.timeIntervalSince(startedAt),
                              finishedAt.timeIntervalSince(scheduledAt)))
                 self.hasUnsavedAutosaveChanges = false
+                self.autosaveFailureMessage = nil
                 self.autosaveTask = nil
             } catch is CancellationError {
                 print(String(format: "Aria autosave canceled: revision=%d elapsed=%.3fs",
@@ -64,7 +65,42 @@ extension ScoreReaderState {
                              saveRevision,
                              Date().timeIntervalSince(scheduledAt),
                              ((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)))
+                self.recordSaveFailure(error)
                 self.autosaveTask = nil
+            }
+        }
+    }
+
+    func retryAutosave() {
+        guard
+            hasUnsavedAutosaveChanges,
+            autosaveFailureMessage != nil,
+            let liveRenderSession = session.liveRenderSession,
+            !isEditingActionInFlight
+        else {
+            return
+        }
+
+        autosaveTask?.cancel()
+        autosaveTask = nil
+        isEditingActionInFlight = true
+        let destinationURL = session.document.url
+        let saveRevision = autosaveRevision
+
+        Task { @MainActor [weak self] in
+            defer {
+                self?.isEditingActionInFlight = false
+            }
+
+            do {
+                try await liveRenderSession.save(to: destinationURL)
+                guard let self, self.autosaveRevision == saveRevision else {
+                    return
+                }
+                self.hasUnsavedAutosaveChanges = false
+                self.autosaveFailureMessage = nil
+            } catch {
+                self?.recordSaveFailure(error)
             }
         }
     }
@@ -145,11 +181,18 @@ extension ScoreReaderState {
                          Date().timeIntervalSince(startedAt)))
             if autosaveRevision == saveRevision {
                 hasUnsavedAutosaveChanges = false
+                autosaveFailureMessage = nil
             }
             return true
         } catch {
+            recordSaveFailure(error)
             editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return false
         }
+    }
+
+    func recordSaveFailure(_ error: Error) {
+        hasUnsavedAutosaveChanges = true
+        autosaveFailureMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
