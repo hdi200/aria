@@ -18,9 +18,46 @@ enum ScoreReaderZoomLimits {
     static let minimumScale: CGFloat = 1
 }
 
+enum ScoreReaderPageHorizontalAlignment {
+    case leading
+    case center
+    case trailing
+}
+
+struct ScoreReaderZoomLayout {
+    static func contentInsets(
+        viewportSize: CGSize,
+        pageSize: CGSize,
+        zoomScale: CGFloat,
+        horizontalAlignment: ScoreReaderPageHorizontalAlignment,
+        centersVertically: Bool
+    ) -> UIEdgeInsets {
+        let horizontalSpace = max(viewportSize.width - pageSize.width * zoomScale, 0)
+        let verticalSpace = max(viewportSize.height - pageSize.height * zoomScale, 0)
+        let left: CGFloat
+        let right: CGFloat
+
+        switch horizontalAlignment {
+        case .leading:
+            left = 0
+            right = horizontalSpace
+        case .center:
+            left = horizontalSpace * 0.5
+            right = horizontalSpace * 0.5
+        case .trailing:
+            left = horizontalSpace
+            right = 0
+        }
+
+        let verticalInset = centersVertically ? verticalSpace * 0.5 : 0
+        return UIEdgeInsets(top: verticalInset, left: left, bottom: verticalInset, right: right)
+    }
+}
+
 struct ScoreReaderZoomViewport: Equatable {
     var zoomScale: CGFloat = 1
     var contentOrigin: CGPoint = .zero
+    var contentSize: CGSize = .zero
     var boundsSize: CGSize = .zero
 
     func project(_ point: CGPoint) -> CGPoint {
@@ -44,6 +81,7 @@ struct ZoomableImageView: UIViewRepresentable {
     let image: UIImage?
     let pdfData: Data?
     let contentSize: CGSize
+    let displayedPageSize: CGSize
     let playbackHighlight: ScorePlaybackMeasureHighlight?
     let selection: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
@@ -54,6 +92,8 @@ struct ZoomableImageView: UIViewRepresentable {
     var activeNotationTopInset: CGFloat = 0
     var activeNotationBottomInset: CGFloat = 0
     var activeNotationViewportHeight: CGFloat = 0
+    var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
+    var centersPageVertically = false
     var allowsEditingInteractions = true
     var allowsPlaybackFollow = true
     var allowsPencilInsertionFineTune = false
@@ -111,9 +151,8 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.backgroundColor = .clear
         scrollView.contentInsetAdjustmentBehavior = .never
 
-        let containerView = UIView()
+        let containerView = ScorePageZoomContainerView()
         containerView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.backgroundColor = .clear
 
         let contentView = ScorePageContentView()
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -127,13 +166,15 @@ struct ZoomableImageView: UIViewRepresentable {
         containerView.addSubview(overlayView)
         scrollView.addSubview(containerView)
 
+        let pageWidthConstraint = containerView.widthAnchor.constraint(equalToConstant: max(displayedPageSize.width, 1))
+        let pageHeightConstraint = containerView.heightAnchor.constraint(equalToConstant: max(displayedPageSize.height, 1))
         NSLayoutConstraint.activate([
             containerView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             containerView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             containerView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             containerView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            containerView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-            containerView.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
+            pageWidthConstraint,
+            pageHeightConstraint,
 
             contentView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
@@ -182,6 +223,8 @@ struct ZoomableImageView: UIViewRepresentable {
         overlayView.addInteraction(pencilInteraction)
 
         context.coordinator.zoomView = containerView
+        context.coordinator.pageWidthConstraint = pageWidthConstraint
+        context.coordinator.pageHeightConstraint = pageHeightConstraint
         context.coordinator.contentView = contentView
         context.coordinator.overlayView = overlayView
         context.coordinator.tapGestureRecognizer = tapGestureRecognizer
@@ -225,6 +268,8 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.activeNotationTopInset = activeNotationTopInset
         context.coordinator.activeNotationBottomInset = activeNotationBottomInset
         context.coordinator.activeNotationViewportHeight = activeNotationViewportHeight
+        context.coordinator.pageHorizontalAlignment = pageHorizontalAlignment
+        context.coordinator.centersPageVertically = centersPageVertically
         context.coordinator.playbackHighlight = playbackHighlight
         context.coordinator.zoomScale = $zoomScale
         context.coordinator.zoomViewport = $zoomViewport
@@ -239,6 +284,8 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.overlayView?.noteEntryPreviewIsRest = noteEntryPreviewIsRest
         context.coordinator.overlayView?.noteEntryPreviewDuration = noteEntryPreviewDuration
         context.coordinator.overlayView?.showsLayoutMarkers = showsLayoutMarkers
+        context.coordinator.pageWidthConstraint?.constant = max(displayedPageSize.width, 1)
+        context.coordinator.pageHeightConstraint?.constant = max(displayedPageSize.height, 1)
         let clampedZoomScale = min(max(zoomScale, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
         let allowsReadingSwipe = !allowsEditingInteractions && clampedZoomScale <= 1.01
         context.coordinator.swipeLeftGestureRecognizer?.isEnabled = allowsReadingSwipe
@@ -294,6 +341,8 @@ struct ZoomableImageView: UIViewRepresentable {
         private var lastHandledActiveNotationAutoScrollRevision = 0
         private var lastHandledPlaybackRect: ScoreNormalizedRect?
         weak var zoomView: UIView?
+        var pageWidthConstraint: NSLayoutConstraint?
+        var pageHeightConstraint: NSLayoutConstraint?
         weak var contentView: ScorePageContentView?
         weak var overlayView: ScorePageOverlayView?
         weak var tapGestureRecognizer: ScorePageTapGestureRecognizer?
@@ -305,6 +354,8 @@ struct ZoomableImageView: UIViewRepresentable {
         weak var swipeRightGestureRecognizer: UISwipeGestureRecognizer?
         weak var zoomScrollView: UIScrollView?
         var isUserZooming = false
+        var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
+        var centersPageVertically = false
         private var selectedNoteDragStartPoint: CGPoint?
         private var selectedChordTextDragStartPoint: CGPoint?
         private var expressionEndpointDragIsStart: Bool?
@@ -406,6 +457,7 @@ struct ZoomableImageView: UIViewRepresentable {
             let nextViewport = ScoreReaderZoomViewport(
                 zoomScale: scrollView.zoomScale,
                 contentOrigin: origin,
+                contentSize: zoomView?.bounds.size ?? .zero,
                 boundsSize: scrollView.bounds.size
             )
             guard zoomViewport.wrappedValue != nextViewport else {
@@ -417,10 +469,19 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         func updateActiveNotationContentInsets(in scrollView: UIScrollView) {
-            // Keep extra scroll room even when zoomed out so programmatic
-            // note-entry focus can lift the active bar above the bottom panel.
-            let bottomInset = usesActiveNotationFocus ? activeNotationBottomScrollInset(for: scrollView) : 0
-            let nextInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
+            let pageSize = zoomView?.bounds.size ?? .zero
+            var nextInset = ScoreReaderZoomLayout.contentInsets(
+                viewportSize: scrollView.bounds.size,
+                pageSize: pageSize,
+                zoomScale: scrollView.zoomScale,
+                horizontalAlignment: pageHorizontalAlignment,
+                centersVertically: centersPageVertically
+            )
+            // Keep extra scroll room in edit mode so programmatic note-entry
+            // focus can lift the active bar above the bottom panel.
+            if usesActiveNotationFocus {
+                nextInset.bottom += activeNotationBottomScrollInset(for: scrollView)
+            }
             guard scrollView.contentInset != nextInset else {
                 return
             }
@@ -1115,6 +1176,27 @@ private final class ScoreOverlayPDFView: UIView {
         context.translateBy(x: -pageBox.minX, y: -pageBox.minY)
         context.drawPDFPage(pdfPage)
         context.restoreGState()
+    }
+}
+
+private final class ScorePageZoomContainerView: UIView {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .white
+        layer.cornerRadius = 4
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.15
+        layer.shadowRadius = 12
+        layer.shadowOffset = CGSize(width: 0, height: 6)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
     }
 }
 

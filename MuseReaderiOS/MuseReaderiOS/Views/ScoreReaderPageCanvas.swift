@@ -11,12 +11,22 @@ struct ScorePageRenderSurfaceIdentity: Hashable {
     let pageIndex: Int
     let pixelWidth: Int
     let pixelHeight: Int
+    let viewportPixelWidth: Int
+    let viewportPixelHeight: Int
 
-    init(pageIndex: Int, pageSize: CGSize, displayScale: CGFloat = UIScreen.main.scale) {
+    init(
+        pageIndex: Int,
+        pageSize: CGSize,
+        viewportSize: CGSize? = nil,
+        displayScale: CGFloat = UIScreen.main.scale
+    ) {
         let safeScale = max(displayScale, 1)
+        let viewportSize = viewportSize ?? pageSize
         self.pageIndex = pageIndex
         self.pixelWidth = Int((max(pageSize.width, 0) * safeScale).rounded())
         self.pixelHeight = Int((max(pageSize.height, 0) * safeScale).rounded())
+        self.viewportPixelWidth = Int((max(viewportSize.width, 0) * safeScale).rounded())
+        self.viewportPixelHeight = Int((max(viewportSize.height, 0) * safeScale).rounded())
     }
 }
 
@@ -93,6 +103,8 @@ struct ScoreReaderPageCanvas: View {
         let fittedPageSize = fittedPageSize
         let pageWidth = fittedPageSize.width
         let pageHeight = fittedPageSize.height
+        let zoomViewportWidth = max(availableWidth, pageWidth)
+        let zoomViewportHeight = fitsPageToViewport ? max(viewportSize.height, pageHeight) : pageHeight
         let topPadding = topPagePadding
         let bottomPadding: CGFloat = fitsPageToViewport ? 0 : 6
         let usesActiveNotationFocus = selectedElement?.pageIndex == pageIndex
@@ -110,6 +122,9 @@ struct ScoreReaderPageCanvas: View {
                 selectedElement: selectedElement,
                 noteEntryPreview: noteEntryPreview,
                 zoomScale: $zoomScale,
+                displayedPageSize: fittedPageSize,
+                pageHorizontalAlignment: zoomPageHorizontalAlignment,
+                centersPageVertically: fitsPageToViewport,
                 allowsPencilInsertionFineTune: allowsPencilInsertionFineTune,
                 noteEntryPreviewPitchClass: noteEntryPreviewPitchClass,
                 noteEntryPreviewIsRest: noteEntryPreviewIsRest,
@@ -157,16 +172,17 @@ struct ScoreReaderPageCanvas: View {
             .id(
                 ScorePageRenderSurfaceIdentity(
                     pageIndex: pageIndex,
-                    pageSize: CGSize(width: pageWidth, height: pageHeight)
+                    pageSize: fittedPageSize,
+                    viewportSize: CGSize(width: zoomViewportWidth, height: zoomViewportHeight)
                 )
             )
-            .frame(width: pageWidth, height: pageHeight)
-            .position(x: pageWidth * 0.5, y: topPadding + pageHeight * 0.5)
+            .frame(width: zoomViewportWidth, height: zoomViewportHeight)
+            .position(x: zoomViewportWidth * 0.5, y: topPadding + zoomViewportHeight * 0.5)
 
             if let anchorY = activeNotationAnchorY(pageHeight: pageHeight, topPadding: topPadding) {
                 Color.clear
                     .frame(width: 1, height: 1)
-                    .position(x: pageWidth * 0.5, y: anchorY)
+                    .position(x: zoomViewportWidth * 0.5, y: anchorY)
                     .id(Self.activeNotationAnchorID(for: pageIndex))
                     .accessibilityHidden(true)
             }
@@ -174,13 +190,12 @@ struct ScoreReaderPageCanvas: View {
             if let anchorY = playbackAnchorY(pageHeight: pageHeight, topPadding: topPadding) {
                 Color.clear
                     .frame(width: 1, height: 1)
-                    .position(x: pageWidth * 0.5, y: anchorY)
+                    .position(x: zoomViewportWidth * 0.5, y: anchorY)
                     .id(Self.playbackAnchorID(for: pageIndex))
                     .accessibilityHidden(true)
             }
         }
-        .frame(width: pageWidth, height: topPadding + pageHeight + bottomPadding)
-        .frame(maxWidth: .infinity, alignment: pageAlignment)
+        .frame(width: zoomViewportWidth, height: topPadding + zoomViewportHeight + bottomPadding)
     }
 
     private var isPortrait: Bool {
@@ -194,7 +209,7 @@ struct ScoreReaderPageCanvas: View {
         return isPortrait && !isCompactPhoneLayout ? 92 : 0
     }
 
-    private var pageAlignment: Alignment {
+    private var zoomPageHorizontalAlignment: ScoreReaderPageHorizontalAlignment {
         if fitsPageToViewport {
             return .center
         }
@@ -293,6 +308,9 @@ struct ScoreReaderPageSurface: View {
     let selectedElement: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
     @Binding var zoomScale: CGFloat
+    let displayedPageSize: CGSize
+    let pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment
+    let centersPageVertically: Bool
     let allowsPencilInsertionFineTune: Bool
     let noteEntryPreviewPitchClass: Int?
     let noteEntryPreviewIsRest: Bool
@@ -342,6 +360,7 @@ struct ScoreReaderPageSurface: View {
                         image: page.image,
                         pdfData: page.pdfData,
                         contentSize: page.displaySize ?? CGSize(width: 612, height: 792),
+                        displayedPageSize: displayedPageSize,
                         playbackHighlight: playbackHighlight,
                         selection: selectedElement,
                         noteEntryPreview: noteEntryPreview,
@@ -352,6 +371,8 @@ struct ScoreReaderPageSurface: View {
                         activeNotationTopInset: activeNotationTopInset,
                         activeNotationBottomInset: activeNotationBottomInset,
                         activeNotationViewportHeight: activeNotationViewportHeight,
+                        pageHorizontalAlignment: pageHorizontalAlignment,
+                        centersPageVertically: centersPageVertically,
                         allowsEditingInteractions: allowsEditingInteractions,
                         allowsPlaybackFollow: allowsPlaybackFollow,
                         allowsPencilInsertionFineTune: allowsPencilInsertionFineTune,
@@ -380,10 +401,12 @@ struct ScoreReaderPageSurface: View {
                         isLoading: isLoading,
                         errorText: errorText
                     )
+                    .frame(width: displayedPageSize.width, height: displayedPageSize.height)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.15), radius: 12, y: 6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: placeholderAlignment)
                 }
             }
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
 
             if isLoading {
                 ProgressView()
@@ -460,12 +483,19 @@ struct ScoreReaderPageSurface: View {
                 )
             }
         }
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
+    }
+
+    private var placeholderAlignment: Alignment {
+        let horizontal: HorizontalAlignment
+        switch pageHorizontalAlignment {
+        case .leading:
+            horizontal = .leading
+        case .center:
+            horizontal = .center
+        case .trailing:
+            horizontal = .trailing
         }
-        .shadow(color: Color.black.opacity(0.15), radius: 12, y: 6)
+        return Alignment(horizontal: horizontal, vertical: centersPageVertically ? .center : .top)
     }
 
     private func editAction(for kind: ScoreSelectedElementKind) -> () -> Void {
@@ -630,7 +660,10 @@ private struct ScoreReaderOverlayCoordinateSpace {
     let viewport: ScoreReaderZoomViewport
 
     func rect(for normalizedRect: ScoreNormalizedRect, in size: CGSize) -> CGRect {
-        let imageRect = fittedImageRect(in: size)
+        let pageSize = viewport.contentSize.width > 0 && viewport.contentSize.height > 0
+            ? viewport.contentSize
+            : size
+        let imageRect = fittedImageRect(in: pageSize)
         let unzoomedRect = CGRect(
             x: imageRect.minX + CGFloat(normalizedRect.x) * imageRect.width,
             y: imageRect.minY + CGFloat(normalizedRect.y) * imageRect.height,

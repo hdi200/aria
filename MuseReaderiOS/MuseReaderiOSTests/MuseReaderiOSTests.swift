@@ -369,9 +369,16 @@ struct MuseReaderiOSTests {
             pageSize: CGSize(width: 768.001, height: 1023.999),
             displayScale: 2
         )
+        let portraitPageInLandscapeViewport = ScorePageRenderSurfaceIdentity(
+            pageIndex: 2,
+            pageSize: CGSize(width: 768, height: 1024),
+            viewportSize: CGSize(width: 1024, height: 1024),
+            displayScale: 2
+        )
 
         #expect(portrait != landscape)
         #expect(portrait == equivalentPortrait)
+        #expect(portrait != portraitPageInLandscapeViewport)
     }
 
     @Test
@@ -391,6 +398,38 @@ struct MuseReaderiOSTests {
     @Test
     func scoreReaderCannotZoomOutPastTheFittedPage() {
         #expect(ScoreReaderZoomLimits.minimumScale == 1)
+    }
+
+    @Test
+    func scoreReaderZoomUsesTheCanvasGuttersAtLargerScales() {
+        let fittedInsets = ScoreReaderZoomLayout.contentInsets(
+            viewportSize: CGSize(width: 1_024, height: 768),
+            pageSize: CGSize(width: 700, height: 768),
+            zoomScale: 1,
+            horizontalAlignment: .center,
+            centersVertically: true
+        )
+        let zoomedInsets = ScoreReaderZoomLayout.contentInsets(
+            viewportSize: CGSize(width: 1_024, height: 768),
+            pageSize: CGSize(width: 700, height: 768),
+            zoomScale: 2,
+            horizontalAlignment: .center,
+            centersVertically: true
+        )
+        let paletteAlignedInsets = ScoreReaderZoomLayout.contentInsets(
+            viewportSize: CGSize(width: 1_024, height: 768),
+            pageSize: CGSize(width: 932, height: 768),
+            zoomScale: 1,
+            horizontalAlignment: .trailing,
+            centersVertically: false
+        )
+
+        #expect(fittedInsets.left == 162)
+        #expect(fittedInsets.right == 162)
+        #expect(zoomedInsets.left == 0)
+        #expect(zoomedInsets.right == 0)
+        #expect(paletteAlignedInsets.left == 92)
+        #expect(paletteAlignedInsets.right == 0)
     }
 
     private func fixtureURL(_ relativePath: String) -> URL {
