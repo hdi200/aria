@@ -454,17 +454,29 @@
         }
 
         mu::engraving::ChordRest* chordRest = selectedChordRest(score);
-        if (chordRest) {
-            for (mu::engraving::Lyrics* lyrics : chordRest->lyrics()) {
-                if (!lyrics) {
-                    continue;
-                }
-
-                score->select(lyrics, mu::engraving::SelectType::SINGLE, lyrics->staffIdx());
-                break;
-            }
+        if (!chordRest || !chordRest->isChord()) {
+            output = makeEditState(score);
+            return true;
         }
 
+        mu::engraving::EngravingItem* destinationItem = noteOrRestSelectionItem(chordRest);
+        if (!destinationItem) {
+            errorMessage = "Select a note before adding lyrics.";
+            return false;
+        }
+
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader add lyrics verse"));
+        mu::engraving::TextBase* text = score->addText(mu::engraving::TextStyleType::LYRICS_ODD, destinationItem);
+        if (!text || !text->isLyrics()) {
+            score->endCmd(true);
+            errorMessage = "MuseReader could not add lyrics at the current selection.";
+            return false;
+        }
+        score->endCmd();
+        refreshAfterEdit();
+
+        mu::engraving::Lyrics* lyrics = mu::engraving::toLyrics(text);
+        score->select(lyrics, mu::engraving::SelectType::SINGLE, lyrics->staffIdx());
         output = makeEditState(score);
         return true;
     }
@@ -553,7 +565,7 @@
             ? selectedLyrics->placement()
             : mu::engraving::PlacementV::BELOW;
 
-        auto nextLyricEntryTarget = [&]() -> mu::engraving::EngravingItem* {
+        auto nextLyricChordRest = [&]() -> mu::engraving::ChordRest* {
             mu::engraving::Segment* nextSegment = chordRest->segment();
             while ((nextSegment = nextSegment ? nextSegment->next1(mu::engraving::SegmentType::ChordRest) : nullptr)) {
                 mu::engraving::EngravingItem* nextItem = nextSegment->element(chordRest->track());
@@ -566,11 +578,10 @@
                     continue;
                 }
 
-                mu::engraving::Lyrics* nextLyrics = nextChordRest->lyrics(verse, placement);
-                return nextLyrics ? static_cast<mu::engraving::EngravingItem*>(nextLyrics) : noteOrRestSelectionItem(nextChordRest);
+                return nextChordRest;
             }
 
-            return static_cast<mu::engraving::EngravingItem*>(nullptr);
+            return nullptr;
         };
 
         muse::String lyricText = muse::String::fromUtf8(text.c_str()).trimmed();
@@ -579,21 +590,15 @@
                 errorMessage = "Lyrics cannot be empty.";
                 return false;
             }
-
-            if (mu::engraving::EngravingItem* selectedAfterAdvance = nextLyricEntryTarget()) {
-                score->select(selectedAfterAdvance, mu::engraving::SelectType::SINGLE, selectedAfterAdvance->staffIdx());
-            }
-            output = makeEditState(score);
-            return true;
         }
 
         mu::engraving::Lyrics* lyrics = selectedLyrics ? selectedLyrics : chordRest->lyrics(verse, placement);
         bool createdLyrics = false;
-        if (!lyrics) {
+        if (!lyrics && !lyricText.empty()) {
             lyrics = mu::engraving::Factory::createLyrics(chordRest);
             lyrics->setTrack(chordRest->track());
             lyrics->setParent(chordRest);
-            lyrics->setVerse(verse);
+            lyrics->setProperty(mu::engraving::Pid::VERSE, verse);
             lyrics->setPlacement(placement);
             lyrics->setSyllabic(mu::engraving::LyricsSyllabic::SINGLE);
             createdLyrics = true;
@@ -603,14 +608,32 @@
         if (createdLyrics) {
             lyrics->setPlainText(lyricText);
             score->undoAddElement(lyrics);
-        } else {
+        } else if (lyrics && !lyricText.empty()) {
             lyrics->undoChangeProperty(mu::engraving::Pid::TEXT, lyricText);
         }
 
-        mu::engraving::EngravingItem* selectedAfterEdit = lyrics;
+        mu::engraving::EngravingItem* selectedAfterEdit = lyrics ? static_cast<mu::engraving::EngravingItem*>(lyrics) : selectedItem;
         if (advanceToNextChord) {
-            if (mu::engraving::EngravingItem* nextTarget = nextLyricEntryTarget()) {
-                selectedAfterEdit = nextTarget;
+            if (mu::engraving::ChordRest* nextChordRest = nextLyricChordRest()) {
+                mu::engraving::Lyrics* nextLyrics = nextChordRest->lyrics(verse, placement);
+                if (!nextLyrics) {
+                    nextLyrics = mu::engraving::Factory::createLyrics(nextChordRest);
+                    nextLyrics->setTrack(nextChordRest->track());
+                    nextLyrics->setParent(nextChordRest);
+                    nextLyrics->setProperty(mu::engraving::Pid::VERSE, verse);
+                    nextLyrics->setPlacement(placement);
+                    nextLyrics->setSyllabic(mu::engraving::LyricsSyllabic::SINGLE);
+                    if (lyrics) {
+                        nextLyrics->setTextStyleType(lyrics->textStyleType());
+                        nextLyrics->setPropertyFlags(mu::engraving::Pid::PLACEMENT,
+                                                     lyrics->propertyFlags(mu::engraving::Pid::PLACEMENT));
+                        nextLyrics->setFontStyle(lyrics->fontStyle());
+                        nextLyrics->setPropertyFlags(mu::engraving::Pid::FONT_STYLE,
+                                                     lyrics->propertyFlags(mu::engraving::Pid::FONT_STYLE));
+                    }
+                    score->undoAddElement(nextLyrics);
+                }
+                selectedAfterEdit = nextLyrics;
             }
         }
 

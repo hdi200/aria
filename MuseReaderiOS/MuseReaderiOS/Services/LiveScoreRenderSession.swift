@@ -392,7 +392,9 @@ actor LiveScoreRenderSession {
             return inactiveEditingState()
         }
 
-        return try makeEditingState(from: bridgeSession.selectAttachedLyrics())
+        let editState = try makeEditingState(from: bridgeSession.selectAttachedLyrics())
+        invalidateCachedPlaybackArtifacts()
+        return editState
     }
 
     func setSelectedText(_ text: String) throws -> ScoreEditingState {

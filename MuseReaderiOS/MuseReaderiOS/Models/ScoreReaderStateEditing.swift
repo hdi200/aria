@@ -607,7 +607,7 @@ extension ScoreReaderState {
     }
 
     func prepareLyricsEntry() {
-        performEditingAction(mutatesScore: false, revealActiveNotation: true) { liveRenderSession in
+        performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
             _ = try await liveRenderSession.setNoteInputEnabled(false)
             return try await liveRenderSession.selectAttachedLyrics()
         }
@@ -671,7 +671,7 @@ extension ScoreReaderState {
             return
         }
 
-        performEditingAction(mutatesScore: !trimmedText.isEmpty, revealActiveNotation: true) { liveRenderSession in
+        performEditingAction(mutatesScore: !trimmedText.isEmpty || advanceToNextChord, revealActiveNotation: true) { liveRenderSession in
             try await liveRenderSession.addLyricsText(trimmedText, advanceToNextChord: advanceToNextChord)
         }
     }
