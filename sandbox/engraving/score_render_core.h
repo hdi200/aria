@@ -267,6 +267,7 @@ public:
     bool selectAttachedLyrics(ScoreEditState& output, std::string& errorMessage);
     bool setSelectedText(const std::string& text, ScoreEditState& output, std::string& errorMessage);
     bool addLyricsText(const std::string& text, bool advanceToNextChord, ScoreEditState& output, std::string& errorMessage);
+    bool addLyricsMelisma(const std::string& text, ScoreEditState& output, std::string& errorMessage);
     bool addRepeatJump(const std::string& repeatJumpKind, ScoreEditState& output, std::string& errorMessage);
     bool addExpression(const std::string& expressionKind, ScoreEditState& output, std::string& errorMessage);
     bool retargetSelectedExpressionEndpoint(bool startEndpoint, int pageIndex, double normalizedX, double normalizedY, ScoreEditState& output, std::string& errorMessage);

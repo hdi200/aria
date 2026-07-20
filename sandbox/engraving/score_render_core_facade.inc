@@ -231,6 +231,13 @@ bool msr::render::ScoreRenderSession::addLyricsText(const std::string& text,
     return m_impl->addLyricsText(text, advanceToNextChord, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::addLyricsMelisma(const std::string& text,
+                                                        ScoreEditState& output,
+                                                        std::string& errorMessage)
+{
+    return m_impl->addLyricsMelisma(text, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::addRepeatJump(const std::string& repeatJumpKind,
                                                      ScoreEditState& output,
                                                      std::string& errorMessage)

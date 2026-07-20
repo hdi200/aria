@@ -168,6 +168,7 @@ struct ScoreReaderLyricsEntryPanel: View {
     let initialText: String
     let isInsertEnabled: Bool
     let insertAction: (String, Bool) -> Void
+    let melismaAction: (String) -> Void
     let cancelAction: () -> Void
 
     init(
@@ -175,12 +176,14 @@ struct ScoreReaderLyricsEntryPanel: View {
         initialText: String,
         isInsertEnabled: Bool,
         insertAction: @escaping (String, Bool) -> Void,
+        melismaAction: @escaping (String) -> Void,
         cancelAction: @escaping () -> Void
     ) {
         self.selectionID = selectionID
         self.initialText = initialText
         self.isInsertEnabled = isInsertEnabled
         self.insertAction = insertAction
+        self.melismaAction = melismaAction
         self.cancelAction = cancelAction
         _lyricsText = State(initialValue: initialText)
         _activeSelectionID = State(initialValue: selectionID)
@@ -214,6 +217,7 @@ struct ScoreReaderLyricsEntryPanel: View {
     private var standardBody: some View {
         HStack(spacing: isPhoneInterface ? 8 : 12) {
             textField
+            extensionButton
             dismissButton
         }
         .padding(isPhoneInterface ? 9 : 12)
@@ -226,11 +230,14 @@ struct ScoreReaderLyricsEntryPanel: View {
 
     private var phoneEmbeddedBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            textField
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
+            HStack(spacing: 8) {
+                textField
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                extensionButton
+            }
 
-            Text("Next or Space moves to next note")
+            Text("Space moves to next note • _ extends the syllable")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.black.opacity(0.48))
                 .fixedSize(horizontal: false, vertical: true)
@@ -245,6 +252,7 @@ struct ScoreReaderLyricsEntryPanel: View {
             isFirstResponder: true,
             commitAction: commit,
             spaceAction: commitAndAdvance,
+            melismaAction: commitMelisma,
             dismissAction: cancelAction
         )
         .frame(height: isPhoneInterface && embedsInCompactPanel ? 44 : (isPhoneInterface ? 42 : 48))
@@ -261,6 +269,23 @@ struct ScoreReaderLyricsEntryPanel: View {
                     .stroke(Color.black.opacity(0.08), lineWidth: 0.7)
             }
         }
+    }
+
+    private var extensionButton: some View {
+        Button(action: commitMelisma) {
+            VStack(spacing: 1) {
+                Text("_")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                Text("Extend")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(Color.black.opacity(isInsertEnabled ? 0.72 : 0.30))
+            .frame(width: isPhoneInterface ? 52 : 58, height: isPhoneInterface ? 44 : 48)
+            .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isInsertEnabled)
+        .accessibilityLabel("Extend lyric syllable")
     }
 
     private var dismissButton: some View {
@@ -296,6 +321,15 @@ struct ScoreReaderLyricsEntryPanel: View {
         }
 
         insertAction(lyricsText.trimmedToNil ?? "", true)
+        lyricsText = ""
+    }
+
+    private func commitMelisma() {
+        guard isInsertEnabled else {
+            return
+        }
+
+        melismaAction(lyricsText.trimmedToNil ?? "")
         lyricsText = ""
     }
 }

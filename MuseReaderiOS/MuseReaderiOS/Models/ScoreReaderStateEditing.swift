@@ -696,6 +696,13 @@ extension ScoreReaderState {
         }
     }
 
+    func addLyricsMelisma(_ text: String) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
+            try await liveRenderSession.addLyricsMelisma(trimmedText)
+        }
+    }
+
     func addRepeatJump(_ repeatJumpKind: String) {
         performEditingAction(mutatesScore: true) { liveRenderSession in
             try await liveRenderSession.addRepeatJump(repeatJumpKind)

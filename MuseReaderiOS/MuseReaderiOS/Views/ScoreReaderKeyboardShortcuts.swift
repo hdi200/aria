@@ -25,6 +25,7 @@ enum ScoreReaderKeyboardShortcut {
     case toggleDot
     case toggleTie
     case addSlur
+    case selectVoice(Int)
     case movePitch(up: Bool)
     case shiftOctave(Int)
     case shiftSemitone(Int)
@@ -94,6 +95,10 @@ final class KeyboardShortcutHostingView: UIView {
             command("+", title: "Tie"),
             command("=", modifiers: .shift, title: "Tie"),
             command("s", title: "Slur"),
+            command("1", modifiers: .command, title: "Voice 1"),
+            command("2", modifiers: .command, title: "Voice 2"),
+            command("3", modifiers: .command, title: "Voice 3"),
+            command("4", modifiers: .command, title: "Voice 4"),
             command(UIKeyCommand.inputLeftArrow, title: "Previous Element"),
             command(UIKeyCommand.inputUpArrow, title: "Move Pitch Up"),
             command(UIKeyCommand.inputRightArrow, title: "Next Element"),
@@ -127,7 +132,7 @@ final class KeyboardShortcutHostingView: UIView {
     }
 
     @objc private func performShortcut(_ sender: UIKeyCommand) {
-        guard let shortcut = shortcut(input: sender.input ?? "", modifiers: sender.modifierFlags)
+        guard let shortcut = Self.resolveShortcut(input: sender.input ?? "", modifiers: sender.modifierFlags)
         else {
             return
         }
@@ -163,7 +168,7 @@ final class KeyboardShortcutHostingView: UIView {
         )
     }
 
-    private func shortcut(input: String, modifiers: UIKeyModifierFlags) -> ScoreReaderKeyboardShortcut? {
+    static func resolveShortcut(input: String, modifiers: UIKeyModifierFlags) -> ScoreReaderKeyboardShortcut? {
         let normalizedModifiers = modifiers.intersection([.command, .shift, .alternate, .control])
         switch (input, normalizedModifiers) {
         case ("z", .command):
@@ -218,6 +223,14 @@ final class KeyboardShortcutHostingView: UIView {
             return .toggleTie
         case ("s", []):
             return .addSlur
+        case ("1", .command):
+            return .selectVoice(0)
+        case ("2", .command):
+            return .selectVoice(1)
+        case ("3", .command):
+            return .selectVoice(2)
+        case ("4", .command):
+            return .selectVoice(3)
         case (UIKeyCommand.inputLeftArrow, []):
             return .selectPrevious
         case (UIKeyCommand.inputRightArrow, []):
@@ -246,6 +259,14 @@ final class KeyboardShortcutHostingView: UIView {
 
         let normalizedModifiers = key.modifierFlags.intersection([.command, .shift, .alternate, .control])
         switch (key.keyCode, normalizedModifiers) {
+        case (.keyboard1, .command):
+            return .selectVoice(0)
+        case (.keyboard2, .command):
+            return .selectVoice(1)
+        case (.keyboard3, .command):
+            return .selectVoice(2)
+        case (.keyboard4, .command):
+            return .selectVoice(3)
         case (.keyboardLeftArrow, []):
             return .selectPrevious
         case (.keyboardRightArrow, []):

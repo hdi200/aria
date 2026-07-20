@@ -20,6 +20,8 @@ struct ScoreReaderHeaderLayoutPolicy: Equatable {
 }
 
 struct ScoreReaderChromeBar: View {
+    @State private var isReaderSettingsPresented = false
+
     let scoreTitle: String
     let parts: [ScorePart]
     @Binding var selectedPartID: String
@@ -368,22 +370,12 @@ struct ScoreReaderChromeBar: View {
     }
 
     private func readerSettingsIslandMenu(iconOnly: Bool) -> some View {
-        Menu {
-            Section("Reading Style") {
-                ForEach(ScoreReaderReadingStyle.allCases, id: \.rawValue) { style in
-                    Button {
-                        readingStyle = style
-                    } label: {
-                        Label(style.title, systemImage: readingStyle == style ? "checkmark" : style.systemImage)
-                    }
-                }
+        Button {
+            if !isReaderSettingsPresented {
+                isPartsPanelPresented = false
+                isExportPanelPresented = false
             }
-
-            Button {
-                playbackFollowEnabled.toggle()
-            } label: {
-                Label("Follow Score", systemImage: playbackFollowEnabled ? "checkmark" : "location")
-            }
+            isReaderSettingsPresented.toggle()
         } label: {
             Group {
                 if iconOnly {
@@ -400,8 +392,82 @@ struct ScoreReaderChromeBar: View {
             .foregroundStyle(Color.black.opacity(0.80))
             .scoreReaderChromeTapTarget(minWidth: iconOnly ? 40 : 70)
         }
+        .buttonStyle(.plain)
         .disabled(isEditingBusy)
         .accessibilityLabel("Reader Settings")
+        .popover(isPresented: $isReaderSettingsPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+            readerSettingsPanelContent
+                .presentationCompactPopoverWhenAvailable()
+        }
+    }
+
+    private var readerSettingsPanelContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Reading Style")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.secondary)
+                .padding(.horizontal, 12)
+
+            ForEach(ScoreReaderReadingStyle.allCases, id: \.rawValue) { style in
+                readerSettingsRow(
+                    title: style.title,
+                    systemImage: style.systemImage,
+                    isSelected: readingStyle == style,
+                    accessibilityValue: readingStyle == style ? "Selected" : ""
+                ) {
+                    readingStyle = style
+                    isReaderSettingsPresented = false
+                }
+            }
+
+            Divider()
+
+            readerSettingsRow(
+                title: "Follow Score",
+                systemImage: "location",
+                isSelected: playbackFollowEnabled,
+                accessibilityValue: playbackFollowEnabled ? "On" : "Off"
+            ) {
+                playbackFollowEnabled.toggle()
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 4)
+        .frame(width: UIDevice.current.userInterfaceIdiom == .phone ? 270 : 300)
+    }
+
+    private func readerSettingsRow(
+        title: String,
+        systemImage: String,
+        isSelected: Bool,
+        accessibilityValue: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 24)
+
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+
+                Spacer(minLength: 16)
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.blue)
+                }
+            }
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(accessibilityValue)
     }
 
     private var partsPanelContent: some View {

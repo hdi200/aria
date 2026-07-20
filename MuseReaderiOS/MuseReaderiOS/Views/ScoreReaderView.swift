@@ -142,6 +142,7 @@ struct ScoreReaderView: View {
                                 addChordTextAndSelectNextAction: readerState.addChordTextAndSelectNext,
                                 openLyricsEntryAction: openLyricsEntry,
                                 addLyricsTextAction: readerState.addLyricsText,
+                                addLyricsMelismaAction: readerState.addLyricsMelisma,
                                 addRepeatJumpAction: readerState.addRepeatJump,
                                 addExpressionAction: readerState.addExpression,
                                 addLayoutBreakAction: requestLayoutBreak,
@@ -1069,6 +1070,8 @@ struct ScoreReaderView: View {
             readerState.toggleTie()
         case .addSlur:
             readerState.addSlur()
+        case .selectVoice(let voice):
+            readerState.setCurrentVoice(voice)
         case .movePitch(let up):
             readerState.movePitch(up: up)
         case .shiftOctave(let octaveDelta):

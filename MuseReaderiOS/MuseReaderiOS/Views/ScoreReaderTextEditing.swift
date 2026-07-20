@@ -6,6 +6,11 @@
 import SwiftUI
 import UIKit
 
+enum ScoreReaderLyricsInputCommand: Equatable {
+    case advance
+    case melisma
+}
+
 enum ScoreReaderToolCategory: String, CaseIterable {
     case select
     case notes
@@ -142,6 +147,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
     let isFirstResponder: Bool
     let commitAction: () -> Void
     let spaceAction: () -> Void
+    let melismaAction: (() -> Void)?
     let dismissAction: (() -> Void)?
 
     init(
@@ -150,6 +156,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         isFirstResponder: Bool,
         commitAction: @escaping () -> Void,
         spaceAction: @escaping () -> Void,
+        melismaAction: (() -> Void)? = nil,
         dismissAction: (() -> Void)? = nil
     ) {
         _text = text
@@ -157,6 +164,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         self.isFirstResponder = isFirstResponder
         self.commitAction = commitAction
         self.spaceAction = spaceAction
+        self.melismaAction = melismaAction
         self.dismissAction = dismissAction
     }
 
@@ -182,6 +190,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         context.coordinator.text = $text
         context.coordinator.commitAction = commitAction
         context.coordinator.spaceAction = spaceAction
+        context.coordinator.melismaAction = melismaAction
         context.coordinator.dismissAction = dismissAction
 
         if isFirstResponder && !uiView.isFirstResponder {
@@ -192,24 +201,44 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, commitAction: commitAction, spaceAction: spaceAction, dismissAction: dismissAction)
+        Coordinator(
+            text: $text,
+            commitAction: commitAction,
+            spaceAction: spaceAction,
+            melismaAction: melismaAction,
+            dismissAction: dismissAction
+        )
+    }
+
+    static func inputCommand(for replacementString: String) -> ScoreReaderLyricsInputCommand? {
+        switch replacementString {
+        case " ":
+            return .advance
+        case "_":
+            return .melisma
+        default:
+            return nil
+        }
     }
 
     final class Coordinator: NSObject, UITextFieldDelegate {
         var text: Binding<String>
         var commitAction: () -> Void
         var spaceAction: () -> Void
+        var melismaAction: (() -> Void)?
         var dismissAction: (() -> Void)?
 
         init(
             text: Binding<String>,
             commitAction: @escaping () -> Void,
             spaceAction: @escaping () -> Void,
+            melismaAction: (() -> Void)? = nil,
             dismissAction: (() -> Void)? = nil
         ) {
             self.text = text
             self.commitAction = commitAction
             self.spaceAction = spaceAction
+            self.melismaAction = melismaAction
             self.dismissAction = dismissAction
         }
 
@@ -224,12 +253,20 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         }
 
         func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
-            guard string == " " else {
+            guard let command = ScoreReaderLyricsTextInputField.inputCommand(for: string) else {
                 return true
             }
 
             text.wrappedValue = textField.text ?? ""
-            spaceAction()
+            switch command {
+            case .advance:
+                spaceAction()
+            case .melisma:
+                guard let melismaAction else {
+                    return true
+                }
+                melismaAction()
+            }
             return false
         }
     }

@@ -486,6 +486,8 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)addLyricsText:(NSString *)text
                       advanceToNextChord:(BOOL)advanceToNextChord
                                     error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addLyricsText(_:advanceToNextChord:));
+- (nullable MSREditState *)addLyricsMelisma:(NSString *)text
+                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addLyricsMelisma(_:));
 - (nullable MSREditState *)addRepeatJump:(NSString *)repeatJumpKind
                                    error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addRepeatJump(_:));
 - (nullable MSREditState *)addExpression:(NSString *)expressionKind

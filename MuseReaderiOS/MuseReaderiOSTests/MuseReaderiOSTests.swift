@@ -13,6 +13,29 @@ import UIKit
 struct MuseReaderiOSTests {
 
     @Test
+    func lyricInputRecognizesAdvanceAndMelismaCommands() {
+        #expect(ScoreReaderLyricsTextInputField.inputCommand(for: " ") == .advance)
+        #expect(ScoreReaderLyricsTextInputField.inputCommand(for: "_") == .melisma)
+        #expect(ScoreReaderLyricsTextInputField.inputCommand(for: "word") == nil)
+    }
+
+    @Test
+    func commandNumberShortcutsSelectMuseScoreVoices() {
+        for (input, expectedVoice) in [("1", 0), ("2", 1), ("3", 2), ("4", 3)] {
+            let shortcut = KeyboardShortcutHostingView.resolveShortcut(input: input, modifiers: .command)
+
+            guard case .selectVoice(let voice) = shortcut else {
+                Issue.record("Command-\(input) did not resolve to a voice shortcut")
+                continue
+            }
+
+            #expect(voice == expectedVoice)
+        }
+
+        #expect(KeyboardShortcutHostingView.resolveShortcut(input: "1", modifiers: []) == nil)
+    }
+
+    @Test
     func parserPrefersStyledMetadata() {
         let parser = ScoreMetadataParser()
         let xml = """

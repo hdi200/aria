@@ -45,6 +45,7 @@ struct ScoreReaderNoteEntrySurface: View {
     let addChordTextAndSelectNextAction: (String) -> Void
     let openLyricsEntryAction: () -> Void
     let addLyricsTextAction: (String, Bool) -> Void
+    let addLyricsMelismaAction: (String) -> Void
     let addRepeatJumpAction: (String) -> Void
     let addExpressionAction: (String) -> Void
     let addLayoutBreakAction: (String) -> Void
@@ -571,6 +572,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 initialText: editingState.selection?.textKind == "Lyrics" ? (editingState.selection?.textContent ?? "") : "",
                 isInsertEnabled: lyricEntryEnabled && !isBusy,
                 insertAction: addLyricsTextAction,
+                melismaAction: addLyricsMelismaAction,
                 cancelAction: {
                     selectedToolCategory = .select
                     selectModeAction()
@@ -721,6 +723,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 initialText: editingState.selection?.textKind == "Lyrics" ? (editingState.selection?.textContent ?? "") : "",
                 isInsertEnabled: lyricEntryEnabled && !isBusy,
                 insertAction: addLyricsTextAction,
+                melismaAction: addLyricsMelismaAction,
                 cancelAction: {
                     selectedToolCategory = .select
                     selectModeAction()

@@ -417,6 +417,16 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func addLyricsMelisma(_ text: String) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.addLyricsMelisma(text))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func addRepeatJump(_ repeatJumpKind: String) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
