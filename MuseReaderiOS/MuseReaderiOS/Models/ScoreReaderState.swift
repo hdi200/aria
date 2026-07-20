@@ -7,6 +7,7 @@
 import Combine
 import Foundation
 import CoreGraphics
+import UIKit
 
 enum ScoreReaderInteractionMode: Equatable {
     case view
@@ -129,6 +130,9 @@ final class ScoreReaderState: ObservableObject {
     var playbackContextTask: Task<Void, Never>?
     var playbackWarmupTask: Task<Void, Error>?
     var autosaveTask: Task<Void, Never>?
+    var backgroundRecoveryTask: Task<Void, Never>?
+    var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
+    let recoveryStore = ScoreRecoveryStore()
     var deferredPagePrefetchTask: Task<Void, Never>?
     var editingStateTask: Task<Void, Never>?
     var noteEntryPreviewTask: Task<Void, Never>?
@@ -367,6 +371,7 @@ final class ScoreReaderState: ObservableObject {
         playbackWarmupTask?.cancel()
         partSelectionTask?.cancel()
         autosaveTask?.cancel()
+        backgroundRecoveryTask?.cancel()
         deferredPagePrefetchTask?.cancel()
         editingStateTask?.cancel()
         noteEntryPreviewTask?.cancel()

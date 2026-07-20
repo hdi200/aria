@@ -1,4 +1,122 @@
+import CryptoKit
 import Foundation
+import UIKit
+
+struct ScoreRecoverySnapshotRecord: Codable, Sendable, Equatable {
+    let sourcePath: String
+    let snapshotFileName: String
+    let preparedAt: Date
+}
+
+struct PendingScoreRecoverySnapshot: Sendable, Equatable {
+    let record: ScoreRecoverySnapshotRecord
+    let snapshotURL: URL
+    let recordURL: URL
+}
+
+struct ScoreRecoveryStore: @unchecked Sendable {
+    private enum Constants {
+        static let directoryName = "Recovery"
+        static let recordExtension = "json"
+    }
+
+    private let fileManager: FileManager
+    private let rootURLOverride: URL?
+
+    init(fileManager: FileManager = .default, rootURL: URL? = nil) {
+        self.fileManager = fileManager
+        self.rootURLOverride = rootURL
+    }
+
+    func prepareSnapshot(for sourceURL: URL) throws -> URL {
+        let directoryURL = try recoveryDirectoryURL()
+        try prepareDirectory(directoryURL)
+
+        let key = recoveryKey(for: sourceURL)
+        let snapshotFileName = "\(key).mscz"
+        let record = ScoreRecoverySnapshotRecord(
+            sourcePath: sourceURL.standardizedFileURL.path,
+            snapshotFileName: snapshotFileName,
+            preparedAt: .now
+        )
+        let recordData = try JSONEncoder().encode(record)
+        try recordData.write(
+            to: directoryURL.appendingPathComponent("\(key).\(Constants.recordExtension)", isDirectory: false),
+            options: .atomic
+        )
+
+        return directoryURL.appendingPathComponent(snapshotFileName, isDirectory: false)
+    }
+
+    func pendingSnapshots() throws -> [PendingScoreRecoverySnapshot] {
+        let directoryURL = try recoveryDirectoryURL()
+        guard fileManager.fileExists(atPath: directoryURL.path) else {
+            return []
+        }
+
+        let recordURLs = try fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ).filter { $0.pathExtension.lowercased() == Constants.recordExtension }
+
+        return recordURLs.compactMap { recordURL in
+            guard
+                let data = try? Data(contentsOf: recordURL),
+                let record = try? JSONDecoder().decode(ScoreRecoverySnapshotRecord.self, from: data)
+            else {
+                try? fileManager.removeItem(at: recordURL)
+                return nil
+            }
+
+            return PendingScoreRecoverySnapshot(
+                record: record,
+                snapshotURL: directoryURL.appendingPathComponent(record.snapshotFileName, isDirectory: false),
+                recordURL: recordURL
+            )
+        }
+    }
+
+    func removeSnapshot(for sourceURL: URL) throws {
+        let directoryURL = try recoveryDirectoryURL()
+        let key = recoveryKey(for: sourceURL)
+        try removeIfPresent(directoryURL.appendingPathComponent("\(key).mscz", isDirectory: false))
+        try removeIfPresent(directoryURL.appendingPathComponent("\(key).\(Constants.recordExtension)", isDirectory: false))
+    }
+
+    func removeSnapshot(_ pendingSnapshot: PendingScoreRecoverySnapshot) throws {
+        try removeIfPresent(pendingSnapshot.snapshotURL)
+        try removeIfPresent(pendingSnapshot.recordURL)
+    }
+
+    private func recoveryDirectoryURL() throws -> URL {
+        if let rootURLOverride {
+            return rootURLOverride
+        }
+        return try ManagedScoreLibraryPaths.privateRootURL(fileManager: fileManager)
+            .appendingPathComponent(Constants.directoryName, isDirectory: true)
+    }
+
+    private func prepareDirectory(_ directoryURL: URL) throws {
+        try fileManager.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        )
+    }
+
+    private func recoveryKey(for sourceURL: URL) -> String {
+        let pathData = Data(sourceURL.standardizedFileURL.path.utf8)
+        return SHA256.hash(data: pathData).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func removeIfPresent(_ url: URL) throws {
+        guard fileManager.fileExists(atPath: url.path) else {
+            return
+        }
+        try fileManager.removeItem(at: url)
+    }
+}
 
 @MainActor
 extension ScoreReaderState {
@@ -53,6 +171,7 @@ extension ScoreReaderState {
                 self.hasUnsavedAutosaveChanges = false
                 self.autosaveFailureMessage = nil
                 self.autosaveTask = nil
+                self.removeRecoverySnapshotAfterCanonicalSave(to: destinationURL)
             } catch is CancellationError {
                 print(String(format: "Aria autosave canceled: revision=%d elapsed=%.3fs",
                              saveRevision,
@@ -99,6 +218,7 @@ extension ScoreReaderState {
                 }
                 self.hasUnsavedAutosaveChanges = false
                 self.autosaveFailureMessage = nil
+                self.removeRecoverySnapshotAfterCanonicalSave(to: destinationURL)
             } catch {
                 self?.recordSaveFailure(error)
             }
@@ -106,21 +226,7 @@ extension ScoreReaderState {
     }
 
     func flushAutosaveOnShutdown() {
-        autosaveTask?.cancel()
-        autosaveTask = nil
-
-        guard hasUnsavedAutosaveChanges, let liveRenderSession = session.liveRenderSession else {
-            return
-        }
-
-        let destinationURL = session.document.url
-        Task {
-            let startedAt = Date()
-            print("Aria autosave shutdown flush begin: destination=\"\(destinationURL.lastPathComponent)\"")
-            try? await liveRenderSession.save(to: destinationURL)
-            print(String(format: "Aria autosave shutdown flush end: elapsed=%.3fs",
-                         Date().timeIntervalSince(startedAt)))
-        }
+        saveRecoverySnapshotForBackground()
     }
 
     func saveBeforeClosing() async -> Bool {
@@ -182,6 +288,7 @@ extension ScoreReaderState {
             if autosaveRevision == saveRevision {
                 hasUnsavedAutosaveChanges = false
                 autosaveFailureMessage = nil
+                removeRecoverySnapshotAfterCanonicalSave(to: destinationURL)
             }
             return true
         } catch {
@@ -194,5 +301,89 @@ extension ScoreReaderState {
     func recordSaveFailure(_ error: Error) {
         hasUnsavedAutosaveChanges = true
         autosaveFailureMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+
+    func saveRecoverySnapshotForBackground() {
+        guard
+            hasUnsavedAutosaveChanges || isEditingActionInFlight,
+            backgroundRecoveryTask == nil,
+            let liveRenderSession = session.liveRenderSession
+        else {
+            return
+        }
+
+        autosaveTask?.cancel()
+        autosaveTask = nil
+
+        let application = UIApplication.shared
+        backgroundTaskIdentifier = application.beginBackgroundTask(withName: "Aria score recovery") { [weak self] in
+            Task { @MainActor in
+                self?.endBackgroundExecutionIfNeeded()
+            }
+        }
+
+        backgroundRecoveryTask = Task { @MainActor [self] in
+            let startedAt = Date()
+            var saveRevision = autosaveRevision
+            defer {
+                backgroundRecoveryTask = nil
+                endBackgroundExecutionIfNeeded()
+                if UIApplication.shared.applicationState == .active, hasUnsavedAutosaveChanges {
+                    scheduleAutosave(delay: .zero)
+                }
+            }
+
+            do {
+                while isEditingActionInFlight {
+                    try await Task.sleep(for: .milliseconds(25))
+                }
+                guard hasUnsavedAutosaveChanges else {
+                    return
+                }
+
+                autosaveTask?.cancel()
+                autosaveTask = nil
+                saveRevision = autosaveRevision
+                let sourceURL = session.document.url
+                let recoveryURL = try recoveryStore.prepareSnapshot(for: sourceURL)
+                print("Aria recovery save begin: revision=\(saveRevision) destination=\"\(recoveryURL.lastPathComponent)\"")
+                try await liveRenderSession.save(to: recoveryURL)
+                print(String(format: "Aria recovery save end: revision=%d elapsed=%.3fs",
+                             saveRevision,
+                             Date().timeIntervalSince(startedAt)))
+                if autosaveRevision == saveRevision {
+                    autosaveFailureMessage = nil
+                }
+            } catch {
+                print(String(format: "Aria recovery save failed: revision=%d elapsed=%.3fs error=%@",
+                             saveRevision,
+                             Date().timeIntervalSince(startedAt),
+                             ((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)))
+                recordSaveFailure(error)
+            }
+        }
+    }
+
+    func resumeAutosaveAfterBackground() {
+        guard backgroundRecoveryTask == nil, hasUnsavedAutosaveChanges else {
+            return
+        }
+        scheduleAutosave(delay: .zero)
+    }
+
+    private func endBackgroundExecutionIfNeeded() {
+        guard backgroundTaskIdentifier != .invalid else {
+            return
+        }
+        UIApplication.shared.endBackgroundTask(backgroundTaskIdentifier)
+        backgroundTaskIdentifier = .invalid
+    }
+
+    private func removeRecoverySnapshotAfterCanonicalSave(to destinationURL: URL) {
+        do {
+            try recoveryStore.removeSnapshot(for: destinationURL)
+        } catch {
+            print("Aria recovery cleanup failed: file=\(destinationURL.lastPathComponent) error=\(error.localizedDescription)")
+        }
     }
 }

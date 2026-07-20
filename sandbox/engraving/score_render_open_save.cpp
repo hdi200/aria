@@ -373,7 +373,13 @@ public:
             return false;
         }
 
-        const bool saved = saveScoreToPath(m_sessionContext->context(), m_masterScore.get(), muse::io::path_t(resolvedTargetPath), errorMessage);
+        const bool saved = saveScoreToPath(
+            m_sessionContext->context(),
+            m_masterScore.get(),
+            muse::io::path_t(m_scorePath),
+            muse::io::path_t(resolvedTargetPath),
+            errorMessage
+        );
         std::cout << "Aria corruption guard: save end"
                   << " success=" << (saved ? "true" : "false")
                   << " elapsed=" << elapsedSecondsSince(started)

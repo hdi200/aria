@@ -205,6 +205,82 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func liveSavePreservesKnownMSCZPackageResources() async throws {
+        let sourceURL = fixtureURL("share/autobotscripts/data/Big_Score.mscz")
+        let savedURL = try writeTemporaryFile(
+            named: "Big_Score.mscz",
+            data: Data(contentsOf: sourceURL)
+        )
+        let documentService = MuseScoreDocumentService()
+        let originalInspection = try documentService.inspectPackage(at: savedURL)
+        let session = try await MuseScoreSessionService().openSession(at: savedURL)
+        let liveRenderSession = try #require(session.liveRenderSession)
+
+        try await liveRenderSession.save(to: savedURL)
+
+        let savedInspection = try documentService.inspectPackage(at: savedURL)
+        for resourcePath in ["Thumbnails/thumbnail.png", "audiosettings.json", "viewsettings.json"] {
+            #expect(savedInspection.document.packageEntries.contains(resourcePath))
+        }
+        #expect(savedInspection.embeddedPreviews.first?.imageData == originalInspection.embeddedPreviews.first?.imageData)
+    }
+
+    @Test
+    func packagedSaveRefusesNonAtomicDirectWriteFallback() async throws {
+        let sourceURL = fixtureURL("test/mmrest.mscz")
+        let originalData = try Data(contentsOf: sourceURL)
+        let savedURL = try writeTemporaryFile(named: "Atomic Save.mscz", data: originalData)
+        let containingDirectoryURL = savedURL.deletingLastPathComponent()
+        let session = try await MuseScoreSessionService().openSession(at: savedURL)
+        let liveRenderSession = try #require(session.liveRenderSession)
+
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o500],
+            ofItemAtPath: containingDirectoryURL.path
+        )
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: containingDirectoryURL.path
+            )
+        }
+
+        var saveFailed = false
+        do {
+            try await liveRenderSession.save(to: savedURL)
+        } catch {
+            saveFailed = true
+        }
+
+        #expect(saveFailed)
+        let retainedData = try Data(contentsOf: savedURL)
+        #expect(retainedData == originalData)
+    }
+
+    @Test
+    func liveSaveAtomicallyReplacesUnpackedMSCXDirectory() async throws {
+        let sourceURL = fixtureURL("test/slur1.mscx")
+        let savedURL = try writeTemporaryFile(
+            named: "Atomic Directory.mscx",
+            data: Data(contentsOf: sourceURL)
+        )
+        let containerURL = savedURL.deletingLastPathComponent()
+        let preparedDirectoryURL = containerURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(containerURL.lastPathComponent).aria-saving", isDirectory: true)
+        let session = try await MuseScoreSessionService().openSession(at: savedURL)
+        let liveRenderSession = try #require(session.liveRenderSession)
+
+        try await liveRenderSession.save(to: savedURL)
+
+        let reopenedSession = try await MuseScoreSessionService().openSession(at: savedURL)
+        #expect(reopenedSession.document.format == .mscx)
+        #expect(reopenedSession.document.museScoreVersion == "4.70")
+        #expect(reopenedSession.capabilities.supportsEditing)
+        #expect(!FileManager.default.fileExists(atPath: preparedDirectoryURL.path))
+    }
+
+    @Test
     func opensMSCZWithLegacyRootThumbnail() throws {
         let scoreXML = """
         <museScore version="3.6">
@@ -261,6 +337,65 @@ struct MuseReaderiOSTests {
         #expect(document.pages.isEmpty == false)
         #expect(document.pages.first?.pageIndex == 0)
         #expect(document.pages.first?.imageData.isEmpty == false)
+    }
+
+    @Test
+    func liveMusicXMLAndMXLCanNormalizeToEditableMSCZ() async throws {
+        let scoreXML = Self.musicXML(title: "Normalized Import", rootElement: "score-partwise")
+        let musicXMLURL = try writeTemporaryFile(named: "normalized.musicxml", contents: scoreXML)
+        let containerXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+          <rootfiles>
+            <rootfile full-path="score.musicxml" media-type="application/vnd.recordare.musicxml+xml"/>
+          </rootfiles>
+        </container>
+        """
+        let mxlURL = try writeTemporaryFile(
+            named: "normalized.mxl",
+            data: makeStoredZip(entries: [
+                ("META-INF/container.xml", Data(containerXML.utf8)),
+                ("score.musicxml", Data(scoreXML.utf8))
+            ])
+        )
+
+        for sourceURL in [musicXMLURL, mxlURL] {
+            let sourceSession = try await MuseScoreSessionService().openSession(at: sourceURL)
+            let liveRenderSession = try #require(sourceSession.liveRenderSession)
+            let destinationURL = sourceURL.deletingPathExtension().appendingPathExtension("mscz")
+
+            try await liveRenderSession.save(to: destinationURL)
+
+            let normalizedSession = try await MuseScoreSessionService().openSession(at: destinationURL)
+            #expect(normalizedSession.document.format == .mscz)
+            #expect(normalizedSession.document.museScoreVersion == "4.70")
+            #expect(normalizedSession.capabilities.supportsEditing)
+            #expect(FileManager.default.fileExists(atPath: sourceURL.path))
+        }
+    }
+
+    @Test
+    func recoveryStoreRecordsAndRemovesPrivateSnapshot() throws {
+        let recoveryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AriaRecoveryTests-\(UUID().uuidString)", isDirectory: true)
+        let sourceURL = recoveryDirectory
+            .deletingLastPathComponent()
+            .appendingPathComponent("Recovery Source.mscz", isDirectory: false)
+        let store = ScoreRecoveryStore(rootURL: recoveryDirectory)
+
+        let snapshotURL = try store.prepareSnapshot(for: sourceURL)
+        try Data("recovery".utf8).write(to: snapshotURL)
+
+        let pendingSnapshot = try #require(store.pendingSnapshots().first)
+        #expect(pendingSnapshot.record.sourcePath == sourceURL.standardizedFileURL.path)
+        #expect(pendingSnapshot.snapshotURL == snapshotURL)
+        let snapshotData = try Data(contentsOf: pendingSnapshot.snapshotURL)
+        #expect(snapshotData == Data("recovery".utf8))
+
+        try store.removeSnapshot(for: sourceURL)
+        let remainingSnapshots = try store.pendingSnapshots()
+        #expect(remainingSnapshots.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: snapshotURL.path))
     }
 
     @Test
@@ -627,7 +762,39 @@ struct MuseReaderiOSTests {
     }
 
     private static func musicXML(title: String, rootElement: String) -> String {
-        """
+        let scoreBody = rootElement == "score-partwise" ? """
+          <part id="P1">
+            <measure number="1">
+              <attributes>
+                <divisions>1</divisions>
+                <key><fifths>0</fifths></key>
+                <time><beats>4</beats><beat-type>4</beat-type></time>
+                <clef><sign>G</sign><line>2</line></clef>
+              </attributes>
+              <note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>whole</type>
+              </note>
+            </measure>
+          </part>
+          <part id="P2">
+            <measure number="1">
+              <attributes>
+                <divisions>1</divisions>
+                <key><fifths>0</fifths></key>
+                <time><beats>4</beats><beat-type>4</beat-type></time>
+                <clef><sign>F</sign><line>4</line></clef>
+              </attributes>
+              <note>
+                <rest/>
+                <duration>4</duration>
+                <type>whole</type>
+              </note>
+            </measure>
+          </part>
+        """ : ""
+        return """
         <?xml version="1.0" encoding="UTF-8"?>
         <\(rootElement) version="4.0">
           <work>
@@ -644,6 +811,7 @@ struct MuseReaderiOSTests {
               <part-name>Violoncello</part-name>
             </score-part>
           </part-list>
+        \(scoreBody)
         </\(rootElement)>
         """
     }
@@ -668,6 +836,7 @@ struct MuseReaderiOSTests {
         for (path, data) in entries {
             let localHeaderOffset = UInt32(output.count)
             let pathData = Data(path.utf8)
+            let checksum = crc32(data)
 
             output.appendLittleEndianUInt32(0x04034b50)
             output.appendLittleEndianUInt16(20)
@@ -675,7 +844,7 @@ struct MuseReaderiOSTests {
             output.appendLittleEndianUInt16(0)
             output.appendLittleEndianUInt16(0)
             output.appendLittleEndianUInt16(0)
-            output.appendLittleEndianUInt32(0)
+            output.appendLittleEndianUInt32(checksum)
             output.appendLittleEndianUInt32(UInt32(data.count))
             output.appendLittleEndianUInt32(UInt32(data.count))
             output.appendLittleEndianUInt16(UInt16(pathData.count))
@@ -690,7 +859,7 @@ struct MuseReaderiOSTests {
             centralDirectory.appendLittleEndianUInt16(0)
             centralDirectory.appendLittleEndianUInt16(0)
             centralDirectory.appendLittleEndianUInt16(0)
-            centralDirectory.appendLittleEndianUInt32(0)
+            centralDirectory.appendLittleEndianUInt32(checksum)
             centralDirectory.appendLittleEndianUInt32(UInt32(data.count))
             centralDirectory.appendLittleEndianUInt32(UInt32(data.count))
             centralDirectory.appendLittleEndianUInt16(UInt16(pathData.count))
@@ -714,6 +883,18 @@ struct MuseReaderiOSTests {
         output.appendLittleEndianUInt32(centralDirectoryOffset)
         output.appendLittleEndianUInt16(0)
         return output
+    }
+
+    private func crc32(_ data: Data) -> UInt32 {
+        var checksum: UInt32 = 0xffff_ffff
+        for byte in data {
+            checksum ^= UInt32(byte)
+            for _ in 0..<8 {
+                let mask = UInt32(bitPattern: -Int32(checksum & 1))
+                checksum = (checksum >> 1) ^ (0xedb8_8320 & mask)
+            }
+        }
+        return checksum ^ 0xffff_ffff
     }
 }
 

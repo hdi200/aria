@@ -8,6 +8,12 @@ import Combine
 import Foundation
 import UniformTypeIdentifiers
 
+private struct PreparedManagedScoreSession {
+    let document: ManagedLibraryDocument
+    let session: ScoreSession
+    let sourceDocumentToRemove: ManagedLibraryDocument?
+}
+
 @MainActor
 final class MuseReaderAppModel: ObservableObject {
     private enum PreviewConstants {
@@ -31,8 +37,10 @@ final class MuseReaderAppModel: ObservableObject {
     private let recentStore: RecentDocumentsStore
     private let setlistStore: LibrarySetlistStore
     private let scoreLibrary: ManagedScoreLibrary
+    private let recoveryStore: ScoreRecoveryStore
     private var libraryPreviewRefreshTask: Task<Void, Never>?
     private var libraryPreviewRefreshGeneration = 0
+    private var didAttemptLaunchRecovery = false
 
     init() {
         let sessionService = MuseScoreSessionService()
@@ -40,11 +48,13 @@ final class MuseReaderAppModel: ObservableObject {
         let recentStore = RecentDocumentsStore()
         let setlistStore = LibrarySetlistStore()
         let scoreLibrary = ManagedScoreLibrary()
+        let recoveryStore = ScoreRecoveryStore()
         self.sessionService = sessionService
         self.documentService = documentService
         self.recentStore = recentStore
         self.setlistStore = setlistStore
         self.scoreLibrary = scoreLibrary
+        self.recoveryStore = recoveryStore
         self.recents = recentStore.load()
         self.setlistFolders = setlistStore.load()
         try? scoreLibrary.prepareStorageIfNeeded()
@@ -265,6 +275,11 @@ final class MuseReaderAppModel: ObservableObject {
 
     func refreshVisibleLibrary() async {
         do {
+            if !didAttemptLaunchRecovery {
+                didAttemptLaunchRecovery = true
+                await restorePendingRecoverySnapshots()
+            }
+
             let existingRecents = recents
             let refreshedRecents = try await Task.detached(priority: .utility) {
                 let scoreLibrary = ManagedScoreLibrary()
@@ -334,6 +349,75 @@ final class MuseReaderAppModel: ObservableObject {
             }
         } catch {
             presentError(title: "Could Not Refresh Library", error: error)
+        }
+    }
+
+    private func restorePendingRecoverySnapshots() async {
+        let pendingSnapshots: [PendingScoreRecoverySnapshot]
+        do {
+            pendingSnapshots = try recoveryStore.pendingSnapshots()
+        } catch {
+            print("Aria launch recovery scan failed: error=\(error.localizedDescription)")
+            return
+        }
+
+        for pendingSnapshot in pendingSnapshots {
+            let sourceURL = URL(fileURLWithPath: pendingSnapshot.record.sourcePath).standardizedFileURL
+            let managedRelativePath = try? scoreLibrary.relativePath(for: sourceURL)
+            guard
+                sourceURL.pathExtension.lowercased() == ScoreFileFormat.mscz.rawValue,
+                let managedRelativePath,
+                managedRelativePath.hasPrefix(ManagedScoreLibraryPaths.itemsDirectoryName + "/")
+            else {
+                try? recoveryStore.removeSnapshot(pendingSnapshot)
+                continue
+            }
+
+            guard FileManager.default.fileExists(atPath: pendingSnapshot.snapshotURL.path) else {
+                try? recoveryStore.removeSnapshot(pendingSnapshot)
+                continue
+            }
+
+            let snapshotModificationDate = try? pendingSnapshot.snapshotURL
+                .resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate
+            let sourceModificationDate = try? sourceURL
+                .resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate
+
+            if let snapshotModificationDate,
+               let sourceModificationDate,
+               snapshotModificationDate <= sourceModificationDate
+            {
+                try? recoveryStore.removeSnapshot(pendingSnapshot)
+                continue
+            }
+
+            do {
+                print("Aria launch recovery begin: source=\(sourceURL.lastPathComponent) snapshot=\(pendingSnapshot.snapshotURL.lastPathComponent)")
+                let recoverySession = try await sessionService.openSession(at: pendingSnapshot.snapshotURL)
+                guard
+                    recoverySession.capabilities.supportsEditing,
+                    let liveRenderSession = recoverySession.liveRenderSession
+                else {
+                    throw ScoreDocumentServiceError.bridgeFailure("The recovery score could not be validated by the MuseScore engine.")
+                }
+
+                try await saveSession(liveRenderSession, to: sourceURL, clearsRecoverySnapshot: false)
+                let validatedSession = try await sessionService.openSession(at: sourceURL)
+                guard
+                    validatedSession.document.format == .mscz,
+                    validatedSession.capabilities.supportsEditing,
+                    validatedSession.liveRenderSession != nil
+                else {
+                    throw ScoreDocumentServiceError.bridgeFailure("The recovered score could not be reopened safely.")
+                }
+
+                try recoveryStore.removeSnapshot(pendingSnapshot)
+                print("Aria launch recovery complete: source=\(sourceURL.lastPathComponent)")
+            } catch {
+                print("Aria launch recovery retained snapshot: source=\(sourceURL.lastPathComponent) error=\(error.localizedDescription)")
+            }
         }
     }
 
@@ -587,7 +671,11 @@ final class MuseReaderAppModel: ObservableObject {
 
         if let libraryRelativePath = recent.libraryRelativePath {
             let libraryURL = try scoreLibrary.url(forRelativePath: libraryRelativePath)
-            return try await openManagedDocument(at: libraryURL, libraryRelativePath: libraryRelativePath)
+            return try await openManagedDocument(
+                at: libraryURL,
+                libraryRelativePath: libraryRelativePath,
+                replacingFileReference: recent.fileReference
+            )
         }
 
         guard let bookmarkData = recent.bookmarkData else {
@@ -621,17 +709,121 @@ final class MuseReaderAppModel: ObservableObject {
         cancelPendingLibraryPreviewRefresh(reason: "open")
         let startedAt = Date()
         print("Aria library open begin: file=\(url.lastPathComponent) relative=\(libraryRelativePath)")
-        let session = try await sessionService.openSession(at: url)
-        print(String(format: "Aria library open session ready: file=%@ pages=%d elapsed=%.3fs", url.lastPathComponent, session.pageCount, Date().timeIntervalSince(startedAt)))
+        let sourceDocument = ManagedLibraryDocument(
+            canonicalURL: url,
+            relativeMainFilePath: libraryRelativePath
+        )
+        let preparedSession = try await prepareManagedScoreSession(sourceDocument)
+        let session = preparedSession.session
+        print(String(format: "Aria library open session ready: file=%@ pages=%d elapsed=%.3fs", session.document.url.lastPathComponent, session.pageCount, Date().timeIntervalSince(startedAt)))
         currentSession = session
-        print("Aria library current session assigned: file=\(url.lastPathComponent)")
+        print("Aria library current session assigned: file=\(session.document.url.lastPathComponent)")
         recents = recentStore.record(
             document: session.document,
-            libraryRelativePath: libraryRelativePath,
+            libraryRelativePath: preparedSession.document.relativeMainFilePath,
             replacingFileReference: replacingFileReference,
             in: recents
         )
+
+        if let sourceDocumentToRemove = preparedSession.sourceDocumentToRemove {
+            replaceSetlistScoreKeys(
+                sourceDocument: sourceDocumentToRemove,
+                replacingFileReference: replacingFileReference,
+                destinationDocument: preparedSession.document
+            )
+            do {
+                try scoreLibrary.removeDocument(atRelativePath: sourceDocumentToRemove.relativeMainFilePath)
+                print("Aria import normalization removed source: file=\(sourceDocumentToRemove.canonicalURL.lastPathComponent)")
+            } catch {
+                print("Aria import normalization source cleanup failed: file=\(sourceDocumentToRemove.canonicalURL.lastPathComponent) error=\(error.localizedDescription)")
+            }
+        }
+
         return session
+    }
+
+    private func prepareManagedScoreSession(_ sourceDocument: ManagedLibraryDocument) async throws -> PreparedManagedScoreSession {
+        let sourceExtension = sourceDocument.canonicalURL.pathExtension.lowercased()
+        let shouldNormalize = sourceExtension == ScoreFileFormat.mxl.rawValue
+            || sourceExtension == ScoreFileFormat.musicxml.rawValue
+            || sourceExtension == "xml"
+
+        let sourceSession = try await sessionService.openSession(at: sourceDocument.canonicalURL)
+        guard shouldNormalize else {
+            return PreparedManagedScoreSession(
+                document: sourceDocument,
+                session: sourceSession,
+                sourceDocumentToRemove: nil
+            )
+        }
+
+        guard
+            sourceSession.capabilities.supportsEditing,
+            let liveRenderSession = sourceSession.liveRenderSession
+        else {
+            throw ScoreDocumentServiceError.bridgeFailure("Aria imported this score but could not convert it into an editable MuseScore document.")
+        }
+
+        let preferredName = sourceDocument.canonicalURL.deletingPathExtension().lastPathComponent
+        let packagedDocument = try scoreLibrary.packagedDocumentDestination(preferredName: preferredName)
+        print("Aria import normalization begin: source=\(sourceDocument.canonicalURL.lastPathComponent) destination=\(packagedDocument.canonicalURL.lastPathComponent)")
+
+        do {
+            try await saveSession(liveRenderSession, to: packagedDocument.canonicalURL)
+            let packagedSession = try await sessionService.openSession(at: packagedDocument.canonicalURL)
+            guard
+                packagedSession.document.format == .mscz,
+                packagedSession.capabilities.supportsEditing,
+                packagedSession.liveRenderSession != nil
+            else {
+                throw ScoreDocumentServiceError.bridgeFailure("Aria created the converted score but could not reopen it safely.")
+            }
+
+            print("Aria import normalization complete: source=\(sourceDocument.canonicalURL.lastPathComponent) destination=\(packagedDocument.canonicalURL.lastPathComponent)")
+            return PreparedManagedScoreSession(
+                document: packagedDocument,
+                session: packagedSession,
+                sourceDocumentToRemove: sourceDocument
+            )
+        } catch {
+            try? scoreLibrary.removeDocument(atRelativePath: packagedDocument.relativeMainFilePath)
+            print("Aria import normalization failed: source=\(sourceDocument.canonicalURL.lastPathComponent) error=\(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    private func replaceSetlistScoreKeys(sourceDocument: ManagedLibraryDocument,
+                                         replacingFileReference: String?,
+                                         destinationDocument: ManagedLibraryDocument)
+    {
+        var oldKeys = Set([
+            sourceDocument.relativeMainFilePath,
+            sourceDocument.canonicalURL.standardizedFileURL.path
+        ])
+        if let replacingFileReference {
+            oldKeys.insert(replacingFileReference)
+        }
+        let newKey = destinationDocument.relativeMainFilePath
+        var changed = false
+
+        for index in setlistFolders.indices {
+            var seenKeys: Set<String> = []
+            let updatedKeys = setlistFolders[index].scoreKeys.compactMap { key -> String? in
+                let updatedKey = oldKeys.contains(key) ? newKey : key
+                if updatedKey != key {
+                    changed = true
+                }
+                return seenKeys.insert(updatedKey).inserted ? updatedKey : nil
+            }
+            if updatedKeys.count != setlistFolders[index].scoreKeys.count {
+                changed = true
+            }
+            setlistFolders[index].scoreKeys = updatedKeys
+        }
+
+        if changed {
+            setlistStore.save(setlistFolders)
+        }
     }
 
     private func refreshRenderedLibraryPreviewIfPossible(for session: ScoreSession,
@@ -680,9 +872,15 @@ final class MuseReaderAppModel: ObservableObject {
         }
     }
 
-    private func saveSession(_ liveRenderSession: LiveScoreRenderSession, to url: URL) async throws {
+    private func saveSession(_ liveRenderSession: LiveScoreRenderSession,
+                             to url: URL,
+                             clearsRecoverySnapshot: Bool = true) async throws
+    {
         if let _ = try scoreLibrary.relativePath(for: url) {
             try await liveRenderSession.save(to: url)
+            if clearsRecoverySnapshot {
+                try? recoveryStore.removeSnapshot(for: url)
+            }
             return
         }
 

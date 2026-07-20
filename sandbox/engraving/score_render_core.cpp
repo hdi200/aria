@@ -1,9 +1,11 @@
 #include "score_render_core.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <cctype>
+#include <cstring>
 #include <limits>
 #include <map>
 #include <memory>
@@ -38,12 +40,17 @@
 #include <QSaveFile>
 #include <QThread>
 
+#if defined(Q_OS_DARWIN)
+#include <sys/stdio.h>
+#endif
+
 #include "draw/drawmodule.h"
 #include "draw/painter.h"
 #include "engraving/compat/mscxcompat.h"
 #include "engraving/compat/scoreaccess.h"
 #include "engraving/editing/editsystemlocks.h"
 #include "engraving/dom/accidental.h"
+#include "engraving/dom/audio.h"
 #include "engraving/dom/chord.h"
 #include "engraving/dom/chordlist.h"
 #include "engraving/dom/articulation.h"

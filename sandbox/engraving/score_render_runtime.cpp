@@ -5587,8 +5587,64 @@ bool writeScoreToBufferSequentially(mu::engraving::Score* score,
     return true;
 }
 
+struct PreservedExcerptPackageResources {
+    muse::String fileName;
+    muse::ByteArray audioSettings;
+    muse::ByteArray viewSettings;
+};
+
+struct PreservedMsczResources {
+    muse::ByteArray thumbnail;
+    muse::ByteArray audioSettings;
+    muse::ByteArray viewSettings;
+    muse::ByteArray automation;
+    std::vector<PreservedExcerptPackageResources> excerpts;
+};
+
+bool readPreservedMsczResources(const muse::io::path_t& sourcePath,
+                                PreservedMsczResources& resources,
+                                std::string& errorMessage)
+{
+    if (mu::engraving::mscIoModeBySuffix(normalizedSuffix(sourcePath)) != mu::engraving::MscIoMode::Zip) {
+        return true;
+    }
+
+    mu::engraving::MscReader::Params params;
+    params.filePath = sourcePath;
+    params.mode = mu::engraving::MscIoMode::Zip;
+
+    mu::engraving::MscReader reader(params);
+    const muse::Ret openResult = reader.open();
+    if (!openResult) {
+        errorMessage = openResult.text().empty()
+            ? "MuseReader could not reopen the original score package to preserve its resources."
+            : "MuseReader could not reopen the original score package to preserve its resources: " + openResult.text();
+        return false;
+    }
+
+    resources.thumbnail = reader.readThumbnailFile();
+    resources.audioSettings = reader.readAudioSettingsJsonFile();
+    resources.viewSettings = reader.readViewSettingsJsonFile();
+    resources.automation = reader.readAutomationJsonFile();
+
+    for (const muse::String& excerptFileName : reader.excerptFileNames()) {
+        const muse::io::path_t pathPrefix = u"Excerpts/" + excerptFileName + u"/";
+        PreservedExcerptPackageResources excerptResources;
+        excerptResources.fileName = excerptFileName;
+        excerptResources.audioSettings = reader.readAudioSettingsJsonFile(pathPrefix);
+        excerptResources.viewSettings = reader.readViewSettingsJsonFile(pathPrefix);
+        if (!excerptResources.audioSettings.empty() || !excerptResources.viewSettings.empty()) {
+            resources.excerpts.push_back(std::move(excerptResources));
+        }
+    }
+
+    reader.close();
+    return true;
+}
+
 bool writeMsczSequentially(mu::engraving::MasterScore* score,
                            mu::engraving::MscWriter& writer,
+                           const PreservedMsczResources& preservedResources,
                            std::string& errorMessage)
 {
     if (!score || !writer.isOpened()) {
@@ -5619,6 +5675,7 @@ bool writeMsczSequentially(mu::engraving::MasterScore* score,
         writer.writeScoreFile(scoreData);
     }
 
+    std::vector<muse::String> writtenExcerptFileNames;
     const std::vector<mu::engraving::Excerpt*>& excerpts = score->excerpts();
     for (size_t excerptIndex = 0; excerptIndex < excerpts.size(); ++excerptIndex) {
         mu::engraving::Excerpt* excerpt = excerpts.at(excerptIndex);
@@ -5654,6 +5711,7 @@ bool writeMsczSequentially(mu::engraving::MasterScore* score,
 
         writer.addExcerptStyleFile(excerpt->fileName(), styleData);
         writer.addExcerptFile(excerpt->fileName(), scoreData);
+        writtenExcerptFileNames.push_back(excerpt->fileName());
         std::cout << "Aria save debug: sequential excerpt end"
                   << " index=" << excerptIndex
                   << " styleBytes=" << styleData.size()
@@ -5689,6 +5747,48 @@ bool writeMsczSequentially(mu::engraving::MasterScore* score,
     std::cout << "Aria save debug: sequential images=" << imageCount
               << " elapsed=" << elapsedSecondsSince(imagesStartedAt) << "s"
               << std::endl;
+
+    int preservedResourceCount = 0;
+    if (!preservedResources.thumbnail.empty()) {
+        writer.writeThumbnailFile(preservedResources.thumbnail);
+        ++preservedResourceCount;
+    }
+    const mu::engraving::Audio* embeddedAudio = score->audio();
+    if (writer.params().mode != mu::engraving::MscIoMode::XmlFile && embeddedAudio) {
+        writer.writeAudioFile(embeddedAudio->data());
+        ++preservedResourceCount;
+    }
+    if (!preservedResources.audioSettings.empty()) {
+        writer.writeAudioSettingsJsonFile(preservedResources.audioSettings);
+        ++preservedResourceCount;
+    }
+    if (!preservedResources.viewSettings.empty()) {
+        writer.writeViewSettingsJsonFile(preservedResources.viewSettings);
+        ++preservedResourceCount;
+    }
+    if (!preservedResources.automation.empty()) {
+        writer.writeAutomationJsonFile(preservedResources.automation);
+        ++preservedResourceCount;
+    }
+
+    for (const PreservedExcerptPackageResources& excerptResources : preservedResources.excerpts) {
+        if (std::find(writtenExcerptFileNames.begin(), writtenExcerptFileNames.end(), excerptResources.fileName)
+            == writtenExcerptFileNames.end()) {
+            continue;
+        }
+
+        const muse::io::path_t pathPrefix = u"Excerpts/" + excerptResources.fileName + u"/";
+        if (!excerptResources.audioSettings.empty()) {
+            writer.writeAudioSettingsJsonFile(excerptResources.audioSettings, pathPrefix);
+            ++preservedResourceCount;
+        }
+        if (!excerptResources.viewSettings.empty()) {
+            writer.writeViewSettingsJsonFile(excerptResources.viewSettings, pathPrefix);
+            ++preservedResourceCount;
+        }
+    }
+
+    std::cout << "Aria save debug: sequential preserved package resources=" << preservedResourceCount << std::endl;
     std::cout << "Aria save debug: sequential package write end"
               << " elapsed=" << elapsedSecondsSince(packageStartedAt) << "s"
               << std::endl;
@@ -5697,11 +5797,18 @@ bool writeMsczSequentially(mu::engraving::MasterScore* score,
 
 bool saveSingleFileScore(const muse::modularity::ContextPtr&,
                          mu::engraving::MasterScore* score,
+                         const muse::io::path_t& sourcePath,
                          const muse::io::path_t& targetPath,
                          const muse::String& targetMainFileName,
                          const mu::engraving::MscIoMode ioMode,
                          std::string& errorMessage)
 {
+    PreservedMsczResources preservedResources;
+    if (ioMode == mu::engraving::MscIoMode::Zip
+        && !readPreservedMsczResources(sourcePath, preservedResources, errorMessage)) {
+        return false;
+    }
+
     muse::ByteArray outputData;
     muse::io::Buffer outputBuffer(&outputData);
 
@@ -5725,7 +5832,7 @@ bool saveSingleFileScore(const muse::modularity::ContextPtr&,
               << std::endl;
     const auto sequentialStartedAt = SteadyClock::now();
     std::cout << "Aria save debug: single-file sequential write begin" << std::endl;
-    const bool writeSucceeded = writeMsczSequentially(score, writer, errorMessage);
+    const bool writeSucceeded = writeMsczSequentially(score, writer, preservedResources, errorMessage);
     std::cout << "Aria save debug: single-file sequential write end"
               << " success=" << (writeSucceeded ? "true" : "false")
               << " elapsed=" << elapsedSecondsSince(sequentialStartedAt) << "s"
@@ -5750,7 +5857,10 @@ bool saveSingleFileScore(const muse::modularity::ContextPtr&,
     const auto diskStartedAt = SteadyClock::now();
     std::cout << "Aria save debug: single-file disk write begin bytes=" << outputData.size() << std::endl;
     QSaveFile destinationFile(targetPath.toQString());
-    destinationFile.setDirectWriteFallback(true);
+    // Never trade the existing score for a non-atomic overwrite. If Qt cannot
+    // create/commit its adjacent temporary file, surface the save failure and
+    // leave the last complete package untouched.
+    destinationFile.setDirectWriteFallback(false);
     if (!destinationFile.open(QIODevice::WriteOnly)) {
         const QString qtError = destinationFile.errorString().trimmed();
         errorMessage = qtError.isEmpty()
@@ -5782,6 +5892,126 @@ bool saveSingleFileScore(const muse::modularity::ContextPtr&,
     return true;
 }
 
+bool directoryContainsMainScoreFile(const QString& directoryPath,
+                                    const muse::String& targetMainFileName)
+{
+    const QFileInfo mainFileInfo(QDir(directoryPath).filePath(targetMainFileName.toQString()));
+    return mainFileInfo.exists() && mainFileInfo.isFile() && mainFileInfo.size() > 0;
+}
+
+bool renameSiblingDirectory(const QString& sourcePath, const QString& destinationPath)
+{
+    const QFileInfo sourceInfo(sourcePath);
+    const QFileInfo destinationInfo(destinationPath);
+    if (sourceInfo.absolutePath() != destinationInfo.absolutePath()) {
+        return false;
+    }
+
+    QDir parentDirectory(sourceInfo.absolutePath());
+    return parentDirectory.rename(sourceInfo.fileName(), destinationInfo.fileName());
+}
+
+bool replaceDirectoryScore(const QString& preparedPath,
+                           const QString& targetPath,
+                           const QString& backupPath,
+                           const muse::String& targetMainFileName,
+                           std::string& errorMessage)
+{
+    if (!directoryContainsMainScoreFile(preparedPath, targetMainFileName)) {
+        errorMessage = "MuseReader did not create a complete replacement score directory.";
+        return false;
+    }
+
+    QDir targetDirectory(targetPath);
+    if (!targetDirectory.exists()) {
+        if (!renameSiblingDirectory(preparedPath, targetPath)) {
+            errorMessage = "MuseReader could not move the new score directory into place.";
+            return false;
+        }
+        return true;
+    }
+
+#if defined(Q_OS_DARWIN)
+    Q_UNUSED(backupPath);
+    // APFS/HFS provide an atomic directory exchange. After this succeeds the
+    // canonical path contains the completed save, while preparedPath contains
+    // the previous valid score until cleanup. There is no crash window where
+    // the canonical score path is absent.
+    const QByteArray preparedFileSystemPath = QFile::encodeName(preparedPath);
+    const QByteArray targetFileSystemPath = QFile::encodeName(targetPath);
+    errno = 0;
+    if (renamex_np(preparedFileSystemPath.constData(), targetFileSystemPath.constData(), RENAME_SWAP) != 0) {
+        const int exchangeError = errno;
+        errorMessage = "MuseReader could not atomically replace the score directory: "
+            + std::string(std::strerror(exchangeError));
+        return false;
+    }
+
+    if (!directoryContainsMainScoreFile(targetPath, targetMainFileName)) {
+        errno = 0;
+        const bool restored = renamex_np(
+            preparedFileSystemPath.constData(),
+            targetFileSystemPath.constData(),
+            RENAME_SWAP
+        ) == 0;
+        errorMessage = restored
+            ? "MuseReader rejected an incomplete replacement and restored the original score directory."
+            : "MuseReader rejected an incomplete replacement, but could not restore the original score directory automatically.";
+        return false;
+    }
+
+    QDir previousDirectory(preparedPath);
+    if (previousDirectory.exists() && !previousDirectory.removeRecursively()) {
+        // The save is already committed atomically. Keep operating with the new
+        // canonical directory and clear this hidden stale copy before the next save.
+        std::cout << "Aria save warning: could not remove previous score directory after atomic exchange path="
+                  << preparedPath.toStdString() << std::endl;
+    }
+    return true;
+#else
+    // MuseReader ships on Darwin, but keep the render-core sandbox usable on
+    // other hosts with a rollback-preserving fallback.
+    QDir backupDirectory(backupPath);
+    if (backupDirectory.exists()) {
+        if (!directoryContainsMainScoreFile(targetPath, targetMainFileName)
+            || !backupDirectory.removeRecursively()) {
+            errorMessage = "MuseReader could not clear a previous score-directory backup safely.";
+            return false;
+        }
+    }
+
+    if (!renameSiblingDirectory(targetPath, backupPath)) {
+        errorMessage = "MuseReader could not protect the original score directory before replacement.";
+        return false;
+    }
+
+    if (!renameSiblingDirectory(preparedPath, targetPath)) {
+        const bool restored = renameSiblingDirectory(backupPath, targetPath);
+        errorMessage = restored
+            ? "MuseReader could not install the replacement score directory; the original was restored."
+            : "MuseReader could not install the replacement score directory, and the original remains in the backup directory.";
+        return false;
+    }
+
+    if (!directoryContainsMainScoreFile(targetPath, targetMainFileName)) {
+        QDir invalidTarget(targetPath);
+        const bool removedInvalidTarget = invalidTarget.removeRecursively();
+        const bool restored = removedInvalidTarget && renameSiblingDirectory(backupPath, targetPath);
+        errorMessage = restored
+            ? "MuseReader rejected an incomplete replacement and restored the original score directory."
+            : "MuseReader rejected an incomplete replacement, but could not restore the original score directory automatically.";
+        return false;
+    }
+
+    backupDirectory.setPath(backupPath);
+    if (backupDirectory.exists() && !backupDirectory.removeRecursively()) {
+        std::cout << "Aria save warning: could not remove score-directory backup path="
+                  << backupPath.toStdString() << std::endl;
+    }
+    return true;
+#endif
+}
+
 bool saveDirectoryScore(const muse::modularity::ContextPtr&,
                         mu::engraving::MasterScore* score,
                         const muse::io::path_t& targetPath,
@@ -5789,7 +6019,10 @@ bool saveDirectoryScore(const muse::modularity::ContextPtr&,
                         std::string& errorMessage)
 {
     const muse::io::path_t targetContainerPath = mu::engraving::containerPath(targetPath);
-    const QString savePath = targetContainerPath.toQString() + "_saving";
+    const QFileInfo targetPathInfo(targetContainerPath.toQString());
+    const QString siblingPrefix = targetPathInfo.absolutePath() + "/." + targetPathInfo.fileName();
+    const QString savePath = siblingPrefix + ".aria-saving";
+    const QString backupPath = siblingPrefix + ".aria-backup";
 
     QDir saveDir(savePath);
     if (saveDir.exists() && !saveDir.removeRecursively()) {
@@ -5816,7 +6049,7 @@ bool saveDirectoryScore(const muse::modularity::ContextPtr&,
               << std::endl;
     const auto sequentialStartedAt = SteadyClock::now();
     std::cout << "Aria save debug: directory sequential write begin" << std::endl;
-    const bool writeSucceeded = writeMsczSequentially(score, writer, errorMessage);
+    const bool writeSucceeded = writeMsczSequentially(score, writer, PreservedMsczResources(), errorMessage);
     std::cout << "Aria save debug: directory sequential write end"
               << " success=" << (writeSucceeded ? "true" : "false")
               << " elapsed=" << elapsedSecondsSince(sequentialStartedAt) << "s"
@@ -5839,17 +6072,12 @@ bool saveDirectoryScore(const muse::modularity::ContextPtr&,
     }
 
     const auto replaceStartedAt = SteadyClock::now();
-    QDir targetDir(targetContainerPath.toQString());
-    if (targetDir.exists() && !targetDir.removeRecursively()) {
-        errorMessage = "MuseReader could not replace the existing score directory.";
-        return false;
-    }
-
-    const QFileInfo savePathInfo(savePath);
-    const QFileInfo targetPathInfo(targetContainerPath.toQString());
-    QDir parentDir(savePathInfo.absolutePath());
-    if (!parentDir.rename(savePathInfo.fileName(), targetPathInfo.fileName())) {
-        errorMessage = "MuseReader could not move the saved score directory into place.";
+    if (!replaceDirectoryScore(
+            savePath,
+            targetContainerPath.toQString(),
+            backupPath,
+            targetMainFileName,
+            errorMessage)) {
         return false;
     }
 
@@ -5861,6 +6089,7 @@ bool saveDirectoryScore(const muse::modularity::ContextPtr&,
 
 bool saveScoreToPath(const muse::modularity::ContextPtr& context,
                      mu::engraving::MasterScore* score,
+                     const muse::io::path_t& sourcePath,
                      const muse::io::path_t& scorePath,
                      std::string& errorMessage)
 {
@@ -5880,7 +6109,7 @@ bool saveScoreToPath(const muse::modularity::ContextPtr& context,
 
     const bool saveSucceeded = (ioMode == mu::engraving::MscIoMode::Dir)
         ? saveDirectoryScore(context, score, scorePath, targetMainFileName, errorMessage)
-        : saveSingleFileScore(context, score, scorePath, targetMainFileName, ioMode, errorMessage);
+        : saveSingleFileScore(context, score, sourcePath, scorePath, targetMainFileName, ioMode, errorMessage);
 
     if (!saveSucceeded) {
         return false;

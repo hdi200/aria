@@ -444,6 +444,16 @@ struct ScoreReaderView: View {
             readerState.stopMIDIInput()
             readerState.shutdown()
         }
+        .onChangeCompatible(of: scenePhase) { phase in
+            switch phase {
+            case .inactive, .background:
+                readerState.saveRecoverySnapshotForBackground()
+            case .active:
+                readerState.resumeAutosaveAfterBackground()
+            @unknown default:
+                break
+            }
+        }
         .onChangeCompatible(of: readerState.editingState.noteInputEnabled) { noteInputEnabled in
             if noteInputEnabled {
                 selectedToolCategory = .notes
