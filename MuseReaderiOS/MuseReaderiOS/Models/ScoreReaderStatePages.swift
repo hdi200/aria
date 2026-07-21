@@ -1,5 +1,62 @@
 import Foundation
 
+enum ScorePageTurnDirection {
+    case backward
+    case forward
+
+    var offset: Int {
+        switch self {
+        case .backward:
+            return -1
+        case .forward:
+            return 1
+        }
+    }
+}
+
+struct ScorePageTurnPlan {
+    static func residentIndices(focusedPageIndex: Int, pageCount: Int) -> [Int] {
+        guard pageCount > 0 else {
+            return []
+        }
+
+        return ((focusedPageIndex - 1)...(focusedPageIndex + 1))
+            .filter { $0 >= 0 && $0 < pageCount }
+    }
+
+    static func loadOrder(
+        focusedPageIndex: Int,
+        direction: ScorePageTurnDirection,
+        pageCount: Int,
+        prefetchDistance: Int
+    ) -> [Int] {
+        guard pageCount > 0, focusedPageIndex >= 0, focusedPageIndex < pageCount else {
+            return []
+        }
+
+        var result = [focusedPageIndex]
+        guard prefetchDistance > 0 else {
+            return result
+        }
+
+        for distance in 1...prefetchDistance {
+            let directionalPageIndex = focusedPageIndex + direction.offset * distance
+            if directionalPageIndex >= 0, directionalPageIndex < pageCount {
+                result.append(directionalPageIndex)
+            }
+        }
+
+        for distance in 1...prefetchDistance {
+            let oppositePageIndex = focusedPageIndex - direction.offset * distance
+            if oppositePageIndex >= 0, oppositePageIndex < pageCount {
+                result.append(oppositePageIndex)
+            }
+        }
+
+        return result
+    }
+}
+
 @MainActor
 extension ScoreReaderState {
     func loadInitialPages() {
@@ -71,6 +128,18 @@ extension ScoreReaderState {
         cancelDeferredPagePrefetch()
         selectedPageIndex = pageIndex
         ensurePagesAround(pageIndex)
+    }
+
+    func updatePageTurnSelection(to pageIndex: Int) {
+        guard isValid(pageIndex) else {
+            return
+        }
+
+        let direction: ScorePageTurnDirection = pageIndex < selectedPageIndex ? .backward : .forward
+        cancelDeferredPagePrefetch()
+        cancelPageLoads(except: pageIndex)
+        selectedPageIndex = pageIndex
+        ensurePagesForPageTurn(pageIndex, direction: direction)
     }
 
     func prefetchPage(_ pageIndex: Int) {
@@ -199,15 +268,30 @@ extension ScoreReaderState {
             return
         }
 
-        let candidates = ((pageIndex - prefetchDistance)...(pageIndex + prefetchDistance))
-            .filter { isValid($0) && !excludedPageIndices.contains($0) }
+        let candidates = ScorePageTurnPlan.loadOrder(
+            focusedPageIndex: pageIndex,
+            direction: .forward,
+            pageCount: pageCount,
+            prefetchDistance: prefetchDistance
+        )
+            .filter { !excludedPageIndices.contains($0) }
         print("Aria page prefetch window: focusPage=\(pageIndex + 1) candidates=\(candidates.map { $0 + 1 }) excluded=\(excludedPageIndices.sorted().map { $0 + 1 }) distance=\(prefetchDistance)")
 
-        for candidate in (pageIndex - prefetchDistance)...(pageIndex + prefetchDistance) {
-            guard !excludedPageIndices.contains(candidate) else {
-                continue
-            }
+        for candidate in candidates {
+            ensureLivePageLoaded(candidate, priority: candidate == pageIndex ? .userInitiated : .utility)
+        }
+    }
 
+    private func ensurePagesForPageTurn(_ pageIndex: Int, direction: ScorePageTurnDirection) {
+        let candidates = ScorePageTurnPlan.loadOrder(
+            focusedPageIndex: pageIndex,
+            direction: direction,
+            pageCount: pageCount,
+            prefetchDistance: prefetchDistance
+        )
+        print("Aria page-turn prefetch: focusPage=\(pageIndex + 1) direction=\(direction) candidates=\(candidates.map { $0 + 1 })")
+
+        for candidate in candidates {
             ensureLivePageLoaded(candidate, priority: candidate == pageIndex ? .userInitiated : .utility)
         }
     }

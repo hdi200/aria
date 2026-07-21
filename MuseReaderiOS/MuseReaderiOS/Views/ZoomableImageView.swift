@@ -24,6 +24,14 @@ enum ScoreReaderPageHorizontalAlignment: Equatable {
     case trailing
 }
 
+enum ScoreReaderReadingGesturePolicy {
+    static let allowsDoubleTapZoom = false
+
+    static func isCenterEditLongPress(_ normalizedPoint: CGPoint) -> Bool {
+        normalizedPoint.x > 0.20 && normalizedPoint.x < 0.80
+    }
+}
+
 struct ScoreReaderZoomLayout {
     static func contentInsets(
         viewportSize: CGSize,
@@ -99,8 +107,9 @@ struct ScoreReaderZoomViewport: Equatable {
 }
 
 struct ZoomableImageView: UIViewRepresentable {
-    let image: UIImage?
+    let imageData: Data?
     let pdfData: Data?
+    let prefersRasterAtRest: Bool
     let contentSize: CGSize
     let displayedPageSize: CGSize
     let playbackHighlight: ScorePlaybackMeasureHighlight?
@@ -138,6 +147,7 @@ struct ZoomableImageView: UIViewRepresentable {
     var onPencilDoubleTap: (() -> Void)? = nil
     var onSwipePreviousPage: (() -> Void)? = nil
     var onSwipeNextPage: (() -> Void)? = nil
+    var onReadingCenterLongPress: (() -> Void)? = nil
     var onManualScroll: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
@@ -157,6 +167,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilDoubleTap: onPencilDoubleTap,
             onSwipePreviousPage: onSwipePreviousPage,
             onSwipeNextPage: onSwipeNextPage,
+            onReadingCenterLongPress: onReadingCenterLongPress,
             onManualScroll: onManualScroll
         )
     }
@@ -181,7 +192,12 @@ struct ZoomableImageView: UIViewRepresentable {
 
         let contentView = ScorePageContentView()
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.configure(image: image, pdfData: pdfData, contentSize: contentSize)
+        contentView.configure(
+            imageData: imageData,
+            pdfData: pdfData,
+            contentSize: contentSize,
+            usesRasterDisplay: prefersRasterAtRest && zoomScale <= 1.01
+        )
 
         let overlayView = ScorePageOverlayView()
         overlayView.translatesAutoresizingMaskIntoConstraints = false
@@ -218,9 +234,11 @@ struct ZoomableImageView: UIViewRepresentable {
 
         let doubleTapGestureRecognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleReadingDoubleTap(_:)))
         doubleTapGestureRecognizer.numberOfTapsRequired = 2
-        doubleTapGestureRecognizer.isEnabled = !allowsEditingInteractions
+        doubleTapGestureRecognizer.isEnabled = Self.allowsReadingDoubleTapZoom && !allowsEditingInteractions
         overlayView.addGestureRecognizer(doubleTapGestureRecognizer)
-        tapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
+        if Self.allowsReadingDoubleTapZoom {
+            tapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
+        }
 
         let swipeLeftGestureRecognizer = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleReadingSwipe(_:)))
         swipeLeftGestureRecognizer.direction = .left
@@ -231,6 +249,16 @@ struct ZoomableImageView: UIViewRepresentable {
         swipeRightGestureRecognizer.direction = .right
         swipeRightGestureRecognizer.isEnabled = !allowsEditingInteractions
         overlayView.addGestureRecognizer(swipeRightGestureRecognizer)
+
+        let readingLongPressGestureRecognizer = UILongPressGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleReadingCenterLongPress(_:))
+        )
+        readingLongPressGestureRecognizer.minimumPressDuration = 0.45
+        readingLongPressGestureRecognizer.allowableMovement = 18
+        readingLongPressGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        readingLongPressGestureRecognizer.isEnabled = !allowsEditingInteractions
+        overlayView.addGestureRecognizer(readingLongPressGestureRecognizer)
 
         let noteDragGestureRecognizer = ScorePageLongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleSelectedNoteDrag(_:)))
         noteDragGestureRecognizer.minimumPressDuration = 0.12
@@ -259,6 +287,7 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.doubleTapGestureRecognizer = doubleTapGestureRecognizer
         context.coordinator.swipeLeftGestureRecognizer = swipeLeftGestureRecognizer
         context.coordinator.swipeRightGestureRecognizer = swipeRightGestureRecognizer
+        context.coordinator.readingLongPressGestureRecognizer = readingLongPressGestureRecognizer
         context.coordinator.zoomScrollView = scrollView
 
         return scrollView
@@ -281,14 +310,16 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.onPencilDoubleTap = onPencilDoubleTap
         context.coordinator.onSwipePreviousPage = onSwipePreviousPage
         context.coordinator.onSwipeNextPage = onSwipeNextPage
+        context.coordinator.onReadingCenterLongPress = onReadingCenterLongPress
         context.coordinator.onManualScroll = onManualScroll
         context.coordinator.allowsPlaybackFollow = allowsPlaybackFollow
         context.coordinator.noteDragGestureRecognizer?.isEnabled = allowsEditingInteractions
         context.coordinator.pencilHoverGestureRecognizer?.isEnabled = allowsEditingInteractions
         context.coordinator.pencilInteraction?.isEnabled = allowsEditingInteractions
-        context.coordinator.doubleTapGestureRecognizer?.isEnabled = !allowsEditingInteractions
+        context.coordinator.doubleTapGestureRecognizer?.isEnabled = Self.allowsReadingDoubleTapZoom && !allowsEditingInteractions
         context.coordinator.swipeLeftGestureRecognizer?.isEnabled = !allowsEditingInteractions
         context.coordinator.swipeRightGestureRecognizer?.isEnabled = !allowsEditingInteractions
+        context.coordinator.readingLongPressGestureRecognizer?.isEnabled = !allowsEditingInteractions
         context.coordinator.activeNotationAutoScrollRevision = activeNotationAutoScrollRevision
         context.coordinator.activeNotationTopInset = activeNotationTopInset
         context.coordinator.activeNotationBottomInset = activeNotationBottomInset
@@ -301,7 +332,12 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.playbackHighlight = playbackHighlight
         context.coordinator.zoomScale = $zoomScale
         context.coordinator.zoomViewport = $zoomViewport
-        context.coordinator.contentView?.configure(image: image, pdfData: pdfData, contentSize: contentSize)
+        context.coordinator.contentView?.configure(
+            imageData: imageData,
+            pdfData: pdfData,
+            contentSize: contentSize,
+            usesRasterDisplay: prefersRasterAtRest && zoomScale <= 1.01
+        )
         context.coordinator.overlayView?.imageSize = contentSize
         context.coordinator.overlayView?.playbackHighlight = playbackHighlight
         context.coordinator.overlayView?.selection = selection
@@ -315,9 +351,10 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.pageWidthConstraint?.constant = max(displayedPageSize.width, 1)
         context.coordinator.pageHeightConstraint?.constant = max(displayedPageSize.height, 1)
         let clampedZoomScale = min(max(zoomScale, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
-        let allowsReadingSwipe = !allowsEditingInteractions && clampedZoomScale <= 1.01
-        context.coordinator.swipeLeftGestureRecognizer?.isEnabled = allowsReadingSwipe
-        context.coordinator.swipeRightGestureRecognizer?.isEnabled = allowsReadingSwipe
+        let allowsReadingAtRest = !allowsEditingInteractions && clampedZoomScale <= 1.01
+        context.coordinator.swipeLeftGestureRecognizer?.isEnabled = allowsReadingAtRest
+        context.coordinator.swipeRightGestureRecognizer?.isEnabled = allowsReadingAtRest
+        context.coordinator.readingLongPressGestureRecognizer?.isEnabled = allowsReadingAtRest
         let allowsInnerPanning = clampedZoomScale > 1.01
         let usesActiveNotationFocus = context.coordinator.usesActiveNotationFocus
 
@@ -349,6 +386,7 @@ struct ZoomableImageView: UIViewRepresentable {
         var onPencilDoubleTap: (() -> Void)?
         var onSwipePreviousPage: (() -> Void)?
         var onSwipeNextPage: (() -> Void)?
+        var onReadingCenterLongPress: (() -> Void)?
         var onManualScroll: (() -> Void)?
         var allowsPlaybackFollow = true
         var allowsPencilInsertionFineTune = false
@@ -379,6 +417,7 @@ struct ZoomableImageView: UIViewRepresentable {
         weak var doubleTapGestureRecognizer: UITapGestureRecognizer?
         weak var swipeLeftGestureRecognizer: UISwipeGestureRecognizer?
         weak var swipeRightGestureRecognizer: UISwipeGestureRecognizer?
+        weak var readingLongPressGestureRecognizer: UILongPressGestureRecognizer?
         weak var zoomScrollView: UIScrollView?
         var isUserZooming = false
         var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
@@ -410,6 +449,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilDoubleTap: (() -> Void)? = nil,
             onSwipePreviousPage: (() -> Void)? = nil,
             onSwipeNextPage: (() -> Void)? = nil,
+            onReadingCenterLongPress: (() -> Void)? = nil,
             onManualScroll: (() -> Void)? = nil
         ) {
             self.zoomScale = zoomScale
@@ -427,6 +467,7 @@ struct ZoomableImageView: UIViewRepresentable {
             self.onPencilDoubleTap = onPencilDoubleTap
             self.onSwipePreviousPage = onSwipePreviousPage
             self.onSwipeNextPage = onSwipeNextPage
+            self.onReadingCenterLongPress = onReadingCenterLongPress
             self.onManualScroll = onManualScroll
         }
 
@@ -774,6 +815,22 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         @objc
+        func handleReadingCenterLongPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
+            guard
+                gestureRecognizer.state == .began,
+                let overlayView,
+                let scrollView = zoomScrollView,
+                scrollView.zoomScale <= 1.01,
+                let normalizedPoint = overlayView.normalizedPoint(at: gestureRecognizer.location(in: overlayView)),
+                ScoreReaderReadingGesturePolicy.isCenterEditLongPress(normalizedPoint)
+            else {
+                return
+            }
+
+            onReadingCenterLongPress?()
+        }
+
+        @objc
         func handleSelectedNoteDrag(_ gestureRecognizer: ScorePageLongPressGestureRecognizer) {
             guard let overlayView else {
                 return
@@ -973,11 +1030,16 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilDoubleTap?()
         }
     }
+
+    private static var allowsReadingDoubleTapZoom: Bool {
+        ScoreReaderReadingGesturePolicy.allowsDoubleTapZoom
+    }
 }
 
 final class ScorePageContentView: UIView {
     private let imageView = UIImageView()
     private let pdfView = ScorePagePDFTileView()
+    private var currentImageData: Data?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1002,21 +1064,31 @@ final class ScorePageContentView: UIView {
         pdfView.frame = bounds
     }
 
-    func configure(image: UIImage?, pdfData: Data?, contentSize: CGSize) {
-        imageView.image = image
+    func configure(imageData: Data?, pdfData: Data?, contentSize: CGSize, usesRasterDisplay: Bool) {
+        if currentImageData != imageData {
+            currentImageData = imageData
+            imageView.image = imageData.flatMap(UIImage.init(data:))
+        }
         let validContentSize = CGSize(
             width: max(contentSize.width, 1),
             height: max(contentSize.height, 1)
         )
 
-        if
-            let pdfData,
-            !pdfData.isEmpty,
-            pdfView.configure(pdfData: pdfData, contentSize: validContentSize)
-        {
+        let hasPDF: Bool
+        if let pdfData, !pdfData.isEmpty {
+            hasPDF = pdfView.configure(pdfData: pdfData, contentSize: validContentSize)
+        } else {
+            pdfView.clear()
+            hasPDF = false
+        }
+
+        if usesRasterDisplay, imageView.image != nil {
+            pdfView.isHidden = true
+            imageView.isHidden = false
+        } else if hasPDF {
             pdfView.isHidden = false
             imageView.isHidden = true
-        } else if image != nil {
+        } else if imageView.image != nil {
             pdfView.clear()
             pdfView.isHidden = true
             imageView.isHidden = false

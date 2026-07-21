@@ -555,6 +555,29 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func phoneHeaderMovesPlaybackLeftOnlyWhenPartsWouldOverlapIt() {
+        let withoutParts = ScoreReaderPhoneHeaderLayoutPolicy(
+            availableWidth: 390,
+            isLandscape: false,
+            hasParts: false
+        )
+        let portraitWithParts = ScoreReaderPhoneHeaderLayoutPolicy(
+            availableWidth: 390,
+            isLandscape: false,
+            hasParts: true
+        )
+        let wideLandscapeWithParts = ScoreReaderPhoneHeaderLayoutPolicy(
+            availableWidth: 844,
+            isLandscape: true,
+            hasParts: true
+        )
+
+        #expect(withoutParts.playbackHorizontalOffset == 0)
+        #expect(portraitWithParts.playbackHorizontalOffset == -51)
+        #expect(wideLandscapeWithParts.playbackHorizontalOffset == 0)
+    }
+
+    @Test
     func scoreReaderCannotZoomOutPastTheFittedPage() {
         #expect(ScoreReaderZoomLimits.minimumScale == 1)
     }
@@ -664,6 +687,56 @@ struct MuseReaderiOSTests {
         #expect(pageTurn.horizontalAlignment == .center)
         #expect(pageTurn.usesFullCanvasZoom == true)
         #expect(pageTurn.topPagePadding == 0)
+    }
+
+    @Test
+    func phoneEditZoomPolicyRestoresTheOrientationSpecificScale() {
+        #expect(ScoreReaderPhoneZoomPolicy.preferredEditScale(for: CGSize(width: 390, height: 844)) == 2.2)
+        #expect(ScoreReaderPhoneZoomPolicy.preferredEditScale(for: CGSize(width: 844, height: 390)) == 1.2)
+    }
+
+    @Test
+    func pageTurnPlanKeepsOnlyAdjacentDisplaySurfacesResident() {
+        #expect(ScorePageTurnPlan.residentIndices(focusedPageIndex: 0, pageCount: 5) == [0, 1])
+        #expect(ScorePageTurnPlan.residentIndices(focusedPageIndex: 2, pageCount: 5) == [1, 2, 3])
+        #expect(ScorePageTurnPlan.residentIndices(focusedPageIndex: 4, pageCount: 5) == [3, 4])
+        #expect(ScorePageTurnPlan.residentIndices(focusedPageIndex: 0, pageCount: 0).isEmpty)
+    }
+
+    @Test
+    func pageTurnPlanLoadsCurrentPageThenFavorsNavigationDirection() {
+        #expect(
+            ScorePageTurnPlan.loadOrder(
+                focusedPageIndex: 2,
+                direction: .forward,
+                pageCount: 5,
+                prefetchDistance: 1
+            ) == [2, 3, 1]
+        )
+        #expect(
+            ScorePageTurnPlan.loadOrder(
+                focusedPageIndex: 2,
+                direction: .backward,
+                pageCount: 5,
+                prefetchDistance: 1
+            ) == [2, 1, 3]
+        )
+        #expect(
+            ScorePageTurnPlan.loadOrder(
+                focusedPageIndex: 4,
+                direction: .forward,
+                pageCount: 5,
+                prefetchDistance: 1
+            ) == [4, 3]
+        )
+    }
+
+    @Test
+    func viewModeLongPressOnlyUsesTheCenterPageZone() {
+        #expect(!ScoreReaderReadingGesturePolicy.allowsDoubleTapZoom)
+        #expect(ScoreReaderReadingGesturePolicy.isCenterEditLongPress(CGPoint(x: 0.5, y: 0.1)))
+        #expect(!ScoreReaderReadingGesturePolicy.isCenterEditLongPress(CGPoint(x: 0.2, y: 0.5)))
+        #expect(!ScoreReaderReadingGesturePolicy.isCenterEditLongPress(CGPoint(x: 0.8, y: 0.5)))
     }
 
     private func fixtureURL(_ relativePath: String) -> URL {

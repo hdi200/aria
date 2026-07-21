@@ -19,9 +19,28 @@ struct ScoreReaderHeaderLayoutPolicy: Equatable {
     }
 }
 
-struct ScoreReaderChromeBar: View {
-    @State private var isReaderSettingsPresented = false
+struct ScoreReaderPhoneHeaderLayoutPolicy: Equatable {
+    let playbackHorizontalOffset: CGFloat
 
+    init(availableWidth: CGFloat, isLandscape: Bool, hasParts: Bool) {
+        guard hasParts else {
+            playbackHorizontalOffset = 0
+            return
+        }
+
+        let outerHorizontalPadding: CGFloat = isLandscape ? 10 : 12
+        let contentWidth = max(availableWidth - (outerHorizontalPadding * 2), 0)
+        let compactPlaybackWidth: CGFloat = 116
+        let partsShareAndEditWidth: CGFloat = 168
+        let minimumIslandSpacing: CGFloat = 8
+        let centeredPlaybackRightEdge = (contentWidth + compactPlaybackWidth) / 2
+        let unobstructedRightEdge = contentWidth - partsShareAndEditWidth - minimumIslandSpacing
+
+        playbackHorizontalOffset = min(0, unobstructedRightEdge - centeredPlaybackRightEdge)
+    }
+}
+
+struct ScoreReaderChromeBar: View {
     let scoreTitle: String
     let parts: [ScorePart]
     @Binding var selectedPartID: String
@@ -141,29 +160,24 @@ struct ScoreReaderChromeBar: View {
 
             Spacer(minLength: 4)
 
-            if interactionMode == .view || parts.count > 1 {
+            if parts.count > 1 {
                 floatingIsland(horizontalPadding: 6) {
-                    HStack(spacing: 6) {
-                        if interactionMode == .view {
-                            readerSettingsIslandMenu(iconOnly: true)
-                        }
-                        if parts.count > 1 {
-                            partsIslandButton(iconOnly: true)
-                        }
-                    }
+                    partsIslandButton(iconOnly: true)
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }
 
             floatingIsland(horizontalPadding: 5) {
-                HStack(spacing: 4) {
-                    exportIslandButton(fontSize: 18, minWidth: 40)
-                    if supportsEditing {
-                        editModeIslandButton(iconOnly: true)
-                    }
-                }
+                exportIslandButton(fontSize: 18, minWidth: 40)
             }
             .fixedSize(horizontal: true, vertical: false)
+
+            if supportsEditing {
+                floatingIsland(horizontalPadding: 5) {
+                    editModeIslandButton(iconOnly: true)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
         }
     }
 
@@ -208,26 +222,19 @@ struct ScoreReaderChromeBar: View {
             HStack(spacing: 12) {
                 Spacer(minLength: 0)
 
-                if interactionMode == .view || parts.count > 1 {
-                    floatingIsland {
-                        HStack(spacing: isCompactHeader ? 8 : 10) {
-                            if interactionMode == .view {
-                                readerSettingsIslandMenu(iconOnly: isCompactHeader)
-                            }
-
-                            if parts.count > 1 {
-                                partsIslandButton()
-                            }
-                        }
+                if parts.count > 1 {
+                    floatingIsland(horizontalPadding: 8) {
+                        partsIslandButton()
                     }
                 }
 
                 floatingIsland(horizontalPadding: 5) {
-                    HStack(spacing: 4) {
-                        exportIslandButton(fontSize: 21, minWidth: 44)
-                        if supportsEditing {
-                            editModeIslandButton(iconOnly: false)
-                        }
+                    exportIslandButton(fontSize: 21, minWidth: 44)
+                }
+
+                if supportsEditing {
+                    floatingIsland(horizontalPadding: 5) {
+                        editModeIslandButton(iconOnly: false)
                     }
                 }
             }
@@ -350,124 +357,36 @@ struct ScoreReaderChromeBar: View {
                     ProgressView()
                         .controlSize(.small)
                 } else if iconOnly {
-                    Image(systemName: interactionMode == .edit ? "checkmark" : "pencil")
-                        .font(.system(size: 17, weight: .semibold))
+                    if interactionMode == .edit {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 17, weight: .semibold))
+                    } else {
+                        Text("Edit")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
                 } else {
                     HStack(spacing: 7) {
-                        Image(systemName: interactionMode == .edit ? "checkmark" : "pencil")
+                        if interactionMode == .edit {
+                            Image(systemName: "checkmark")
+                        } else {
+                            Image(systemName: "pencil")
+                        }
                         Text(interactionMode == .edit ? "Done" : "Edit")
                     }
                     .font(.system(size: 14, weight: .semibold))
                 }
             }
-            .foregroundStyle(interactionMode == .edit ? Color.blue : Color.black.opacity(0.84))
+            .foregroundStyle(
+                !iconOnly && interactionMode == .edit
+                    ? Color.black.opacity(0.84)
+                    : Color.blue
+            )
             .scoreReaderChromeTapTarget(minWidth: iconOnly ? 40 : 72)
         }
         .buttonStyle(.plain)
         .disabled(!supportsEditing || isEditingBusy || interactionMode == .leavingEdit)
         .opacity(supportsEditing ? 1 : 0.42)
         .accessibilityLabel(interactionMode == .edit ? "Done editing" : "Edit score")
-    }
-
-    private func readerSettingsIslandMenu(iconOnly: Bool) -> some View {
-        Button {
-            if !isReaderSettingsPresented {
-                isPartsPanelPresented = false
-                isExportPanelPresented = false
-            }
-            isReaderSettingsPresented.toggle()
-        } label: {
-            Group {
-                if iconOnly {
-                    Image(systemName: "rectangle.portrait.on.rectangle.portrait")
-                        .font(.system(size: 16, weight: .semibold))
-                } else {
-                    HStack(spacing: 7) {
-                        Image(systemName: "rectangle.portrait.on.rectangle.portrait")
-                        Text("View")
-                    }
-                    .font(.system(size: 14, weight: .semibold))
-                }
-            }
-            .foregroundStyle(Color.black.opacity(0.80))
-            .scoreReaderChromeTapTarget(minWidth: iconOnly ? 40 : 70)
-        }
-        .buttonStyle(.plain)
-        .disabled(isEditingBusy)
-        .accessibilityLabel("Reader Settings")
-        .popover(isPresented: $isReaderSettingsPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-            readerSettingsPanelContent
-                .presentationCompactPopoverWhenAvailable()
-        }
-    }
-
-    private var readerSettingsPanelContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Reading Style")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.secondary)
-                .padding(.horizontal, 12)
-
-            ForEach(ScoreReaderReadingStyle.allCases, id: \.rawValue) { style in
-                readerSettingsRow(
-                    title: style.title,
-                    systemImage: style.systemImage,
-                    isSelected: readingStyle == style,
-                    accessibilityValue: readingStyle == style ? "Selected" : ""
-                ) {
-                    readingStyle = style
-                    isReaderSettingsPresented = false
-                }
-            }
-
-            Divider()
-
-            readerSettingsRow(
-                title: "Follow Score",
-                systemImage: "location",
-                isSelected: playbackFollowEnabled,
-                accessibilityValue: playbackFollowEnabled ? "On" : "Off"
-            ) {
-                playbackFollowEnabled.toggle()
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 4)
-        .frame(width: UIDevice.current.userInterfaceIdiom == .phone ? 270 : 300)
-    }
-
-    private func readerSettingsRow(
-        title: String,
-        systemImage: String,
-        isSelected: Bool,
-        accessibilityValue: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 17, weight: .medium))
-                    .frame(width: 24)
-
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-
-                Spacer(minLength: 16)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.blue)
-                }
-            }
-            .foregroundStyle(Color.primary)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityValue(accessibilityValue)
     }
 
     private var partsPanelContent: some View {
@@ -500,9 +419,14 @@ struct ScoreReaderChromeBar: View {
     }
 
     private func phoneFloatingIslandHeader(availableWidth: CGFloat, isPhoneLandscape: Bool, showsPlaybackTime: Bool) -> some View {
-        let hasTrailingExtras = interactionMode == .view || parts.count > 1
+        let hasTrailingExtras = parts.count > 1
         let showsCenteredPlaybackTime = showsPlaybackTime && (!hasTrailingExtras || availableWidth >= 620)
         let showsTitle = isPhoneLandscape && availableWidth >= 620
+        let phoneLayout = ScoreReaderPhoneHeaderLayoutPolicy(
+            availableWidth: availableWidth,
+            isLandscape: isPhoneLandscape,
+            hasParts: hasTrailingExtras
+        )
 
         return ZStack {
             HStack {
@@ -535,6 +459,7 @@ struct ScoreReaderChromeBar: View {
                     compactPlaybackControls(showsElapsedTime: showsCenteredPlaybackTime)
                 }
                 .fixedSize(horizontal: true, vertical: false)
+                .offset(x: phoneLayout.playbackHorizontalOffset)
             }
 
             HStack(spacing: 8) {
@@ -542,28 +467,22 @@ struct ScoreReaderChromeBar: View {
 
                 if hasTrailingExtras {
                     floatingIsland(horizontalPadding: 6) {
-                        HStack(spacing: 6) {
-                            if interactionMode == .view {
-                                readerSettingsIslandMenu(iconOnly: true)
-                            }
-
-                            if parts.count > 1 {
-                                partsIslandButton(iconOnly: true)
-                            }
-                        }
+                        partsIslandButton(iconOnly: true)
                     }
                     .fixedSize(horizontal: true, vertical: false)
                 }
 
                 floatingIsland(horizontalPadding: 5) {
-                    HStack(spacing: 4) {
-                        exportIslandButton(fontSize: 18, minWidth: 40)
-                        if supportsEditing {
-                            editModeIslandButton(iconOnly: true)
-                        }
-                    }
+                    exportIslandButton(fontSize: 18, minWidth: 40)
                 }
                 .fixedSize(horizontal: true, vertical: false)
+
+                if supportsEditing {
+                    floatingIsland(horizontalPadding: 5) {
+                        editModeIslandButton(iconOnly: true)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
             }
         }
         .font(.system(size: 14, weight: .medium))
@@ -682,6 +601,7 @@ private extension View {
                 }
         }
     }
+
 }
 
 struct ScoreReaderPlaybackPreparationHUD: View {

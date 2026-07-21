@@ -7,6 +7,12 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
+enum ScoreReaderPhoneZoomPolicy {
+    static func preferredEditScale(for viewportSize: CGSize) -> CGFloat {
+        viewportSize.width > viewportSize.height ? 1.2 : 2.2
+    }
+}
+
 struct ScorePageRenderSurfaceIdentity: Hashable {
     let pageIndex: Int
     let pixelWidth: Int
@@ -143,6 +149,7 @@ struct ScoreReaderPageCanvas: View {
     let pencilDoubleTapAction: () -> Void
     var swipePreviousPageAction: () -> Void = {}
     var swipeNextPageAction: () -> Void = {}
+    var viewModeLongPressAction: () -> Void = {}
     var manualScrollAction: () -> Void = {}
 
     var body: some View {
@@ -175,6 +182,7 @@ struct ScoreReaderPageCanvas: View {
                 displayedPageSize: fittedPageSize,
                 pageHorizontalAlignment: zoomPageHorizontalAlignment,
                 centersPageVertically: fitsPageToViewport,
+                prefersRasterAtRest: fitsPageToViewport && !allowsEditingInteractions,
                 viewportEdgePadding: pageLayoutPolicy.viewportEdgePadding,
                 restingTopInset: pageLayoutPolicy.restingTopInset,
                 allowsPencilInsertionFineTune: allowsPencilInsertionFineTune,
@@ -216,6 +224,7 @@ struct ScoreReaderPageCanvas: View {
                 pencilDoubleTapAction: pencilDoubleTapAction,
                 swipePreviousPageAction: swipePreviousPageAction,
                 swipeNextPageAction: swipeNextPageAction,
+                viewModeLongPressAction: viewModeLongPressAction,
                 manualScrollAction: manualScrollAction
             )
             // CATiledLayer renders PDF tiles asynchronously. A viewport-size
@@ -374,6 +383,7 @@ struct ScoreReaderPageSurface: View {
     let displayedPageSize: CGSize
     let pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment
     let centersPageVertically: Bool
+    let prefersRasterAtRest: Bool
     let viewportEdgePadding: CGFloat
     let restingTopInset: CGFloat
     let allowsPencilInsertionFineTune: Bool
@@ -415,6 +425,7 @@ struct ScoreReaderPageSurface: View {
     let pencilDoubleTapAction: () -> Void
     let swipePreviousPageAction: () -> Void
     let swipeNextPageAction: () -> Void
+    let viewModeLongPressAction: () -> Void
     let manualScrollAction: () -> Void
 
     var body: some View {
@@ -422,8 +433,9 @@ struct ScoreReaderPageSurface: View {
             Group {
                 if let page, page.hasRenderableContent {
                     ZoomableImageView(
-                        image: page.image,
+                        imageData: page.imageData,
                         pdfData: page.pdfData,
+                        prefersRasterAtRest: prefersRasterAtRest,
                         contentSize: page.displaySize ?? CGSize(width: 612, height: 792),
                         displayedPageSize: displayedPageSize,
                         playbackHighlight: playbackHighlight,
@@ -461,6 +473,7 @@ struct ScoreReaderPageSurface: View {
                         onPencilDoubleTap: pencilDoubleTapAction,
                         onSwipePreviousPage: swipePreviousPageAction,
                         onSwipeNextPage: swipeNextPageAction,
+                        onReadingCenterLongPress: viewModeLongPressAction,
                         onManualScroll: manualScrollAction
                     )
                 } else {

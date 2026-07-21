@@ -93,7 +93,7 @@ struct ScorePage: Identifiable, Sendable, Equatable {
     }
 
     var hasRenderableContent: Bool {
-        pdfData?.isEmpty == false || image != nil
+        pdfData?.isEmpty == false || imageData?.isEmpty == false
     }
 
     func rasterizedImage() -> UIImage? {

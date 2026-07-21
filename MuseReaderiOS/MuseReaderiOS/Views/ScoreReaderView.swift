@@ -480,7 +480,13 @@ struct ScoreReaderView: View {
                 clearSelectionCommandMenu()
                 zoomScaleBeforeTextEntry = nil
             }
-            if mode == .view {
+            if mode == .edit, isPhoneInterface {
+                // View mode intentionally returns to a full-page scale. Force the
+                // preferred phone edit scale again on every edit invocation,
+                // even when the device orientation has not changed.
+                lastPhoneLandscapeZoomMode = nil
+                applyPreferredPhoneZoomIfNeeded(for: UIScreen.main.bounds.size)
+            } else if mode == .view {
                 zoomScale = 1
             }
         }
@@ -767,19 +773,30 @@ struct ScoreReaderView: View {
 
     private var pageTurnReaderCanvas: some View {
         GeometryReader { geometry in
-            scorePageCanvas(
-                pageIndex: readerState.selectedPageIndex,
-                geometry: geometry,
-                isPageTurn: true
-            )
-            .id(readerState.selectedPageIndex)
+            ZStack {
+                ForEach(
+                    ScorePageTurnPlan.residentIndices(
+                        focusedPageIndex: readerState.selectedPageIndex,
+                        pageCount: readerState.pageCount
+                    ),
+                    id: \.self
+                ) { pageIndex in
+                    let isSelectedPage = pageIndex == readerState.selectedPageIndex
+                    scorePageCanvas(
+                        pageIndex: pageIndex,
+                        geometry: geometry,
+                        isPageTurn: true,
+                        isActivePage: isSelectedPage
+                    )
+                    .id(pageIndex)
+                    .opacity(isSelectedPage ? 1 : 0)
+                    .zIndex(isSelectedPage ? 1 : 0)
+                    .allowsHitTesting(isSelectedPage)
+                    .accessibilityHidden(!isSelectedPage)
+                }
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .padding(12)
-            .transition(.opacity)
-            .animation(.easeInOut(duration: 0.16), value: readerState.selectedPageIndex)
-            .task(id: readerState.selectedPageIndex) {
-                readerState.prefetchPage(readerState.selectedPageIndex)
-            }
         }
     }
 
@@ -871,7 +888,12 @@ struct ScoreReaderView: View {
         }
     }
 
-    private func scorePageCanvas(pageIndex: Int, geometry: GeometryProxy, isPageTurn: Bool) -> some View {
+    private func scorePageCanvas(
+        pageIndex: Int,
+        geometry: GeometryProxy,
+        isPageTurn: Bool,
+        isActivePage: Bool = true
+    ) -> some View {
         let isCompactPhoneLayout = isPhoneInterface
         let isPhoneLandscapeLayout = isCompactPhoneLayout && geometry.size.width > geometry.size.height
         let editingEnabled = readerState.isEditingMode
@@ -888,7 +910,7 @@ struct ScoreReaderView: View {
             playbackHighlight: readerState.playbackMeasureHighlight(for: pageIndex),
             selectedElement: editingEnabled ? readerState.selectedElement(for: pageIndex) : nil,
             noteEntryPreview: editingEnabled ? readerState.noteEntryPreview(for: pageIndex) : nil,
-            zoomScale: $zoomScale,
+            zoomScale: isActivePage ? $zoomScale : .constant(1),
             availableWidth: isPageTurn || editingEnabled
                 ? (isPageTurn ? pageTurnViewport.width : geometry.size.width)
                 : geometry.size.width - (isCompactPhoneLayout ? 0 : 48),
@@ -957,6 +979,7 @@ struct ScoreReaderView: View {
             pencilDoubleTapAction: toggleNoteInputFromPencilDoubleTap,
             swipePreviousPageAction: showPreviousPage,
             swipeNextPageAction: showNextPage,
+            viewModeLongPressAction: enterEditModeFromViewLongPress,
             manualScrollAction: readerState.suspendPlaybackFollow
         )
     }
@@ -1195,7 +1218,7 @@ struct ScoreReaderView: View {
         }
 
         lastPhoneLandscapeZoomMode = isLandscape
-        zoomScale = isLandscape ? 1.2 : 2.2
+        zoomScale = ScoreReaderPhoneZoomPolicy.preferredEditScale(for: size)
     }
 
     private func closeReader() {
@@ -1262,6 +1285,20 @@ struct ScoreReaderView: View {
         case .leavingEdit:
             break
         }
+    }
+
+    private func enterEditModeFromViewLongPress() {
+        guard
+            readerState.interactionMode == .view,
+            readerState.supportsEditing,
+            !readerState.isEditingActionInFlight,
+            !isClosingScore,
+            !isPreparingExport
+        else {
+            return
+        }
+
+        toggleInteractionMode()
     }
 
     private func finishEditingAndEnterViewMode() {
@@ -1377,7 +1414,7 @@ struct ScoreReaderView: View {
             return
         }
         zoomScale = 1
-        readerState.updateSelection(to: readerState.selectedPageIndex - 1)
+        readerState.updatePageTurnSelection(to: readerState.selectedPageIndex - 1)
     }
 
     private func showNextPage() {
@@ -1387,7 +1424,7 @@ struct ScoreReaderView: View {
             return
         }
         zoomScale = 1
-        readerState.updateSelection(to: readerState.selectedPageIndex + 1)
+        readerState.updatePageTurnSelection(to: readerState.selectedPageIndex + 1)
     }
 
     private func exportScore() {
