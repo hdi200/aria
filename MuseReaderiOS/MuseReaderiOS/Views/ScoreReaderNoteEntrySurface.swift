@@ -54,6 +54,7 @@ struct ScoreReaderNoteEntrySurface: View {
     let fillSelectionWithSlashesAction: () -> Void
     let replaceSelectionWithRhythmicSlashesAction: () -> Void
     let openAddInstrumentAction: () -> Void
+    let openTransposeScoreAction: () -> Void
     let removeSelectedInstrumentAction: () -> Void
     let openClefEditorAction: () -> Void
     let openAutoBreaksAction: () -> Void
@@ -662,6 +663,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 canFillWithSlashes: editingState.selection?.canFillWithSlashes == true && !isBusy,
                 canReplaceWithRhythmicSlashes: hasSelection && !isBusy,
                 openAddInstrumentAction: openAddInstrumentAction,
+                openTransposeScoreAction: openTransposeScoreAction,
                 removeSelectedInstrumentAction: removeSelectedInstrumentAction,
                 openClefEditorAction: openClefEditorAction,
                 openScoreSetupAction: openScoreSetupAction,
@@ -856,6 +858,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 canFillWithSlashes: editingState.selection?.canFillWithSlashes == true && !isBusy,
                 canReplaceWithRhythmicSlashes: hasSelection && !isBusy,
                 openAddInstrumentAction: openAddInstrumentAction,
+                openTransposeScoreAction: openTransposeScoreAction,
                 removeSelectedInstrumentAction: removeSelectedInstrumentAction,
                 openClefEditorAction: openClefEditorAction,
                 openScoreSetupAction: openScoreSetupAction,

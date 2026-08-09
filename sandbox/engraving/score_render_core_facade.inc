@@ -49,6 +49,11 @@ bool msr::render::ScoreRenderSession::hasConcertPitchRelevantTransposition() con
     return m_impl->hasConcertPitchRelevantTransposition();
 }
 
+int msr::render::ScoreRenderSession::scoreStartKey() const
+{
+    return m_impl->scoreStartKey();
+}
+
 std::vector<msr::render::ScorePartInfo> msr::render::ScoreRenderSession::partInfoList() const
 {
     return m_impl->partInfoList();
@@ -536,6 +541,16 @@ bool msr::render::ScoreRenderSession::selectAll(ScoreEditState& output, std::str
 bool msr::render::ScoreRenderSession::clearSelection(ScoreEditState& output, std::string& errorMessage)
 {
     return m_impl->clearSelection(output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::transposeScore(const int mode,
+                                                      const int direction,
+                                                      const int interval,
+                                                      const int targetKey,
+                                                      ScoreEditState& output,
+                                                      std::string& errorMessage)
+{
+    return m_impl->transposeScore(mode, direction, interval, targetKey, output, errorMessage);
 }
 
 bool msr::render::ScoreRenderSession::transposeSelectedMeasureRange(const int mode,

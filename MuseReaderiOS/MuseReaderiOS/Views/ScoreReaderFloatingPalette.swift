@@ -179,8 +179,9 @@ struct ScoreReaderFloatingToolPalette: View {
         ScoreReaderPaletteButton(textSymbol: "D.C.", title: "D.C. al Coda", isSelected: false, isEnabled: hasSelection, action: { addRepeatJumpAction("D.C. al Coda") })
         ScoreReaderPaletteButton(textSymbol: "D.C.", title: "D.C. al Fine", isSelected: false, isEnabled: hasSelection, action: { addRepeatJumpAction("D.C. al Fine") })
         ScoreReaderPaletteSeparator()
-        ScoreReaderPaletteButton(textSymbol: "\u{E048}", title: "Coda", usesMusicFont: true, isSelected: false, isEnabled: hasSelection, action: { addRepeatJumpAction("Coda") })
         ScoreReaderPaletteButton(textSymbol: "\u{E047}", title: "Segno", usesMusicFont: true, isSelected: false, isEnabled: hasSelection, action: { addRepeatJumpAction("Segno") })
+        ScoreReaderPaletteButton(textSymbol: "To Coda", title: "To Coda", isSelected: false, isEnabled: hasSelection, action: { addRepeatJumpAction("To Coda") })
+        ScoreReaderPaletteButton(textSymbol: "\u{E048}", title: "Coda", usesMusicFont: true, isSelected: false, isEnabled: hasSelection, action: { addRepeatJumpAction("Coda") })
     }
 
     @ViewBuilder

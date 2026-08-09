@@ -121,6 +121,10 @@ actor LiveScoreRenderSession {
         bridgeSession.hasConcertPitchRelevantTransposition
     }
 
+    func scoreStartKey() -> Int {
+        bridgeSession.scoreStartKey
+    }
+
     func setConcertPitchEnabled(_ enabled: Bool) throws -> Int {
         var pageCount = 0
         try bridgeSession.setConcertPitchEnabled(enabled, totalPageCount: &pageCount)
@@ -905,6 +909,24 @@ actor LiveScoreRenderSession {
                 targetKey: request.targetKey
             ),
             refreshScope: .nearby
+        )
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
+    func transposeScore(_ request: ScoreTransposeRequest) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(
+            from: bridgeSession.transposeScore(
+                mode: request.mode.rawValue,
+                direction: request.direction.rawValue,
+                interval: request.interval,
+                targetKey: request.targetKey
+            ),
+            refreshScope: .all
         )
         invalidateCachedPlaybackArtifacts()
         return editState

@@ -857,6 +857,15 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (NSInteger)scoreStartKey
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    return _session ? static_cast<NSInteger>(_session->scoreStartKey()) : 0;
+#else
+    return 0;
+#endif
+}
+
 - (NSArray<MSRScorePartInfo *> *)scoreParts
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
@@ -2897,6 +2906,43 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                                                  errorMessage)) {
         if (error) {
             *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not transpose the selected measures."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)transposeScoreWithMode:(NSInteger)mode
+                               direction:(NSInteger)direction
+                                interval:(NSInteger)interval
+                               targetKey:(NSInteger)targetKey
+                                   error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->transposeScore(static_cast<int>(mode),
+                                  static_cast<int>(direction),
+                                  static_cast<int>(interval),
+                                  static_cast<int>(targetKey),
+                                  editState,
+                                  errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not transpose the score."));
         }
         return nil;
     }

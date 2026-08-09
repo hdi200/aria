@@ -234,6 +234,7 @@ public:
     bool supportsEditing() const;
     bool concertPitchEnabled() const;
     bool hasConcertPitchRelevantTransposition() const;
+    int scoreStartKey() const;
     std::vector<ScorePartInfo> partInfoList() const;
     bool setActivePartIndex(std::optional<int> partIndex, int& totalPageCount, std::string& errorMessage);
     bool setConcertPitchEnabled(bool enabled, int& totalPageCount, std::string& errorMessage);
@@ -322,6 +323,7 @@ public:
     bool pasteMeasureRange(ScoreEditState& output, std::string& errorMessage);
     bool selectAll(ScoreEditState& output, std::string& errorMessage);
     bool clearSelection(ScoreEditState& output, std::string& errorMessage);
+    bool transposeScore(int mode, int direction, int interval, int targetKey, ScoreEditState& output, std::string& errorMessage);
     bool transposeSelectedMeasureRange(int mode, int direction, int interval, int targetKey, ScoreEditState& output, std::string& errorMessage);
     bool moveSelectionPitch(bool up, ScoreEditState& output, std::string& errorMessage);
     bool shiftSelectionPitchBySemitones(int semitoneDelta, ScoreEditState& output, std::string& errorMessage);

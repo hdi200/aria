@@ -1168,6 +1168,19 @@ extension ScoreReaderState {
         }
     }
 
+    func transposeScore(_ request: ScoreTransposeRequest) {
+        performEditingAction(mutatesScore: true) { liveRenderSession in
+            try await liveRenderSession.transposeScore(request)
+        }
+    }
+
+    func scoreStartKey() async -> Int {
+        guard let liveRenderSession = session.liveRenderSession else {
+            return 0
+        }
+        return await liveRenderSession.scoreStartKey()
+    }
+
     func movePitch(up: Bool) {
         performEditingAction(mutatesScore: true, auditionNote: true) { liveRenderSession in
             try await liveRenderSession.movePitch(up: up)

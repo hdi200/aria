@@ -116,6 +116,12 @@ public:
         return false;
     }
 
+    int scoreStartKey() const
+    {
+        const mu::engraving::Score* score = m_masterScore.get();
+        return currentKeyForSelection(score, score ? score->firstMeasure() : nullptr, 0);
+    }
+
     std::vector<ScorePartInfo> partInfoList() const
     {
         std::vector<ScorePartInfo> output;

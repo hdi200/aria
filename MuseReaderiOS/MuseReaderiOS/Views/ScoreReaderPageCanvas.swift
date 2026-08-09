@@ -1405,17 +1405,20 @@ struct ScoreReaderTransposePanel: View {
     @State private var interval = ScoreTransposeInterval.majorSecond
     @State private var targetKey: ScoreTransposeTargetKey
 
+    let title: String
     let isSheetStyle: Bool
     let cancelAction: () -> Void
     let applyAction: (ScoreTransposeRequest) -> Void
 
     init(
         currentKey: Int,
+        title: String = "Transpose",
         isSheetStyle: Bool = false,
         cancelAction: @escaping () -> Void,
         applyAction: @escaping (ScoreTransposeRequest) -> Void
     ) {
         _targetKey = State(initialValue: ScoreTransposeTargetKey(coreKey: currentKey) ?? .cMajor)
+        self.title = title
         self.isSheetStyle = isSheetStyle
         self.cancelAction = cancelAction
         self.applyAction = applyAction
@@ -1423,7 +1426,7 @@ struct ScoreReaderTransposePanel: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text("Transpose")
+            Text(title)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Color.black.opacity(0.88))
 

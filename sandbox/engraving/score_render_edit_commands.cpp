@@ -843,9 +843,15 @@
             const mu::engraving::staff_idx_t staffIdx = chordRest ? chordRest->staffIdx() : 0;
             score->cmdAddSpanner(volta, staffIdx, segment, segment, false);
             addedItem = volta;
-        } else if (key == "coda" || key == "segno") {
+        } else if (key == "coda" || key == "segno" || key == "tocoda") {
             mu::engraving::Marker* marker = mu::engraving::Factory::createMarker(measure);
-            marker->setMarkerType(key == "segno" ? mu::engraving::MarkerType::SEGNO : mu::engraving::MarkerType::CODA);
+            mu::engraving::MarkerType markerType = mu::engraving::MarkerType::CODA;
+            if (key == "segno") {
+                markerType = mu::engraving::MarkerType::SEGNO;
+            } else if (key == "tocoda") {
+                markerType = mu::engraving::MarkerType::TOCODA;
+            }
+            marker->setMarkerType(markerType);
             marker->resetProperty(mu::engraving::Pid::LABEL);
             marker->setTrack(0);
             marker->setParent(measure);
@@ -2950,19 +2956,15 @@
         return true;
     }
 
-    bool transposeSelectedMeasureRange(const int mode,
-                                       const int direction,
-                                       const int interval,
-                                       const int targetKey,
-                                       msr::render::ScoreEditState& output,
-                                       std::string& errorMessage)
+    bool transposeMeasureRangeInScore(mu::engraving::Score* score,
+                                      const int mode,
+                                      const int direction,
+                                      const int interval,
+                                      const int targetKey,
+                                      const muse::TranslatableString& commandName,
+                                      msr::render::ScoreEditState& output,
+                                      std::string& errorMessage)
     {
-        if (!supportsEditing()) {
-            errorMessage = "Editing is unavailable for this score session.";
-            return false;
-        }
-
-        mu::engraving::Score* score = activeScore();
         const bool transposesCurrentListSelection = score->selection().isList();
         mu::engraving::Measure* startMeasure = nullptr;
         mu::engraving::Measure* endMeasure = nullptr;
@@ -3031,7 +3033,7 @@
             );
         }
 
-        score->startCmd(muse::TranslatableString::untranslatable("MuseReader transpose selection"));
+        score->startCmd(commandName);
         if (!transposesCurrentListSelection) {
             ::selectMeasureRange(score, startMeasure, endMeasure, staffStart, staffEnd);
         }
@@ -3062,6 +3064,70 @@
         }
         output = makeEditState(score);
         return true;
+    }
+
+    bool transposeScore(const int mode,
+                        const int direction,
+                        const int interval,
+                        const int targetKey,
+                        msr::render::ScoreEditState& output,
+                        std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+        if (!m_masterScore || !m_masterScore->firstMeasure() || m_masterScore->nstaves() == 0) {
+            errorMessage = "The score has no measures to transpose.";
+            return false;
+        }
+
+        mu::engraving::Score* score = m_masterScore.get();
+        const mu::engraving::Selection previousSelection = score->selection();
+        score->cmdSelectAll();
+
+        msr::render::ScoreEditState commandOutput;
+        const bool succeeded = transposeMeasureRangeInScore(
+            score,
+            mode,
+            direction,
+            interval,
+            targetKey,
+            muse::TranslatableString::untranslatable("MuseReader transpose score"),
+            commandOutput,
+            errorMessage
+        );
+
+        score->setSelection(previousSelection);
+        if (succeeded) {
+            relayoutActiveScore();
+        }
+        output = makeEditState(activeScore());
+        return succeeded;
+    }
+
+    bool transposeSelectedMeasureRange(const int mode,
+                                       const int direction,
+                                       const int interval,
+                                       const int targetKey,
+                                       msr::render::ScoreEditState& output,
+                                       std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        return transposeMeasureRangeInScore(
+            activeScore(),
+            mode,
+            direction,
+            interval,
+            targetKey,
+            muse::TranslatableString::untranslatable("MuseReader transpose selection"),
+            output,
+            errorMessage
+        );
     }
 
     bool moveSelectionPitch(const bool up,

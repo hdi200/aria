@@ -8,9 +8,15 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
+private enum ScoreReaderTransposeScope {
+    case selection
+    case score
+}
+
 private struct ScoreReaderTransposeSheetContext: Identifiable {
     let id = UUID()
     let currentKey: Int
+    let scope: ScoreReaderTransposeScope
 }
 
 private struct ScoreReaderPlaybackScrollTarget: Equatable {
@@ -157,6 +163,7 @@ struct ScoreReaderView: View {
                                     }
                                     isAddInstrumentPresented = true
                                 },
+                                openTransposeScoreAction: openTransposeScoreSheet,
                                 removeSelectedInstrumentAction: readerState.removeSelectedInstrument,
                                 openClefEditorAction: { isClefPickerPresented = true },
                                 openAutoBreaksAction: { isAutoBreaksPresented = true },
@@ -611,11 +618,17 @@ struct ScoreReaderView: View {
         .sheet(item: $transposeSheetContext) { context in
             ScoreReaderTransposePanel(
                 currentKey: context.currentKey,
+                title: context.scope == .score ? "Transpose Score" : "Transpose",
                 isSheetStyle: true,
                 cancelAction: { transposeSheetContext = nil },
                 applyAction: { request in
                     transposeSheetContext = nil
-                    readerState.transposeSelectedMeasureRange(request)
+                    switch context.scope {
+                    case .selection:
+                        readerState.transposeSelectedMeasureRange(request)
+                    case .score:
+                        readerState.transposeScore(request)
+                    }
                 }
             )
             .presentationDetents([.large])
@@ -1971,7 +1984,18 @@ struct ScoreReaderView: View {
 
     private func openTransposeSheet(currentKey: Int) {
         clearSelectionCommandMenu()
-        transposeSheetContext = ScoreReaderTransposeSheetContext(currentKey: currentKey)
+        transposeSheetContext = ScoreReaderTransposeSheetContext(currentKey: currentKey, scope: .selection)
+    }
+
+    private func openTransposeScoreSheet() {
+        clearSelectionCommandMenu()
+        Task { @MainActor in
+            let currentKey = await readerState.scoreStartKey()
+            guard readerState.isEditingMode else {
+                return
+            }
+            transposeSheetContext = ScoreReaderTransposeSheetContext(currentKey: currentKey, scope: .score)
+        }
     }
 
     private func requestLayoutBreak(_ breakKind: String) {

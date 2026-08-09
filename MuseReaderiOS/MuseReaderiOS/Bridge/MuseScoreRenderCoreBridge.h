@@ -417,6 +417,7 @@ isEditableText:(BOOL)isEditableText
 @property (nonatomic, readonly) BOOL supportsEditing;
 @property (nonatomic, readonly) BOOL concertPitchEnabled;
 @property (nonatomic, readonly) BOOL hasConcertPitchRelevantTransposition;
+@property (nonatomic, readonly) NSInteger scoreStartKey;
 @property (nonatomic, copy, readonly) NSArray<MSRScorePartInfo *> *scoreParts;
 
 - (nullable MSRRenderedPage *)renderPageAtIndex:(NSInteger)pageIndex
@@ -591,6 +592,11 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)pasteMeasureRangeWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(pasteMeasureRange());
 - (nullable MSREditState *)selectAllWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(selectAll());
 - (nullable MSREditState *)clearSelectionWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(clearSelection());
+- (nullable MSREditState *)transposeScoreWithMode:(NSInteger)mode
+                                        direction:(NSInteger)direction
+                                         interval:(NSInteger)interval
+                                        targetKey:(NSInteger)targetKey
+                                            error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(transposeScore(mode:direction:interval:targetKey:));
 - (nullable MSREditState *)transposeSelectedMeasureRangeWithMode:(NSInteger)mode
                                                        direction:(NSInteger)direction
                                                         interval:(NSInteger)interval

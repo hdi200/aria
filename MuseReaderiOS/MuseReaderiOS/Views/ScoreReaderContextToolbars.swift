@@ -637,9 +637,11 @@ struct ScoreReaderRepeatContextToolbar: View {
             ScoreReaderContextDivider()
             ScoreReaderPaletteButton(textSymbol: "D.C.", title: "D.C. al Fine", isSelected: false, isEnabled: isEnabled, action: { addRepeatJumpAction("D.C. al Fine") })
             ScoreReaderContextDivider()
-            ScoreReaderPaletteButton(textSymbol: "\u{E048}", title: "Coda", usesMusicFont: true, isSelected: false, isEnabled: isEnabled, action: { addRepeatJumpAction("Coda") })
-            ScoreReaderContextDivider()
             ScoreReaderPaletteButton(textSymbol: "\u{E047}", title: "Segno", usesMusicFont: true, isSelected: false, isEnabled: isEnabled, action: { addRepeatJumpAction("Segno") })
+            ScoreReaderContextDivider()
+            ScoreReaderPaletteButton(textSymbol: "To Coda", title: "To Coda", isSelected: false, isEnabled: isEnabled, action: { addRepeatJumpAction("To Coda") })
+            ScoreReaderContextDivider()
+            ScoreReaderPaletteButton(textSymbol: "\u{E048}", title: "Coda", usesMusicFont: true, isSelected: false, isEnabled: isEnabled, action: { addRepeatJumpAction("Coda") })
         }
     }
 }
@@ -779,6 +781,7 @@ struct ScoreReaderMoreContextToolbar: View {
     let canFillWithSlashes: Bool
     let canReplaceWithRhythmicSlashes: Bool
     let openAddInstrumentAction: () -> Void
+    let openTransposeScoreAction: () -> Void
     let removeSelectedInstrumentAction: () -> Void
     let openClefEditorAction: () -> Void
     let openScoreSetupAction: () -> Void
@@ -797,6 +800,8 @@ struct ScoreReaderMoreContextToolbar: View {
             ScoreReaderPaletteButton(systemImage: "slider.horizontal.3", title: "Score Setup", isSelected: false, isEnabled: isEnabled, action: openScoreSetupAction)
             ScoreReaderContextDivider()
             ScoreReaderPaletteButton(systemImage: "music.note.list", title: "Add/Remove Instrument", isSelected: false, isEnabled: isEnabled, action: openAddInstrumentAction)
+            ScoreReaderContextDivider()
+            ScoreReaderPaletteButton(systemImage: "arrow.up.arrow.down", title: "Transpose Score", isSelected: false, isEnabled: isEnabled, action: openTransposeScoreAction)
             if showsConcertPitchControl {
                 ScoreReaderContextDivider()
                 ScoreReaderPaletteButton(systemImage: "music.quarternote.3", title: "Concert Pitch", isSelected: concertPitchEnabled, isEnabled: isEnabled, action: toggleConcertPitchAction)

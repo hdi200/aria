@@ -241,6 +241,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		6D8D20012F8D4F7E00DD6DE1 /* Build MuseScore Render Artifacts */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -255,6 +256,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(MUSEREADER_RENDER_BUILD_DIR)/MuseScoreRenderCore.framework/MuseScoreRenderCore",
+				"$(MUSEREADER_RENDER_BUILD_DIR)/global/libmuse_global.a",
+				"$(MUSEREADER_RENDER_BUILD_DIR)/draw/libmuse_draw.a",
+				"$(MUSEREADER_RENDER_BUILD_DIR)/engraving/libengraving.a",
+				"$(MUSEREADER_RENDER_BUILD_DIR)/musicxml/libiex_musicxml.a",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -462,12 +468,14 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2;
+				MARKETING_VERSION = 3.3;
+				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
+				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";
 				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"$(inherited)",
@@ -640,12 +648,14 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2;
+				MARKETING_VERSION = 3.3;
+				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
+				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";
 				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
 					"$(inherited)",
