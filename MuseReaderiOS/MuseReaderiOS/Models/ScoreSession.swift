@@ -339,6 +339,7 @@ struct ScorePickupEditorContext: Identifiable, Sendable, Equatable {
 struct ScoreSelectedElement: Sendable, Equatable {
     let pageIndex: Int
     let kind: ScoreSelectedElementKind
+    let canDragMovableElement: Bool
     let isSingleMeasure: Bool
     let isFirstMeasure: Bool
     let isPickupMeasure: Bool

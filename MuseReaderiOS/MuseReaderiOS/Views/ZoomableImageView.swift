@@ -137,7 +137,7 @@ struct ZoomableImageView: UIViewRepresentable {
     var onTap: ((CGPoint, ScorePageTapInputKind) -> Void)? = nil
     var onSelectedNoteDrag: ((CGPoint) -> Void)? = nil
     var onExpressionEndpointDrag: ((Bool, CGPoint) -> Void)? = nil
-    var onSelectedChordTextDrag: ((CGPoint) -> Void)? = nil
+    var onSelectedMovableElementDrag: ((CGPoint) -> Void)? = nil
     var onMeasureRangePreview: ((CGPoint, CGPoint) -> Void)? = nil
     var onMeasureRangePreviewEnd: (() -> Void)? = nil
     var onMeasureRangeDrag: ((CGPoint, CGPoint) -> Void)? = nil
@@ -157,7 +157,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onTap: onTap,
             onSelectedNoteDrag: onSelectedNoteDrag,
             onExpressionEndpointDrag: onExpressionEndpointDrag,
-            onSelectedChordTextDrag: onSelectedChordTextDrag,
+            onSelectedMovableElementDrag: onSelectedMovableElementDrag,
             onMeasureRangePreview: onMeasureRangePreview,
             onMeasureRangePreviewEnd: onMeasureRangePreviewEnd,
             onMeasureRangeDrag: onMeasureRangeDrag,
@@ -297,7 +297,7 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.onTap = onTap
         context.coordinator.onSelectedNoteDrag = onSelectedNoteDrag
         context.coordinator.onExpressionEndpointDrag = onExpressionEndpointDrag
-        context.coordinator.onSelectedChordTextDrag = onSelectedChordTextDrag
+        context.coordinator.onSelectedMovableElementDrag = onSelectedMovableElementDrag
         context.coordinator.onMeasureRangePreview = onMeasureRangePreview
         context.coordinator.onMeasureRangePreviewEnd = onMeasureRangePreviewEnd
         context.coordinator.onMeasureRangeDrag = onMeasureRangeDrag
@@ -376,7 +376,7 @@ struct ZoomableImageView: UIViewRepresentable {
         var onTap: ((CGPoint, ScorePageTapInputKind) -> Void)?
         var onSelectedNoteDrag: ((CGPoint) -> Void)?
         var onExpressionEndpointDrag: ((Bool, CGPoint) -> Void)?
-        var onSelectedChordTextDrag: ((CGPoint) -> Void)?
+        var onSelectedMovableElementDrag: ((CGPoint) -> Void)?
         var onMeasureRangePreview: ((CGPoint, CGPoint) -> Void)?
         var onMeasureRangePreviewEnd: (() -> Void)?
         var onMeasureRangeDrag: ((CGPoint, CGPoint) -> Void)?
@@ -425,7 +425,7 @@ struct ZoomableImageView: UIViewRepresentable {
         var restingHorizontalEdgePadding: CGFloat = 0
         var restingTopInset: CGFloat = 0
         private var selectedNoteDragStartPoint: CGPoint?
-        private var selectedChordTextDragStartPoint: CGPoint?
+        private var selectedMovableElementDragStartPoint: CGPoint?
         private var expressionEndpointDragIsStart: Bool?
         private var measureRangeDragStartPoint: CGPoint?
         private var measureRangeDragAnchorFrame: CGRect?
@@ -439,7 +439,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onTap: ((CGPoint, ScorePageTapInputKind) -> Void)? = nil,
             onSelectedNoteDrag: ((CGPoint) -> Void)? = nil,
             onExpressionEndpointDrag: ((Bool, CGPoint) -> Void)? = nil,
-            onSelectedChordTextDrag: ((CGPoint) -> Void)? = nil,
+            onSelectedMovableElementDrag: ((CGPoint) -> Void)? = nil,
             onMeasureRangePreview: ((CGPoint, CGPoint) -> Void)? = nil,
             onMeasureRangePreviewEnd: (() -> Void)? = nil,
             onMeasureRangeDrag: ((CGPoint, CGPoint) -> Void)? = nil,
@@ -457,7 +457,7 @@ struct ZoomableImageView: UIViewRepresentable {
             self.onTap = onTap
             self.onSelectedNoteDrag = onSelectedNoteDrag
             self.onExpressionEndpointDrag = onExpressionEndpointDrag
-            self.onSelectedChordTextDrag = onSelectedChordTextDrag
+            self.onSelectedMovableElementDrag = onSelectedMovableElementDrag
             self.onMeasureRangePreview = onMeasureRangePreview
             self.onMeasureRangePreviewEnd = onMeasureRangePreviewEnd
             self.onMeasureRangeDrag = onMeasureRangeDrag
@@ -845,7 +845,7 @@ struct ZoomableImageView: UIViewRepresentable {
                 }
                 if allowsPencilInsertionFineTune && gestureRecognizer.inputKind == .pencil {
                     selectedNoteDragStartPoint = nil
-                    selectedChordTextDragStartPoint = nil
+                    selectedMovableElementDragStartPoint = nil
                     expressionEndpointDragIsStart = nil
                     measureRangeDragStartPoint = nil
                     measureRangeDragAnchorFrame = nil
@@ -854,30 +854,30 @@ struct ZoomableImageView: UIViewRepresentable {
                     onPencilHoverPreview?(overlayView.normalizedPoint(at: point))
                 } else if allowsPencilInsertionFineTune {
                     selectedNoteDragStartPoint = nil
-                    selectedChordTextDragStartPoint = nil
+                    selectedMovableElementDragStartPoint = nil
                     expressionEndpointDragIsStart = nil
                     measureRangeDragStartPoint = startPoint
                     measureRangeDragAnchorFrame = overlayView.measureRangeDragAnchorFrame(at: startPoint)
                     insertionDragStartPoint = nil
                 } else if overlayView.containsSelectedNote(at: point) {
                     selectedNoteDragStartPoint = startPoint
-                    selectedChordTextDragStartPoint = nil
+                    selectedMovableElementDragStartPoint = nil
                     expressionEndpointDragIsStart = nil
                     measureRangeDragStartPoint = nil
                     measureRangeDragAnchorFrame = nil
                     insertionDragStartPoint = nil
                     overlayView.updateSelectedNoteDrag(startPoint: startPoint, currentPoint: point)
-                } else if overlayView.containsSelectedChordText(at: point) {
+                } else if overlayView.containsSelectedMovableElement(at: point) {
                     selectedNoteDragStartPoint = nil
-                    selectedChordTextDragStartPoint = startPoint
+                    selectedMovableElementDragStartPoint = startPoint
                     expressionEndpointDragIsStart = nil
                     measureRangeDragStartPoint = nil
                     measureRangeDragAnchorFrame = nil
                     insertionDragStartPoint = nil
-                    overlayView.updateSelectedChordTextDrag(startPoint: startPoint, currentPoint: point)
+                    overlayView.updateSelectedMovableElementDrag(startPoint: startPoint, currentPoint: point)
                 } else if let endpointIsStart = overlayView.expressionEndpoint(at: point) {
                     selectedNoteDragStartPoint = nil
-                    selectedChordTextDragStartPoint = nil
+                    selectedMovableElementDragStartPoint = nil
                     expressionEndpointDragIsStart = endpointIsStart
                     measureRangeDragStartPoint = nil
                     measureRangeDragAnchorFrame = nil
@@ -885,7 +885,7 @@ struct ZoomableImageView: UIViewRepresentable {
                     overlayView.updateExpressionEndpointDragPreview(start: endpointIsStart, at: point)
                 } else {
                     selectedNoteDragStartPoint = nil
-                    selectedChordTextDragStartPoint = nil
+                    selectedMovableElementDragStartPoint = nil
                     expressionEndpointDragIsStart = nil
                     measureRangeDragStartPoint = startPoint
                     measureRangeDragAnchorFrame = overlayView.measureRangeDragAnchorFrame(at: startPoint)
@@ -895,8 +895,8 @@ struct ZoomableImageView: UIViewRepresentable {
             case .changed:
                 if let selectedNoteDragStartPoint {
                     overlayView.updateSelectedNoteDrag(startPoint: selectedNoteDragStartPoint, currentPoint: point)
-                } else if let selectedChordTextDragStartPoint {
-                    overlayView.updateSelectedChordTextDrag(startPoint: selectedChordTextDragStartPoint, currentPoint: point)
+                } else if let selectedMovableElementDragStartPoint {
+                    overlayView.updateSelectedMovableElementDrag(startPoint: selectedMovableElementDragStartPoint, currentPoint: point)
                 } else if let expressionEndpointDragIsStart {
                     overlayView.updateExpressionEndpointDragPreview(start: expressionEndpointDragIsStart, at: point)
                 } else if insertionDragStartPoint != nil {
@@ -921,12 +921,12 @@ struct ZoomableImageView: UIViewRepresentable {
                     if let dropPoint {
                         onSelectedNoteDrag?(dropPoint)
                     }
-                } else if let selectedChordTextDragStartPoint {
-                    let dropPoint = overlayView.selectedChordTextDragDropPoint(startPoint: selectedChordTextDragStartPoint, currentPoint: point)
-                    self.selectedChordTextDragStartPoint = nil
-                    overlayView.clearSelectedChordTextDrag()
+                } else if let selectedMovableElementDragStartPoint {
+                    let dropPoint = overlayView.selectedMovableElementDragDropPoint(startPoint: selectedMovableElementDragStartPoint, currentPoint: point)
+                    self.selectedMovableElementDragStartPoint = nil
+                    overlayView.clearSelectedMovableElementDrag()
                     if let dropPoint {
-                        onSelectedChordTextDrag?(dropPoint)
+                        onSelectedMovableElementDrag?(dropPoint)
                     }
                 } else if let expressionEndpointDragIsStart {
                     self.expressionEndpointDragIsStart = nil
@@ -962,14 +962,14 @@ struct ZoomableImageView: UIViewRepresentable {
 
             case .cancelled, .failed:
                 selectedNoteDragStartPoint = nil
-                selectedChordTextDragStartPoint = nil
+                selectedMovableElementDragStartPoint = nil
                 expressionEndpointDragIsStart = nil
                 measureRangeDragStartPoint = nil
                 measureRangeDragAnchorFrame = nil
                 insertionDragStartPoint = nil
                 lastPencilHoverPoint = nil
                 overlayView.clearSelectedNoteDrag()
-                overlayView.clearSelectedChordTextDrag()
+                overlayView.clearSelectedMovableElementDrag()
                 overlayView.clearExpressionEndpointDragPreview()
                 overlayView.clearInsertionFineTune()
                 overlayView.clearMeasureRangeDragPreview()
@@ -1604,8 +1604,8 @@ final class ScorePageOverlayView: UIView {
     private var layoutMarkerViews: [ScoreLayoutMarkerBadgeView] = []
     private var selectedNoteDragOffset: CGPoint = .zero
     private var isDraggingSelectedNote = false
-    private var selectedChordTextDragOffset: CGPoint = .zero
-    private var isDraggingSelectedChordText = false
+    private var selectedMovableElementDragOffset: CGPoint = .zero
+    private var isDraggingSelectedMovableElement = false
     private var measureRangePreviewStartPoint: CGPoint?
     private var measureRangePreviewEndPoint: CGPoint?
     private var expressionEndpointPreviewIsStart: Bool?
@@ -1619,7 +1619,7 @@ final class ScorePageOverlayView: UIView {
             return previewFrame.insetBy(dx: -18, dy: -18)
         }
         if let selectionFrame,
-           selection?.kind == .note || selection?.kind == .rest || selection?.kind == .measure || selection?.kind == .chordText || selection?.kind == .text {
+           selection?.kind == .note || selection?.kind == .rest || selection?.kind == .measure || selection?.canDragMovableElement == true {
             return selectionFrame.insetBy(dx: -22, dy: -22)
         }
         return nil
@@ -1734,8 +1734,8 @@ final class ScorePageOverlayView: UIView {
         return selectionFrame.insetBy(dx: -18, dy: -18).contains(point)
     }
 
-    func containsSelectedChordText(at point: CGPoint) -> Bool {
-        guard selection?.kind == .chordText, let selectionFrame else {
+    func containsSelectedMovableElement(at point: CGPoint) -> Bool {
+        guard selection?.canDragMovableElement == true, let selectionFrame else {
             return false
         }
 
@@ -1863,8 +1863,8 @@ final class ScorePageOverlayView: UIView {
         updateOverlayFrames()
     }
 
-    func selectedChordTextDragDropPoint(startPoint: CGPoint, currentPoint: CGPoint) -> CGPoint? {
-        guard selection?.kind == .chordText, let selectionFrame else {
+    func selectedMovableElementDragDropPoint(startPoint: CGPoint, currentPoint: CGPoint) -> CGPoint? {
+        guard selection?.canDragMovableElement == true, let selectionFrame else {
             return nil
         }
 
@@ -1875,23 +1875,23 @@ final class ScorePageOverlayView: UIView {
         return normalizedPoint(at: dropCenter)
     }
 
-    func updateSelectedChordTextDrag(startPoint: CGPoint, currentPoint: CGPoint) {
-        guard selection?.kind == .chordText else {
-            clearSelectedChordTextDrag()
+    func updateSelectedMovableElementDrag(startPoint: CGPoint, currentPoint: CGPoint) {
+        guard selection?.canDragMovableElement == true else {
+            clearSelectedMovableElementDrag()
             return
         }
 
-        selectedChordTextDragOffset = CGPoint(
+        selectedMovableElementDragOffset = CGPoint(
             x: currentPoint.x - startPoint.x,
             y: currentPoint.y - startPoint.y
         )
-        isDraggingSelectedChordText = true
+        isDraggingSelectedMovableElement = true
         updateOverlayFrames()
     }
 
-    func clearSelectedChordTextDrag() {
-        selectedChordTextDragOffset = .zero
-        isDraggingSelectedChordText = false
+    func clearSelectedMovableElementDrag() {
+        selectedMovableElementDragOffset = .zero
+        isDraggingSelectedMovableElement = false
         updateOverlayFrames()
     }
 
@@ -2009,8 +2009,8 @@ final class ScorePageOverlayView: UIView {
                     var selectionFrame = frame(for: rect, inside: imageRect)
                     if isDraggingSelectedNote && index == 0 {
                         selectionFrame = selectionFrame.offsetBy(dx: selectedNoteDragOffset.x, dy: selectedNoteDragOffset.y)
-                    } else if isDraggingSelectedChordText && selection.kind == .chordText && index == 0 {
-                        selectionFrame = selectionFrame.offsetBy(dx: selectedChordTextDragOffset.x, dy: selectedChordTextDragOffset.y)
+                    } else if isDraggingSelectedMovableElement && selection.canDragMovableElement && index == 0 {
+                        selectionFrame = selectionFrame.offsetBy(dx: selectedMovableElementDragOffset.x, dy: selectedMovableElementDragOffset.y)
                     } else if index == 0 {
                         selectionFrame = locallyAdjustedRangePreviewFrame(selectionFrame, inside: imageRect)
                     }
@@ -2152,7 +2152,7 @@ final class ScorePageOverlayView: UIView {
         guard
             let selection,
             selection.kind == .chordText,
-            isDraggingSelectedChordText,
+            isDraggingSelectedMovableElement,
             let selectionFrame
         else {
             chordAttachmentGuideLayer.isHidden = true
@@ -2160,7 +2160,7 @@ final class ScorePageOverlayView: UIView {
             return
         }
 
-        let movedFrame = selectionFrame.offsetBy(dx: selectedChordTextDragOffset.x, dy: selectedChordTextDragOffset.y)
+        let movedFrame = selectionFrame.offsetBy(dx: selectedMovableElementDragOffset.x, dy: selectedMovableElementDragOffset.y)
         let chordPoint = CGPoint(x: movedFrame.midX, y: movedFrame.maxY + 2)
         let dragCenter = CGPoint(x: movedFrame.midX, y: movedFrame.midY)
         guard let anchorPoint = snappedChordAttachmentPoint(for: dragCenter, selection: selection, inside: imageRect) else {

@@ -55,6 +55,7 @@
 #include "engraving/dom/chordlist.h"
 #include "engraving/dom/articulation.h"
 #include "engraving/dom/dynamic.h"
+#include "engraving/dom/elementgroup.h"
 #include "engraving/dom/excerpt.h"
 #include "engraving/dom/factory.h"
 #include "engraving/dom/hairpin.h"

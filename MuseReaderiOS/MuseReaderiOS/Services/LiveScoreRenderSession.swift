@@ -494,6 +494,23 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func dragSelectedMovableElement(pageIndex: Int, normalizedPoint: CGPoint) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(
+            from: bridgeSession.dragSelectedMovableElement(
+                pageIndex: pageIndex,
+                normalizedX: normalizedPoint.x,
+                normalizedY: normalizedPoint.y
+            ),
+            refreshScope: .nearby
+        )
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func addLayoutBreak(_ breakKind: String) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
@@ -1221,6 +1238,7 @@ actor LiveScoreRenderSession {
             selection = ScoreSelectedElement(
                 pageIndex: bridgeSelection.pageIndex,
                 kind: kind,
+                canDragMovableElement: bridgeSelection.canDragMovableElement,
                 isSingleMeasure: bridgeSelection.isSingleMeasure,
                 isFirstMeasure: bridgeSelection.isFirstMeasure,
                 isPickupMeasure: bridgeSelection.isPickupMeasure,

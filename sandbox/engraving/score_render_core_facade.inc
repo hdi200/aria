@@ -289,6 +289,15 @@ bool msr::render::ScoreRenderSession::dragSelectedChordText(const int pageIndex,
     return m_impl->dragSelectedChordText(pageIndex, normalizedX, normalizedY, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::dragSelectedMovableElement(const int pageIndex,
+                                                                  const double normalizedX,
+                                                                  const double normalizedY,
+                                                                  ScoreEditState& output,
+                                                                  std::string& errorMessage)
+{
+    return m_impl->dragSelectedMovableElement(pageIndex, normalizedX, normalizedY, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::addLayoutBreak(const std::string& breakKind,
                                                      ScoreEditState& output,
                                                      std::string& errorMessage)

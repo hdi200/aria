@@ -93,6 +93,7 @@ struct ScoreSelectionState {
     bool isHairpin = false;
     bool isEditableText = false;
     bool isChordText = false;
+    bool canDragMovableElement = false;
     bool canChangePitch = false;
     bool canFillWithSlashes = false;
     bool isDotted = false;
@@ -274,6 +275,7 @@ public:
     bool addRepeatJump(const std::string& repeatJumpKind, ScoreEditState& output, std::string& errorMessage);
     bool addExpression(const std::string& expressionKind, ScoreEditState& output, std::string& errorMessage);
     bool retargetSelectedExpressionEndpoint(bool startEndpoint, int pageIndex, double normalizedX, double normalizedY, ScoreEditState& output, std::string& errorMessage);
+    bool dragSelectedMovableElement(int pageIndex, double normalizedX, double normalizedY, ScoreEditState& output, std::string& errorMessage);
     bool dragSelectedChordText(int pageIndex, double normalizedX, double normalizedY, ScoreEditState& output, std::string& errorMessage);
     bool addLayoutBreak(const std::string& breakKind, ScoreEditState& output, std::string& errorMessage);
     bool removeLayoutBreak(ScoreEditState& output, std::string& errorMessage);

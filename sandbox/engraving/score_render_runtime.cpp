@@ -811,6 +811,29 @@ bool isEditableTextItem(const mu::engraving::EngravingItem* item)
                     || item->isLyrics());
 }
 
+bool isDirectlyDraggableTextItem(const mu::engraving::EngravingItem* item)
+{
+    if (!item || !item->isMovable()) {
+        return false;
+    }
+
+    switch (item->type()) {
+    case mu::engraving::ElementType::HARMONY:
+    case mu::engraving::ElementType::TEXT:
+    case mu::engraving::ElementType::STAFF_TEXT:
+    case mu::engraving::ElementType::SYSTEM_TEXT:
+    case mu::engraving::ElementType::DYNAMIC:
+    case mu::engraving::ElementType::EXPRESSION:
+    case mu::engraving::ElementType::TEMPO_TEXT:
+    case mu::engraving::ElementType::MARKER:
+    case mu::engraving::ElementType::JUMP:
+    case mu::engraving::ElementType::REHEARSAL_MARK:
+        return true;
+    default:
+        return false;
+    }
+}
+
 mu::engraving::Note* editableNoteForItem(mu::engraving::EngravingItem* item)
 {
     if (!item) {
@@ -3469,6 +3492,7 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     selectionState.isHairpin = expressionSpanner ? expressionSpanner->isHairpin() : false;
     selectionState.isEditableText = editableTextSelection;
     selectionState.isChordText = selectedItem->isHarmony();
+    selectionState.canDragMovableElement = isDirectlyDraggableTextItem(selectedItem);
     selectionState.currentKey = currentKeyForSelection(
         score,
         measure,
@@ -3494,6 +3518,24 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         if (selectedItem->isHarmony()) {
             selectionState.textKind = "Chord Text";
             mu::engraving::Harmony* harmony = mu::engraving::toHarmony(selectedItem);
+            if (harmony && harmony->isRealizable()) {
+                for (const auto& [pitch, unusedTpc] : harmony->getRealizedHarmony().notes()) {
+                    (void)unusedTpc;
+                    if (pitch >= 0 && pitch <= 127) {
+                        selectionState.chordMidiPitches.push_back(pitch);
+                    }
+                }
+                std::sort(selectionState.chordMidiPitches.begin(), selectionState.chordMidiPitches.end());
+            }
+            if (harmony && harmony->part()) {
+                mu::engraving::PlaybackSetupDataResolver setupResolver;
+                muse::mpe::PlaybackSetupData setupData;
+                setupResolver.resolveSetupData(harmony->part()->instrument(harmony->tick()), setupData);
+                const muse::midi::Program program = midiProgramForSetup(setupData);
+                selectionState.playbackBank = program.bank;
+                selectionState.playbackProgram = program.program;
+                selectionState.playbackSetupData = setupData.toString().toStdString();
+            }
             mu::engraving::Segment* parentSegment = harmony ? harmony->getParentSeg() : nullptr;
             mu::engraving::Measure* parentMeasure = parentSegment ? parentSegment->measure() : nullptr;
             mu::engraving::System* parentSystem = parentMeasure ? parentMeasure->system() : nullptr;

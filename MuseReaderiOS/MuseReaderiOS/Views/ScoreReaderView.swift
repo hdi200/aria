@@ -1043,8 +1043,8 @@ struct ScoreReaderView: View {
             expressionEndpointDragAction: { startEndpoint, dropPoint in
                 readerState.retargetSelectedExpressionEndpoint(start: startEndpoint, pageIndex: pageIndex, normalizedPoint: dropPoint)
             },
-            selectedChordTextDragAction: { dropPoint in
-                readerState.dragSelectedChordText(pageIndex: pageIndex, normalizedPoint: dropPoint)
+            selectedMovableElementDragAction: { dropPoint in
+                readerState.dragSelectedMovableElement(pageIndex: pageIndex, normalizedPoint: dropPoint)
             },
             measureRangePreviewAction: { startPoint, endPoint in
                 readerState.previewMeasureRange(pageIndex: pageIndex, startNormalizedPoint: startPoint, endNormalizedPoint: endPoint)

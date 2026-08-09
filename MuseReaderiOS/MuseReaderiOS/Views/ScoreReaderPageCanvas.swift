@@ -139,7 +139,7 @@ struct ScoreReaderPageCanvas: View {
     let tapAction: (CGPoint, ScorePageTapInputKind) -> Void
     let selectedNoteDragAction: (CGPoint) -> Void
     let expressionEndpointDragAction: (Bool, CGPoint) -> Void
-    let selectedChordTextDragAction: (CGPoint) -> Void
+    let selectedMovableElementDragAction: (CGPoint) -> Void
     let measureRangePreviewAction: (CGPoint, CGPoint) -> Void
     let measureRangePreviewEndAction: () -> Void
     let measureRangeDragAction: (CGPoint, CGPoint) -> Void
@@ -214,7 +214,7 @@ struct ScoreReaderPageCanvas: View {
                 tapAction: tapAction,
                 selectedNoteDragAction: selectedNoteDragAction,
                 expressionEndpointDragAction: expressionEndpointDragAction,
-                selectedChordTextDragAction: selectedChordTextDragAction,
+                selectedMovableElementDragAction: selectedMovableElementDragAction,
                 measureRangePreviewAction: measureRangePreviewAction,
                 measureRangePreviewEndAction: measureRangePreviewEndAction,
                 measureRangeDragAction: measureRangeDragAction,
@@ -415,7 +415,7 @@ struct ScoreReaderPageSurface: View {
     let tapAction: (CGPoint, ScorePageTapInputKind) -> Void
     let selectedNoteDragAction: (CGPoint) -> Void
     let expressionEndpointDragAction: (Bool, CGPoint) -> Void
-    let selectedChordTextDragAction: (CGPoint) -> Void
+    let selectedMovableElementDragAction: (CGPoint) -> Void
     let measureRangePreviewAction: (CGPoint, CGPoint) -> Void
     let measureRangePreviewEndAction: () -> Void
     let measureRangeDragAction: (CGPoint, CGPoint) -> Void
@@ -463,7 +463,7 @@ struct ScoreReaderPageSurface: View {
                         onTap: tapAction,
                         onSelectedNoteDrag: selectedNoteDragAction,
                         onExpressionEndpointDrag: expressionEndpointDragAction,
-                        onSelectedChordTextDrag: selectedChordTextDragAction,
+                        onSelectedMovableElementDrag: selectedMovableElementDragAction,
                         onMeasureRangePreview: measureRangePreviewAction,
                         onMeasureRangePreviewEnd: measureRangePreviewEndAction,
                         onMeasureRangeDrag: measureRangeDragAction,

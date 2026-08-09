@@ -60,6 +60,8 @@ extension ScoreReaderState {
             return
         }
 
+        notePreviewController.stopAll()
+
         if playbackController.isWaitingToStartPlayback {
             playbackPreparationMessage = playbackPreparationStartingMessage
             return
@@ -230,6 +232,8 @@ extension ScoreReaderState {
         else {
             return
         }
+
+        notePreviewController.stopAll()
 
         isPlaybackActionInFlight = true
         playbackErrorMessage = nil

@@ -798,6 +798,72 @@
         return true;
     }
 
+    bool dragSelectedMovableElement(const int pageIndex,
+                                    const double normalizedX,
+                                    const double normalizedY,
+                                    msr::render::ScoreEditState& output,
+                                    std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        if (score->inputState().noteEntryMode()) {
+            errorMessage = "Finish note entry before moving a score element.";
+            return false;
+        }
+
+        mu::engraving::EngravingItem* item = currentSelectedItem(score);
+        if (!isDirectlyDraggableTextItem(item)) {
+            errorMessage = "Select a movable text, dynamic, tempo, marker, or chord symbol before dragging it.";
+            return false;
+        }
+
+        if (item->isHarmony()) {
+            return dragSelectedChordText(pageIndex, normalizedX, normalizedY, output, errorMessage);
+        }
+
+        mu::engraving::Page* page = pageForIndex(score, pageIndex);
+        mu::engraving::Page* itemPage = pageForItem(score, item);
+        if (!page || page != itemPage) {
+            errorMessage = "The selected element cannot be dragged to a different page.";
+            return false;
+        }
+
+        std::unique_ptr<mu::engraving::ElementGroup> dragGroup = item->getDragGroup(
+            [item](const mu::engraving::EngravingItem* candidate) {
+                return candidate == item;
+            }
+        );
+        if (!dragGroup || !dragGroup->enabled()) {
+            errorMessage = "MuseScore cannot move that selected element.";
+            return false;
+        }
+
+        const mu::engraving::PointF dropPoint = pointForNormalizedPagePosition(page, normalizedX, normalizedY);
+        const mu::engraving::PointF currentCenter = item->pageBoundingRect().center();
+        const mu::engraving::PointF delta = dropPoint - currentCenter;
+        mu::engraving::EditData editData;
+        editData.pos = dropPoint;
+        editData.lastPos = currentCenter;
+        editData.delta = delta;
+        editData.evtDelta = delta;
+        editData.moveDelta = delta;
+
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader drag score element"));
+        dragGroup->startDrag(editData);
+        dragGroup->drag(editData);
+        dragGroup->endDrag(editData);
+        score->endCmd();
+
+        refreshAfterEdit();
+        score->select(item, mu::engraving::SelectType::SINGLE, item->staffIdx());
+        output = makeEditState(score);
+        return true;
+    }
+
     bool addRepeatJump(const std::string& repeatJumpKind,
                        msr::render::ScoreEditState& output,
                        std::string& errorMessage)
@@ -3037,7 +3103,7 @@
         if (!transposesCurrentListSelection) {
             ::selectMeasureRange(score, startMeasure, endMeasure, staffStart, staffEnd);
         }
-        const bool transposeExistingKeySignatures = transposeMode != mu::engraving::TransposeMode::TO_KEY;
+        const bool transposeExistingKeySignatures = true;
         if (!mu::engraving::Transpose::transpose(score, transposeMode, transposeDirection, key, interval, transposeExistingKeySignatures, true, true)) {
             score->endCmd(true);
             errorMessage = "MuseScore could not transpose the current selection.";

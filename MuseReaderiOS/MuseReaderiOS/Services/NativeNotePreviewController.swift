@@ -19,6 +19,7 @@ final class NativeNotePreviewController {
     private var activeStopTasks: [UInt8: Task<Void, Never>] = [:]
 
     func play(midiPitches: [Int]?, fallbackMIDIPitch: Int?, playbackBank: Int?, playbackProgram: Int?, playbackSetupData: String?) {
+        stopActiveNotes()
         let requestedPitches = midiPitches?.isEmpty == false ? midiPitches ?? [] : fallbackMIDIPitch.map { [$0] } ?? []
         let validPitches = requestedPitches.filter { (0...127).contains($0) }
         guard !validPitches.isEmpty else {
@@ -48,16 +49,20 @@ final class NativeNotePreviewController {
     }
 
     func stopAll() {
-        for note in activeStopTasks.keys {
-            sampler?.stopNote(note, onChannel: 0)
-        }
-        activeStopTasks.values.forEach { $0.cancel() }
-        activeStopTasks.removeAll()
+        stopActiveNotes()
         engine?.stop()
         engine = nil
         sampler = nil
         loadedSoundBankURL = nil
         loadedProgram = nil
+    }
+
+    private func stopActiveNotes() {
+        for note in activeStopTasks.keys {
+            sampler?.stopNote(note, onChannel: 0)
+        }
+        activeStopTasks.values.forEach { $0.cancel() }
+        activeStopTasks.removeAll()
     }
 
     private func prepareIfNeeded(program: UInt8) throws {

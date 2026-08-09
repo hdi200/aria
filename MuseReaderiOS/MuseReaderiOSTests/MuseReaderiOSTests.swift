@@ -815,6 +815,7 @@ struct MuseReaderiOSTests {
         return ScoreSelectedElement(
             pageIndex: pageIndex,
             kind: .note,
+            canDragMovableElement: false,
             isSingleMeasure: false,
             isFirstMeasure: false,
             isPickupMeasure: false,

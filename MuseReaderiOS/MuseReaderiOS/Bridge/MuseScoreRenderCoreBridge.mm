@@ -198,6 +198,7 @@ MSRSelectionInfo * _Nullable MakeSelectionInfo(const msr::render::ScoreSelection
                                                   isHairpin:selectionState.isHairpin
                                                 isEditableText:selectionState.isEditableText
                                             isChordText:selectionState.isChordText
+                                canDragMovableElement:selectionState.canDragMovableElement
                                         canChangePitch:selectionState.canChangePitch
                                     canFillWithSlashes:selectionState.canFillWithSlashes
                                               isDotted:selectionState.isDotted
@@ -426,6 +427,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                      isHairpin:(BOOL)isHairpin
                  isEditableText:(BOOL)isEditableText
                         isChordText:(BOOL)isChordText
+             canDragMovableElement:(BOOL)canDragMovableElement
                    canChangePitch:(BOOL)canChangePitch
                 canFillWithSlashes:(BOOL)canFillWithSlashes
                          isDotted:(BOOL)isDotted
@@ -489,6 +491,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _isHairpin = isHairpin;
         _isEditableText = isEditableText;
         _isChordText = isChordText;
+        _canDragMovableElement = canDragMovableElement;
         _canChangePitch = canChangePitch;
         _canFillWithSlashes = canFillWithSlashes;
         _isDotted = isDotted;
@@ -1902,6 +1905,41 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                                          errorMessage)) {
         if (error) {
             *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not move that chord symbol."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)dragSelectedMovableElementAtPageIndex:(NSInteger)pageIndex
+                                            normalizedX:(double)normalizedX
+                                            normalizedY:(double)normalizedY
+                                                  error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->dragSelectedMovableElement(static_cast<int>(pageIndex),
+                                               normalizedX,
+                                               normalizedY,
+                                               editState,
+                                               errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not move that score element."));
         }
         return nil;
     }

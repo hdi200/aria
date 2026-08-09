@@ -336,6 +336,7 @@ extension ScoreReaderState {
                     self?.hasContinuousNoteInputCursor = false
                     self?.lastKeyboardInputCanReceiveAccidental = false
                     self?.applyEditingState(newState)
+                    self?.auditionSelectedChordSymbol(in: newState)
                 }
             } catch {
                 self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -748,6 +749,15 @@ extension ScoreReaderState {
     func dragSelectedChordText(pageIndex: Int, normalizedPoint: CGPoint) {
         performEditingAction(mutatesScore: true) { liveRenderSession in
             try await liveRenderSession.dragSelectedChordText(
+                pageIndex: pageIndex,
+                normalizedPoint: normalizedPoint
+            )
+        }
+    }
+
+    func dragSelectedMovableElement(pageIndex: Int, normalizedPoint: CGPoint) {
+        performEditingAction(mutatesScore: true) { liveRenderSession in
+            try await liveRenderSession.dragSelectedMovableElement(
                 pageIndex: pageIndex,
                 normalizedPoint: normalizedPoint
             )
@@ -1876,6 +1886,26 @@ extension ScoreReaderState {
             playbackBank: editingState.selection?.playbackBank,
             playbackProgram: editingState.selection?.playbackProgram,
             playbackSetupData: editingState.selection?.playbackSetupData
+        )
+    }
+
+    func auditionSelectedChordSymbol(in editingState: ScoreEditingState) {
+        guard
+            playbackState.status != .playing,
+            !isPlaybackActionInFlight,
+            let selection = editingState.selection,
+            selection.kind == .chordText,
+            !selection.chordMidiPitches.isEmpty
+        else {
+            return
+        }
+
+        notePreviewController.play(
+            midiPitches: selection.chordMidiPitches,
+            fallbackMIDIPitch: nil,
+            playbackBank: selection.playbackBank,
+            playbackProgram: selection.playbackProgram,
+            playbackSetupData: selection.playbackSetupData
         )
     }
 

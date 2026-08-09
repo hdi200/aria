@@ -240,6 +240,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isHairpin;
 @property (nonatomic, readonly) BOOL isEditableText;
 @property (nonatomic, readonly) BOOL isChordText;
+@property (nonatomic, readonly) BOOL canDragMovableElement;
 @property (nonatomic, readonly) BOOL canChangePitch;
 @property (nonatomic, readonly) BOOL canFillWithSlashes;
 @property (nonatomic, readonly) BOOL isDotted;
@@ -299,6 +300,7 @@ isExpressionSpanner:(BOOL)isExpressionSpanner
        isHairpin:(BOOL)isHairpin
 isEditableText:(BOOL)isEditableText
                         isChordText:(BOOL)isChordText
+             canDragMovableElement:(BOOL)canDragMovableElement
                    canChangePitch:(BOOL)canChangePitch
                 canFillWithSlashes:(BOOL)canFillWithSlashes
 	                         isDotted:(BOOL)isDotted
@@ -507,6 +509,10 @@ isEditableText:(BOOL)isEditableText
                                                 normalizedX:(double)normalizedX
                                                 normalizedY:(double)normalizedY
                                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(dragSelectedChordText(pageIndex:normalizedX:normalizedY:));
+- (nullable MSREditState *)dragSelectedMovableElementAtPageIndex:(NSInteger)pageIndex
+                                                     normalizedX:(double)normalizedX
+                                                     normalizedY:(double)normalizedY
+                                                           error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(dragSelectedMovableElement(pageIndex:normalizedX:normalizedY:));
 - (nullable MSREditState *)addLayoutBreak:(NSString *)breakKind
                                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addLayoutBreak(_:));
 - (nullable MSREditState *)removeLayoutBreakWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(removeLayoutBreak());
