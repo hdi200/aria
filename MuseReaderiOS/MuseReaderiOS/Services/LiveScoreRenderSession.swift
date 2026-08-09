@@ -125,6 +125,20 @@ actor LiveScoreRenderSession {
         bridgeSession.scoreStartKey
     }
 
+    func setViewTransposeKey(_ targetKey: Int) throws -> Int {
+        var pageCount = 0
+        try bridgeSession.setViewTransposeKey(targetKey, totalPageCount: &pageCount)
+        invalidateCachedPlaybackArtifacts()
+        return pageCount
+    }
+
+    func clearViewTranspose() throws -> Int {
+        var pageCount = 0
+        try bridgeSession.clearViewTranspose(totalPageCount: &pageCount)
+        invalidateCachedPlaybackArtifacts()
+        return pageCount
+    }
+
     func setConcertPitchEnabled(_ enabled: Bool) throws -> Int {
         var pageCount = 0
         try bridgeSession.setConcertPitchEnabled(enabled, totalPageCount: &pageCount)

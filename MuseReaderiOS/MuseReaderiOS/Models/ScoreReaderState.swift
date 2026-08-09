@@ -52,6 +52,7 @@ struct ScoreReaderRememberedState: Codable, Equatable {
     var zoomScale = 1.0
     var readingStyle = ScoreReaderReadingStyle.pageTurn
     var playbackFollowEnabled = true
+    var viewTransposeKey: Int? = nil
 }
 
 struct ScoreReaderRememberedStateStore {
@@ -110,6 +111,10 @@ final class ScoreReaderState: ObservableObject {
     @Published var activePageCount: Int
     @Published var concertPitchEnabled = false
     @Published var hasConcertPitchRelevantTransposition = false
+    @Published var viewTransposeSourceKey: ScoreTransposeTargetKey?
+    @Published var viewTransposeKey: ScoreTransposeTargetKey?
+    @Published var isViewTransposeActionInFlight = false
+    @Published var viewTransposeErrorMessage: String?
     @Published var corruptionReport: ScoreCorruptionReport
     @Published var pickupEditorContext: ScorePickupEditorContext?
     @Published private(set) var interactionMode: ScoreReaderInteractionMode
@@ -208,6 +213,7 @@ final class ScoreReaderState: ObservableObject {
         session: ScoreSession,
         initialPageIndex: Int,
         initialInteractionMode: ScoreReaderInteractionMode = .view,
+        initialViewTransposeKey: Int? = nil,
         preferredDPI: Int = 144
     ) {
         self.session = session
@@ -217,7 +223,9 @@ final class ScoreReaderState: ObservableObject {
             : .view
         self.activePageCount = session.pageCount
         self.selectedPageIndex = ScoreReaderState.boundedIndex(initialPageIndex, pageCount: session.pageCount)
-        self.cachedPagesByIndex = Dictionary(uniqueKeysWithValues: session.previewPages.map { ($0.index, $0) })
+        self.cachedPagesByIndex = initialInteractionMode == .view && initialViewTransposeKey != nil
+            ? [:]
+            : Dictionary(uniqueKeysWithValues: session.previewPages.map { ($0.index, $0) })
         self.corruptionReport = session.corruptionReport
         self.playbackController = session.capabilities.supportsPlayback ? NativePlaybackController() : nil
         self.playbackState = session.capabilities.supportsPlayback
@@ -239,12 +247,12 @@ final class ScoreReaderState: ObservableObject {
         guard
             supportsEditing,
             interactionMode == .view,
-            let liveRenderSession = session.liveRenderSession
+            let liveRenderSession = session.liveRenderSession,
+            !isViewTransposeActionInFlight
         else {
             return
         }
 
-        interactionMode = .edit
         editingErrorMessage = nil
         stopMIDIInput()
         isEditingActionInFlight = true
@@ -253,6 +261,15 @@ final class ScoreReaderState: ObservableObject {
                 self?.isEditingActionInFlight = false
             }
             do {
+                if self?.viewTransposeKey != self?.viewTransposeSourceKey {
+                    let updatedPageCount = try await liveRenderSession.clearViewTranspose()
+                    guard let self else {
+                        return
+                    }
+                    self.viewTransposeKey = self.viewTransposeSourceKey
+                    self.refreshAfterViewTranspose(pageCount: updatedPageCount, preparesPlayback: false)
+                }
+                self?.interactionMode = .edit
                 var state = try await liveRenderSession.setNoteInputEnabled(false)
                 state = try await liveRenderSession.clearSelection()
                 self?.applyEditingState(state)
@@ -360,6 +377,13 @@ final class ScoreReaderState: ObservableObject {
         }
 
         let saveSucceeded = transitionSucceeded ? await savePendingChanges() : false
+        if transitionSucceeded, let liveRenderSession = session.liveRenderSession {
+            let coreKey = await liveRenderSession.scoreStartKey()
+            if let key = ScoreTransposeTargetKey(coreKey: coreKey) {
+                viewTransposeSourceKey = key
+                viewTransposeKey = key
+            }
+        }
         interactionMode = .view
         return transitionSucceeded && saveSucceeded
     }

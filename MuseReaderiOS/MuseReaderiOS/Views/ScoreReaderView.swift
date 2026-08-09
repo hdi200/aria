@@ -19,6 +19,50 @@ private struct ScoreReaderTransposeSheetContext: Identifiable {
     let scope: ScoreReaderTransposeScope
 }
 
+private struct ScoreReaderViewKeyControl: View {
+    let currentKey: ScoreTransposeTargetKey
+    let isBusy: Bool
+    let selectKey: (ScoreTransposeTargetKey) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(ScoreTransposeTargetKey.allCases, id: \.self) { key in
+                Button {
+                    selectKey(key)
+                } label: {
+                    if key == currentKey {
+                        Label(key.title, systemImage: "checkmark")
+                    } else {
+                        Text(key.title)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                if isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "music.note")
+                }
+                Text(currentKey.compactTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(Color.black.opacity(0.78))
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy)
+        .accessibilityLabel("Viewing key, \(currentKey.title)")
+        .accessibilityHint("Choose a temporary key for this score view")
+    }
+}
+
 private struct ScoreReaderPlaybackScrollTarget: Equatable {
     let pageIndex: Int
     let normalizedRect: ScoreNormalizedRect
@@ -95,7 +139,8 @@ struct ScoreReaderView: View {
             wrappedValue: ScoreReaderState(
                 session: session,
                 initialPageIndex: initialInteractionMode == .view ? rememberedState.pageIndex : initialPageIndex,
-                initialInteractionMode: initialInteractionMode
+                initialInteractionMode: initialInteractionMode,
+                initialViewTransposeKey: initialInteractionMode == .view ? rememberedState.viewTransposeKey : nil
             )
         )
     }
@@ -403,6 +448,19 @@ struct ScoreReaderView: View {
                                 .allowsHitTesting(false)
                         }
                     }
+                    .overlay(alignment: .bottomTrailing) {
+                        if readerState.interactionMode == .view,
+                           let viewKey = readerState.viewTransposeKey
+                        {
+                            ScoreReaderViewKeyControl(
+                                currentKey: viewKey,
+                                isBusy: readerState.isViewTransposeActionInFlight,
+                                selectKey: readerState.setTemporaryViewKey
+                            )
+                            .padding(.trailing, 14)
+                            .padding(.bottom, 10)
+                        }
+                    }
                     .overlay(alignment: .bottom) {
                         if savedViewModeConfirmationIsVisible {
                             Text("Saved · View mode")
@@ -440,11 +498,14 @@ struct ScoreReaderView: View {
         }
         .task {
             readerState.playbackFollowEnabled = initialRememberedState.playbackFollowEnabled
+            let rememberedPartIndex = rememberedPartIndexForInitialLoad()
+            await readerState.prepareInitialViewState(
+                rememberedViewKey: initialRememberedState.viewTransposeKey,
+                partIndex: rememberedPartIndex
+            )
             readerState.loadInitialPages()
-            readerState.loadConcertPitchState()
             readerState.startPlaybackMonitoring()
             await readerState.prepareInitialInteractionMode()
-            restoreRememberedPartIfNeeded()
         }
         .onDisappear {
             saveRememberedReaderState()
@@ -496,6 +557,9 @@ struct ScoreReaderView: View {
             } else if mode == .view {
                 zoomScale = 1
             }
+        }
+        .onChangeCompatible(of: readerState.viewTransposeKey) { _ in
+            saveRememberedReaderState()
         }
         .onChangeCompatible(of: readerState.selectedPageIndex) { _ in
             saveRememberedReaderState()
@@ -685,6 +749,13 @@ struct ScoreReaderView: View {
             }
         } message: {
             Text(readerState.editingErrorMessage ?? "Aria could not apply that edit.")
+        }
+        .alert("View Key Not Changed", isPresented: viewTransposeErrorIsPresented) {
+            Button("OK", role: .cancel) {
+                readerState.viewTransposeErrorMessage = nil
+            }
+        } message: {
+            Text(readerState.viewTransposeErrorMessage ?? "Aria could not change the temporary viewing key.")
         }
         // Drive the hidden state from scenePhase so locking/unlocking forces
         // SwiftUI to re-push preferredStatusBarHidden. Otherwise the bar can stay
@@ -1252,7 +1323,7 @@ struct ScoreReaderView: View {
         }
     }
 
-    private func restoreRememberedPartIfNeeded() {
+    private func rememberedPartIndexForInitialLoad() -> Int? {
         guard
             readerState.interactionMode == .view,
             initialRememberedState.selectedPartID != "full-score",
@@ -1261,11 +1332,11 @@ struct ScoreReaderView: View {
             if initialRememberedState.selectedPartID != "full-score" {
                 selectedPartID = "full-score"
             }
-            return
+            return nil
         }
 
         selectedPartID = part.id
-        readerState.selectScorePart(index: part.index)
+        return part.index
     }
 
     private func saveRememberedReaderState() {
@@ -1279,7 +1350,10 @@ struct ScoreReaderView: View {
                 selectedPartID: selectedPartID,
                 zoomScale: Double(min(max(zoomScale, ScoreReaderZoomLimits.minimumScale), 3.0)),
                 readingStyle: readingStyle,
-                playbackFollowEnabled: readerState.playbackFollowEnabled
+                playbackFollowEnabled: readerState.playbackFollowEnabled,
+                viewTransposeKey: readerState.viewTransposeKey != readerState.viewTransposeSourceKey
+                    ? readerState.viewTransposeKey?.coreKey
+                    : nil
             ),
             for: session.id
         )
@@ -1821,6 +1895,11 @@ struct ScoreReaderView: View {
         if await liveRenderSession.concertPitchEnabled() != concertPitchEnabled {
             restoredPageCount = try await liveRenderSession.setConcertPitchEnabled(concertPitchEnabled)
         }
+        if let temporaryViewKey = readerState.viewTransposeKey,
+           temporaryViewKey != readerState.viewTransposeSourceKey
+        {
+            restoredPageCount = try await liveRenderSession.setViewTransposeKey(temporaryViewKey.coreKey)
+        }
         let hasConcertPitchRelevantTransposition = await liveRenderSession.hasConcertPitchRelevantTransposition()
 
         await MainActor.run {
@@ -1890,6 +1969,17 @@ struct ScoreReaderView: View {
             set: { isPresented in
                 if !isPresented {
                     readerState.editingErrorMessage = nil
+                }
+            }
+        )
+    }
+
+    private var viewTransposeErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { readerState.viewTransposeErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    readerState.viewTransposeErrorMessage = nil
                 }
             }
         )

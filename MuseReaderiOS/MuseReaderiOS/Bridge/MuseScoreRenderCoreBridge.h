@@ -428,6 +428,11 @@ isEditableText:(BOOL)isEditableText
                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setActivePart(index:totalPageCount:));
 - (BOOL)setFullScoreViewWithTotalPageCount:(NSInteger * _Nullable)totalPageCount
                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setFullScoreView(totalPageCount:));
+- (BOOL)setViewTransposeKey:(NSInteger)targetKey
+             totalPageCount:(NSInteger * _Nullable)totalPageCount
+                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setViewTransposeKey(_:totalPageCount:));
+- (BOOL)clearViewTransposeWithTotalPageCount:(NSInteger * _Nullable)totalPageCount
+                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(clearViewTranspose(totalPageCount:));
 - (BOOL)setConcertPitchEnabled:(BOOL)enabled
                 totalPageCount:(NSInteger * _Nullable)totalPageCount
                           error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setConcertPitchEnabled(_:totalPageCount:));

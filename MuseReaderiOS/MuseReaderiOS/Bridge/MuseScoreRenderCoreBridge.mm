@@ -839,6 +839,73 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (BOOL)setViewTransposeKey:(NSInteger)targetKey
+             totalPageCount:(NSInteger *)totalPageCount
+                      error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return NO;
+    }
+
+    int updatedPageCount = 0;
+    std::string errorMessage;
+    if (!_session->setViewTransposeKey(static_cast<int>(targetKey), updatedPageCount, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not change the viewing key."));
+        }
+        return NO;
+    }
+
+    _totalPageCount = updatedPageCount;
+    if (totalPageCount) {
+        *totalPageCount = updatedPageCount;
+    }
+    return YES;
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to the reusable MuseScore render core yet, so it cannot transpose the score view.");
+    }
+    return NO;
+#endif
+}
+
+- (BOOL)clearViewTransposeWithTotalPageCount:(NSInteger *)totalPageCount
+                                       error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return NO;
+    }
+
+    int updatedPageCount = 0;
+    std::string errorMessage;
+    if (!_session->clearViewTranspose(updatedPageCount, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not restore the original viewing key."));
+        }
+        return NO;
+    }
+
+    _totalPageCount = updatedPageCount;
+    if (totalPageCount) {
+        *totalPageCount = updatedPageCount;
+    }
+    return YES;
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to the reusable MuseScore render core yet, so it cannot restore the score view.");
+    }
+    return NO;
+#endif
+}
+
 - (BOOL)concertPitchEnabled
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE

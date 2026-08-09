@@ -1,7 +1,7 @@
     bool playbackMeasureRegions(std::vector<msr::render::PlaybackMeasureRegion>& output,
                                 std::string& errorMessage) const
     {
-        mu::engraving::Score* score = activeScore();
+        mu::engraving::Score* score = presentationScore();
         if (!score) {
             errorMessage = "Playback is unavailable because the score session is closed.";
             return false;
@@ -110,7 +110,7 @@
 
     bool playbackTrackSummary(std::vector<msr::render::PlaybackTrackSummary>& output, std::string& errorMessage) const
     {
-        mu::engraving::Score* score = activeScore();
+        mu::engraving::Score* score = presentationScore();
         if (!score) {
             errorMessage = "Playback is unavailable because the score session is closed.";
             return false;
@@ -266,4 +266,3 @@
                   << "s" << std::endl;
         return true;
     }
-

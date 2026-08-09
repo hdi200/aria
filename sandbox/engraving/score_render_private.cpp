@@ -4,9 +4,14 @@ private:
         return m_activeScore ? m_activeScore : m_masterScore.get();
     }
 
+    mu::engraving::Score* presentationScore() const
+    {
+        return m_viewTransposeActiveScore ? m_viewTransposeActiveScore : activeScore();
+    }
+
     int activePageCount() const
     {
-        mu::engraving::Score* score = activeScore();
+        mu::engraving::Score* score = presentationScore();
         return score ? static_cast<int>(score->npages()) : 0;
     }
 
@@ -43,7 +48,7 @@ private:
     {
         const auto startedAt = SteadyClock::now();
         const int pagesBefore = activePageCount();
-        if (mu::engraving::Score* score = activeScore()) {
+        if (mu::engraving::Score* score = presentationScore()) {
             std::cout << "Aria render core relayout begin: mode=all pagesBefore=" << pagesBefore << std::endl;
             score->setLayoutAll();
             score->doLayout();
@@ -116,9 +121,20 @@ private:
         m_totalPageCount = activePageCount();
     }
 
+    void discardViewTranspose()
+    {
+        m_playbackStream.reset();
+        ++m_playbackStreamRevision;
+        m_viewTransposeActiveScore = nullptr;
+        m_viewTransposeMasterScore.reset();
+        m_totalPageCount = activePageCount();
+    }
+
     std::unique_ptr<SessionContext> m_sessionContext;
     std::unique_ptr<mu::engraving::MasterScore> m_masterScore;
     mu::engraving::Score* m_activeScore = nullptr;
+    std::unique_ptr<mu::engraving::MasterScore> m_viewTransposeMasterScore;
+    mu::engraving::Score* m_viewTransposeActiveScore = nullptr;
     std::optional<int> m_activePartIndex;
     std::string m_scorePath;
     muse::ByteArray m_measureClipboard;

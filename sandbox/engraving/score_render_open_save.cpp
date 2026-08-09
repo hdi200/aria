@@ -170,6 +170,10 @@ public:
             return false;
         }
 
+        // Part selection belongs to the source score. The caller can reapply a
+        // temporary viewing key after the requested source part is active.
+        discardViewTranspose();
+
         if (!partIndex.has_value()) {
             m_activePartIndex.reset();
             m_activeScore = m_masterScore.get();
@@ -219,6 +223,117 @@ public:
                   << " pages=" << totalPageCount
                   << std::endl;
 
+        return true;
+    }
+
+    bool setViewTransposeKey(const int targetKey, int& totalPageCount, std::string& errorMessage)
+    {
+        if (!m_masterScore) {
+            errorMessage = "The MuseScore render session is no longer available.";
+            return false;
+        }
+
+        const mu::engraving::Key key = static_cast<mu::engraving::Key>(targetKey);
+        if (key < mu::engraving::Key::MIN || key > mu::engraving::Key::MAX) {
+            errorMessage = "The requested viewing key is unsupported.";
+            return false;
+        }
+
+        std::unique_ptr<mu::engraving::MasterScore> transposedMasterScore(m_masterScore->clone());
+        if (!transposedMasterScore || !transposedMasterScore->firstMeasure() || transposedMasterScore->nstaves() == 0) {
+            errorMessage = "MuseScore could not create a temporary score view.";
+            return false;
+        }
+
+        transposedMasterScore->cmdSelectAll();
+        transposedMasterScore->startCmd(muse::TranslatableString::untranslatable("MuseReader temporary view transpose"));
+        const bool transposed = mu::engraving::Transpose::transpose(
+            transposedMasterScore.get(),
+            mu::engraving::TransposeMode::TO_KEY,
+            mu::engraving::TransposeDirection::CLOSEST,
+            key,
+            0,
+            true,
+            true,
+            true
+        );
+        if (!transposed) {
+            transposedMasterScore->endCmd(true);
+            errorMessage = "MuseScore could not transpose the temporary score view.";
+            return false;
+        }
+        transposedMasterScore->endCmd();
+        transposedMasterScore->deselectAll();
+        transposedMasterScore->setLayoutAll();
+        transposedMasterScore->doLayout();
+
+        mu::engraving::Score* transposedActiveScore = transposedMasterScore.get();
+        if (m_activePartIndex.has_value()) {
+            const std::vector<mu::engraving::Part*>& parts = transposedMasterScore->parts();
+            if (*m_activePartIndex < 0 || *m_activePartIndex >= static_cast<int>(parts.size())) {
+                errorMessage = "The active part is unavailable in the temporary score view.";
+                return false;
+            }
+
+            mu::engraving::Part* part = parts.at(static_cast<size_t>(*m_activePartIndex));
+            mu::engraving::Excerpt* excerpt = nullptr;
+            for (mu::engraving::Excerpt* candidate : transposedMasterScore->excerpts()) {
+                if (candidate && candidate->initialPartId() == part->id()) {
+                    excerpt = candidate;
+                    break;
+                }
+            }
+            if (!excerpt) {
+                std::vector<mu::engraving::Excerpt*> createdExcerpts
+                    = mu::engraving::Excerpt::createExcerptsFromParts({ part }, transposedMasterScore.get());
+                if (createdExcerpts.empty()) {
+                    errorMessage = "MuseScore could not create the temporary part view.";
+                    return false;
+                }
+                excerpt = createdExcerpts.front();
+                transposedMasterScore->initAndAddExcerpt(excerpt, true);
+            } else {
+                transposedMasterScore->initExcerpt(excerpt);
+            }
+
+            transposedActiveScore = excerpt->excerptScore();
+            if (!transposedActiveScore) {
+                errorMessage = "MuseScore created the temporary part, but it produced no score.";
+                return false;
+            }
+            transposedActiveScore->setLayoutAll();
+            transposedActiveScore->doLayout();
+        }
+
+        const int transposedPageCount = static_cast<int>(transposedActiveScore->npages());
+        if (transposedPageCount <= 0) {
+            errorMessage = "The temporary transposed view produced no pages.";
+            return false;
+        }
+
+        m_playbackStream.reset();
+        ++m_playbackStreamRevision;
+        m_viewTransposeActiveScore = nullptr;
+        m_viewTransposeMasterScore = std::move(transposedMasterScore);
+        m_viewTransposeActiveScore = transposedActiveScore;
+        m_totalPageCount = transposedPageCount;
+        totalPageCount = transposedPageCount;
+        return true;
+    }
+
+    bool clearViewTranspose(int& totalPageCount, std::string& errorMessage)
+    {
+        if (!m_masterScore) {
+            errorMessage = "The MuseScore render session is no longer available.";
+            return false;
+        }
+
+        discardViewTranspose();
+        totalPageCount = activePageCount();
+        if (totalPageCount <= 0) {
+            errorMessage = "The score view produced no pages.";
+            return false;
+        }
         return true;
     }
 

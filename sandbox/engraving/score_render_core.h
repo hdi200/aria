@@ -237,6 +237,8 @@ public:
     int scoreStartKey() const;
     std::vector<ScorePartInfo> partInfoList() const;
     bool setActivePartIndex(std::optional<int> partIndex, int& totalPageCount, std::string& errorMessage);
+    bool setViewTransposeKey(int targetKey, int& totalPageCount, std::string& errorMessage);
+    bool clearViewTranspose(int& totalPageCount, std::string& errorMessage);
     bool setConcertPitchEnabled(bool enabled, int& totalPageCount, std::string& errorMessage);
     bool renderPage(int pageIndex, int dpi, RenderedPage& output, std::string& errorMessage) const;
     bool pdfData(std::vector<std::uint8_t>& output, std::string& errorMessage) const;

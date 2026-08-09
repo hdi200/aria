@@ -186,6 +186,26 @@ enum ScoreTransposeTargetKey: CaseIterable, ScoreReaderTransposeOption {
         }
     }
 
+    var compactTitle: String {
+        switch self {
+        case .cFlatMajor: return "Cb / Abm"
+        case .gFlatMajor: return "Gb / Ebm"
+        case .dFlatMajor: return "Db / Bbm"
+        case .aFlatMajor: return "Ab / Fm"
+        case .eFlatMajor: return "Eb / Cm"
+        case .bFlatMajor: return "Bb / Gm"
+        case .fMajor: return "F / Dm"
+        case .cMajor: return "C / Am"
+        case .gMajor: return "G / Em"
+        case .dMajor: return "D / Bm"
+        case .aMajor: return "A / F#m"
+        case .eMajor: return "E / C#m"
+        case .bMajor: return "B / G#m"
+        case .fSharpMajor: return "F# / D#m"
+        case .cSharpMajor: return "C# / A#m"
+        }
+    }
+
     init?(coreKey: Int) {
         guard let key = Self.allCases.first(where: { $0.coreKey == coreKey }) else {
             return nil

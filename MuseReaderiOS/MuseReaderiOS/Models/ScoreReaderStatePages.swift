@@ -78,6 +78,122 @@ extension ScoreReaderState {
         }
     }
 
+    func prepareInitialViewState(rememberedViewKey: Int?, partIndex: Int?) async {
+        guard let liveRenderSession = session.liveRenderSession else {
+            viewTransposeSourceKey = nil
+            viewTransposeKey = nil
+            return
+        }
+
+        let sourceCoreKey = await liveRenderSession.scoreStartKey()
+        guard let sourceKey = ScoreTransposeTargetKey(coreKey: sourceCoreKey) else {
+            return
+        }
+        let rememberedKey = rememberedViewKey.flatMap { ScoreTransposeTargetKey(coreKey: $0) }
+        viewTransposeSourceKey = sourceKey
+        viewTransposeKey = sourceKey
+        isViewTransposeActionInFlight = rememberedKey != nil
+        defer {
+            isViewTransposeActionInFlight = false
+        }
+
+        var updatedPageCount = activePageCount
+        var activatedPartIndex: Int?
+        do {
+            if let partIndex {
+                updatedPageCount = try await liveRenderSession.setActivePart(index: partIndex)
+                activatedPartIndex = partIndex
+            }
+            if let rememberedKey, rememberedKey != sourceKey {
+                updatedPageCount = try await liveRenderSession.setViewTransposeKey(rememberedKey.coreKey)
+                viewTransposeKey = rememberedKey
+            }
+
+            activeScorePartIndex = partIndex
+            activePageCount = max(updatedPageCount, 0)
+            selectedPageIndex = ScoreReaderState.boundedIndex(selectedPageIndex, pageCount: activePageCount)
+            if partIndex != nil || rememberedKey != nil {
+                cachedPagesByIndex.removeAll()
+                staleLivePageIndices.removeAll()
+            }
+
+            updateConcertPitchState(
+                enabled: await liveRenderSession.concertPitchEnabled(),
+                isRelevant: await liveRenderSession.hasConcertPitchRelevantTransposition()
+            )
+        } catch {
+            viewTransposeKey = sourceKey
+            activeScorePartIndex = activatedPartIndex
+            activePageCount = max(updatedPageCount, 0)
+            selectedPageIndex = ScoreReaderState.boundedIndex(selectedPageIndex, pageCount: activePageCount)
+            if activatedPartIndex != nil || rememberedKey != nil {
+                cachedPagesByIndex.removeAll()
+                staleLivePageIndices.removeAll()
+            }
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            viewTransposeErrorMessage = message
+            partSelectionErrorMessage = message
+        }
+    }
+
+    func setTemporaryViewKey(_ key: ScoreTransposeTargetKey) {
+        guard
+            interactionMode == .view,
+            let sourceKey = viewTransposeSourceKey,
+            let liveRenderSession = session.liveRenderSession,
+            !isViewTransposeActionInFlight,
+            pendingScorePartIndex == nil
+        else {
+            return
+        }
+
+        guard key != viewTransposeKey else {
+            return
+        }
+
+        isViewTransposeActionInFlight = true
+        viewTransposeErrorMessage = nil
+        Task { @MainActor [weak self] in
+            defer {
+                self?.isViewTransposeActionInFlight = false
+            }
+
+            do {
+                let updatedPageCount: Int
+                if key == sourceKey {
+                    updatedPageCount = try await liveRenderSession.clearViewTranspose()
+                } else {
+                    updatedPageCount = try await liveRenderSession.setViewTransposeKey(key.coreKey)
+                }
+                guard let self else {
+                    return
+                }
+                self.viewTransposeKey = key
+                self.refreshAfterViewTranspose(pageCount: updatedPageCount)
+            } catch {
+                self?.viewTransposeErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    func refreshAfterViewTranspose(pageCount: Int, preparesPlayback: Bool = true) {
+        cancelDeferredPagePrefetch()
+        loadTasks.values.forEach { $0.cancel() }
+        loadTasks.removeAll()
+        loadingPageIndices.removeAll()
+        pageErrorMessages.removeAll()
+        cachedPagesByIndex.removeAll()
+        staleLivePageIndices.removeAll()
+        activePageCount = max(pageCount, 0)
+        selectedPageIndex = ScoreReaderState.boundedIndex(selectedPageIndex, pageCount: activePageCount)
+        invalidatePlaybackAfterScoreMutation()
+        ensurePagesAround(selectedPageIndex)
+        if preparesPlayback {
+            loadPlaybackContextIfNeeded()
+            startPlaybackWarmup()
+        }
+    }
+
     func toggleConcertPitch() {
         setConcertPitchEnabled(!concertPitchEnabled)
     }
@@ -151,6 +267,8 @@ extension ScoreReaderState {
             return
         }
 
+        let temporaryViewKey = viewTransposeKey != viewTransposeSourceKey ? viewTransposeKey : nil
+
         partSelectionTask?.cancel()
         partSelectionRevision += 1
         let selectionRevision = partSelectionRevision
@@ -179,11 +297,14 @@ extension ScoreReaderState {
 
         let selectionTask = Task { @MainActor [weak self] in
             do {
-                let updatedPageCount: Int
+                var updatedPageCount: Int
                 if let index {
                     updatedPageCount = try await liveRenderSession.setActivePart(index: index)
                 } else {
                     updatedPageCount = try await liveRenderSession.setFullScoreView()
+                }
+                if let temporaryViewKey {
+                    updatedPageCount = try await liveRenderSession.setViewTransposeKey(temporaryViewKey.coreKey)
                 }
                 try Task.checkCancellation()
                 let concertPitchEnabled = await liveRenderSession.concertPitchEnabled()
@@ -236,6 +357,7 @@ extension ScoreReaderState {
                 self.partSelectionTask = nil
                 self.playbackPreparationMessage = nil
                 self.pageErrorMessages[self.selectedPageIndex] = message
+                self.viewTransposeKey = self.viewTransposeSourceKey
             }
         }
         partSelectionTask = selectionTask

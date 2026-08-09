@@ -66,6 +66,19 @@ bool msr::render::ScoreRenderSession::setActivePartIndex(const std::optional<int
     return m_impl->setActivePartIndex(partIndex, totalPageCount, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::setViewTransposeKey(const int targetKey,
+                                                           int& totalPageCount,
+                                                           std::string& errorMessage)
+{
+    return m_impl->setViewTransposeKey(targetKey, totalPageCount, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::clearViewTranspose(int& totalPageCount,
+                                                          std::string& errorMessage)
+{
+    return m_impl->clearViewTranspose(totalPageCount, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::setConcertPitchEnabled(const bool enabled,
                                                              int& totalPageCount,
                                                              std::string& errorMessage)

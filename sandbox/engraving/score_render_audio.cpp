@@ -41,7 +41,7 @@
                   << (activePartId.has_value() ? std::to_string(*activePartId) : std::string("full"))
                   << std::endl;
 
-        return renderFluidSynthPlaybackEvents(activeScore(),
+        return renderFluidSynthPlaybackEvents(presentationScore(),
                                               m_sessionContext->context(),
                                               soundFontPath,
                                               activePartId,

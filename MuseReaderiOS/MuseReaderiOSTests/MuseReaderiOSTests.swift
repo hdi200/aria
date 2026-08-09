@@ -502,13 +502,31 @@ struct MuseReaderiOSTests {
             selectedPartID: "part-0",
             zoomScale: 1.75,
             readingStyle: .continuousScroll,
-            playbackFollowEnabled: false
+            playbackFollowEnabled: false,
+            viewTransposeKey: -3
         )
 
         store.save(expected, for: "score-a")
 
         #expect(store.state(for: "score-a") == expected)
         #expect(store.state(for: "score-b") == ScoreReaderRememberedState())
+    }
+
+    @Test
+    func readerPreferencesWithoutViewKeyRemainDecodable() throws {
+        let suiteName = "MuseReaderiOSTests.reader-preferences-legacy.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = ScoreReaderRememberedStateStore(userDefaults: defaults)
+        let legacyJSON = """
+        {"pageIndex":2,"selectedPartID":"full-score","zoomScale":1,"readingStyle":"pageTurn","playbackFollowEnabled":true}
+        """
+        defaults.set(try #require(legacyJSON.data(using: .utf8)), forKey: "ScoreReaderRememberedState.legacy")
+
+        let state = store.state(for: "legacy")
+
+        #expect(state.pageIndex == 2)
+        #expect(state.viewTransposeKey == nil)
     }
 
     @Test

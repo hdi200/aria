@@ -77,7 +77,7 @@
             return false;
         }
 
-        mu::engraving::Score* score = activeScore();
+        mu::engraving::Score* score = presentationScore();
         if (!score) {
             errorMessage = "The score session is closed.";
             return false;
@@ -162,7 +162,7 @@
             return false;
         }
 
-        mu::engraving::Score* score = activeScore();
+        mu::engraving::Score* score = presentationScore();
         if (!score) {
             errorMessage = "The score session is closed.";
             return false;
