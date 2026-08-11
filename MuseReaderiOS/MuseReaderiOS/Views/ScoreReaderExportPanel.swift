@@ -92,6 +92,15 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
             return true
         }
     }
+
+    var exportsDisplayedView: Bool {
+        switch self {
+        case .pdf, .images:
+            return true
+        case .museScore, .musicXML, .midi, .audio:
+            return false
+        }
+    }
 }
 
 struct ScoreReaderExportDraft {
@@ -101,6 +110,7 @@ struct ScoreReaderExportDraft {
     var selectedPartIDs: Set<String> = []
     var fileName = ""
     var exportPartsInConcertPitch = false
+    var exportPartsInOriginalKey = false
 
     var hasExportContent: Bool {
         includesFullScore || includesParts
@@ -154,6 +164,7 @@ struct ScoreReaderExportPanel: View {
     let scoreTitle: String
     let sharingDescription: String
     let parts: [ScorePart]
+    let isShowingTemporaryTransposedView: Bool
     @Binding var draft: ScoreReaderExportDraft
     let isPreparingExport: Bool
     let cancelAction: () -> Void
@@ -224,6 +235,10 @@ struct ScoreReaderExportPanel: View {
 
                 if showsExportPartsInConcertRow {
                     exportPartsInConcertRow
+                }
+
+                if showsExportPartsInOriginalKeyRow {
+                    exportPartsInOriginalKeyRow
                 }
 
                 filenameRow
@@ -365,6 +380,11 @@ struct ScoreReaderExportPanel: View {
                 VStack(alignment: .leading, spacing: isPhone ? 1 : 3) {
                     HStack(spacing: 6) {
                         Text(format.title)
+                        if showsTransposedLabel(for: format) {
+                            Text("(Transposed)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Color.blue.opacity(0.82))
+                        }
                         if !format.isAvailable {
                             Text("Soon")
                                 .font(.caption2.weight(.bold))
@@ -414,6 +434,18 @@ struct ScoreReaderExportPanel: View {
         draft.format == .pdf && !parts.isEmpty
     }
 
+    private func showsTransposedLabel(for format: ScoreReaderExportFormat) -> Bool {
+        guard isShowingTemporaryTransposedView, format.exportsDisplayedView else {
+            return false
+        }
+
+        return draft.includesFullScore || !draft.exportPartsInOriginalKey
+    }
+
+    private var showsExportPartsInOriginalKeyRow: Bool {
+        isShowingTemporaryTransposedView && draft.format.exportsDisplayedView && !parts.isEmpty
+    }
+
     private var exportPartsInConcertRow: some View {
         Button {
             draft.exportPartsInConcertPitch.toggle()
@@ -423,6 +455,27 @@ struct ScoreReaderExportPanel: View {
                     .foregroundStyle(draft.exportPartsInConcertPitch ? Color.blue : Color.black.opacity(0.34))
                     .font(.system(size: isPhone ? 17 : 20, weight: .semibold))
                 Text("Export parts in concert")
+                Spacer()
+            }
+            .padding(.horizontal, isPhone ? 12 : 16)
+            .frame(height: isPhone ? 42 : 54)
+            .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(panelBorder)
+        }
+        .buttonStyle(.plain)
+        .disabled(!draft.includesParts)
+        .opacity(draft.includesParts ? 1 : 0.46)
+    }
+
+    private var exportPartsInOriginalKeyRow: some View {
+        Button {
+            draft.exportPartsInOriginalKey.toggle()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: draft.exportPartsInOriginalKey ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(draft.exportPartsInOriginalKey ? Color.blue : Color.black.opacity(0.34))
+                    .font(.system(size: isPhone ? 17 : 20, weight: .semibold))
+                Text("Export parts in Original Key")
                 Spacer()
             }
             .padding(.horizontal, isPhone ? 12 : 16)

@@ -20,23 +20,16 @@ private struct ScoreReaderTransposeSheetContext: Identifiable {
 }
 
 private struct ScoreReaderViewKeyControl: View {
+    @State private var isKeyPickerPresented = false
+
     let currentKey: ScoreTransposeTargetKey
+    let originalKey: ScoreTransposeTargetKey
     let isBusy: Bool
     let selectKey: (ScoreTransposeTargetKey) -> Void
 
     var body: some View {
-        Menu {
-            ForEach(ScoreTransposeTargetKey.allCases, id: \.self) { key in
-                Button {
-                    selectKey(key)
-                } label: {
-                    if key == currentKey {
-                        Label(key.title, systemImage: "checkmark")
-                    } else {
-                        Text(key.title)
-                    }
-                }
-            }
+        Button {
+            isKeyPickerPresented = true
         } label: {
             HStack(spacing: 7) {
                 if isBusy {
@@ -60,6 +53,105 @@ private struct ScoreReaderViewKeyControl: View {
         .disabled(isBusy)
         .accessibilityLabel("Viewing key, \(currentKey.title)")
         .accessibilityHint("Choose a temporary key for this score view")
+        .popover(isPresented: $isKeyPickerPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+            ScoreReaderViewKeyPicker(
+                currentKey: currentKey,
+                originalKey: originalKey,
+                selectKey: selectKey
+            )
+            .presentationCompactPopoverWhenAvailable()
+        }
+    }
+}
+
+private struct ScoreReaderViewKeyPicker: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let currentKey: ScoreTransposeTargetKey
+    let originalKey: ScoreTransposeTargetKey
+    let selectKey: (ScoreTransposeTargetKey) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Text("Viewing Key")
+                    .font(.system(size: 16, weight: .semibold))
+
+                Spacer(minLength: 8)
+
+                Label("Original Key", systemImage: "music.note")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 46)
+
+            Divider()
+
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        ForEach(ScoreTransposeTargetKey.allCases, id: \.self) { key in
+                            Button {
+                                selectKey(key)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Text(key.title)
+                                        .font(.system(size: 14, weight: key == currentKey ? .semibold : .regular))
+                                        .foregroundStyle(Color.black.opacity(0.82))
+
+                                    Spacer(minLength: 8)
+
+                                    if key == originalKey {
+                                        Image(systemName: "music.note")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(Color.blue)
+                                            .accessibilityHidden(true)
+                                    }
+
+                                    if key == currentKey {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(Color.accentColor)
+                                            .accessibilityHidden(true)
+                                    }
+                                }
+                                .padding(.horizontal, 14)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .background(key == currentKey ? Color.accentColor.opacity(0.10) : Color.clear)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .id(key)
+                            .accessibilityLabel(key.title)
+                            .accessibilityValue(accessibilityValue(for: key))
+
+                            if key != ScoreTransposeTargetKey.allCases.last {
+                                Divider()
+                                    .padding(.leading, 14)
+                            }
+                        }
+                    }
+                }
+                .task(id: currentKey) {
+                    await Task.yield()
+                    proxy.scrollTo(currentKey, anchor: .center)
+                }
+            }
+        }
+        .frame(width: 290, height: 360)
+    }
+
+    private func accessibilityValue(for key: ScoreTransposeTargetKey) -> String {
+        var values: [String] = []
+        if key == originalKey {
+            values.append("Original key")
+        }
+        if key == currentKey {
+            values.append("Currently displayed")
+        }
+        return values.joined(separator: ", ")
     }
 }
 
@@ -310,6 +402,7 @@ struct ScoreReaderView: View {
                                 isPartsPanelPresented = false
                                 if !isExportPanelPresented {
                                     exportDraft.exportPartsInConcertPitch = readerState.concertPitchEnabled
+                                    exportDraft.exportPartsInOriginalKey = false
                                     if selectedPartID == "full-score" {
                                         exportDraft.includesFullScore = true
                                         exportDraft.includesParts = false
@@ -340,6 +433,7 @@ struct ScoreReaderView: View {
                                         scoreTitle: session.document.primaryTitle,
                                         sharingDescription: sharingDescription,
                                         parts: displayedScoreParts,
+                                        isShowingTemporaryTransposedView: isShowingTemporaryTransposedView,
                                         draft: $exportDraft,
                                         isPreparingExport: isPreparingExport,
                                         cancelAction: { isExportPanelPresented = false },
@@ -450,15 +544,18 @@ struct ScoreReaderView: View {
                     }
                     .overlay(alignment: .bottomTrailing) {
                         if readerState.interactionMode == .view,
+                           isChromeVisible,
                            let viewKey = readerState.viewTransposeKey
                         {
                             ScoreReaderViewKeyControl(
                                 currentKey: viewKey,
+                                originalKey: readerState.viewTransposeSourceKey ?? viewKey,
                                 isBusy: readerState.isViewTransposeActionInFlight,
                                 selectKey: readerState.setTemporaryViewKey
                             )
                             .padding(.trailing, 14)
                             .padding(.bottom, 10)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
                     .overlay(alignment: .bottom) {
@@ -1089,6 +1186,12 @@ struct ScoreReaderView: View {
             pageIndex: highlight.pageIndex,
             normalizedRect: highlight.normalizedRect
         )
+    }
+
+    private var isShowingTemporaryTransposedView: Bool {
+        readerState.interactionMode == .view
+            && readerState.viewTransposeKey != nil
+            && readerState.viewTransposeKey != readerState.viewTransposeSourceKey
     }
 
     private func revealPlayback(using proxy: ScrollViewProxy) {
@@ -1776,11 +1879,24 @@ struct ScoreReaderView: View {
 
         let selectedPartIDBeforeExport = selectedPartID
         let concertPitchBeforeExport = await liveRenderSession.concertPitchEnabled()
+        let temporaryViewKeyForExport: ScoreTransposeTargetKey? = {
+            guard readerState.interactionMode == .view,
+                  exportDraft.format.exportsDisplayedView,
+                  let viewKey = readerState.viewTransposeKey,
+                  viewKey != readerState.viewTransposeSourceKey
+            else {
+                return nil
+            }
+            return viewKey
+        }()
         var results: [T] = []
 
         do {
             if exportDraft.includesFullScore {
-                let fullScorePageCount = try await liveRenderSession.setFullScoreView()
+                var fullScorePageCount = try await liveRenderSession.setFullScoreView()
+                if let temporaryViewKeyForExport {
+                    fullScorePageCount = try await liveRenderSession.setViewTransposeKey(temporaryViewKeyForExport.coreKey)
+                }
                 results.append(try await export(.fullScore(pageCount: fullScorePageCount)))
             }
 
@@ -1791,6 +1907,9 @@ struct ScoreReaderView: View {
                        await liveRenderSession.concertPitchEnabled() != exportDraft.exportPartsInConcertPitch
                     {
                         partPageCount = try await liveRenderSession.setConcertPitchEnabled(exportDraft.exportPartsInConcertPitch)
+                    }
+                    if let temporaryViewKeyForExport, !exportDraft.exportPartsInOriginalKey {
+                        partPageCount = try await liveRenderSession.setViewTransposeKey(temporaryViewKeyForExport.coreKey)
                     }
                     results.append(try await export(.part(part, pageCount: partPageCount)))
                 }

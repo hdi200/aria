@@ -125,7 +125,7 @@ struct LibraryView: View {
                         Color.black.opacity(0.05)
                             .ignoresSafeArea()
 
-                        ProgressView("Importing score…")
+                        ProgressView(model.importProgress?.message ?? "Importing score…")
                             .padding(.horizontal, 22)
                             .padding(.vertical, 16)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -138,6 +138,7 @@ struct LibraryView: View {
                     folders: model.setlistFolders,
                     importAction: model.startImport,
                     isLoading: model.isLoading,
+                    loadingMessage: model.importProgress?.message ?? "Importing score…",
                     createFolderAction: {
                         newSetlistName = ""
                         isNewSetlistPresented = true
@@ -182,7 +183,7 @@ struct LibraryView: View {
         .fileImporter(
             isPresented: $model.isImportingPresented,
             allowedContentTypes: model.supportedContentTypes,
-            allowsMultipleSelection: false,
+            allowsMultipleSelection: true,
             onCompletion: model.handleImportSelection
         )
         .task {
@@ -524,6 +525,7 @@ private struct LibrarySidebar: View {
     let folders: [LibrarySetlistFolder]
     let importAction: () -> Void
     let isLoading: Bool
+    let loadingMessage: String
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
     let settingsAction: () -> Void
@@ -611,7 +613,7 @@ private struct LibrarySidebar: View {
                 Color.black.opacity(0.05)
                     .ignoresSafeArea()
 
-                ProgressView("Importing score…")
+                ProgressView(loadingMessage)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 16)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

@@ -1340,56 +1340,55 @@ struct AddInstrumentSheet: View {
     }
 
     private var selectedPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(showsCurrentInstruments ? "In Score (\(currentInstruments.count))" : "Selected (\(selectedInstruments.count))")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(CreateScorePalette.ink)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(showsCurrentInstruments ? "In Score (\(currentInstruments.count))" : "Selected (\(selectedInstruments.count))")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(CreateScorePalette.ink)
 
-            if showsCurrentInstruments {
-                currentInstrumentList
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(selectedInstruments.enumerated()), id: \.element.id) { index, instrument in
-                        selectedInstrumentRow(instrument)
-                            .onDrag {
-                                draggedInstrumentID = instrument.id
-                                draggedInstrumentOriginalIndex = index
-                                return NSItemProvider(object: instrument.id as NSString)
-                            }
-                            .onDrop(
-                                of: [UTType.plainText],
-                                delegate: InstrumentReorderDropDelegate(
-                                    instrument: instrument,
-                                    instruments: $selectedInstruments,
-                                    draggedInstrumentID: $draggedInstrumentID,
-                                    draggedOriginalIndex: $draggedInstrumentOriginalIndex,
-                                    didDrop: nil
+                if showsCurrentInstruments {
+                    currentInstrumentList
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(selectedInstruments.enumerated()), id: \.element.id) { index, instrument in
+                            selectedInstrumentRow(instrument)
+                                .onDrag {
+                                    draggedInstrumentID = instrument.id
+                                    draggedInstrumentOriginalIndex = index
+                                    return NSItemProvider(object: instrument.id as NSString)
+                                }
+                                .onDrop(
+                                    of: [UTType.plainText],
+                                    delegate: InstrumentReorderDropDelegate(
+                                        instrument: instrument,
+                                        instruments: $selectedInstruments,
+                                        draggedInstrumentID: $draggedInstrumentID,
+                                        draggedOriginalIndex: $draggedInstrumentOriginalIndex,
+                                        didDrop: nil
+                                    )
                                 )
-                            )
-                        if instrument.id != selectedInstruments.last?.id {
-                            Divider()
+                            if instrument.id != selectedInstruments.last?.id {
+                                Divider()
+                            }
                         }
                     }
+                    .padding(.horizontal, 10)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(CreateScorePalette.cardBorder, lineWidth: 1)
+                    }
                 }
-                .padding(.horizontal, 10)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(CreateScorePalette.cardBorder, lineWidth: 1)
-                }
+
+                instrumentDetailCard(focusedInstrument)
             }
-
-            Spacer(minLength: 12)
-
-            instrumentDetailCard(focusedInstrument)
+            .padding(16)
         }
-        .padding(16)
         .background(Color(.systemGroupedBackground))
     }
 
     private var currentInstrumentList: some View {
-        ScrollView {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
             ForEach(Array(currentInstruments.enumerated()), id: \.element.id) { index, instrument in
                 HStack(spacing: 10) {
                     Image(systemName: "line.3.horizontal")
@@ -1432,9 +1431,8 @@ struct AddInstrumentSheet: View {
                     Divider()
                 }
             }
-            }
         }
-        .frame(minHeight: 160, maxHeight: 260)
+        .frame(minHeight: 160)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {

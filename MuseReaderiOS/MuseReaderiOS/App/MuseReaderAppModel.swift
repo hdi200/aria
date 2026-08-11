@@ -14,6 +14,84 @@ private struct PreparedManagedScoreSession {
     let sourceDocumentToRemove: ManagedLibraryDocument?
 }
 
+struct ScoreImportProgress: Equatable {
+    let itemNumber: Int
+    let totalCount: Int
+
+    var message: String {
+        guard totalCount > 1 else {
+            return "Importing score…"
+        }
+        return "Importing score \(itemNumber) of \(totalCount)…"
+    }
+}
+
+struct ScoreImportFailure: Equatable {
+    let fileName: String
+    let message: String
+}
+
+struct ScoreImportBatchOutcome {
+    let totalCount: Int
+    let importedCount: Int
+    let failures: [ScoreImportFailure]
+
+    var alert: ReaderAlert {
+        let title: String
+        let summary: String
+        if failures.isEmpty {
+            title = "Import Complete"
+            summary = "\(importedCount) scores were imported into your library."
+        } else if importedCount == 0 {
+            title = "Import Failed"
+            summary = "None of the \(totalCount) selected scores could be imported."
+        } else {
+            title = "Import Partially Complete"
+            summary = "\(importedCount) of \(totalCount) scores were imported into your library."
+        }
+
+        guard !failures.isEmpty else {
+            return ReaderAlert(title: title, message: summary)
+        }
+
+        let visibleFailures = failures.prefix(5).map { "\($0.fileName): \($0.message)" }
+        let hiddenFailureCount = failures.count - visibleFailures.count
+        let hiddenFailureMessage = hiddenFailureCount > 0 ? "\n…and \(hiddenFailureCount) more." : ""
+        return ReaderAlert(
+            title: title,
+            message: summary + "\n\nCouldn’t import:\n" + visibleFailures.joined(separator: "\n") + hiddenFailureMessage
+        )
+    }
+}
+
+enum ScoreImportBatchRunner {
+    @MainActor
+    static func run(urls: [URL],
+                    progress: (ScoreImportProgress) -> Void,
+                    importDocument: (URL) async throws -> Void) async -> ScoreImportBatchOutcome
+    {
+        var importedCount = 0
+        var failures: [ScoreImportFailure] = []
+
+        for (index, url) in urls.enumerated() {
+            progress(ScoreImportProgress(itemNumber: index + 1, totalCount: urls.count))
+            do {
+                try await importDocument(url)
+                importedCount += 1
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                failures.append(ScoreImportFailure(fileName: url.lastPathComponent, message: message))
+            }
+        }
+
+        return ScoreImportBatchOutcome(
+            totalCount: urls.count,
+            importedCount: importedCount,
+            failures: failures
+        )
+    }
+}
+
 @MainActor
 final class MuseReaderAppModel: ObservableObject {
     private enum PreviewConstants {
@@ -30,6 +108,7 @@ final class MuseReaderAppModel: ObservableObject {
     @Published var isImportingPresented = false
     @Published var isCreateScorePresented = false
     @Published var isLoading = false
+    @Published var importProgress: ScoreImportProgress?
     @Published var errorAlert: ReaderAlert?
 
     private let sessionService: any ScoreSessionService
@@ -144,12 +223,18 @@ final class MuseReaderAppModel: ObservableObject {
     func handleImportSelection(result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            guard let url = urls.first else {
+            guard !urls.isEmpty else {
                 presentError(title: "Import Failed", message: "The Files picker did not return a score.")
                 return
             }
 
-            handleImport(result: .success(url))
+            if urls.count == 1, let url = urls.first {
+                handleImport(result: .success(url))
+            } else {
+                Task {
+                    await importSelectedDocuments(at: urls)
+                }
+            }
         case .failure(let error):
             handleImport(result: .failure(error))
         }
@@ -531,17 +616,55 @@ final class MuseReaderAppModel: ObservableObject {
 
     private func openImportedDocument(at url: URL) async {
         isLoading = true
-        defer { isLoading = false }
+        importProgress = ScoreImportProgress(itemNumber: 1, totalCount: 1)
+        defer {
+            importProgress = nil
+            isLoading = false
+        }
 
         do {
-            let managedDocument = try importIntoLibrary(from: url)
-            let session = try await openManagedDocument(
-                at: managedDocument.canonicalURL,
-                libraryRelativePath: managedDocument.relativeMainFilePath
-            )
+            let session = try await importDocument(at: url, setsCurrentSession: true)
             pendingImportedSession = session
         } catch {
             presentError(title: "Import Failed", error: error)
+        }
+    }
+
+    private func importSelectedDocuments(at urls: [URL]) async {
+        isLoading = true
+        defer {
+            importProgress = nil
+            isLoading = false
+        }
+
+        let outcome = await ScoreImportBatchRunner.run(
+            urls: urls,
+            progress: { progress in
+                self.importProgress = progress
+            },
+            importDocument: { url in
+                _ = try await self.importDocument(at: url, setsCurrentSession: false)
+            }
+        )
+        errorAlert = outcome.alert
+    }
+
+    private func importDocument(at externalURL: URL, setsCurrentSession: Bool) async throws -> ScoreSession {
+        let managedDocument = try importIntoLibrary(from: externalURL)
+        do {
+            return try await openManagedDocument(
+                at: managedDocument.canonicalURL,
+                libraryRelativePath: managedDocument.relativeMainFilePath,
+                setsCurrentSession: setsCurrentSession
+            )
+        } catch {
+            do {
+                try scoreLibrary.removeDocument(atRelativePath: managedDocument.relativeMainFilePath)
+                print("Aria failed import cleanup removed: file=\(managedDocument.canonicalURL.lastPathComponent)")
+            } catch let cleanupError {
+                print("Aria failed import cleanup could not remove: file=\(managedDocument.canonicalURL.lastPathComponent) error=\(cleanupError.localizedDescription)")
+            }
+            throw error
         }
     }
 
@@ -704,7 +827,8 @@ final class MuseReaderAppModel: ObservableObject {
 
     private func openManagedDocument(at url: URL,
                                      libraryRelativePath: String,
-                                     replacingFileReference: String? = nil) async throws -> ScoreSession
+                                     replacingFileReference: String? = nil,
+                                     setsCurrentSession: Bool = true) async throws -> ScoreSession
     {
         cancelPendingLibraryPreviewRefresh(reason: "open")
         let startedAt = Date()
@@ -716,8 +840,10 @@ final class MuseReaderAppModel: ObservableObject {
         let preparedSession = try await prepareManagedScoreSession(sourceDocument)
         let session = preparedSession.session
         print(String(format: "Aria library open session ready: file=%@ pages=%d elapsed=%.3fs", session.document.url.lastPathComponent, session.pageCount, Date().timeIntervalSince(startedAt)))
-        currentSession = session
-        print("Aria library current session assigned: file=\(session.document.url.lastPathComponent)")
+        if setsCurrentSession {
+            currentSession = session
+            print("Aria library current session assigned: file=\(session.document.url.lastPathComponent)")
+        }
         recents = recentStore.record(
             document: session.document,
             libraryRelativePath: preparedSession.document.relativeMainFilePath,

@@ -12,11 +12,57 @@ import UIKit
 
 struct MuseReaderiOSTests {
 
+    private enum BatchImportTestError: LocalizedError {
+        case unreadable
+
+        var errorDescription: String? {
+            "The score is unreadable."
+        }
+    }
+
     @Test
     func lyricInputRecognizesAdvanceAndMelismaCommands() {
         #expect(ScoreReaderLyricsTextInputField.inputCommand(for: " ") == .advance)
         #expect(ScoreReaderLyricsTextInputField.inputCommand(for: "_") == .melisma)
         #expect(ScoreReaderLyricsTextInputField.inputCommand(for: "word") == nil)
+    }
+
+    @Test @MainActor
+    func batchImportContinuesAfterAnIndividualFailure() async {
+        let urls = ["First.mscz", "Broken.mscz", "Last.musicxml"].map {
+            URL(fileURLWithPath: "/tmp/\($0)")
+        }
+        var attemptedFileNames: [String] = []
+        var reportedProgress: [ScoreImportProgress] = []
+
+        let outcome = await ScoreImportBatchRunner.run(
+            urls: urls,
+            progress: { reportedProgress.append($0) },
+            importDocument: { url in
+                attemptedFileNames.append(url.lastPathComponent)
+                if url.lastPathComponent == "Broken.mscz" {
+                    throw BatchImportTestError.unreadable
+                }
+            }
+        )
+
+        #expect(attemptedFileNames == ["First.mscz", "Broken.mscz", "Last.musicxml"])
+        #expect(reportedProgress.map(\.itemNumber) == [1, 2, 3])
+        #expect(reportedProgress.allSatisfy { $0.totalCount == 3 })
+        #expect(outcome.totalCount == 3)
+        #expect(outcome.importedCount == 2)
+        #expect(outcome.failures == [
+            ScoreImportFailure(fileName: "Broken.mscz", message: "The score is unreadable.")
+        ])
+        #expect(outcome.alert.title == "Import Partially Complete")
+        #expect(outcome.alert.message.contains("2 of 3 scores were imported"))
+        #expect(outcome.alert.message.contains("Broken.mscz: The score is unreadable."))
+    }
+
+    @Test
+    func importProgressDescribesSingleAndBatchImports() {
+        #expect(ScoreImportProgress(itemNumber: 1, totalCount: 1).message == "Importing score…")
+        #expect(ScoreImportProgress(itemNumber: 2, totalCount: 5).message == "Importing score 2 of 5…")
     }
 
     @Test
