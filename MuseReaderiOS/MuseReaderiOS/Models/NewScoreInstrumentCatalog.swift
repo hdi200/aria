@@ -115,11 +115,14 @@ enum NewScoreInstrumentCatalog {
         }
     }
 
-    static func instrument(fromTemplateID instrumentID: String, name: String) -> NewScoreInstrument {
+    static func instrument(fromTemplateID instrumentID: String,
+                           name: String,
+                           instanceID: String? = nil) -> NewScoreInstrument
+    {
         let catalogID = canonicalInstrumentID(for: instrumentID)
         if let catalogInstrument = importantInstruments.first(where: { $0.instrumentID == catalogID }) {
             return NewScoreInstrument(
-                instanceID: "\(instrumentID)-\(name)",
+                instanceID: instanceID ?? "\(instrumentID)-\(name)",
                 instrumentID: catalogID,
                 name: name,
                 category: catalogInstrument.category,
@@ -131,11 +134,19 @@ enum NewScoreInstrumentCatalog {
         }
 
         return NewScoreInstrument(
-            instanceID: "\(instrumentID)-\(name)",
+            instanceID: instanceID ?? "\(instrumentID)-\(name)",
             instrumentID: catalogID,
             name: name,
             category: fallbackCategory(for: catalogID, name: name),
             clef: fallbackClef(for: catalogID, name: name)
+        )
+    }
+
+    static func instrument(from part: ScorePart) -> NewScoreInstrument {
+        instrument(
+            fromTemplateID: part.name.lowercased().replacingOccurrences(of: " ", with: "-"),
+            name: part.name,
+            instanceID: part.id
         )
     }
 

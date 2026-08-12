@@ -101,6 +101,7 @@ final class ScoreReaderState: ObservableObject {
     @Published var autosaveFailureMessage: String?
     @Published var hasUnsavedAutosaveChanges = false
     @Published var isEditingActionInFlight = false
+    @Published private(set) var scoreParts: [ScorePart]
     @Published var pendingPitchClass: Int?
     @Published var pendingMIDIPitch: Int?
     @Published var pendingPreferFlats = false
@@ -181,6 +182,13 @@ final class ScoreReaderState: ObservableObject {
         cachedPagesByIndex[selectedPageIndex]
     }
 
+    func updateScoreParts(_ parts: [ScorePart]) {
+        guard scoreParts != parts else {
+            return
+        }
+        scoreParts = parts
+    }
+
     var currentPageLabel: String {
         guard pageCount > 0 else {
             return "Reader Unavailable"
@@ -223,6 +231,7 @@ final class ScoreReaderState: ObservableObject {
             : .view
         self.activePageCount = session.pageCount
         self.selectedPageIndex = ScoreReaderState.boundedIndex(initialPageIndex, pageCount: session.pageCount)
+        self.scoreParts = session.document.parts
         self.cachedPagesByIndex = initialInteractionMode == .view && initialViewTransposeKey != nil
             ? [:]
             : Dictionary(uniqueKeysWithValues: session.previewPages.map { ($0.index, $0) })

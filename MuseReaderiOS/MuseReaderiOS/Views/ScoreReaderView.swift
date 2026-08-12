@@ -193,7 +193,6 @@ struct ScoreReaderView: View {
     @State private var isClefPickerPresented = false
     @State private var instrumentsToAdd: [NewScoreInstrument] = []
     @State private var currentScoreInstruments: [NewScoreInstrument] = []
-    @State private var scoreParts: [ScorePart] = []
     @State private var instrumentLayoutParts: [ScorePart] = []
     @State private var selectionCommandAnchor: ScoreReaderSelectionCommandAnchor?
     @State private var dismissedSelectionCommandIdentity: String?
@@ -683,16 +682,10 @@ struct ScoreReaderView: View {
             }
         }
         .onAppear {
-            if scoreParts.isEmpty {
-                scoreParts = session.document.parts
-            }
-            if currentScoreInstruments.isEmpty {
-                currentScoreInstruments = scoreInstrumentsFromDocumentParts()
-            }
+            synchronizePartPresentation(with: displayedScoreParts, reselectActivePart: false)
         }
-        .onChangeCompatible(of: instrumentLayoutParts) { parts in
-            scoreParts = renumberedScoreParts(parts)
-            currentScoreInstruments = scoreInstrumentsFromDocumentParts()
+        .onChangeCompatible(of: readerState.scoreParts) { parts in
+            synchronizePartPresentation(with: parts)
         }
         .sheet(item: $textEditorDraft) { draft in
             ScoreReaderTextEditSheet(
@@ -815,15 +808,12 @@ struct ScoreReaderView: View {
                 currentInstruments: $currentScoreInstruments,
                 showsCurrentInstruments: true,
                 addCurrentInstrumentAction: { instrument in
-                    appendDisplayedPart(for: instrument)
                     readerState.addInstrument(instrument)
                 },
                 removeCurrentInstrumentAction: { index, _ in
-                    removeDisplayedPart(at: index)
                     readerState.removeInstrument(at: index)
                 },
                 moveCurrentInstrumentAction: { source, destination in
-                    moveDisplayedPart(from: source, to: destination)
                     readerState.moveInstrument(from: source, to: destination)
                 }
             )
@@ -1327,18 +1317,22 @@ struct ScoreReaderView: View {
             return 40
         }
 
+        if measuredNoteEntryPanelHeight > 0 {
+            return measuredNoteEntryPanelHeight + 12
+        }
+
         if isPhoneLandscapeLayout {
             if selectedToolCategory == .chord || selectedToolCategory == .lyrics {
-                return 88
+                return 170
             }
-            return 126
+            return selectedToolCategory == .notes || selectedToolCategory == .select ? 230 : 150
         }
 
         if isCompactPhoneLayout {
             if selectedToolCategory == .chord || selectedToolCategory == .lyrics {
-                return 118
+                return 190
             }
-            return 250
+            return selectedToolCategory == .notes || selectedToolCategory == .select ? 340 : 150
         }
 
         return 190
@@ -1932,64 +1926,26 @@ struct ScoreReaderView: View {
     }
 
     private func scoreInstrumentsFromDocumentParts() -> [NewScoreInstrument] {
-        displayedScoreParts.map { part in
-            NewScoreInstrumentCatalog.instrument(fromTemplateID: part.name.lowercased().replacingOccurrences(of: " ", with: "-"), name: part.name)
-        }
+        displayedScoreParts.map { NewScoreInstrumentCatalog.instrument(from: $0) }
     }
 
     private var displayedScoreParts: [ScorePart] {
-        scoreParts.isEmpty ? session.document.parts : scoreParts
+        readerState.scoreParts.isEmpty ? session.document.parts : readerState.scoreParts
     }
 
-    private func renumberedScoreParts(_ parts: [ScorePart]) -> [ScorePart] {
-        parts.enumerated().map { index, part in
-            ScorePart(
-                id: part.id,
-                index: index,
-                name: part.name,
-                clef: part.clef,
-                isVisible: part.isVisible
-            )
-        }
-    }
+    private func synchronizePartPresentation(with parts: [ScorePart], reselectActivePart: Bool = true) {
+        let authoritativeParts = parts.isEmpty ? session.document.parts : parts
+        instrumentLayoutParts = authoritativeParts
+        currentScoreInstruments = authoritativeParts.map { NewScoreInstrumentCatalog.instrument(from: $0) }
 
-    private func appendDisplayedPart(for instrument: NewScoreInstrument) {
-        var updatedParts = displayedScoreParts
-        updatedParts.append(
-            ScorePart(
-                id: "part-\(UUID().uuidString)",
-                index: updatedParts.count,
-                name: instrument.name,
-                clef: instrument.clef,
-                isVisible: true
-            )
-        )
-        scoreParts = renumberedScoreParts(updatedParts)
-        instrumentLayoutParts = scoreParts
-    }
-
-    private func removeDisplayedPart(at index: Int) {
-        var updatedParts = displayedScoreParts
-        guard updatedParts.indices.contains(index) else {
-            return
+        if reselectActivePart, selectedPartID != "full-score" {
+            if let selectedPart = authoritativeParts.first(where: { $0.id == selectedPartID }) {
+                readerState.selectScorePart(index: selectedPart.index)
+            } else {
+                selectedPartID = "full-score"
+                readerState.selectScorePart(index: nil)
+            }
         }
-        updatedParts.remove(at: index)
-        scoreParts = renumberedScoreParts(updatedParts)
-        instrumentLayoutParts = scoreParts
-        if selectedPartID != "full-score", !scoreParts.contains(where: { $0.id == selectedPartID }) {
-            selectedPartID = "full-score"
-            readerState.selectScorePart(index: nil)
-        }
-    }
-
-    private func moveDisplayedPart(from source: Int, to destination: Int) {
-        var updatedParts = displayedScoreParts
-        guard updatedParts.indices.contains(source) else {
-            return
-        }
-        updatedParts.move(fromOffsets: IndexSet(integer: source), toOffset: destination)
-        scoreParts = renumberedScoreParts(updatedParts)
-        instrumentLayoutParts = scoreParts
     }
 
     private var shouldExportPartsInConcertPitch: Bool {

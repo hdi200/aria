@@ -1756,6 +1756,9 @@ extension ScoreReaderState {
 
     func applyEditingState(_ editingState: ScoreEditingState) {
         self.editingState = editingState
+        if !editingState.scoreParts.isEmpty {
+            updateScoreParts(editingState.scoreParts)
+        }
         let selectedChordPitchCount = editingState.selection?.chordMidiPitches.count ?? 0
         if selectedChordPitchCount > 1 {
             stackedChordInputEnabled = true

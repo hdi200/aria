@@ -39,7 +39,11 @@ actor LiveScoreRenderSession {
         self.totalPageCount = bridgeSession.totalPageCount
         self.supportsPlayback = bridgeSession.supportsPlayback
         self.supportsEditing = bridgeSession.supportsEditing
-        self.parts = bridgeSession.scoreParts.map { part in
+        self.parts = Self.makeScoreParts(from: bridgeSession.scoreParts)
+    }
+
+    private static func makeScoreParts(from bridgeParts: [MSRScorePartInfo]) -> [ScorePart] {
+        bridgeParts.map { part in
             let name = part.name.trimmingCharacters(in: .whitespacesAndNewlines)
             let displayName = name.isEmpty ? "Part \(part.index + 1)" : name
             return ScorePart(
@@ -1324,7 +1328,8 @@ actor LiveScoreRenderSession {
                 systemSpacingSpatium: editState.systemSpacingSpatium
             ),
             refreshScope: refreshScope,
-            pageCount: refreshedPageCount
+            pageCount: refreshedPageCount,
+            scoreParts: Self.makeScoreParts(from: bridgeSession.scoreParts)
         )
     }
 
@@ -1370,7 +1375,8 @@ actor LiveScoreRenderSession {
             staffSpacingSpatium: ScorePageSettingsValue.a4.staffSpacingSpatium,
             pageSettings: .a4,
             refreshScope: .local,
-            pageCount: nil
+            pageCount: nil,
+            scoreParts: parts
         )
     }
 }

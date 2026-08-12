@@ -489,7 +489,8 @@ struct MuseReaderiOSTests {
             staffSpacingSpatium: ScorePageSettingsValue.a4.staffSpacingSpatium,
             pageSettings: .a4,
             refreshScope: .local,
-            pageCount: 2
+            pageCount: 2,
+            scoreParts: []
         )
 
         state.refreshAfterScoreMutation(with: editState, revealActiveNotation: true)
@@ -497,6 +498,39 @@ struct MuseReaderiOSTests {
         #expect(state.pageCount == 2)
         #expect(state.pageIndices == [0, 1])
         #expect(state.selectedPageIndex == 1)
+    }
+
+    @Test
+    func duplicateInstrumentRowsUseMuseScorePartIDs() {
+        let parts = [
+            ScorePart(id: "501", index: 0, name: "Flute", clef: .treble),
+            ScorePart(id: "827", index: 1, name: "Flute", clef: .treble)
+        ]
+
+        let instruments = parts.map { NewScoreInstrumentCatalog.instrument(from: $0) }
+
+        #expect(instruments.map(\.id) == ["501", "827"])
+        #expect(instruments.map(\.name) == ["Flute", "Flute"])
+        #expect(Set(instruments.map(\.id)).count == 2)
+        #expect(NewScoreInstrumentCatalog.instrument(fromTemplateID: "flute", name: "Flute").id == "flute-Flute")
+    }
+
+    @Test
+    @MainActor
+    func readerStateKeepsAuthoritativePartSnapshot() {
+        let state = ScoreReaderState(session: testSession(supportsEditing: false), initialPageIndex: 0)
+        defer { state.shutdown() }
+        let parts = [
+            ScorePart(id: "19", index: 0, name: "Piano", clef: .treble),
+            ScorePart(id: "23", index: 1, name: "Piano", clef: .treble)
+        ]
+        var editState = ScoreEditingState.inactive
+        editState.scoreParts = parts
+
+        state.applyEditingState(editState)
+        state.applyEditingState(.inactive)
+
+        #expect(state.scoreParts == parts)
     }
 
     @Test

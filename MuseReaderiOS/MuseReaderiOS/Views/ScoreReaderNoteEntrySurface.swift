@@ -164,20 +164,13 @@ struct ScoreReaderNoteEntrySurface: View {
                     .padding(.horizontal, 8)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
-            } else {
-                compactModeToolbar
-                    .padding(.horizontal, 6)
-                    .padding(.top, 8)
-                    .padding(.bottom, 6)
-
-                compactPanelDivider
             }
 
             compactDetailToolbar
                 .padding(.horizontal, 6)
                 .padding(.vertical, selectedToolCategory == .chord || selectedToolCategory == .lyrics ? 10 : 6)
 
-            if selectedToolCategory != .chord && selectedToolCategory != .lyrics {
+            if showsCompactPitchInputArea {
                 compactPanelDivider
 
                 compactPitchInputArea
@@ -185,6 +178,13 @@ struct ScoreReaderNoteEntrySurface: View {
                     .padding(.top, 6)
                     .padding(.bottom, 8)
             }
+
+            compactPanelDivider
+
+            compactModeToolbar
+                .padding(.horizontal, 0)
+                .padding(.top, 4)
+                .padding(.bottom, 4)
         }
         .environment(\.scoreReaderCompactPanelEmbedded, true)
         .scoreReaderCompactNoteEntryPanelBackground()
@@ -198,7 +198,7 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var textEntryBottomFillHeight: CGFloat {
-        selectedToolCategory == .chord || selectedToolCategory == .lyrics ? 56 : 80
+        96
     }
 
     private var compactTextEntryHeader: some View {
@@ -244,24 +244,18 @@ struct ScoreReaderNoteEntrySurface: View {
                     .padding(.bottom, 4)
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
-                VStack(spacing: 0) {
-                    compactModeToolbar
-                        .padding(.horizontal, 6)
-                        .padding(.top, 8)
-                        .padding(.bottom, 6)
+            if showsCompactPitchInputArea {
+                HStack(alignment: .top, spacing: 10) {
+                    compactLandscapeControlColumn
+                        .frame(minWidth: 300, idealWidth: 370, maxWidth: 430)
 
-                    compactPanelDivider
-
-                    compactLandscapeDetailToolbar
+                    compactLandscapePitchInputArea
                         .padding(.horizontal, 6)
-                        .padding(.bottom, 8)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
                 }
-                .frame(minWidth: 260, idealWidth: 340, maxWidth: 380)
-
-                compactLandscapePitchInputArea
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 8)
+            } else {
+                compactLandscapeControlColumn
                     .frame(maxWidth: .infinity)
             }
         }
@@ -274,6 +268,21 @@ struct ScoreReaderNoteEntrySurface: View {
                 .ignoresSafeArea(.container, edges: .bottom)
         }
         .ignoresSafeArea(.container, edges: .bottom)
+    }
+
+    private var compactLandscapeControlColumn: some View {
+        VStack(spacing: 0) {
+            compactLandscapeDetailToolbar
+                .padding(.horizontal, 6)
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+
+            compactPanelDivider
+
+            compactModeToolbar
+                .padding(.horizontal, 0)
+                .padding(.vertical, 2)
+        }
     }
 
     private var pitchKeyboardRow: some View {
@@ -337,6 +346,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 minimumVisibleNaturalKeyCount: 7,
                 maximumVisibleNaturalKeyCount: 8,
                 targetWhiteKeyWidth: 42,
+                activeAccidentalLabelFontSize: 7,
                 action: { key in
                     handlePitchKeyboardTap(key)
                 }
@@ -349,7 +359,7 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var compactPitchInputArea: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             if showsPercussionUnsupportedNotice {
                 percussionUnsupportedNotice
             }
@@ -739,6 +749,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 pendingAccidentalKind: pendingAccidentalKind,
                 isBusy: isBusy,
                 isCompact: true,
+                usesPortraitGrid: true,
                 applyDurationAction: applyDurationAction,
                 toggleDotAction: toggleDotAction,
                 toggleRestAction: toggleRestAction,
@@ -878,7 +889,6 @@ struct ScoreReaderNoteEntrySurface: View {
         }
     }
 
-
     private var modeToolbar: some View {
         ScoreReaderModeToolbar(
             editingState: editingState,
@@ -977,6 +987,10 @@ struct ScoreReaderNoteEntrySurface: View {
         || editingState.selection?.canChangePitch == true
         || editingState.selection?.kind == .rest
         || editingState.selection?.kind == .measure
+    }
+
+    private var showsCompactPitchInputArea: Bool {
+        selectedToolCategory == .notes || selectedToolCategory == .select
     }
 
     private var hasSelection: Bool {
@@ -1089,10 +1103,10 @@ private extension View {
     @ViewBuilder
     func scoreReaderCompactNoteEntryPanelBackground() -> some View {
         let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 18,
+            topLeadingRadius: 28,
             bottomLeadingRadius: 0,
             bottomTrailingRadius: 0,
-            topTrailingRadius: 18,
+            topTrailingRadius: 28,
             style: .continuous
         )
 

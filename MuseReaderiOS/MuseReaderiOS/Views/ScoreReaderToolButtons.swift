@@ -13,33 +13,21 @@ struct ScoreReaderModeToolbar: View {
     var body: some View {
         Group {
             if isCompact {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        compactButtons
-                    }
-                    .frame(minHeight: 50)
+                HStack(spacing: 0) {
+                    compactButtons
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: ScoreReaderCompactModeMetrics.cellHeight)
             } else {
                 HStack(spacing: 0) {
                     regularButtons
                 }
             }
         }
-        .padding(.horizontal, isCompact ? 4 : 10)
+        .padding(.horizontal, isCompact ? 0 : 10)
         .padding(.vertical, isCompact ? 0 : 8)
         .frame(maxWidth: isCompact ? .infinity : nil)
         .modifier(ScoreReaderModeToolbarChromeModifier(isCompact: isCompact))
-    }
-
-    @ViewBuilder
-    private var toolbarButtons: some View {
-        if isCompact {
-            ScrollView(.horizontal, showsIndicators: false) {
-                compactButtons
-            }
-        } else {
-            regularButtons
-        }
     }
 
     @ViewBuilder
@@ -61,17 +49,11 @@ struct ScoreReaderModeToolbar: View {
     @ViewBuilder
     private var compactButtons: some View {
         compactCategoryButton(.notes, title: "Note", systemImage: "music.note", showsPlusBadge: true, action: noteInputModeAction)
-        compactDivider
         compactSelectButton
-        compactDivider
         compactCategoryButton(.text, title: "Text", systemImage: "textformat")
-        compactDivider
         compactCategoryButton(.repeats, title: "Repeats", systemImage: "repeat")
-        compactDivider
         compactCategoryButton(.expression, title: "Expr", textSymbol: "f")
-        compactDivider
         compactCategoryButton(.layout, title: "Layout", systemImage: "square.grid.2x2")
-        compactDivider
         compactCategoryButton(.more, title: "More", systemImage: "ellipsis")
     }
 
@@ -83,7 +65,7 @@ struct ScoreReaderModeToolbar: View {
     }
 
     private func compactCategoryButton(_ category: ScoreReaderToolCategory, title: String, systemImage: String? = nil, textSymbol: String? = nil, showsPlusBadge: Bool = false, action: (() -> Void)? = nil) -> some View {
-        ScoreReaderCompactModeToolbarButton(title: title, systemImage: systemImage, textSymbol: textSymbol, showsPlusBadge: showsPlusBadge, isActive: selectedToolCategory == category, isEnabled: categoryEnabled(category), action: {
+        ScoreReaderCompactModeToolbarButton(title: title, systemImage: systemImage, textSymbol: textSymbol, showsPlusBadge: showsPlusBadge, isActive: compactCategoryIsActive(category), isEnabled: categoryEnabled(category), action: {
             if let action {
                 selectedToolCategory = category
                 action()
@@ -99,31 +81,25 @@ struct ScoreReaderModeToolbar: View {
             selectModeAction()
             selectedToolCategory = .select
         } label: {
-            VStack(spacing: 2) {
-                Image(systemName: "cursorarrow")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: ScoreReaderCompactModeMetrics.iconSlotHeight, height: ScoreReaderCompactModeMetrics.iconSlotHeight)
-
-                Text("Select")
-                    .font(.system(size: 10, weight: selectedToolCategory == .select ? .semibold : .medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-            .foregroundStyle(selectedToolCategory == .select ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .scoreReaderCompactModeCellHighlight(isActive: selectedToolCategory == .select)
-            .contentShape(Rectangle())
+            ScoreReaderCompactModeToolbarLabel(
+                title: "Select",
+                systemImage: "cursorarrow",
+                isActive: selectedToolCategory == .select
+            )
         }
         .buttonStyle(.plain)
-        .frame(width: ScoreReaderCompactModeMetrics.cellWidth, height: ScoreReaderCompactModeMetrics.cellHeight)
+        .frame(maxWidth: .infinity)
+        .frame(height: ScoreReaderCompactModeMetrics.cellHeight)
         .disabled(isBusy)
         .opacity(isBusy ? 0.42 : 1)
     }
 
-    private var compactDivider: some View {
-        Rectangle()
-            .fill(Color.black.opacity(0.06))
-            .frame(width: 0.5, height: 30)
+    private func compactCategoryIsActive(_ category: ScoreReaderToolCategory) -> Bool {
+        if category == .text {
+            return selectedToolCategory == .text || selectedToolCategory == .chord || selectedToolCategory == .lyrics
+        }
+
+        return selectedToolCategory == category
     }
 
     private func categoryEnabled(_ category: ScoreReaderToolCategory) -> Bool {
@@ -158,8 +134,7 @@ private struct ScoreReaderModeToolbarChromeModifier: ViewModifier {
 }
 
 private enum ScoreReaderCompactModeMetrics {
-    static let cellWidth: CGFloat = 68
-    static let cellHeight: CGFloat = 50
+    static let cellHeight: CGFloat = 62
     static let iconSlotHeight: CGFloat = 24
     static let highlightCornerRadius: CGFloat = 10
 }
@@ -178,14 +153,13 @@ private extension View {
             }
     }
 
-    /// Fixed-size selection chip for compact mode tabs (same footprint for every icon/label).
+    /// Selection chip for compact mode tabs. The parent distributes all tabs
+    /// evenly so the complete mobile mode bar remains visible without scrolling.
     func scoreReaderCompactModeCellHighlight(isActive: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: ScoreReaderCompactModeMetrics.highlightCornerRadius, style: .continuous)
 
-        return frame(
-            width: ScoreReaderCompactModeMetrics.cellWidth,
-            height: ScoreReaderCompactModeMetrics.cellHeight
-        )
+        return frame(maxWidth: .infinity)
+        .frame(height: ScoreReaderCompactModeMetrics.cellHeight)
         .background {
             if isActive {
                 shape
@@ -224,45 +198,65 @@ struct ScoreReaderCompactModeToolbarButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 2) {
-                ZStack(alignment: .bottomTrailing) {
-                    Group {
-                        if let systemImage {
-                            Image(systemName: systemImage)
-                                .font(.system(size: 18, weight: .semibold))
-                        } else if let textSymbol {
-                            Text(textSymbol)
-                                .font(.system(size: 22, weight: .bold, design: .serif))
-                                .italic()
-                                .rotationEffect(.degrees(-3))
-                        }
-                    }
-                    .frame(width: ScoreReaderCompactModeMetrics.iconSlotHeight, height: ScoreReaderCompactModeMetrics.iconSlotHeight)
+            ScoreReaderCompactModeToolbarLabel(
+                title: title,
+                systemImage: systemImage,
+                textSymbol: textSymbol,
+                showsPlusBadge: showsPlusBadge,
+                isActive: isActive
+            )
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .frame(height: ScoreReaderCompactModeMetrics.cellHeight)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.42)
+    }
+}
 
-                    if showsPlusBadge {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .background(Color.white, in: Circle())
-                            .offset(x: 4, y: 2)
+private struct ScoreReaderCompactModeToolbarLabel: View {
+    let title: String
+    var systemImage: String? = nil
+    var textSymbol: String? = nil
+    var showsPlusBadge = false
+    let isActive: Bool
+
+    var body: some View {
+        VStack(spacing: 3) {
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let systemImage {
+                        Image(systemName: systemImage)
+                            .font(.system(size: 18, weight: .semibold))
+                    } else if let textSymbol {
+                        Text(textSymbol)
+                            .font(.system(size: 23, weight: .bold, design: .serif))
+                            .italic()
+                            .rotationEffect(.degrees(-3))
                     }
                 }
                 .frame(width: ScoreReaderCompactModeMetrics.iconSlotHeight, height: ScoreReaderCompactModeMetrics.iconSlotHeight)
 
-                Text(title)
-                    .font(.system(size: 10, weight: isActive ? .semibold : .medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .frame(maxWidth: .infinity)
+                if showsPlusBadge {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .background(Color.white, in: Circle())
+                        .offset(x: 4, y: 2)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .foregroundStyle(isActive ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82))
-            .scoreReaderCompactModeCellHighlight(isActive: isActive)
-            .contentShape(Rectangle())
+            .frame(width: ScoreReaderCompactModeMetrics.iconSlotHeight, height: ScoreReaderCompactModeMetrics.iconSlotHeight)
+
+            Text(title)
+                .font(.system(size: 9, weight: isActive ? .semibold : .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.66)
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
-        .frame(width: ScoreReaderCompactModeMetrics.cellWidth, height: ScoreReaderCompactModeMetrics.cellHeight)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.42)
+        .frame(maxWidth: .infinity)
+        .frame(height: ScoreReaderCompactModeMetrics.cellHeight)
+        .foregroundStyle(isActive ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82))
+        .scoreReaderCompactModeCellHighlight(isActive: isActive)
+        .contentShape(Rectangle())
     }
 }
 

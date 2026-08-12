@@ -493,7 +493,7 @@ private struct ScorePreviewStripSection: View {
                     buttonAction: session.pageCount > 0 ? { openPageAction(0) } : nil
                 )
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
+                MobileHintingHorizontalScrollView(hintHeight: 46) {
                     HStack(spacing: 18) {
                         ForEach(session.previewPages) { page in
                             ScorePreviewCard(

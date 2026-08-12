@@ -337,7 +337,7 @@ struct ScoreReaderExportPanel: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.black.opacity(0.64))
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            MobileHintingHorizontalScrollView(hintHeight: 25) {
                 HStack(spacing: 7) {
                     ForEach(parts) { part in
                         Button {

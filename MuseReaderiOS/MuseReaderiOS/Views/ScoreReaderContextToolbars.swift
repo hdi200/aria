@@ -160,6 +160,7 @@ struct ScoreReaderKeyboardContextToolbar: View {
     let pendingAccidentalKind: ScoreAccidentalKind?
     let isBusy: Bool
     var isCompact = false
+    var usesPortraitGrid = false
     let applyDurationAction: (ScoreNoteDuration) -> Void
     let toggleDotAction: () -> Void
     let toggleRestAction: () -> Void
@@ -174,7 +175,11 @@ struct ScoreReaderKeyboardContextToolbar: View {
 
     var body: some View {
         if isCompact {
-            compactBody
+            if usesPortraitGrid {
+                compactPortraitGridBody
+            } else {
+                compactBody
+            }
         } else {
             regularBody
         }
@@ -269,75 +274,191 @@ struct ScoreReaderKeyboardContextToolbar: View {
     }
 
     private var compactBody: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ScoreReaderCompactPaletteButton(
-                    stackedChordIcon: true,
-                    isSelected: stackedChordInputEnabled,
-                    isEnabled: canUseStackedChordInput,
-                    action: toggleStackedChordInputAction
-                )
-                ScoreReaderContextDivider()
-                    .frame(height: 38)
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                compactSectionTitle("Duration")
+                    .padding(.leading, 4)
 
+                MobileHintingHorizontalScrollView(hintHeight: 46) {
+                    HStack(spacing: 0) {
+                        ForEach(ScoreNoteDuration.allCases) { duration in
+                            ScoreReaderCompactPaletteButton(
+                                duration: duration,
+                                width: 60,
+                                isSelected: selectedDuration == duration,
+                                isEnabled: canUseRhythmTools,
+                                action: { applyDurationAction(duration) }
+                            )
+                            .accessibilityLabel(duration.noteEntryTitle)
+
+                            ScoreReaderCompactGroupedDivider()
+                        }
+
+                        ScoreReaderCompactPaletteButton(
+                            textSymbol: "·",
+                            width: 60,
+                            isSelected: selectedIsDotted,
+                            isEnabled: canUseRhythmTools,
+                            action: toggleDotAction
+                        )
+                        .accessibilityLabel(selectedIsDotted ? "Remove dot" : "Add dot")
+
+                        ScoreReaderCompactGroupedDivider()
+
+                        ScoreReaderCompactTupletMenuButton(
+                            width: 60,
+                            isEnabled: canUseRhythmTools,
+                            action: addTupletAction
+                        )
+                    }
+                    .padding(.horizontal, 1)
+                    .background(Color.white.opacity(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.black.opacity(0.08), lineWidth: 0.6)
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
+
+            Group {
+                compactSectionTitle("Accidentals & Options")
+                    .padding(.top, 2)
+                    .padding(.leading, 4)
+
+                HStack(spacing: 10) {
+                    ScoreReaderCompactControlGroup {
+                        compactGroupedAccidentalButton(.sharp)
+                        ScoreReaderCompactGroupedDivider()
+                        compactGroupedAccidentalButton(.flat)
+                        ScoreReaderCompactGroupedDivider()
+                        compactGroupedAccidentalButton(.natural)
+                    }
+
+                    ScoreReaderCompactControlGroup {
+                        ScoreReaderCompactGroupedPaletteButton(
+                            textSymbol: "\u{1D13D}",
+                            usesMusicFont: true,
+                            glyphBaselineOffset: 10,
+                            isSelected: selectedIsRest,
+                            isEnabled: canUseRhythmTools,
+                            accessibilityLabel: selectedIsRest ? "Note entry" : "Rest entry",
+                            action: toggleRestAction
+                        )
+                        ScoreReaderCompactGroupedDivider()
+                        ScoreReaderCompactGroupedPaletteButton(
+                            textSymbol: "⌒",
+                            isSelected: editingState.selection?.isTiedForward == true,
+                            isEnabled: editingState.selection?.kind == .note && !isBusy,
+                            accessibilityLabel: "Tie",
+                            action: toggleTieAction
+                        )
+                        ScoreReaderCompactGroupedDivider()
+                        ScoreReaderCompactGroupedPaletteButton(
+                            stackedChordIcon: true,
+                            isSelected: stackedChordInputEnabled,
+                            isEnabled: canUseStackedChordInput,
+                            accessibilityLabel: stackedChordInputEnabled ? "Single note entry" : "Build chord",
+                            action: toggleStackedChordInputAction
+                        )
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var compactPortraitGridBody: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
                 ForEach(ScoreNoteDuration.allCases) { duration in
-                    ScoreReaderCompactPaletteButton(
+                    ScoreReaderCompactGridPaletteButton(
                         duration: duration,
                         isSelected: selectedDuration == duration,
                         isEnabled: canUseRhythmTools,
+                        accessibilityLabel: duration.noteEntryTitle,
                         action: { applyDurationAction(duration) }
                     )
-
-                    ScoreReaderContextDivider()
-                        .frame(height: 38)
                 }
 
-                ScoreReaderCompactTupletMenuButton(
-                    isEnabled: canUseRhythmTools,
-                    action: addTupletAction
-                )
-                ScoreReaderContextDivider()
-                    .frame(height: 38)
-
-                ScoreReaderCompactPaletteButton(
+                ScoreReaderCompactGridPaletteButton(
                     textSymbol: "·",
                     isSelected: selectedIsDotted,
                     isEnabled: canUseRhythmTools,
+                    accessibilityLabel: selectedIsDotted ? "Remove dot" : "Add dot",
                     action: toggleDotAction
                 )
-                ScoreReaderContextDivider()
-                    .frame(height: 38)
 
-                ScoreReaderCompactPaletteButton(
-                    textSymbol: "\u{1D13D}",
-                    usesMusicFont: true,
-                    isSelected: selectedIsRest,
+                ScoreReaderCompactGridTupletMenuButton(
                     isEnabled: canUseRhythmTools,
-                    action: toggleRestAction
+                    action: addTupletAction
                 )
-                ScoreReaderContextDivider()
-                    .frame(height: 38)
+            }
 
-                ScoreReaderCompactPaletteButton(
+            HStack(spacing: 4) {
+                compactGridAccidentalButton(.sharp)
+                compactGridAccidentalButton(.flat)
+                compactGridAccidentalButton(.natural)
+
+                ScoreReaderCompactGridPaletteButton(
+                    stackedChordIcon: true,
+                    isSelected: stackedChordInputEnabled,
+                    isEnabled: canUseStackedChordInput,
+                    accessibilityLabel: stackedChordInputEnabled ? "Single note entry" : "Build chord",
+                    action: toggleStackedChordInputAction
+                )
+
+                ScoreReaderCompactGridPaletteButton(
                     textSymbol: "⌒",
                     isSelected: editingState.selection?.isTiedForward == true,
                     isEnabled: editingState.selection?.kind == .note && !isBusy,
+                    accessibilityLabel: "Tie",
                     action: toggleTieAction
                 )
-                ScoreReaderContextDivider()
-                    .frame(height: 38)
 
-                compactAccidentalButton(.flat)
-                ScoreReaderContextDivider()
-                    .frame(height: 38)
-                compactAccidentalButton(.natural)
-                ScoreReaderContextDivider()
-                    .frame(height: 38)
-                compactAccidentalButton(.sharp)
+                ScoreReaderCompactGridPaletteButton(
+                    textSymbol: "\u{1D13D}",
+                    usesMusicFont: true,
+                    glyphBaselineOffset: 10,
+                    isSelected: selectedIsRest,
+                    isEnabled: canUseRhythmTools,
+                    accessibilityLabel: selectedIsRest ? "Note entry" : "Rest entry",
+                    action: toggleRestAction
+                )
             }
-            .frame(minHeight: 52)
         }
-        .frame(maxWidth: .infinity, minHeight: 52)
+        .padding(.horizontal, 2)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func compactSectionTitle(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .tracking(0.7)
+            .foregroundStyle(Color.black.opacity(0.42))
+    }
+
+    private func compactGroupedAccidentalButton(_ accidentalKind: ScoreAccidentalKind) -> some View {
+        ScoreReaderCompactGroupedPaletteButton(
+            textSymbol: symbol(for: accidentalKind),
+            isSelected: selectedAccidental == accidentalKind,
+            isEnabled: canEditPitch,
+            accessibilityLabel: title(for: accidentalKind),
+            action: { applyAccidental(accidentalKind) }
+        )
+    }
+
+    private func compactGridAccidentalButton(_ accidentalKind: ScoreAccidentalKind) -> some View {
+        ScoreReaderCompactGridPaletteButton(
+            textSymbol: symbol(for: accidentalKind),
+            isSelected: selectedAccidental == accidentalKind,
+            isEnabled: canEditPitch,
+            accessibilityLabel: title(for: accidentalKind),
+            action: { applyAccidental(accidentalKind) }
+        )
     }
 
     private func accidentalButton(_ accidentalKind: ScoreAccidentalKind) -> some View {
@@ -517,6 +638,7 @@ struct ScoreReaderCompactPaletteButton: View {
     var textSymbol: String? = nil
     var stackedChordIcon = false
     var usesMusicFont = false
+    var width: CGFloat = 46
     let isSelected: Bool
     let isEnabled: Bool
     let action: () -> Void
@@ -539,7 +661,7 @@ struct ScoreReaderCompactPaletteButton: View {
                 }
             }
             .foregroundStyle(isSelected ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82))
-            .frame(width: 46, height: 46)
+            .frame(width: width, height: 46)
             .background(
                 isSelected ? Color(red: 0.86, green: 0.93, blue: 1.0) : Color.clear,
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -552,7 +674,173 @@ struct ScoreReaderCompactPaletteButton: View {
     }
 }
 
+private struct ScoreReaderCompactControlGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 0) {
+            content
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.white.opacity(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.black.opacity(0.08), lineWidth: 0.6)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct ScoreReaderCompactGroupedDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.black.opacity(0.07))
+            .frame(width: 0.5, height: 34)
+    }
+}
+
+private struct ScoreReaderCompactGroupedPaletteButton: View {
+    var duration: ScoreNoteDuration? = nil
+    var textSymbol: String? = nil
+    var stackedChordIcon = false
+    var usesMusicFont = false
+    var glyphBaselineOffset: CGFloat = 0
+    let isSelected: Bool
+    let isEnabled: Bool
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if let duration {
+                    Text(duration.bravuraTextGlyph)
+                        .font(MusicNotationFont.font(size: 24))
+                } else if stackedChordIcon {
+                    Image("ScoreReaderStackedChord")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 25, height: 25)
+                } else if let textSymbol {
+                    Text(textSymbol)
+                        .font(usesMusicFont ? MusicNotationFont.font(size: 23) : .system(size: 22, weight: .semibold))
+                        .baselineOffset(glyphBaselineOffset)
+                }
+            }
+            .foregroundStyle(isSelected ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82))
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(
+                isSelected ? Color(red: 0.86, green: 0.93, blue: 1.0) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.42)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct ScoreReaderCompactGridPaletteButton: View {
+    var duration: ScoreNoteDuration? = nil
+    var textSymbol: String? = nil
+    var stackedChordIcon = false
+    var usesMusicFont = false
+    var glyphBaselineOffset: CGFloat = 0
+    let isSelected: Bool
+    let isEnabled: Bool
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if let duration {
+                    Text(duration.bravuraTextGlyph)
+                        .font(MusicNotationFont.font(size: 25))
+                } else if stackedChordIcon {
+                    Image("ScoreReaderStackedChord")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 25, height: 25)
+                } else if let textSymbol {
+                    Text(textSymbol)
+                        .font(usesMusicFont ? MusicNotationFont.font(size: 24) : .system(size: 23, weight: .semibold))
+                        .baselineOffset(glyphBaselineOffset)
+                }
+            }
+            .foregroundStyle(isSelected ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.84))
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(
+                isSelected ? Color(red: 0.86, green: 0.93, blue: 1.0) : Color.white.opacity(0.58),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isSelected ? Color.blue.opacity(0.24) : Color.black.opacity(0.08), lineWidth: 0.7)
+                    .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.42)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct ScoreReaderCompactGridTupletMenuButton: View {
+    let isEnabled: Bool
+    let action: (Int) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(ScoreReaderTupletPreset.allCases) { preset in
+                Button(preset.title) {
+                    action(preset.count)
+                }
+            }
+        } label: {
+            VStack(spacing: 0) {
+                Text("3")
+                    .font(.system(size: 16, weight: .semibold))
+                    .italic()
+                    .frame(height: 16)
+                HStack(spacing: 0) {
+                    Rectangle().frame(width: 1, height: 4)
+                    Rectangle().frame(height: 1)
+                    Rectangle().frame(width: 1, height: 4)
+                }
+                .frame(width: 21, height: 6)
+            }
+            .foregroundStyle(Color.black.opacity(0.84))
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(Color.white.opacity(0.58), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 0.7)
+                    .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.42)
+        .accessibilityLabel("Tuplet")
+    }
+}
+
 struct ScoreReaderCompactTupletMenuButton: View {
+    var width: CGFloat = 46
     let isEnabled: Bool
     let action: (Int) -> Void
 
@@ -577,7 +865,7 @@ struct ScoreReaderCompactTupletMenuButton: View {
                 .frame(width: 24, height: 7)
             }
             .foregroundStyle(Color.black.opacity(0.82))
-            .frame(width: 46, height: 46)
+            .frame(width: width, height: 46)
             .contentShape(Rectangle())
         }
         .menuStyle(.button)
@@ -829,7 +1117,7 @@ struct ScoreReaderHorizontalContextToolbar<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        MobileHintingHorizontalScrollView(hintHeight: isEmbeddedInCompactPanel ? 52 : 58) {
             HStack(spacing: 0) {
                 content()
             }

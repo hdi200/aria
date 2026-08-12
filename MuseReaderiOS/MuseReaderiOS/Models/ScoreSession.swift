@@ -531,6 +531,7 @@ struct ScoreEditingState: Sendable, Equatable {
     var pageSettings: ScorePageSettingsValue
     var refreshScope: ScoreEditRefreshScope
     var pageCount: Int?
+    var scoreParts: [ScorePart]
 
     static let inactive = ScoreEditingState(
         selection: nil,
@@ -547,7 +548,8 @@ struct ScoreEditingState: Sendable, Equatable {
         staffSpacingSpatium: ScorePageSettingsValue.a4.staffSpacingSpatium,
         pageSettings: .a4,
         refreshScope: .local,
-        pageCount: nil
+        pageCount: nil,
+        scoreParts: []
     )
 
     var canDeleteSelection: Bool {

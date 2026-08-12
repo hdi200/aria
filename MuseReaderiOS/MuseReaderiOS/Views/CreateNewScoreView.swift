@@ -640,7 +640,7 @@ private struct TemplateBrowserSheet: View {
 
     private var phoneTemplateBrowser: some View {
         VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
+            MobileHintingHorizontalScrollView(hintHeight: 56) {
                 HStack(spacing: 8) {
                     ForEach(NewScoreTemplateChoice.allTemplates) { category in
                         Button {
@@ -978,7 +978,7 @@ struct AddInstrumentSheet: View {
             .padding(.bottom, 10)
 
             // Genre pills
-            ScrollView(.horizontal, showsIndicators: false) {
+            MobileHintingHorizontalScrollView(hintHeight: 34) {
                 HStack(spacing: 8) {
                     ForEach(NewScoreInstrumentGenre.allCases) { genre in
                         Button {
@@ -1008,7 +1008,7 @@ struct AddInstrumentSheet: View {
 
             // Category pills (hidden when searching)
             if searchText.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                MobileHintingHorizontalScrollView(hintHeight: 30) {
                     HStack(spacing: 6) {
                         ForEach(visibleCategories) { category in
                             Button {
@@ -1054,13 +1054,7 @@ struct AddInstrumentSheet: View {
             // Instrument list
             List(visibleInstruments) { instrument in
                 Button {
-                    if showsCurrentInstruments {
-                        let inst = instrumentInstance(from: instrument)
-                        currentInstruments.append(inst)
-                        addCurrentInstrumentAction(inst)
-                    } else {
-                        toggleInstrument(instrument)
-                    }
+                    addInstrument(instrument)
                 } label: {
                     HStack(spacing: 14) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -1072,24 +1066,14 @@ struct AddInstrumentSheet: View {
                                 .foregroundStyle(CreateScorePalette.mutedInk)
                         }
                         Spacer()
-                        Image(
-                            systemName: isSelected(instrument)
-                                ? "checkmark.circle.fill"
-                                : "plus.circle"
-                        )
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(
-                            isSelected(instrument)
-                                ? CreateScorePalette.accent
-                                : CreateScorePalette.subtle
-                        )
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(CreateScorePalette.subtle)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(
-                    isSelected(instrument) ? CreateScorePalette.accentSoft : Color.clear
-                )
+                .listRowBackground(Color.clear)
             }
             .listStyle(.plain)
 
@@ -1217,7 +1201,7 @@ struct AddInstrumentSheet: View {
                     .padding(.vertical, 8)
                     .background(Color(.secondarySystemBackground))
 
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    MobileHintingHorizontalScrollView(hintHeight: 30) {
                         HStack(spacing: 8) {
                             ForEach(Array(currentInstruments.enumerated()), id: \.element.id) { index, instrument in
                                 HStack(spacing: 6) {
@@ -1315,7 +1299,7 @@ struct AddInstrumentSheet: View {
         List(visibleInstruments) { instrument in
             Button {
                 focusedInstrument = instrument
-                toggleInstrument(instrument)
+                addInstrument(instrument)
             } label: {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -1327,14 +1311,14 @@ struct AddInstrumentSheet: View {
                             .foregroundStyle(CreateScorePalette.mutedInk)
                     }
                     Spacer()
-                    Image(systemName: isSelected(instrument) ? "checkmark.circle.fill" : "plus.circle")
+                    Image(systemName: "plus.circle")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(isSelected(instrument) ? CreateScorePalette.accent : CreateScorePalette.subtle)
+                        .foregroundStyle(CreateScorePalette.subtle)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .listRowBackground(isSelected(instrument) ? CreateScorePalette.accentSoft : Color.clear)
+            .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
     }
@@ -1512,27 +1496,17 @@ struct AddInstrumentSheet: View {
         .font(.system(size: 14, weight: .medium))
     }
 
-    private func isSelected(_ instrument: NewScoreInstrument) -> Bool {
-        if showsCurrentInstruments {
-            return false
-        }
-        return selectedInstruments.contains { $0.instrumentID == instrument.instrumentID && $0.name == instrument.name }
-    }
+    private func addInstrument(_ instrument: NewScoreInstrument) {
+        let instrumentToAdd = instrumentInstance(from: instrument)
 
-    private func toggleInstrument(_ instrument: NewScoreInstrument) {
         if showsCurrentInstruments {
-            let instrumentToAdd = instrumentInstance(from: instrument)
             currentInstruments.append(instrumentToAdd)
             focusedInstrument = instrumentToAdd
             addCurrentInstrumentAction(instrumentToAdd)
             return
         }
 
-        if let index = selectedInstruments.firstIndex(where: { $0.instrumentID == instrument.instrumentID && $0.name == instrument.name }) {
-            selectedInstruments.remove(at: index)
-        } else {
-            selectedInstruments.append(instrumentInstance(from: instrument))
-        }
+        selectedInstruments.append(instrumentToAdd)
     }
 
     private func instrumentInstance(from instrument: NewScoreInstrument) -> NewScoreInstrument {

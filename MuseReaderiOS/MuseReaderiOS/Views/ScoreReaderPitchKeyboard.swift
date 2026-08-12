@@ -20,6 +20,7 @@ struct ScoreReaderWidePitchKeyboard: View {
     var minimumVisibleNaturalKeyCount = 14
     var maximumVisibleNaturalKeyCount = 22
     var targetWhiteKeyWidth: CGFloat = 48
+    var activeAccidentalLabelFontSize: CGFloat = 9
     let action: (PianoKeyboardKey) -> Void
 
     private let minMIDIPitch = 21
@@ -71,7 +72,7 @@ struct ScoreReaderWidePitchKeyboard: View {
 
                         if isActive(midiPitch: key.midiPitch), hasExactActiveMIDIPitch {
                             Text(label(forMIDIPitch: key.midiPitch))
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: activeAccidentalLabelFontSize, weight: .bold))
                                 .foregroundStyle(.white)
                                 .padding(.bottom, 5)
                         }
