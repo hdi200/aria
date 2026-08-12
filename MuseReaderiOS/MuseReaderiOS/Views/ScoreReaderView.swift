@@ -160,10 +160,30 @@ private struct ScoreReaderPlaybackScrollTarget: Equatable {
     let normalizedRect: ScoreNormalizedRect
 }
 
+private struct ScoreReaderTwoPageViewIcon: View {
+    let isActive: Bool
+
+    var body: some View {
+        HStack(spacing: 3) {
+            pageOutline
+            pageOutline
+        }
+        .foregroundStyle(isActive ? Color.blue : Color.black.opacity(0.72))
+        .frame(width: 24, height: 18)
+    }
+
+    private var pageOutline: some View {
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .stroke(lineWidth: 1.8)
+            .frame(width: 9, height: 15)
+    }
+}
+
 struct ScoreReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("ScoreReaderFloatingPaletteDockedLeft") private var floatingPaletteDockedLeft = true
+    @AppStorage("ScoreReaderTwoPageViewEnabled") private var twoPageViewEnabled = false
 
     let session: ScoreSession
     private let initialRememberedState: ScoreReaderRememberedState
@@ -531,7 +551,7 @@ struct ScoreReaderView: View {
                     }
                     .overlay(alignment: .bottom) {
                         if readerState.interactionMode == .view, readingStyle == .pageTurn, readerState.pageCount > 1 {
-                            Text(readerState.currentPageLabel.replacingOccurrences(of: "Page ", with: ""))
+                            Text(viewModePageLabel)
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(Color.black.opacity(0.62))
                                 .padding(.horizontal, 12)
@@ -539,6 +559,33 @@ struct ScoreReaderView: View {
                                 .background(.regularMaterial, in: Capsule())
                                 .padding(.bottom, 10)
                                 .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        if readerState.interactionMode == .view,
+                           readingStyle == .pageTurn,
+                           readerState.pageCount > 1,
+                           isChromeVisible
+                        {
+                            Button(action: toggleTwoPageView) {
+                                VStack(spacing: 4) {
+                                    ScoreReaderTwoPageViewIcon(isActive: twoPageViewEnabled)
+                                        .frame(width: 38, height: 34)
+                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
+
+                                    Text("Two-page view")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Color.black.opacity(0.68))
+                                        .lineLimit(1)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.leading, 14)
+                            .padding(.bottom, 10)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .accessibilityLabel(twoPageViewEnabled ? "Use single-page view" : "Use two-page view")
+                            .accessibilityValue(twoPageViewEnabled ? "Two pages" : "One page")
                         }
                     }
                     .overlay(alignment: .bottomTrailing) {
@@ -942,28 +989,120 @@ struct ScoreReaderView: View {
         }
     }
 
+    private var usesTwoPageSpread: Bool {
+        readerState.interactionMode == .view
+        && readingStyle == .pageTurn
+        && twoPageViewEnabled
+        && readerState.pageCount > 1
+    }
+
+    private var twoPageSpreadStartIndex: Int {
+        guard readerState.pageCount > 0 else {
+            return 0
+        }
+
+        let boundedIndex = min(max(readerState.selectedPageIndex, 0), readerState.pageCount - 1)
+        return boundedIndex - (boundedIndex % 2)
+    }
+
+    private var twoPageSpreadIndices: [Int] {
+        guard readerState.pageCount > 0 else {
+            return []
+        }
+
+        return [twoPageSpreadStartIndex, twoPageSpreadStartIndex + 1]
+            .filter { $0 < readerState.pageCount }
+    }
+
+    private var twoPageSpreadEndIndex: Int {
+        min(twoPageSpreadStartIndex + 1, max(readerState.pageCount - 1, 0))
+    }
+
+    private var viewModePageLabel: String {
+        guard usesTwoPageSpread else {
+            return readerState.currentPageLabel.replacingOccurrences(of: "Page ", with: "")
+        }
+
+        return "\(twoPageSpreadStartIndex + 1)–\(twoPageSpreadEndIndex + 1) of \(readerState.pageCount)"
+    }
+
+    private func toggleTwoPageView() {
+        let spreadStartIndex = twoPageSpreadStartIndex
+        withAnimation(.easeInOut(duration: 0.22)) {
+            twoPageViewEnabled.toggle()
+            zoomScale = 1
+        }
+
+        if twoPageViewEnabled {
+            readerState.updatePageTurnSelection(to: spreadStartIndex)
+            for pageIndex in twoPageSpreadIndices {
+                readerState.prefetchPage(pageIndex)
+            }
+        }
+    }
+
     private var pageTurnReaderCanvas: some View {
         GeometryReader { geometry in
-            ZStack {
-                ForEach(
-                    ScorePageTurnPlan.residentIndices(
-                        focusedPageIndex: readerState.selectedPageIndex,
-                        pageCount: readerState.pageCount
-                    ),
-                    id: \.self
-                ) { pageIndex in
-                    let isSelectedPage = pageIndex == readerState.selectedPageIndex
-                    scorePageCanvas(
-                        pageIndex: pageIndex,
-                        geometry: geometry,
-                        isPageTurn: true,
-                        isActivePage: isSelectedPage
+            Group {
+                if usesTwoPageSpread {
+                    let spreadSpacing: CGFloat = 8
+                    let spreadWidth = max(geometry.size.width - 24, 1)
+                    let pageViewportWidth = max((spreadWidth - spreadSpacing) / 2, 1)
+                    let pageViewportSize = CGSize(
+                        width: pageViewportWidth,
+                        height: max(geometry.size.height - 24, 1)
                     )
-                    .id(pageIndex)
-                    .opacity(isSelectedPage ? 1 : 0)
-                    .zIndex(isSelectedPage ? 1 : 0)
-                    .allowsHitTesting(isSelectedPage)
-                    .accessibilityHidden(!isSelectedPage)
+
+                    HStack(spacing: spreadSpacing) {
+                        ForEach(twoPageSpreadIndices, id: \.self) { pageIndex in
+                            scorePageCanvas(
+                                pageIndex: pageIndex,
+                                geometry: geometry,
+                                isPageTurn: true,
+                                pageTurnViewportOverride: pageViewportSize
+                            )
+                            .frame(width: pageViewportWidth, height: pageViewportSize.height)
+                            .id(pageIndex)
+                            .onAppear {
+                                readerState.prefetchPage(pageIndex)
+                            }
+                        }
+                    }
+                    .frame(width: spreadWidth, height: pageViewportSize.height)
+                    .overlay {
+                        if geometry.size.width > geometry.size.height {
+                            Color.clear
+                                .frame(width: 44, height: pageViewportSize.height)
+                                .contentShape(Rectangle())
+                                .onTapGesture(perform: toggleViewChrome)
+                                .accessibilityElement()
+                                .accessibilityLabel("Show or hide viewer controls")
+                                .accessibilityAddTraits(.isButton)
+                        }
+                    }
+                } else {
+                    ZStack {
+                        ForEach(
+                            ScorePageTurnPlan.residentIndices(
+                                focusedPageIndex: readerState.selectedPageIndex,
+                                pageCount: readerState.pageCount
+                            ),
+                            id: \.self
+                        ) { pageIndex in
+                            let isSelectedPage = pageIndex == readerState.selectedPageIndex
+                            scorePageCanvas(
+                                pageIndex: pageIndex,
+                                geometry: geometry,
+                                isPageTurn: true,
+                                isActivePage: isSelectedPage
+                            )
+                            .id(pageIndex)
+                            .opacity(isSelectedPage ? 1 : 0)
+                            .zIndex(isSelectedPage ? 1 : 0)
+                            .allowsHitTesting(isSelectedPage)
+                            .accessibilityHidden(!isSelectedPage)
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -1063,15 +1202,17 @@ struct ScoreReaderView: View {
         pageIndex: Int,
         geometry: GeometryProxy,
         isPageTurn: Bool,
-        isActivePage: Bool = true
+        isActivePage: Bool = true,
+        pageTurnViewportOverride: CGSize? = nil
     ) -> some View {
         let isCompactPhoneLayout = isPhoneInterface
         let isPhoneLandscapeLayout = isCompactPhoneLayout && geometry.size.width > geometry.size.height
         let editingEnabled = readerState.isEditingMode
-        let pageTurnViewport = CGSize(
+        let defaultPageTurnViewport = CGSize(
             width: max(geometry.size.width - 24, 1),
             height: max(geometry.size.height - 24, 1)
         )
+        let pageTurnViewport = pageTurnViewportOverride ?? defaultPageTurnViewport
 
         return ScoreReaderPageCanvas(
             pageIndex: pageIndex,
@@ -1119,7 +1260,7 @@ struct ScoreReaderView: View {
                     clearSelectionCommandMenu()
                     readerState.handlePageTap(pageIndex: pageIndex, normalizedPoint: normalizedPoint, inputKind: inputKind)
                 } else if isPageTurn {
-                    handleViewModePageTap(normalizedPoint)
+                    handleViewModePageTap(normalizedPoint, pageIndex: pageIndex)
                 } else {
                     toggleViewChrome()
                 }
@@ -1560,7 +1701,18 @@ struct ScoreReaderView: View {
         }
     }
 
-    private func handleViewModePageTap(_ normalizedPoint: CGPoint) {
+    private func handleViewModePageTap(_ normalizedPoint: CGPoint, pageIndex: Int) {
+        if usesTwoPageSpread {
+            if pageIndex == twoPageSpreadStartIndex, normalizedPoint.x <= 0.50 {
+                showPreviousPage()
+            } else if pageIndex == twoPageSpreadEndIndex, normalizedPoint.x >= 0.50 {
+                showNextPage()
+            } else {
+                toggleViewChrome()
+            }
+            return
+        }
+
         if normalizedPoint.x <= 0.20 {
             showPreviousPage()
         } else if normalizedPoint.x >= 0.80 {
@@ -1594,21 +1746,27 @@ struct ScoreReaderView: View {
     }
 
     private func showPreviousPage() {
-        guard readerState.interactionMode == .view, readerState.selectedPageIndex > 0 else {
+        let targetPageIndex = usesTwoPageSpread
+            ? twoPageSpreadStartIndex - 2
+            : readerState.selectedPageIndex - 1
+        guard readerState.interactionMode == .view, targetPageIndex >= 0 else {
             return
         }
         zoomScale = 1
-        readerState.updatePageTurnSelection(to: readerState.selectedPageIndex - 1)
+        readerState.updatePageTurnSelection(to: targetPageIndex)
     }
 
     private func showNextPage() {
+        let targetPageIndex = usesTwoPageSpread
+            ? twoPageSpreadStartIndex + 2
+            : readerState.selectedPageIndex + 1
         guard readerState.interactionMode == .view,
-              readerState.selectedPageIndex + 1 < readerState.pageCount
+              targetPageIndex < readerState.pageCount
         else {
             return
         }
         zoomScale = 1
-        readerState.updatePageTurnSelection(to: readerState.selectedPageIndex + 1)
+        readerState.updatePageTurnSelection(to: targetPageIndex)
     }
 
     private func exportScore() {

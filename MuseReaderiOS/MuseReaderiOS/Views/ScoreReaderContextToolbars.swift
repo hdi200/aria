@@ -154,6 +154,12 @@ struct ScoreReaderLinesMenuButton: View {
     }
 }
 
+enum ScoreReaderCompactKeyboardSections: Equatable {
+    case all
+    case durationOnly
+    case optionsOnly
+}
+
 struct ScoreReaderKeyboardContextToolbar: View {
     let editingState: ScoreEditingState
     let pendingPitchClass: Int?
@@ -161,6 +167,7 @@ struct ScoreReaderKeyboardContextToolbar: View {
     let isBusy: Bool
     var isCompact = false
     var usesPortraitGrid = false
+    var compactSections: ScoreReaderCompactKeyboardSections = .all
     let applyDurationAction: (ScoreNoteDuration) -> Void
     let toggleDotAction: () -> Void
     let toggleRestAction: () -> Void
@@ -275,7 +282,7 @@ struct ScoreReaderKeyboardContextToolbar: View {
 
     private var compactBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Group {
+            if compactSections != .optionsOnly {
                 compactSectionTitle("Duration")
                     .padding(.leading, 4)
 
@@ -321,9 +328,9 @@ struct ScoreReaderKeyboardContextToolbar: View {
                 }
             }
 
-            Group {
+            if compactSections != .durationOnly {
                 compactSectionTitle("Accidentals & Options")
-                    .padding(.top, 2)
+                    .padding(.top, compactSections == .all ? 2 : 0)
                     .padding(.leading, 4)
 
                 HStack(spacing: 10) {

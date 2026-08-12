@@ -249,9 +249,19 @@ struct ScoreReaderNoteEntrySurface: View {
                     compactLandscapeControlColumn
                         .frame(minWidth: 300, idealWidth: 370, maxWidth: 430)
 
-                    compactLandscapePitchInputArea
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 8)
+                    VStack(spacing: 0) {
+                        compactLandscapeDurationToolbar
+                            .padding(.horizontal, 6)
+                            .padding(.top, 5)
+                            .padding(.bottom, 3)
+
+                        compactPanelDivider
+
+                        compactLandscapePitchInputArea
+                            .padding(.horizontal, 6)
+                            .padding(.top, 4)
+                            .padding(.bottom, 8)
+                    }
                         .frame(maxWidth: .infinity)
                 }
             } else {
@@ -279,10 +289,18 @@ struct ScoreReaderNoteEntrySurface: View {
 
             compactPanelDivider
 
+            if selectedToolCategory == .notes || selectedToolCategory == .select {
+                Spacer(minLength: 0)
+            }
+
             compactModeToolbar
                 .padding(.horizontal, 0)
                 .padding(.vertical, 2)
         }
+        .frame(
+            height: selectedToolCategory == .notes || selectedToolCategory == .select ? 190 : nil,
+            alignment: .top
+        )
     }
 
     private var pitchKeyboardRow: some View {
@@ -780,6 +798,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 pendingAccidentalKind: pendingAccidentalKind,
                 isBusy: isBusy,
                 isCompact: true,
+                compactSections: .optionsOnly,
                 applyDurationAction: applyDurationAction,
                 toggleDotAction: toggleDotAction,
                 toggleRestAction: toggleRestAction,
@@ -887,6 +906,28 @@ struct ScoreReaderNoteEntrySurface: View {
         case .chord, .lyrics:
             compactDetailToolbar
         }
+    }
+
+    private var compactLandscapeDurationToolbar: some View {
+        ScoreReaderKeyboardContextToolbar(
+            editingState: editingState,
+            pendingPitchClass: pendingPitchClass,
+            pendingAccidentalKind: pendingAccidentalKind,
+            isBusy: isBusy,
+            isCompact: true,
+            compactSections: .durationOnly,
+            applyDurationAction: applyDurationAction,
+            toggleDotAction: toggleDotAction,
+            toggleRestAction: toggleRestAction,
+            toggleTieAction: toggleTieAction,
+            addTupletAction: addTupletAction,
+            stackedChordInputEnabled: stackedChordInputEnabled,
+            toggleStackedChordInputAction: toggleStackedChordInputAction,
+            setPitchClassAction: setPitchClassAction,
+            prepareAccidentalAction: prepareAccidentalAction,
+            changeAccidentalAction: changeAccidentalAction,
+            preferFlats: $preferFlats
+        )
     }
 
     private var modeToolbar: some View {
