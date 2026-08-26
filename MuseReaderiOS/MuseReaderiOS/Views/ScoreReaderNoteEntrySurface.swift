@@ -14,6 +14,7 @@ struct ScoreReaderNoteEntrySurface: View {
     let pendingPitchClass: Int?
     let pendingMIDIPitch: Int?
     let stackedChordInputEnabled: Bool
+    let showsCompactModeToolbar: Bool
     let isBusy: Bool
     let errorText: String?
     let selectModeAction: () -> Void
@@ -179,26 +180,18 @@ struct ScoreReaderNoteEntrySurface: View {
                     .padding(.bottom, 8)
             }
 
-            compactPanelDivider
+            if showsCompactModeToolbar {
+                compactPanelDivider
 
-            compactModeToolbar
-                .padding(.horizontal, 0)
-                .padding(.top, 4)
-                .padding(.bottom, 4)
+                compactModeToolbar
+                    .padding(.horizontal, 0)
+                    .padding(.top, 4)
+                    .padding(.bottom, 4)
+            }
         }
+        .frame(maxWidth: .infinity)
         .environment(\.scoreReaderCompactPanelEmbedded, true)
         .scoreReaderCompactNoteEntryPanelBackground()
-        .padding(.horizontal, 10)
-        .background(alignment: .bottom) {
-            Color.white.opacity(0.97)
-                .frame(height: textEntryBottomFillHeight)
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
-    }
-
-    private var textEntryBottomFillHeight: CGFloat {
-        96
     }
 
     private var compactTextEntryHeader: some View {
@@ -269,15 +262,9 @@ struct ScoreReaderNoteEntrySurface: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .frame(maxWidth: .infinity)
         .environment(\.scoreReaderCompactPanelEmbedded, true)
         .scoreReaderCompactNoteEntryPanelBackground()
-        .padding(.horizontal, 10)
-        .background(alignment: .bottom) {
-            Color.white.opacity(0.97)
-                .frame(height: 100)
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     private var compactLandscapeControlColumn: some View {
@@ -293,9 +280,11 @@ struct ScoreReaderNoteEntrySurface: View {
                 Spacer(minLength: 0)
             }
 
-            compactModeToolbar
-                .padding(.horizontal, 0)
-                .padding(.vertical, 2)
+            if showsCompactModeToolbar {
+                compactModeToolbar
+                    .padding(.horizontal, 0)
+                    .padding(.vertical, 2)
+            }
         }
         .frame(
             height: selectedToolCategory == .notes || selectedToolCategory == .select ? 190 : nil,
@@ -1161,7 +1150,6 @@ private extension View {
                         .allowsHitTesting(false)
                 }
                 .shadow(color: Color.black.opacity(0.10), radius: 20, y: 8)
-                .ignoresSafeArea(.container, edges: .bottom)
         } else {
             self
                 .background(.regularMaterial, in: shape)
@@ -1171,7 +1159,6 @@ private extension View {
                         .allowsHitTesting(false)
                 }
                 .shadow(color: Color.black.opacity(0.08), radius: 14, y: 6)
-                .ignoresSafeArea(.container, edges: .bottom)
         }
     }
 

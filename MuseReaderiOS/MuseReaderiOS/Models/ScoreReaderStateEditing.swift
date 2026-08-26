@@ -1632,16 +1632,6 @@ extension ScoreReaderState {
     }
 
     func prepareAccidental(_ accidentalKind: ScoreAccidentalKind) {
-        if editingState.noteInputEnabled,
-           hasContinuousNoteInputCursor,
-           lastKeyboardInputCanReceiveAccidental,
-           !noteInputWasActivatedByPencil {
-            pendingAccidentalKind = nil
-            pendingPreferFlats = accidentalKind == .flat
-            changeSelectedAccidental(accidentalKind)
-            return
-        }
-
         if pendingAccidentalKind == accidentalKind {
             pendingAccidentalKind = nil
             pendingPreferFlats = false

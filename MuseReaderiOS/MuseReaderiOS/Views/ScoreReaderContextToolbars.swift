@@ -429,6 +429,8 @@ struct ScoreReaderKeyboardContextToolbar: View {
                     textSymbol: "\u{1D13D}",
                     usesMusicFont: true,
                     glyphBaselineOffset: 10,
+                    musicFontSize: 26,
+                    glyphVerticalOffset: -3,
                     isSelected: selectedIsRest,
                     isEnabled: canUseRhythmTools,
                     accessibilityLabel: selectedIsRest ? "Note entry" : "Rest entry",
@@ -523,7 +525,9 @@ struct ScoreReaderKeyboardContextToolbar: View {
     }
 
     private var selectedAccidental: ScoreAccidentalKind? {
-        editingState.noteInputEnabled ? pendingAccidentalKind : editingState.selection?.accidentalKind
+        editingState.noteInputEnabled
+            ? pendingAccidentalKind
+            : editingState.selection?.accidentalKind
     }
 
     private func applyAccidental(_ accidentalKind: ScoreAccidentalKind) {
@@ -757,6 +761,8 @@ private struct ScoreReaderCompactGridPaletteButton: View {
     var stackedChordIcon = false
     var usesMusicFont = false
     var glyphBaselineOffset: CGFloat = 0
+    var musicFontSize: CGFloat = 24
+    var glyphVerticalOffset: CGFloat = 0
     let isSelected: Bool
     let isEnabled: Bool
     let accessibilityLabel: String
@@ -776,8 +782,9 @@ private struct ScoreReaderCompactGridPaletteButton: View {
                         .frame(width: 25, height: 25)
                 } else if let textSymbol {
                     Text(textSymbol)
-                        .font(usesMusicFont ? MusicNotationFont.font(size: 24) : .system(size: 23, weight: .semibold))
+                        .font(usesMusicFont ? MusicNotationFont.font(size: musicFontSize) : .system(size: 23, weight: .semibold))
                         .baselineOffset(glyphBaselineOffset)
+                        .offset(y: glyphVerticalOffset)
                 }
             }
             .foregroundStyle(isSelected ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.84))

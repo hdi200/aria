@@ -559,6 +559,56 @@ struct MuseReaderiOSTests {
 
     @Test
     @MainActor
+    func noteEntryAccidentalsOnlyToggleThePendingNextNoteChoice() {
+        let state = ScoreReaderState(
+            session: testSession(supportsEditing: true),
+            initialPageIndex: 0,
+            initialInteractionMode: .edit
+        )
+        defer { state.shutdown() }
+
+        var editState = ScoreEditingState.inactive
+        editState.selection = selectedNote(pageIndex: 0, accidentalKind: .sharp)
+        editState.noteInputEnabled = true
+        state.applyEditingState(editState)
+        state.hasContinuousNoteInputCursor = true
+        state.noteInputWasActivatedByPencil = true
+
+        // While note entry is active, accidental buttons control only the next
+        // entered note, even when the current note is already a sharp.
+        state.prepareAccidental(.sharp)
+        #expect(state.pendingAccidentalKind == .sharp)
+        state.prepareAccidental(.sharp)
+        #expect(state.pendingAccidentalKind == nil)
+
+        // A different accidental is still a one-shot choice for the next note,
+        // and pressing that pending choice again cancels it.
+        state.prepareAccidental(.flat)
+        #expect(state.pendingAccidentalKind == .flat)
+        state.prepareAccidental(.flat)
+        #expect(state.pendingAccidentalKind == nil)
+
+        // In Pencil point entry, Natural can be armed and canceled for the next
+        // staff tap just like Sharp and Flat.
+        state.prepareAccidental(.natural)
+        #expect(state.pendingAccidentalKind == .natural)
+        state.prepareAccidental(.natural)
+        #expect(state.pendingAccidentalKind == nil)
+
+        // Keyboard entry and Previous/Next selection history must not change
+        // the rule: note-entry accidentals remain pending-only. Editing a
+        // selected note is routed separately after leaving note entry.
+        state.noteInputWasActivatedByPencil = false
+        state.lastKeyboardInputCanReceiveAccidental = true
+        state.shouldEditSelectedPitchBeforeContinuingKeyboardInput = true
+        state.prepareAccidental(.natural)
+        #expect(state.pendingAccidentalKind == .natural)
+        state.prepareAccidental(.natural)
+        #expect(state.pendingAccidentalKind == nil)
+    }
+
+    @Test
+    @MainActor
     func noneditableScoreCannotStartInEditMode() {
         let state = ScoreReaderState(
             session: testSession(supportsEditing: false),
@@ -890,7 +940,10 @@ struct MuseReaderiOSTests {
         )
     }
 
-    private func selectedNote(pageIndex: Int) -> ScoreSelectedElement {
+    private func selectedNote(
+        pageIndex: Int,
+        accidentalKind: ScoreAccidentalKind? = nil
+    ) -> ScoreSelectedElement {
         let rect = ScoreNormalizedRect(x: 0.2, y: 0.3, width: 0.05, height: 0.04)
         return ScoreSelectedElement(
             pageIndex: pageIndex,
@@ -914,7 +967,7 @@ struct MuseReaderiOSTests {
             playbackProgram: 0,
             playbackSetupData: "",
             duration: .quarter,
-            accidentalKind: nil,
+            accidentalKind: accidentalKind,
             diatonicStep: 0,
             currentKey: 0,
             currentTimeSignatureNumerator: 4,

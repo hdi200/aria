@@ -43,8 +43,8 @@ final class NativePlaybackController {
     private var durationSeconds: TimeInterval = 0
     private var queuedUntilSeconds: TimeInterval = 0
     private var pendingStartSeconds: TimeInterval = 0
-    private var scheduledStartSeconds: TimeInterval = 0
-    private var playbackStartedAt: Date?
+    private var timelineClock = PlaybackTimelineClock()
+    private var bufferProgress = PlaybackBufferProgress()
     private var isPaused = false
     private var isScheduling = false
     private var schedulingTask: Task<Void, Never>?
@@ -121,8 +121,8 @@ final class NativePlaybackController {
         self.sampleRate = Double(audioData.sampleRate)
         self.durationSeconds = max(durationSeconds, audioData.durationSeconds)
         self.queuedUntilSeconds = pendingStartSeconds
-        self.scheduledStartSeconds = pendingStartSeconds
-        self.playbackStartedAt = nil
+        self.timelineClock.reset(to: pendingStartSeconds)
+        self.bufferProgress.reset(to: pendingStartSeconds)
         self.isPaused = false
         self.scheduledBufferCount = 0
 
@@ -165,7 +165,7 @@ final class NativePlaybackController {
         }
         if playWhenBuffered {
             playWhenBuffered = false
-            playbackStartedAt = nil
+            timelineClock.pauseFallback(at: pendingStartSeconds)
             isPaused = true
             log("pause armed playback position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
             return
@@ -175,8 +175,8 @@ final class NativePlaybackController {
         }
 
         pendingStartSeconds = currentPositionSeconds()
+        timelineClock.pauseFallback(at: pendingStartSeconds)
         playerNode.pause()
-        playbackStartedAt = nil
         isPaused = true
         log("pause position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
     }
@@ -199,9 +199,9 @@ final class NativePlaybackController {
         cancelSchedulingTask()
         revision += 1
         pendingStartSeconds = bounded(positionSeconds)
-        scheduledStartSeconds = pendingStartSeconds
+        timelineClock.reset(to: pendingStartSeconds)
+        bufferProgress.reset(to: pendingStartSeconds)
         queuedUntilSeconds = pendingStartSeconds
-        playbackStartedAt = nil
         playWhenBuffered = false
         isPaused = !wasPlaying
         fillPlaybackQueue(revision: revision)
@@ -224,8 +224,8 @@ final class NativePlaybackController {
         durationSeconds = 0
         queuedUntilSeconds = 0
         pendingStartSeconds = 0
-        scheduledStartSeconds = 0
-        playbackStartedAt = nil
+        timelineClock.reset(to: 0)
+        bufferProgress.reset(to: 0)
         isPaused = false
         isScheduling = false
         scheduledBufferCount = 0
@@ -263,9 +263,9 @@ final class NativePlaybackController {
         cancelSchedulingTask()
         revision += 1
         pendingStartSeconds = currentPosition
-        scheduledStartSeconds = pendingStartSeconds
+        timelineClock.reset(to: pendingStartSeconds)
+        bufferProgress.reset(to: pendingStartSeconds)
         queuedUntilSeconds = pendingStartSeconds
-        playbackStartedAt = nil
         playWhenBuffered = false
         isPaused = !wasPlaying
         isScheduling = false
@@ -296,8 +296,9 @@ final class NativePlaybackController {
             }
 
             self.log("queue fill begin pending=\(self.formatSeconds(self.pendingStartSeconds)) queuedUntil=\(self.formatSeconds(self.queuedUntilSeconds)) duration=\(self.formatSeconds(self.durationSeconds)) revision=\(revision)")
+            let prebufferDuration = self.chunkDurationSeconds * Double(self.prebufferChunks)
             while revision == self.revision,
-                  self.queuedUntilSeconds < max(self.pendingStartSeconds + (self.chunkDurationSeconds * Double(self.prebufferChunks)), self.durationSeconds == 0 ? self.chunkDurationSeconds : min(self.durationSeconds, self.pendingStartSeconds + (self.chunkDurationSeconds * Double(self.prebufferChunks)))) {
+                  self.queuedUntilSeconds < self.bufferProgress.consumedUntilSeconds + prebufferDuration {
                 let startTime = self.queuedUntilSeconds
                 if self.durationSeconds > 0, startTime >= self.durationSeconds {
                     return
@@ -358,9 +359,12 @@ final class NativePlaybackController {
                 guard let self, revision == self.revision else {
                     return
                 }
-                self.pendingStartSeconds = self.bounded(startTime + bufferDuration)
-                self.isPaused = false
-                self.log("buffer complete start=\(self.formatSeconds(startTime)) nextPending=\(self.formatSeconds(self.pendingStartSeconds)) revision=\(revision)")
+                self.bufferProgress.recordConsumedBuffer(
+                    startTimeSeconds: startTime,
+                    durationSeconds: bufferDuration,
+                    playbackDurationSeconds: self.durationSeconds
+                )
+                self.log("buffer consumed start=\(self.formatSeconds(startTime)) consumedUntil=\(self.formatSeconds(self.bufferProgress.consumedUntilSeconds)) revision=\(revision)")
                 self.fillPlaybackQueue(revision: revision)
             }
         }
@@ -410,18 +414,20 @@ final class NativePlaybackController {
            playerNode.isPlaying,
            let nodeTime = playerNode.lastRenderTime,
            let playerTime = playerNode.playerTime(forNodeTime: nodeTime) {
-            return bounded(scheduledStartSeconds + (Double(playerTime.sampleTime) / playerTime.sampleRate))
+            return bounded(timelineClock.positionSeconds(
+                playerSampleTimeSeconds: Double(playerTime.sampleTime) / playerTime.sampleRate
+            ))
         }
 
         if playerNode?.isPlaying == true {
-            return bounded(scheduledStartSeconds)
+            return bounded(timelineClock.positionSeconds(playerSampleTimeSeconds: nil))
         }
 
-        if let playbackStartedAt {
-            return bounded(scheduledStartSeconds + Date().timeIntervalSince(playbackStartedAt))
-        }
-
-        return bounded(pendingStartSeconds)
+        return bounded(bufferProgress.positionWhenNotRendering(
+            capturedPositionSeconds: pendingStartSeconds,
+            playbackDurationSeconds: durationSeconds,
+            isPausedOrWaiting: isPaused || playWhenBuffered
+        ))
     }
 
     private func stopInternally() {
@@ -430,8 +436,8 @@ final class NativePlaybackController {
         revision += 1
         queuedUntilSeconds = 0
         pendingStartSeconds = 0
-        scheduledStartSeconds = 0
-        playbackStartedAt = nil
+        timelineClock.reset(to: 0)
+        bufferProgress.reset(to: 0)
         isPaused = false
         isScheduling = false
         scheduledBufferCount = 0
@@ -452,14 +458,12 @@ final class NativePlaybackController {
         guard queuedUntilSeconds > pendingStartSeconds + 0.001 else {
             playWhenBuffered = true
             isPaused = false
-            playbackStartedAt = nil
-            scheduledStartSeconds = pendingStartSeconds
+            timelineClock.pauseFallback(at: pendingStartSeconds)
             log("play armed waiting for buffer position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
             return
         }
 
-        playbackStartedAt = Date()
-        scheduledStartSeconds = pendingStartSeconds
+        timelineClock.startFallback(at: pendingStartSeconds)
         playWhenBuffered = false
         playerNode.play()
         isPaused = false

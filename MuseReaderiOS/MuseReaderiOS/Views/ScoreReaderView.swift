@@ -273,6 +273,7 @@ struct ScoreReaderView: View {
                                 pendingPitchClass: readerState.pendingPitchClass,
                                 pendingMIDIPitch: readerState.pendingMIDIPitch,
                                 stackedChordInputEnabled: readerState.stackedChordInputEnabled,
+                                showsCompactModeToolbar: !isPhoneInterface,
                                 isBusy: readerState.isEditingActionInFlight,
                                 errorText: nil,
                                 selectModeAction: selectModeFromToolbar,
@@ -639,6 +640,14 @@ struct ScoreReaderView: View {
                     .allowsHitTesting(!isClosingScore)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if readerState.isEditingMode && isPhoneInterface && !plainTextEditorIsActive {
+                compactPhoneModeBar
+            }
+        }
+        .onAppear {
+            updatePhoneOrientation(for: readerState.interactionMode)
+        }
         .task {
             readerState.playbackFollowEnabled = initialRememberedState.playbackFollowEnabled
             let rememberedPartIndex = rememberedPartIndexForInitialLoad()
@@ -651,6 +660,7 @@ struct ScoreReaderView: View {
             await readerState.prepareInitialInteractionMode()
         }
         .onDisappear {
+            unlockPhoneOrientation()
             saveRememberedReaderState()
             readerState.stopMIDIInput()
             readerState.shutdown()
@@ -685,6 +695,7 @@ struct ScoreReaderView: View {
             }
         }
         .onChangeCompatible(of: readerState.interactionMode) { mode in
+            updatePhoneOrientation(for: mode)
             isChromeVisible = true
             if mode != .edit {
                 selectedToolCategory = .select
@@ -958,6 +969,72 @@ struct ScoreReaderView: View {
 
     private var isPhoneInterface: Bool {
         UIDevice.current.userInterfaceIdiom == .phone
+    }
+
+    private var compactPhoneModeBar: some View {
+        ScoreReaderModeToolbar(
+            editingState: readerState.editingState,
+            isBusy: readerState.isEditingActionInFlight,
+            isCompact: true,
+            selectedToolCategory: $selectedToolCategory,
+            selectModeAction: {
+                selectedToolCategory = .select
+                selectModeFromToolbar()
+            },
+            noteInputModeAction: {
+                selectedToolCategory = .notes
+                noteInputModeFromToolbar()
+            },
+            isMeasureSelection: readerState.editingState.selection?.kind == .measure,
+            isSingleMeasureSelection: readerState.editingState.selection?.kind == .measure
+                && readerState.editingState.selection?.isSingleMeasure == true
+        )
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
+        .background {
+            compactPhoneModeBarBackground
+        }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.black.opacity(0.08))
+                .frame(height: 0.5)
+                .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private var compactPhoneModeBarBackground: some View {
+        let shape = Rectangle()
+
+        if #available(iOS 26.0, *) {
+            shape
+                .fill(Color.white.opacity(0.22))
+                .glassEffect(.regular, in: shape)
+                .ignoresSafeArea(.container, edges: .bottom)
+        } else {
+            shape
+                .fill(.regularMaterial)
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
+    }
+
+    private func updatePhoneOrientation(for mode: ScoreReaderInteractionMode) {
+        guard isPhoneInterface else {
+            return
+        }
+
+        MuseReaderAppDelegate.updateSupportedInterfaceOrientations(
+            mode == .edit ? .portrait : .all
+        )
+    }
+
+    private func unlockPhoneOrientation() {
+        guard isPhoneInterface else {
+            return
+        }
+
+        MuseReaderAppDelegate.updateSupportedInterfaceOrientations(.all)
     }
 
     private var floatingPaletteTopPadding: CGFloat {

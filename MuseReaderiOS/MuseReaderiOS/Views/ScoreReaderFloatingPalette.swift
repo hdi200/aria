@@ -273,7 +273,9 @@ struct ScoreReaderFloatingToolPalette: View {
     }
 
     private var selectedAccidental: ScoreAccidentalKind? {
-        editingState.noteInputEnabled ? pendingAccidentalKind : editingState.selection?.accidentalKind
+        editingState.noteInputEnabled
+            ? pendingAccidentalKind
+            : editingState.selection?.accidentalKind
     }
 
     private func preparedPitchClass(for accidentalKind: ScoreAccidentalKind) -> Int? {

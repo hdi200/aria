@@ -11,6 +11,10 @@
         mu::engraving::InputState& inputState = score->inputState();
         inputState.setNoteEntryMethod(mu::engraving::NoteEntryMethod::BY_DURATION);
         inputState.setNoteEntryMode(enabled);
+        // MuseReader's accidental buttons are one-shot for staff/Pencil entry.
+        // Never let MuseScore's persistent InputState carry an accidental across
+        // an iOS note-entry mode transition.
+        inputState.setAccidentalType(mu::engraving::AccidentalType::NONE);
         normalizeNoteEntryDuration(inputState);
         if (enabled) {
             if (mu::engraving::ChordRest* chordRest = selectedOrMeasureChordRest(score)) {
@@ -1842,13 +1846,13 @@
             symNotehead = mu::engraving::Note::noteHead(0, mu::engraving::NoteHeadGroup::HEAD_NORMAL, duration.headType());
             const std::optional<mu::engraving::AccidentalType> accidentalType = accidentalKind >= 0
                 ? accidentalTypeForKind(accidentalKind)
-                : std::nullopt;
+                : std::optional<mu::engraving::AccidentalType>(mu::engraving::AccidentalType::NONE);
             shadowNote.setState(
                 symNotehead,
                 duration,
                 false,
                 position.beyondScore,
-                accidentalType.value_or(inputState.accidentalType()),
+                accidentalType.value_or(mu::engraving::AccidentalType::NONE),
                 inputState.articulationIds()
             );
         }
@@ -2281,30 +2285,29 @@
         inputState.setTrack(requestedTrack);
         inputState.setSegment(position.segment);
 
-        std::optional<mu::engraving::AccidentalType> requestedAccidentalType;
-        const mu::engraving::AccidentalType previousAccidentalType = inputState.accidentalType();
+        std::optional<mu::engraving::AccidentalType> requestedAccidentalType = mu::engraving::AccidentalType::NONE;
         if (accidentalKind.has_value() && !inputState.rest()) {
             requestedAccidentalType = accidentalTypeForKind(*accidentalKind);
             if (!requestedAccidentalType.has_value()) {
                 errorMessage = "MuseReader does not recognize that accidental.";
                 return false;
             }
-            inputState.setAccidentalType(*requestedAccidentalType);
         }
+        // Swift owns the one-shot accidental choice. Explicitly synchronize even
+        // the absence of a choice so a prior MuseScore InputState value cannot
+        // sharpen or flatten a later staff/Pencil note.
+        inputState.setAccidentalType(inputState.rest()
+            ? mu::engraving::AccidentalType::NONE
+            : *requestedAccidentalType);
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader insert note"));
         const muse::Ret insertResult = score->putNote(pagePoint, false, false);
         const bool insertSucceeded = static_cast<bool>(insertResult);
+        inputState.setAccidentalType(mu::engraving::AccidentalType::NONE);
         if (!insertSucceeded) {
-            if (requestedAccidentalType.has_value()) {
-                inputState.setAccidentalType(previousAccidentalType);
-            }
             score->endCmd(true);
             errorMessage = insertResult.text().empty() ? "MuseReader could not place a note at that position." : insertResult.text();
             return false;
-        }
-        if (requestedAccidentalType.has_value()) {
-            inputState.setAccidentalType(previousAccidentalType);
         }
         if (pitchClass.has_value() && !inputState.rest()) {
             if (!applyDiatonicPitchClassToNote(score, lastInputNote(score, false), *pitchClass, preferFlats, errorMessage)) {
@@ -2990,16 +2993,12 @@
 
         mu::engraving::Score* score = activeScore();
         mu::engraving::Note* targetNote = currentSelectedNote(score);
-        if (score->inputState().noteEntryMode()) {
-            if (mu::engraving::Note* inputNote = lastInputNote(score, false)) {
-                const mu::engraving::Segment* lastSegment = score->inputState().lastSegment();
-                const mu::engraving::Segment* selectedSegment = targetNote && targetNote->chord()
-                    ? targetNote->chord()->segment()
-                    : nullptr;
-                if (!targetNote || selectedSegment != lastSegment) {
-                    targetNote = inputNote;
-                }
-            }
+        // This is a selection-based command. Previous/Next navigation may leave
+        // InputState::lastSegment at the newest note while selecting an older
+        // one, so a valid selection must always win. Fall back to the last input
+        // note only when there is no selected note at all.
+        if (!targetNote && score->inputState().noteEntryMode()) {
+            targetNote = lastInputNote(score, false);
         }
         if (!targetNote) {
             errorMessage = "Select a pitched note before changing its accidental.";
@@ -3012,10 +3011,19 @@
             return false;
         }
 
-        score->startCmd(muse::TranslatableString::untranslatable("MuseReader change accidental"));
+        mu::engraving::AccidentalType appliedAccidentalType = *accidentalType;
+        if (appliedAccidentalType != mu::engraving::AccidentalType::NATURAL
+            && targetNote->accidentalType() == appliedAccidentalType) {
+            // Match NotationInteraction::toggleAccidentalForSelection: pressing
+            // the selected Sharp/Flat again removes that explicit accidental.
+            appliedAccidentalType = mu::engraving::AccidentalType::NONE;
+        }
+
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader toggle accidental"));
         score->select(targetNote, mu::engraving::SelectType::SINGLE, targetNote->staffIdx());
-        mu::engraving::EditNote::changeAccidental(score, targetNote, *accidentalType);
+        mu::engraving::EditNote::changeAccidental(score, targetNote, appliedAccidentalType);
         continueNoteInputAfterChord(score, targetNote->chord());
+        score->inputState().setAccidentalType(mu::engraving::AccidentalType::NONE);
         score->endCmd();
         refreshAfterEdit();
         output = makeEditState(score);
