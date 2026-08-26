@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.26)
 
 project(score_render_probe LANGUAGES C CXX)
 
+option(SCORE_RENDER_BUILD_TESTS "Build standalone render-core regression tests." OFF)
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -68,7 +70,7 @@ include(GetPlatformInfo)
 include(${MU_ROOT}/src/framework/cmake/MuseSetupConfiguration.cmake)
 include(${MU_ROOT}/src/framework/audio/thirdparty/fluidsynth/fluidsynth.cmake)
 
-find_package(Qt6 6.3 REQUIRED COMPONENTS Core Gui Svg Qml Network)
+find_package(Qt6 6.3 REQUIRED COMPONENTS Core Gui Svg Qml Quick Widgets Network)
 
 qt_standard_project_setup()
 
@@ -76,6 +78,14 @@ add_subdirectory(${MU_ROOT}/src/framework/global global)
 add_subdirectory(${MU_ROOT}/src/framework/draw draw)
 add_subdirectory(${MU_ROOT}/src/engraving engraving)
 add_subdirectory(${MU_ROOT}/src/importexport/musicxml musicxml)
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # The standalone host build produces iex_musicxml as a shared library. Its
+    # MusicXML text-scaling code calls draw font APIs directly, so declare that
+    # dependency here instead of relying on the final render-core link to
+    # resolve it as the iOS static build does.
+    target_link_libraries(iex_musicxml PRIVATE muse::draw)
+endif()
 
 # Embed the MPE articulation profiles (pizzicato, tremolo, mute, etc.) directly
 # into the render core so it has the same articulation patterns that MuseScore
@@ -187,4 +197,28 @@ else()
     target_link_libraries(score_render_probe PRIVATE
         score_render_core
     )
+
+    if(SCORE_RENDER_BUILD_TESTS)
+        enable_testing()
+
+        add_executable(score_render_accidental_tests
+            tests/score_render_accidental_tests.cpp
+        )
+
+        target_include_directories(score_render_accidental_tests PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}
+        )
+
+        target_link_libraries(score_render_accidental_tests PRIVATE
+            score_render_core
+        )
+
+        add_test(
+            NAME score_render_accidental_tests
+            COMMAND score_render_accidental_tests
+        )
+        set_tests_properties(score_render_accidental_tests PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        )
+    endif()
 endif()

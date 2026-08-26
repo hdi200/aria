@@ -28,6 +28,9 @@ struct LibraryView: View {
     @State private var renameSetlistName = ""
     @State private var scorePendingFolderSelection: ReaderRecentDocument?
     @State private var isOpenSourceLegalPresented = false
+    @AppStorage("LibraryScoreSortOrder") private var scoreSortOrder = LibraryScoreSortOrder.recentlyOpened
+    @AppStorage("LibraryDashboardScoreLayout") private var dashboardScoreLayout = LibraryScoreLayout.medium
+    @AppStorage("LibraryPhoneScoreLayout") private var phoneScoreLayout = LibraryScoreLayout.list
 
     private let sidebarWidth: CGFloat = 286
 
@@ -42,7 +45,7 @@ struct LibraryView: View {
         let baseScores: [ReaderRecentDocument]
         switch selectedCategory {
         case .allScores:
-            baseScores = model.recents.sorted { $0.lastOpened > $1.lastOpened }
+            baseScores = model.recents
         case .setlists, .settings:
             baseScores = []
         case .setlist(let folderID):
@@ -50,18 +53,13 @@ struct LibraryView: View {
                 let scoreKeys = Set(folder.scoreKeys)
                 baseScores = model.recents
                     .filter { scoreKeys.contains($0.setlistKey) || scoreKeys.contains($0.fileReference) }
-                    .sorted { $0.lastOpened > $1.lastOpened }
             } else {
                 baseScores = []
             }
         }
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else {
-            return baseScores
-        }
-
-        return baseScores.filter { score in
+        let filteredScores = query.isEmpty ? baseScores : baseScores.filter { score in
             [
                 score.primaryTitle,
                 score.secondaryLine ?? "",
@@ -70,6 +68,8 @@ struct LibraryView: View {
             .map { $0.lowercased() }
             .contains { $0.contains(query) }
         }
+
+        return scoreSortOrder.sorted(filteredScores)
     }
 
     private var displayedCategoryTitle: String {
@@ -93,6 +93,8 @@ struct LibraryView: View {
                     selectedCategory: $selectedCategory,
                     title: displayedCategoryTitle,
                     searchText: $searchText,
+                    sortOrder: $scoreSortOrder,
+                    scoreLayout: $phoneScoreLayout,
                     folders: model.setlistFolders,
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
@@ -165,6 +167,8 @@ struct LibraryView: View {
                     selectedCategory: selectedCategory,
                     title: displayedCategoryTitle,
                     searchText: $searchText,
+                    sortOrder: $scoreSortOrder,
+                    scoreLayout: $dashboardScoreLayout,
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
                     openAction: openScore,
@@ -495,6 +499,161 @@ private enum LibraryCategory: Equatable {
     }
 }
 
+private enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
+    case recentlyOpened
+    case titleAscending
+    case titleDescending
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .recentlyOpened:
+            return "Recently Opened"
+        case .titleAscending:
+            return "Title A–Z"
+        case .titleDescending:
+            return "Title Z–A"
+        }
+    }
+
+    var compactTitle: String {
+        switch self {
+        case .recentlyOpened:
+            return "Recent"
+        case .titleAscending:
+            return "A–Z"
+        case .titleDescending:
+            return "Z–A"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .recentlyOpened:
+            return "clock"
+        case .titleAscending, .titleDescending:
+            return "textformat.abc"
+        }
+    }
+
+    func sorted(_ scores: [ReaderRecentDocument]) -> [ReaderRecentDocument] {
+        scores.sorted { lhs, rhs in
+            switch self {
+            case .recentlyOpened:
+                if lhs.lastOpened != rhs.lastOpened {
+                    return lhs.lastOpened > rhs.lastOpened
+                }
+                let comparison = compareTitles(lhs, rhs)
+                return comparison == .orderedSame ? lhs.fileReference < rhs.fileReference : comparison == .orderedAscending
+            case .titleAscending:
+                let comparison = compareTitles(lhs, rhs)
+                if comparison != .orderedSame {
+                    return comparison == .orderedAscending
+                }
+                return lhs.lastOpened == rhs.lastOpened ? lhs.fileReference < rhs.fileReference : lhs.lastOpened > rhs.lastOpened
+            case .titleDescending:
+                let comparison = compareTitles(lhs, rhs)
+                if comparison != .orderedSame {
+                    return comparison == .orderedDescending
+                }
+                return lhs.lastOpened == rhs.lastOpened ? lhs.fileReference < rhs.fileReference : lhs.lastOpened > rhs.lastOpened
+            }
+        }
+    }
+
+    private func compareTitles(_ lhs: ReaderRecentDocument, _ rhs: ReaderRecentDocument) -> ComparisonResult {
+        lhs.primaryTitle.localizedStandardCompare(rhs.primaryTitle)
+    }
+}
+
+private enum LibraryScoreLayout: String, CaseIterable, Identifiable {
+    case list
+    case small
+    case medium
+    case large
+    case extraLarge
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .list: return "List"
+        case .small: return "Small Icons"
+        case .medium: return "Medium Icons"
+        case .large: return "Large Icons"
+        case .extraLarge: return "Extra Large Icons"
+        }
+    }
+
+    var compactTitle: String {
+        switch self {
+        case .list: return "List"
+        case .small: return "S"
+        case .medium: return "M"
+        case .large: return "L"
+        case .extraLarge: return "XL"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .list:
+            return "list.bullet"
+        case .small:
+            return "square.grid.3x3"
+        case .medium:
+            return "square.grid.2x2"
+        case .large, .extraLarge:
+            return "rectangle.grid.1x2"
+        }
+    }
+
+    var dashboardColumns: [GridItem] {
+        let sizing: (minimum: CGFloat, maximum: CGFloat, spacing: CGFloat)
+        switch self {
+        case .list:
+            return []
+        case .small:
+            sizing = (118, 145, 16)
+        case .medium:
+            sizing = (170, 195, 24)
+        case .large:
+            sizing = (220, 255, 28)
+        case .extraLarge:
+            sizing = (290, 330, 32)
+        }
+        return [GridItem(.adaptive(minimum: sizing.minimum, maximum: sizing.maximum), spacing: sizing.spacing)]
+    }
+
+    var phoneColumns: [GridItem] {
+        let sizing: (minimum: CGFloat, maximum: CGFloat, spacing: CGFloat)
+        switch self {
+        case .list:
+            return []
+        case .small:
+            sizing = (96, 125, 10)
+        case .medium:
+            sizing = (140, 175, 12)
+        case .large:
+            sizing = (185, 235, 14)
+        case .extraLarge:
+            sizing = (260, 340, 16)
+        }
+        return [GridItem(.adaptive(minimum: sizing.minimum, maximum: sizing.maximum), spacing: sizing.spacing)]
+    }
+
+    var gridSpacing: CGFloat {
+        switch self {
+        case .list: return 0
+        case .small: return 18
+        case .medium: return 24
+        case .large: return 28
+        case .extraLarge: return 32
+        }
+    }
+}
+
 private struct FolderScoreAddRequest: Identifiable {
     let id: UUID
 }
@@ -770,6 +929,8 @@ private struct PhoneLibraryView: View {
     @Binding var selectedCategory: LibraryCategory
     let title: String
     @Binding var searchText: String
+    @Binding var sortOrder: LibraryScoreSortOrder
+    @Binding var scoreLayout: LibraryScoreLayout
     let folders: [LibrarySetlistFolder]
     let createAction: () -> Void
     let importAction: () -> Void
@@ -887,15 +1048,35 @@ private struct PhoneLibraryView: View {
                             .accessibilityLabel("Add Scores to Folder")
                         }
                     }
-                    PhoneScoreList(
-                        scores: scores,
-                        openAction: openAction,
-                        editInfoAction: editInfoAction,
-                        deleteAction: deleteAction,
-                        activeFolder: activeFolder,
-                        addToFolderAction: addToFolderAction,
-                        removeFromFolderAction: removeFromFolderAction
+                    LibraryScoreDisplayBar(
+                        scoreCount: scores.count,
+                        sortOrder: $sortOrder,
+                        scoreLayout: $scoreLayout,
+                        isCompact: true
                     )
+
+                    if scoreLayout == .list {
+                        PhoneScoreList(
+                            scores: scores,
+                            openAction: openAction,
+                            editInfoAction: editInfoAction,
+                            deleteAction: deleteAction,
+                            activeFolder: activeFolder,
+                            addToFolderAction: addToFolderAction,
+                            removeFromFolderAction: removeFromFolderAction
+                        )
+                    } else {
+                        PhoneScoreGrid(
+                            scores: scores,
+                            scoreLayout: scoreLayout,
+                            openAction: openAction,
+                            editInfoAction: editInfoAction,
+                            deleteAction: deleteAction,
+                            activeFolder: activeFolder,
+                            addToFolderAction: addToFolderAction,
+                            removeFromFolderAction: removeFromFolderAction
+                        )
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -1093,7 +1274,7 @@ private struct PhoneScoreList: View {
     let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        LazyVStack(spacing: 0) {
             ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
                 PhoneScoreListRow(
                     score: score,
@@ -1120,6 +1301,35 @@ private struct PhoneScoreList: View {
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+        }
+    }
+}
+
+private struct PhoneScoreGrid: View {
+    let scores: [ReaderRecentDocument]
+    let scoreLayout: LibraryScoreLayout
+    let openAction: (ReaderRecentDocument) -> Void
+    let editInfoAction: (ReaderRecentDocument) -> Void
+    let deleteAction: (ReaderRecentDocument) -> Void
+    let activeFolder: LibrarySetlistFolder?
+    let addToFolderAction: (ReaderRecentDocument) -> Void
+    let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: scoreLayout.phoneColumns, alignment: .leading, spacing: scoreLayout.gridSpacing) {
+            ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
+                LibraryScoreCard(
+                    score: score,
+                    paletteIndex: index,
+                    openAction: { openAction(score) },
+                    editInfoAction: { editInfoAction(score) },
+                    deleteAction: { deleteAction(score) },
+                    addToFolderAction: { addToFolderAction(score) },
+                    removeFromFolderAction: activeFolder.map { folder in
+                        { removeFromFolderAction(score, folder) }
+                    }
+                )
+            }
         }
     }
 }
@@ -1298,16 +1508,14 @@ private struct LibraryDashboardView: View {
     let selectedCategory: LibraryCategory
     let title: String
     @Binding var searchText: String
+    @Binding var sortOrder: LibraryScoreSortOrder
+    @Binding var scoreLayout: LibraryScoreLayout
     let createAction: () -> Void
     let importAction: () -> Void
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
     let openSourceAction: () -> Void
-
-    private let columns = [
-        GridItem(.adaptive(minimum: 170, maximum: 195), spacing: 24)
-    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1318,6 +1526,15 @@ private struct LibraryDashboardView: View {
                 importAction: importAction
             )
 
+            if selectedCategory != .settings {
+                LibraryScoreDisplayBar(
+                    scoreCount: scores.count,
+                    sortOrder: $sortOrder,
+                    scoreLayout: $scoreLayout,
+                    isCompact: false
+                )
+            }
+
             ScrollView {
                 if selectedCategory == .settings {
                     LibrarySettingsContent(openSourceAction: openSourceAction)
@@ -1325,8 +1542,16 @@ private struct LibraryDashboardView: View {
                 } else if scores.isEmpty {
                     LibraryEmptyState(createAction: createAction, importAction: importAction, selectedCategory: selectedCategory)
                         .padding(36)
+                } else if scoreLayout == .list {
+                    LibraryScoreList(
+                        scores: scores,
+                        openAction: openAction,
+                        editInfoAction: editInfoAction,
+                        deleteAction: deleteAction
+                    )
+                    .padding(34)
                 } else {
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 28) {
+                    LazyVGrid(columns: scoreLayout.dashboardColumns, alignment: .leading, spacing: scoreLayout.gridSpacing) {
                         ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
                             LibraryScoreCard(
                                 score: score,
@@ -1342,6 +1567,186 @@ private struct LibraryDashboardView: View {
             }
         }
         .background(LibraryPalette.mainBackground)
+    }
+}
+
+private struct LibraryScoreDisplayBar: View {
+    let scoreCount: Int
+    @Binding var sortOrder: LibraryScoreSortOrder
+    @Binding var scoreLayout: LibraryScoreLayout
+    let isCompact: Bool
+
+    private var scoreCountLabel: String {
+        "\(scoreCount) \(scoreCount == 1 ? "score" : "scores")"
+    }
+
+    var body: some View {
+        HStack(spacing: isCompact ? 8 : 12) {
+            Text(scoreCountLabel)
+                .font(.system(size: isCompact ? 13 : 14, weight: .semibold))
+                .foregroundStyle(LibraryPalette.mutedInk)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Menu {
+                Picker("Sort Order", selection: $sortOrder) {
+                    ForEach(LibraryScoreSortOrder.allCases) { option in
+                        Label(option.title, systemImage: option.systemImage)
+                            .tag(option)
+                    }
+                }
+            } label: {
+                LibraryDisplayMenuLabel(
+                    systemImage: "arrow.up.arrow.down",
+                    title: isCompact ? sortOrder.compactTitle : sortOrder.title,
+                    accessibilityLabel: "Sort: \(sortOrder.title)",
+                    isCompact: isCompact
+                )
+            }
+
+            Menu {
+                Picker("View", selection: $scoreLayout) {
+                    ForEach(LibraryScoreLayout.allCases) { option in
+                        Label(option.title, systemImage: option.systemImage)
+                            .tag(option)
+                    }
+                }
+            } label: {
+                LibraryDisplayMenuLabel(
+                    systemImage: scoreLayout.systemImage,
+                    title: isCompact ? scoreLayout.compactTitle : scoreLayout.title,
+                    accessibilityLabel: "View: \(scoreLayout.title)",
+                    isCompact: isCompact
+                )
+            }
+        }
+        .padding(.horizontal, isCompact ? 2 : 34)
+        .frame(height: isCompact ? 42 : 52)
+        .background(isCompact ? Color.clear : LibraryPalette.background)
+        .overlay(alignment: .bottom) {
+            if !isCompact {
+                Rectangle()
+                    .fill(LibraryPalette.divider)
+                    .frame(height: 1)
+            }
+        }
+    }
+}
+
+private struct LibraryDisplayMenuLabel: View {
+    let systemImage: String
+    let title: String
+    let accessibilityLabel: String
+    let isCompact: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+
+            Text(title)
+                .font(.system(size: isCompact ? 13 : 14, weight: .semibold))
+                .lineLimit(1)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(LibraryPalette.subtle)
+        }
+        .foregroundStyle(LibraryPalette.mutedInk)
+        .padding(.horizontal, isCompact ? 9 : 12)
+        .frame(height: isCompact ? 32 : 34)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+        }
+        .contentShape(Rectangle())
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct LibraryScoreList: View {
+    let scores: [ReaderRecentDocument]
+    let openAction: (ReaderRecentDocument) -> Void
+    let editInfoAction: (ReaderRecentDocument) -> Void
+    let deleteAction: (ReaderRecentDocument) -> Void
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
+                LibraryScoreListRow(
+                    score: score,
+                    openAction: { openAction(score) },
+                    editInfoAction: { editInfoAction(score) },
+                    deleteAction: { deleteAction(score) }
+                )
+
+                if index < scores.count - 1 {
+                    Rectangle()
+                        .fill(LibraryPalette.divider)
+                        .frame(height: 1)
+                        .padding(.leading, 18)
+                }
+            }
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+        }
+    }
+}
+
+private struct LibraryScoreListRow: View {
+    let score: ReaderRecentDocument
+    let openAction: () -> Void
+    let editInfoAction: () -> Void
+    let deleteAction: () -> Void
+
+    var body: some View {
+        Button(action: openAction) {
+            HStack(spacing: 14) {
+                Text(score.primaryTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.ink)
+                    .lineLimit(1)
+
+                if let secondaryLine = score.secondaryLine?.trimmedToNil {
+                    Text(secondaryLine)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(LibraryPalette.mutedInk)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Text(score.format.rawValue.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.subtle)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.subtle)
+            }
+            .padding(.horizontal, 18)
+            .frame(height: 56)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(action: editInfoAction) {
+                Label("Edit Info", systemImage: "square.and.pencil")
+            }
+            Button(role: .destructive, action: deleteAction) {
+                Label("Delete Score", systemImage: "trash")
+            }
+        }
+        .onDrag {
+            NSItemProvider(object: score.setlistKey as NSString)
+        }
     }
 }
 
@@ -1493,8 +1898,28 @@ private struct LibraryScoreCard: View {
     let openAction: () -> Void
     let editInfoAction: () -> Void
     let deleteAction: () -> Void
+    let addToFolderAction: (() -> Void)?
+    let removeFromFolderAction: (() -> Void)?
 
     @State private var isInfoPresented = false
+
+    init(
+        score: ReaderRecentDocument,
+        paletteIndex: Int,
+        openAction: @escaping () -> Void,
+        editInfoAction: @escaping () -> Void,
+        deleteAction: @escaping () -> Void,
+        addToFolderAction: (() -> Void)? = nil,
+        removeFromFolderAction: (() -> Void)? = nil
+    ) {
+        self.score = score
+        self.paletteIndex = paletteIndex
+        self.openAction = openAction
+        self.editInfoAction = editInfoAction
+        self.deleteAction = deleteAction
+        self.addToFolderAction = addToFolderAction
+        self.removeFromFolderAction = removeFromFolderAction
+    }
 
     private var palette: (fill: Color, icon: Color) {
         LibraryPalette.cardPalettes[paletteIndex % LibraryPalette.cardPalettes.count]
@@ -1533,6 +1958,16 @@ private struct LibraryScoreCard: View {
             .contextMenu {
                 Button(action: editInfoAction) {
                     Label("Edit Info", systemImage: "square.and.pencil")
+                }
+                if let addToFolderAction {
+                    Button(action: addToFolderAction) {
+                        Label("Add to Folder", systemImage: "folder.badge.plus")
+                    }
+                }
+                if let removeFromFolderAction {
+                    Button(action: removeFromFolderAction) {
+                        Label("Remove from Folder", systemImage: "folder.badge.minus")
+                    }
                 }
                 Button(role: .destructive, action: deleteAction) {
                     Label("Delete Score", systemImage: "trash")
