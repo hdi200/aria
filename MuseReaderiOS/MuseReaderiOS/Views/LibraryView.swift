@@ -643,6 +643,15 @@ private enum LibraryScoreLayout: String, CaseIterable, Identifiable {
         return [GridItem(.adaptive(minimum: sizing.minimum, maximum: sizing.maximum), spacing: sizing.spacing)]
     }
 
+    var phoneGridAlignment: HorizontalAlignment {
+        switch self {
+        case .large, .extraLarge:
+            return .center
+        case .list, .small, .medium:
+            return .leading
+        }
+    }
+
     var gridSpacing: CGFloat {
         switch self {
         case .list: return 0
@@ -1316,7 +1325,11 @@ private struct PhoneScoreGrid: View {
     let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
 
     var body: some View {
-        LazyVGrid(columns: scoreLayout.phoneColumns, alignment: .leading, spacing: scoreLayout.gridSpacing) {
+        LazyVGrid(
+            columns: scoreLayout.phoneColumns,
+            alignment: scoreLayout.phoneGridAlignment,
+            spacing: scoreLayout.gridSpacing
+        ) {
             ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
                 LibraryScoreCard(
                     score: score,
