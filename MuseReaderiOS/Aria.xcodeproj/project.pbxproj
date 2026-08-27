@@ -24,6 +24,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		6D60B4C22FC4F69B007C2FEE /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 		6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Aria-Info.plist"; sourceTree = "<group>"; };
 		6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
 		6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
@@ -81,6 +82,7 @@
 				6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */,
 				6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */,
 				6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */,
+				6D60B4C22FC4F69B007C2FEE /* Products.storekit */,
 				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
 				6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */,
 				6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */,
@@ -437,7 +439,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -473,7 +475,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.8;
+				MARKETING_VERSION = 3.9;
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";
@@ -617,7 +619,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -653,7 +655,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.8;
+				MARKETING_VERSION = 3.9;
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";

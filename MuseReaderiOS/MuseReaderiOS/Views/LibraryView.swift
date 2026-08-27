@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var model: MuseReaderAppModel
+    @ObservedObject private var accessController: LibraryAccessController
 
     @State private var searchText = ""
     @State private var selectedCategory: LibraryCategory = .allScores
@@ -33,6 +34,11 @@ struct LibraryView: View {
     @AppStorage("LibraryPhoneScoreLayout") private var phoneScoreLayout = LibraryScoreLayout.list
 
     private let sidebarWidth: CGFloat = 286
+
+    init(model: MuseReaderAppModel) {
+        self.model = model
+        _accessController = ObservedObject(wrappedValue: model.libraryAccessController)
+    }
 
     private var activeSetlistFolder: LibrarySetlistFolder? {
         guard case .setlist(let folderID) = selectedCategory else {
@@ -119,7 +125,12 @@ struct LibraryView: View {
                     },
                     openSourceAction: {
                         isOpenSourceLegalPresented = true
-                    }
+                    },
+                    accessStatus: accessController.status,
+                    accessDisplayPrice: accessController.displayPrice,
+                    managedScoreCount: model.managedScoreCount,
+                    freeScoreLimit: model.freeScoreLimit,
+                    unlockAction: model.presentUnlimitedScoresFromSettings
                 )
                 .background(LibraryPalette.mainBackground.ignoresSafeArea())
                 .overlay {
@@ -176,7 +187,12 @@ struct LibraryView: View {
                     deleteAction: { scorePendingDeletion = $0 },
                     openSourceAction: {
                         isOpenSourceLegalPresented = true
-                    }
+                    },
+                    accessStatus: accessController.status,
+                    accessDisplayPrice: accessController.displayPrice,
+                    managedScoreCount: model.managedScoreCount,
+                    freeScoreLimit: model.freeScoreLimit,
+                    unlockAction: model.presentUnlimitedScoresFromSettings
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(LibraryPalette.mainBackground)
@@ -192,12 +208,17 @@ struct LibraryView: View {
         )
         .task {
             await model.refreshVisibleLibrary()
+            model.presentEarlySupporterMessageIfNeeded()
+        }
+        .onChangeCompatible(of: accessController.status) { _ in
+            model.presentEarlySupporterMessageIfNeeded()
         }
         .onChangeCompatible(of: scenePhase) { phase in
             guard phase == .active else {
                 return
             }
             Task {
+                await accessController.refreshEntitlements()
                 await model.refreshVisibleLibrary()
             }
         }
@@ -303,6 +324,7 @@ struct LibraryView: View {
                 return false
             }
             .onDisappear {
+                model.createScoreFlowDidDismiss()
                 guard let pendingPresentation = pendingCreatedReaderPresentation else {
                     return
                 }
@@ -329,6 +351,20 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $isOpenSourceLegalPresented) {
             OpenSourceLegalView()
+        }
+        .sheet(item: $model.libraryAccessSheet) { sheet in
+            switch sheet {
+            case .paywall(let context):
+                LibraryPaywallView(
+                    model: model,
+                    accessController: accessController,
+                    context: context
+                )
+            case .importReview(let review):
+                ScoreImportReviewSheet(model: model, review: review)
+            case .earlySupporter:
+                EarlySupporterAccessView()
+            }
         }
         .sheet(item: $folderPendingScoreAdd) { request in
             if let folder = model.setlistFolders.first(where: { $0.id == request.id }) {
@@ -366,7 +402,9 @@ struct LibraryView: View {
 
     private var visibleErrorAlert: Binding<ReaderAlert?> {
         Binding {
-            model.isCreateScorePresented || readerPresentation != nil ? nil : model.errorAlert
+            model.isCreateScorePresented || readerPresentation != nil || model.libraryAccessSheet != nil
+                ? nil
+                : model.errorAlert
         } set: { alert in
             model.errorAlert = alert
         }
@@ -667,7 +705,7 @@ private struct FolderScoreAddRequest: Identifiable {
     let id: UUID
 }
 
-private enum LibraryPalette {
+enum LibraryPalette {
     static let accent = Color(red: 0.00, green: 0.48, blue: 1.00)
     static let accentSoft = Color(red: 0.89, green: 0.95, blue: 1.00)
     static let background = Color.white
@@ -802,7 +840,7 @@ private struct LibraryBrandHeader: View {
     }
 }
 
-private struct AriaLogoMark: View {
+struct AriaLogoMark: View {
     let size: CGFloat
     let cornerRadius: CGFloat
 
@@ -953,6 +991,11 @@ private struct PhoneLibraryView: View {
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
     let openSourceAction: () -> Void
+    let accessStatus: LibraryAccessStatus
+    let accessDisplayPrice: String?
+    let managedScoreCount: Int
+    let freeScoreLimit: Int
+    let unlockAction: () -> Void
 
     private var activeTab: PhoneTab {
         switch selectedCategory {
@@ -1016,6 +1059,17 @@ private struct PhoneLibraryView: View {
                     PhoneSearchField(text: $searchText)
                 }
 
+                if selectedCategory == .allScores, accessStatus == .free {
+                    HStack {
+                        FreeScoreAllowancePill(used: managedScoreCount, limit: freeScoreLimit)
+                        Spacer(minLength: 0)
+                    }
+
+                    if managedScoreCount >= freeScoreLimit {
+                        FreeLibraryFullNotice(unlockAction: unlockAction)
+                    }
+                }
+
                 // ── Content area ────────────────────────────────────────
                 if selectedCategory == .setlists {
                     PhoneSetlistContent(
@@ -1025,7 +1079,12 @@ private struct PhoneLibraryView: View {
                         renameFolderAction: renameFolderAction
                     )
                 } else if activeTab == .settings {
-                    PhoneSettingsContent(openSourceAction: openSourceAction)
+                    PhoneSettingsContent(
+                        accessStatus: accessStatus,
+                        accessDisplayPrice: accessDisplayPrice,
+                        unlockAction: unlockAction,
+                        openSourceAction: openSourceAction
+                    )
                 } else if showsScoreList {
                     if let activeFolder {
                         HStack(alignment: .center, spacing: 12) {
@@ -1479,6 +1538,9 @@ private struct FolderScorePickerSheet: View {
 }
 
 private struct PhoneSettingsContent: View {
+    let accessStatus: LibraryAccessStatus
+    let accessDisplayPrice: String?
+    let unlockAction: () -> Void
     let openSourceAction: () -> Void
 
     var body: some View {
@@ -1486,6 +1548,12 @@ private struct PhoneSettingsContent: View {
             Text("Settings")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(LibraryPalette.ink)
+
+            LibraryAccessSettingsCard(
+                status: accessStatus,
+                displayPrice: accessDisplayPrice,
+                unlockAction: unlockAction
+            )
 
             Button(action: openSourceAction) {
                 HStack(spacing: 14) {
@@ -1529,6 +1597,11 @@ private struct LibraryDashboardView: View {
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
     let openSourceAction: () -> Void
+    let accessStatus: LibraryAccessStatus
+    let accessDisplayPrice: String?
+    let managedScoreCount: Int
+    let freeScoreLimit: Int
+    let unlockAction: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1544,13 +1617,32 @@ private struct LibraryDashboardView: View {
                     scoreCount: scores.count,
                     sortOrder: $sortOrder,
                     scoreLayout: $scoreLayout,
-                    isCompact: false
+                    isCompact: false,
+                    freeScoreUsage: selectedCategory == .allScores && accessStatus == .free
+                        ? managedScoreCount
+                        : nil,
+                    freeScoreLimit: freeScoreLimit
                 )
+            }
+
+            if selectedCategory == .allScores,
+               accessStatus == .free,
+               managedScoreCount >= freeScoreLimit
+            {
+                FreeLibraryFullNotice(unlockAction: unlockAction)
+                    .padding(.horizontal, 34)
+                    .padding(.vertical, 10)
+                    .background(LibraryPalette.background)
             }
 
             ScrollView {
                 if selectedCategory == .settings {
-                    LibrarySettingsContent(openSourceAction: openSourceAction)
+                    LibrarySettingsContent(
+                        accessStatus: accessStatus,
+                        accessDisplayPrice: accessDisplayPrice,
+                        unlockAction: unlockAction,
+                        openSourceAction: openSourceAction
+                    )
                         .padding(34)
                 } else if scores.isEmpty {
                     LibraryEmptyState(createAction: createAction, importAction: importAction, selectedCategory: selectedCategory)
@@ -1588,6 +1680,8 @@ private struct LibraryScoreDisplayBar: View {
     @Binding var sortOrder: LibraryScoreSortOrder
     @Binding var scoreLayout: LibraryScoreLayout
     let isCompact: Bool
+    var freeScoreUsage: Int? = nil
+    var freeScoreLimit: Int = LibraryAccessPolicy.freeScoreLimit
 
     private var scoreCountLabel: String {
         "\(scoreCount) \(scoreCount == 1 ? "score" : "scores")"
@@ -1599,6 +1693,10 @@ private struct LibraryScoreDisplayBar: View {
                 .font(.system(size: isCompact ? 13 : 14, weight: .semibold))
                 .foregroundStyle(LibraryPalette.mutedInk)
                 .lineLimit(1)
+
+            if let freeScoreUsage {
+                FreeScoreAllowancePill(used: freeScoreUsage, limit: freeScoreLimit)
+            }
 
             Spacer(minLength: 8)
 
@@ -1764,10 +1862,20 @@ private struct LibraryScoreListRow: View {
 }
 
 private struct LibrarySettingsContent: View {
+    let accessStatus: LibraryAccessStatus
+    let accessDisplayPrice: String?
+    let unlockAction: () -> Void
     let openSourceAction: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            LibraryAccessSettingsCard(
+                status: accessStatus,
+                displayPrice: accessDisplayPrice,
+                unlockAction: unlockAction
+            )
+            .frame(width: 420)
+
             Button(action: openSourceAction) {
                 HStack(spacing: 14) {
                     Image(systemName: "doc.text")

@@ -17,6 +17,7 @@ enum ManagedScoreLibraryError: LocalizedError {
     case missingDocument
     case couldNotCreateStorage
     case missingTemplate(String)
+    case replacementFailed
 
     var errorDescription: String? {
         switch self {
@@ -30,6 +31,8 @@ enum ManagedScoreLibraryError: LocalizedError {
             return "Aria could not create its internal score library."
         case .missingTemplate(let name):
             return "Aria could not find the \(name) score template."
+        case .replacementFailed:
+            return "Aria could not safely replace the existing score."
         }
     }
 }
@@ -39,6 +42,7 @@ enum ManagedScoreLibraryPaths {
     static let previousNestedVisibleRootDirectoryName = "Aria"
     static let itemsDirectoryName = "Scores"
     static let indexFileName = "library-index.json"
+    static let replacementStagingDirectoryName = ".AriaImportStaging"
 
     static func privateRootURL(fileManager: FileManager = .default) throws -> URL {
         guard let applicationSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
@@ -157,6 +161,151 @@ struct ManagedScoreLibrary {
             canonicalURL: canonicalURL,
             relativeMainFilePath: relativePath
         )
+    }
+
+    func preferredStoredFileName(for sourceURL: URL) -> String {
+        let sanitizedSourceName = sanitizedFileName(sourceURL.lastPathComponent)
+        switch sourceURL.pathExtension.lowercased() {
+        case ScoreFileFormat.mxl.rawValue, ScoreFileFormat.musicxml.rawValue, "xml":
+            let baseName = (sanitizedSourceName as NSString).deletingPathExtension.trimmedToNil ?? "Score"
+            return "\(baseName).\(ScoreFileFormat.mscz.rawValue)"
+        default:
+            return sanitizedSourceName
+        }
+    }
+
+    func stageDocumentForReplacement(from sourceURL: URL) throws -> ManagedLibraryDocument {
+        guard sourceURL.isFileURL else {
+            throw ManagedScoreLibraryError.invalidLocation
+        }
+
+        try prepareStorageIfNeeded()
+        let stagingRootURL = try replacementStagingRootURL()
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: stagingRootURL, withIntermediateDirectories: true, attributes: nil)
+
+        let fileExtension = sourceURL.pathExtension.lowercased()
+        let canonicalURL: URL
+        do {
+            switch fileExtension {
+            case ScoreFileFormat.mscz.rawValue, ScoreFileFormat.mxl.rawValue, ScoreFileFormat.musicxml.rawValue, "xml":
+                let destinationURL = stagingRootURL.appendingPathComponent(
+                    sanitizedFileName(sourceURL.lastPathComponent),
+                    isDirectory: false
+                )
+                try coordinatedRead(from: sourceURL) { coordinatedURL in
+                    try fileManager.copyItem(at: coordinatedURL, to: destinationURL)
+                }
+                canonicalURL = destinationURL
+            case ScoreFileFormat.mscx.rawValue:
+                let sourceContainerURL = sourceURL.deletingLastPathComponent()
+                let containerName = sanitizedFileName(
+                    sourceContainerURL.lastPathComponent.trimmedToNil
+                        ?? sourceURL.deletingPathExtension().lastPathComponent
+                )
+                let destinationContainerURL = stagingRootURL.appendingPathComponent(containerName, isDirectory: true)
+                do {
+                    try coordinatedRead(from: sourceContainerURL) { coordinatedURL in
+                        try fileManager.copyItem(at: coordinatedURL, to: destinationContainerURL)
+                    }
+                } catch {
+                    try fileManager.createDirectory(
+                        at: destinationContainerURL,
+                        withIntermediateDirectories: true,
+                        attributes: nil
+                    )
+                    let destinationURL = destinationContainerURL.appendingPathComponent(
+                        sanitizedFileName(sourceURL.lastPathComponent),
+                        isDirectory: false
+                    )
+                    try coordinatedRead(from: sourceURL) { coordinatedURL in
+                        try fileManager.copyItem(at: coordinatedURL, to: destinationURL)
+                    }
+                }
+                canonicalURL = destinationContainerURL.appendingPathComponent(
+                    sanitizedFileName(sourceURL.lastPathComponent),
+                    isDirectory: false
+                )
+            default:
+                throw ManagedScoreLibraryError.unsupportedFormat(fileExtension.isEmpty ? "unknown" : fileExtension)
+            }
+
+            guard fileManager.fileExists(atPath: canonicalURL.path) else {
+                throw ManagedScoreLibraryError.missingDocument
+            }
+
+            return ManagedLibraryDocument(
+                canonicalURL: canonicalURL,
+                relativeMainFilePath: try relativePath(for: canonicalURL).requiredLibraryPath()
+            )
+        } catch {
+            try? fileManager.removeItem(at: stagingRootURL)
+            throw error
+        }
+    }
+
+    func stagedPackagedDocumentDestination(
+        preferredName: String,
+        alongside stagedDocument: ManagedLibraryDocument
+    ) throws -> ManagedLibraryDocument {
+        let operationRootURL = try replacementOperationRootURL(for: stagedDocument)
+        let baseName = preferredName.trimmedToNil ?? "Score"
+        let destinationURL = uniqueDestinationURL(
+            for: "\(baseName).\(ScoreFileFormat.mscz.rawValue)",
+            in: operationRootURL,
+            isDirectory: false
+        )
+        return ManagedLibraryDocument(
+            canonicalURL: destinationURL,
+            relativeMainFilePath: try relativePath(for: destinationURL).requiredLibraryPath()
+        )
+    }
+
+    func replaceDocument(
+        with stagedDocument: ManagedLibraryDocument,
+        replacing existingDocument: ManagedLibraryDocument
+    ) throws -> ManagedLibraryDocument {
+        let stagedItemURL = containerURLForRemoval(of: stagedDocument.canonicalURL)
+        let existingItemURL = containerURLForRemoval(of: existingDocument.canonicalURL)
+        let operationRootURL = try replacementOperationRootURL(for: stagedDocument)
+        let backupName = ".AriaReplacementBackup-\(UUID().uuidString)"
+        let backupURL = existingItemURL.deletingLastPathComponent()
+            .appendingPathComponent(backupName, isDirectory: existingItemURL.hasDirectoryPath)
+
+        guard fileManager.fileExists(atPath: stagedItemURL.path),
+              fileManager.fileExists(atPath: existingItemURL.path)
+        else {
+            throw ManagedScoreLibraryError.missingDocument
+        }
+
+        do {
+            _ = try fileManager.replaceItemAt(
+                existingItemURL,
+                withItemAt: stagedItemURL,
+                backupItemName: backupName,
+                options: [.usingNewMetadataOnly]
+            )
+            guard fileManager.fileExists(atPath: existingDocument.canonicalURL.path) else {
+                throw ManagedScoreLibraryError.replacementFailed
+            }
+            try? fileManager.removeItem(at: backupURL)
+            try? fileManager.removeItem(at: operationRootURL)
+            return existingDocument
+        } catch {
+            if fileManager.fileExists(atPath: backupURL.path) {
+                try? fileManager.removeItem(at: existingItemURL)
+                try? fileManager.moveItem(at: backupURL, to: existingItemURL)
+            }
+            try? fileManager.removeItem(at: operationRootURL)
+            throw error
+        }
+    }
+
+    func discardStagedDocument(_ stagedDocument: ManagedLibraryDocument) {
+        guard let operationRootURL = try? replacementOperationRootURL(for: stagedDocument) else {
+            return
+        }
+        try? fileManager.removeItem(at: operationRootURL)
     }
 
     func createDocument(fromTemplate template: NewScoreTemplateChoice) throws -> ManagedLibraryDocument {
@@ -396,6 +545,23 @@ struct ManagedScoreLibrary {
         if let capturedError {
             throw capturedError
         }
+    }
+
+    private func replacementStagingRootURL() throws -> URL {
+        try ManagedScoreLibraryPaths.itemsRootURL(fileManager: fileManager)
+            .appendingPathComponent(ManagedScoreLibraryPaths.replacementStagingDirectoryName, isDirectory: true)
+    }
+
+    private func replacementOperationRootURL(for stagedDocument: ManagedLibraryDocument) throws -> URL {
+        let stagingRootURL = try replacementStagingRootURL().standardizedFileURL
+        let stagedURL = stagedDocument.canonicalURL.standardizedFileURL
+        let relativePath = stagedURL.path.dropFirst(stagingRootURL.path.count)
+        guard stagedURL.path.hasPrefix(stagingRootURL.path + "/"),
+              let operationName = relativePath.split(separator: "/").first
+        else {
+            throw ManagedScoreLibraryError.invalidLocation
+        }
+        return stagingRootURL.appendingPathComponent(String(operationName), isDirectory: true)
     }
 
     private static let supportedScoreExtensions: Set<String> = [

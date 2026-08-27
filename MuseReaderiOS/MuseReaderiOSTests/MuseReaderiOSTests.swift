@@ -21,6 +21,157 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func simulatorAccessOverrideParsesBothXcodeArgumentForms() {
+        #expect(
+            LibraryAccessSimulationOverride.fromLaunchArguments([
+                "Aria", "-AriaAccessOverride", "earlySupporter"
+            ]) == .earlySupporter
+        )
+        #expect(
+            LibraryAccessSimulationOverride.fromLaunchArguments([
+                "Aria", "-AriaAccessOverride=familyShared"
+            ]) == .familyShared
+        )
+        #expect(
+            LibraryAccessSimulationOverride.fromLaunchArguments([
+                "Aria", "-AriaAccessOverride", "invalid"
+            ]) == nil
+        )
+    }
+
+    @Test
+    func libraryAccessPolicyGrandfathersBuildOne() {
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "1",
+                purchaseReason: nil
+            ) == .unlimited(.earlySupporter)
+        )
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "1.0",
+                purchaseReason: nil
+            ) == .unlimited(.earlySupporter)
+        )
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "2",
+                purchaseReason: nil
+            ) == .free
+        )
+    }
+
+    @Test
+    func verifiedPurchaseAndFamilySharingUnlockNewUsers() {
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "2",
+                purchaseReason: .purchased
+            ) == .unlimited(.purchased)
+        )
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "2",
+                purchaseReason: .familyShared
+            ) == .unlimited(.familyShared)
+        )
+    }
+
+    @Test @MainActor
+    func cachedVerifiedAccessPreservesOfflineContinuity() throws {
+        let suiteName = "LibraryAccessControllerTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            UnlimitedScoresReason.purchased.rawValue,
+            forKey: "Aria.LibraryAccess.VerifiedUnlimitedReason"
+        )
+
+        let controller = LibraryAccessController(userDefaults: defaults)
+        #expect(controller.status == .unlimited(.purchased))
+    }
+
+    @Test
+    func scoreAllowanceAccountsForReservationsAndOverLimitLibraries() {
+        let freeAllowance = LibraryScoreAllowance(
+            status: .free,
+            usedScoreCount: 1,
+            reservedScoreCount: 1,
+            freeLimit: 2
+        )
+        #expect(freeAllowance.remainingSlots == 0)
+        #expect(!freeAllowance.canReserve(1))
+
+        let refundedAllowance = LibraryScoreAllowance(
+            status: .free,
+            usedScoreCount: 5,
+            reservedScoreCount: 0,
+            freeLimit: 2
+        )
+        #expect(refundedAllowance.remainingSlots == 0)
+
+        let unlimitedAllowance = LibraryScoreAllowance(
+            status: .unlimited(.purchased),
+            usedScoreCount: 2_500,
+            reservedScoreCount: 0,
+            freeLimit: 2
+        )
+        #expect(unlimitedAllowance.canReserve(100))
+    }
+
+    @Test
+    func importReviewSeparatesReplacementsCapacityAndDuplicateNames() {
+        let replacement = ScoreImportCandidate(
+            url: URL(fileURLWithPath: "/tmp/Autumn Leaves.mscz"),
+            destinationFileName: "Autumn Leaves.mscz",
+            disposition: .replace(
+                relativePath: "Scores/Autumn Leaves.mscz",
+                existingFileReference: "old-reference"
+            )
+        )
+        let firstNew = ScoreImportCandidate(
+            url: URL(fileURLWithPath: "/tmp/Blue Bossa.mscz"),
+            destinationFileName: "Blue Bossa.mscz",
+            disposition: .new
+        )
+        let duplicateNew = ScoreImportCandidate(
+            url: URL(fileURLWithPath: "/another/BLUE BOSSA.MSCZ"),
+            destinationFileName: "BLUE BOSSA.MSCZ",
+            disposition: .new
+        )
+        let overflowNew = ScoreImportCandidate(
+            url: URL(fileURLWithPath: "/tmp/So What.mscz"),
+            destinationFileName: "So What.mscz",
+            disposition: .new
+        )
+        let review = ScoreImportReview(
+            candidates: [replacement, firstNew, duplicateNew, overflowNew],
+            availableNewSlots: 1,
+            hasUnlimitedScores: false
+        )
+
+        #expect(review.replacementCount == 1)
+        #expect(review.newCandidateCount == 3)
+        #expect(review.hasDuplicateDestinations)
+        #expect(review.exceedsFreeCapacity)
+    }
+
+    @Test
+    func replacementMatchingUsesTheFinalManagedFilename() {
+        let library = ManagedScoreLibrary()
+        #expect(
+            library.preferredStoredFileName(
+                for: URL(fileURLWithPath: "/tmp/Autumn Leaves.mscz")
+            ) == "Autumn Leaves.mscz"
+        )
+        #expect(
+            library.preferredStoredFileName(
+                for: URL(fileURLWithPath: "/tmp/Blue Bossa.musicxml")
+            ) == "Blue Bossa.mscz"
+        )
+    }
+
+    @Test
     func lyricInputRecognizesAdvanceAndMelismaCommands() {
         #expect(ScoreReaderLyricsTextInputField.inputCommand(for: " ") == .advance)
         #expect(ScoreReaderLyricsTextInputField.inputCommand(for: "_") == .melisma)

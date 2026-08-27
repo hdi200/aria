@@ -1,0 +1,35 @@
+{
+  "identifier" : "7AC9A69A-2CFA-4F7A-922F-8B9BB03033C8",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : true,
+      "internalID" : "D399B364-85E6-4ED1-8908-852CC01FE8FB",
+      "localizations" : [
+        {
+          "description" : "Unlock every feature Aria offers today.",
+          "displayName" : "Aria Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.hdi200.ariascore.unlimitedscores",
+      "referenceName" : "Aria Pro",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA"
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
