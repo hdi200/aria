@@ -222,6 +222,7 @@ private struct PaywallBenefitRow: View {
 
 struct ScoreImportReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject var model: MuseReaderAppModel
 
     let review: ScoreImportReview
@@ -237,118 +238,139 @@ struct ScoreImportReviewSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            VStack(spacing: 20) {
                 if !review.hasUnlimitedScores {
-                    Section {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "info.circle.fill")
-                                .font(.system(size: 19, weight: .semibold))
-                                .foregroundStyle(LibraryPalette.accent)
-                                .padding(.top, 1)
-
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(freePlanBannerTitle)
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(LibraryPalette.ink)
-
-                                Text(freePlanBannerMessage)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(LibraryPalette.mutedInk)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .padding(.vertical, 5)
-                        .accessibilityElement(children: .combine)
-                    }
+                    freePlanSummary
                 }
 
-                Section {
-                    ForEach(review.candidates) { candidate in
-                        Button {
-                            toggle(candidate)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: selectedIDs.contains(candidate.id) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(selectedIDs.contains(candidate.id) ? LibraryPalette.accent : LibraryPalette.subtle)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(review.candidates) { candidate in
+                            Button {
+                                toggle(candidate)
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: selectedIDs.contains(candidate.id) ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 23, weight: .semibold))
+                                        .foregroundStyle(selectedIDs.contains(candidate.id) ? LibraryPalette.accent : LibraryPalette.subtle)
 
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(candidate.url.lastPathComponent)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(LibraryPalette.ink)
-                                        .lineLimit(1)
-                                    Text(candidate.disposition.isReplacement ? "Replace existing · no slot used" : "Add as a new score")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(candidate.disposition.isReplacement ? LibraryPalette.accent : LibraryPalette.mutedInk)
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(LibraryPalette.mainBackground)
+                                        Image(systemName: "music.note")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(LibraryPalette.mutedInk)
+                                    }
+                                    .frame(width: 46, height: 50)
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(candidateDisplayName(candidate))
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(LibraryPalette.ink)
+                                            .lineLimit(1)
+                                        Text(candidateDetail(candidate))
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundStyle(candidate.disposition.isReplacement ? LibraryPalette.accent : LibraryPalette.mutedInk)
+                                    }
+
+                                    Spacer(minLength: 0)
                                 }
-
-                                Spacer(minLength: 0)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 12)
+                                .contentShape(Rectangle())
                             }
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+
+                            if candidate.id != review.candidates.last?.id {
+                                Divider()
+                                    .padding(.leading, 78)
+                                    .padding(.trailing, 18)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
-                } header: {
-                    Text("Selected Scores")
-                } footer: {
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .padding(.vertical, 1)
+                }
+                .scrollIndicators(.visible)
+                .frame(minHeight: 110, maxHeight: .infinity)
+
+                if review.hasDuplicateDestinations || capacityMessage != nil {
                     VStack(alignment: .leading, spacing: 5) {
                         if review.hasDuplicateDestinations {
                             Text("Files with the same destination name conflict. Choose one from each matching group.")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(LibraryPalette.mutedInk)
                         }
                         if let capacityMessage {
                             Text(capacityMessage)
+                                .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(.red)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                Section {
-                    VStack(spacing: 12) {
+                if review.exceedsFreeCapacity {
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.orange)
+                        Text("\(LibraryAccessPolicy.freeScoreLimit)-score free limit reached")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(LibraryPalette.mutedInk)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+
+                VStack(spacing: 12) {
+                    Button {
+                        let candidates = selectedCandidates
+                        dismiss()
+                        model.confirmImportReview(candidates)
+                    } label: {
+                        Text(primaryActionTitle)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(LibraryPalette.accent)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedCandidates.isEmpty)
+                    .opacity(selectedCandidates.isEmpty ? 0.45 : 1)
+
+                    if let upgradeActionTitle {
                         Button {
-                            let candidates = selectedCandidates
-                            dismiss()
-                            model.confirmImportReview(candidates)
+                            let candidates = candidatesForUnlimitedImport
+                            model.unlockAndImport(candidates)
                         } label: {
-                            Text(primaryActionTitle)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(LibraryPalette.accent)
+                            Text(upgradeActionTitle)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
-                                .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(LibraryPalette.cardBorder, lineWidth: 1)
-                                }
+                                .background(
+                                    LibraryPalette.accent,
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                )
                         }
                         .buttonStyle(.plain)
-                        .disabled(selectedCandidates.isEmpty)
-                        .opacity(selectedCandidates.isEmpty ? 0.45 : 1)
-
-                        if let upgradeActionTitle {
-                            Button {
-                                let candidates = candidatesForUnlimitedImport
-                                model.unlockAndImport(candidates)
-                            } label: {
-                                Text(upgradeActionTitle)
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 50)
-                                    .background(
-                                        LibraryPalette.accent,
-                                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(hasUnresolvedDuplicateConflict)
-                            .opacity(hasUnresolvedDuplicateConflict ? 0.45 : 1)
-                        }
+                        .disabled(hasUnresolvedDuplicateConflict)
+                        .opacity(hasUnresolvedDuplicateConflict ? 0.45 : 1)
                     }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-                    .listRowBackground(Color.clear)
                 }
             }
-            .navigationTitle(reviewTitle)
+            .padding(.horizontal, sheetHorizontalPadding)
+            .padding(.top, sheetVerticalPadding)
+            .padding(.bottom, sheetVerticalPadding + 4)
+            .frame(maxWidth: 680, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(LibraryPalette.mainBackground.ignoresSafeArea())
+            .navigationTitle(sheetTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -360,6 +382,75 @@ struct ScoreImportReviewSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+    }
+
+    private var sheetHorizontalPadding: CGFloat {
+        horizontalSizeClass == .compact ? 16 : 24
+    }
+
+    private var sheetVerticalPadding: CGFloat {
+        horizontalSizeClass == .compact ? 16 : 24
+    }
+
+    private var sheetTitle: String {
+        horizontalSizeClass == .compact ? "Choose Scores" : reviewTitle
+    }
+
+    @ViewBuilder
+    private var freePlanSummary: some View {
+        Group {
+            if horizontalSizeClass == .compact {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        freePlanBadge
+                        Spacer(minLength: 8)
+                        freePlanSelectionStatus
+                    }
+
+                    Text(freePlanPrompt)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(LibraryPalette.mutedInk)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                HStack(spacing: 14) {
+                    freePlanBadge
+
+                    Text(freePlanPrompt)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(LibraryPalette.mutedInk)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 8)
+                    freePlanSelectionStatus
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var freePlanBadge: some View {
+        Text("Free plan")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(LibraryPalette.accent)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(LibraryPalette.accentSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private var freePlanSelectionStatus: some View {
+        Text(freePlanSelectionLabel)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(LibraryPalette.accent)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
     }
 
     private var selectedCandidates: [ScoreImportCandidate] {
@@ -384,19 +475,22 @@ struct ScoreImportReviewSheet: View {
         return nil
     }
 
-    private var freePlanBannerTitle: String {
-        review.availableNewSlots > 0 ? "Free plan · 2 scores" : "Your library is full"
-    }
-
-    private var freePlanBannerMessage: String {
+    private var freePlanPrompt: String {
         switch review.availableNewSlots {
         case ...0:
-            return "Replace a score to make room, or upgrade to Pro for unlimited scores."
+            return "Replace a score or unlock Aria Pro."
         case 1:
-            return "Pick the score you want to import. You can replace it anytime; only new additions count toward the limit."
+            return "Choose up to 1 score to import."
         default:
-            return "Pick the 2 you want to import. You can replace either one anytime; only new additions count toward the limit."
+            return "Choose up to \(review.availableNewSlots) scores to import."
         }
+    }
+
+    private var freePlanSelectionLabel: String {
+        guard review.availableNewSlots > 0 else {
+            return "No slots available"
+        }
+        return "\(min(selectedNewCount, review.availableNewSlots)) / \(review.availableNewSlots) selected"
     }
 
     private var reviewTitle: String {
@@ -406,7 +500,30 @@ struct ScoreImportReviewSheet: View {
         if review.replacementCount > 0 {
             return review.replacementCount == 1 ? "Replace Existing Score?" : "Replace Existing Scores?"
         }
-        return "Choose Scores to Import"
+        return "Choose Scores"
+    }
+
+    private func candidateDisplayName(_ candidate: ScoreImportCandidate) -> String {
+        candidate.url.deletingPathExtension().lastPathComponent
+    }
+
+    private func candidateDetail(_ candidate: ScoreImportCandidate) -> String {
+        let action = candidate.disposition.isReplacement ? "Replace existing" : "New score"
+        return "\(candidateFileType(candidate)) · \(action)"
+    }
+
+    private func candidateFileType(_ candidate: ScoreImportCandidate) -> String {
+        switch candidate.url.pathExtension.lowercased() {
+        case "mscz", "mscx":
+            return "MuseScore"
+        case "musicxml", "mxl", "xml":
+            return "MusicXML"
+        case "mid", "midi":
+            return "MIDI"
+        default:
+            let fileExtension = candidate.url.pathExtension
+            return fileExtension.isEmpty ? "Score" : fileExtension.uppercased()
+        }
     }
 
     private var primaryActionTitle: String {
