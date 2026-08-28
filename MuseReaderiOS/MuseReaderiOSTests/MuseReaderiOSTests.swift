@@ -201,6 +201,9 @@ struct MuseReaderiOSTests {
         #expect(SetlistReaderNavigationPlan.initialPageIndex(for: .previous, targetPageCount: 0) == 0)
         #expect(SetlistReaderNavigationPlan.targetIndex(from: 0, direction: .previous, scoreCount: 1) == nil)
         #expect(SetlistReaderNavigationPlan.targetIndex(from: 0, direction: .next, scoreCount: 1) == nil)
+        #expect(SetlistReaderNavigationPlan.nextPreloadIndex(from: 0, scoreCount: 3) == 1)
+        #expect(SetlistReaderNavigationPlan.nextPreloadIndex(from: 2, scoreCount: 3) == nil)
+        #expect(SetlistReaderNavigationPlan.nextPreloadIndex(from: 0, scoreCount: 1) == nil)
     }
 
     @Test

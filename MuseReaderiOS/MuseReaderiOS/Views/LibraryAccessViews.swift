@@ -20,8 +20,6 @@ struct LibraryPaywallView: View {
         ScrollView {
             VStack(spacing: 0) {
                 HStack(spacing: 11) {
-                    AriaLogoMark(size: 42, cornerRadius: 12)
-
                     Text("Aria")
                         .font(.system(size: 21, weight: .bold))
                         .foregroundStyle(LibraryPalette.ink)
@@ -66,9 +64,7 @@ struct LibraryPaywallView: View {
                                     .stroke(LibraryPalette.accent.opacity(0.13), lineWidth: 1)
                             }
 
-                        Image(systemName: "infinity")
-                            .font(.system(size: 39, weight: .semibold))
-                            .foregroundStyle(LibraryPalette.accent)
+                        AriaLogoMark(size: 64, cornerRadius: 18)
                     }
                     .accessibilityHidden(true)
 
@@ -242,6 +238,30 @@ struct ScoreImportReviewSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                if !review.hasUnlimitedScores {
+                    Section {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 19, weight: .semibold))
+                                .foregroundStyle(LibraryPalette.accent)
+                                .padding(.top, 1)
+
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(freePlanBannerTitle)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(LibraryPalette.ink)
+
+                                Text(freePlanBannerMessage)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(LibraryPalette.mutedInk)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.vertical, 5)
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+
                 Section {
                     ForEach(review.candidates) { candidate in
                         Button {
@@ -290,7 +310,14 @@ struct ScoreImportReviewSheet: View {
                     }
                     .disabled(selectedCandidates.isEmpty)
 
-                    if review.exceedsFreeCapacity {
+                    if showsGetAriaProAction {
+                        Button("Get Aria Pro") {
+                            let candidates = candidatesForUnlimitedImport
+                            model.unlockAndImport(candidates)
+                        }
+                        .foregroundStyle(LibraryPalette.accent)
+                        .disabled(hasUnresolvedDuplicateConflict)
+                    } else if review.exceedsFreeCapacity {
                         Button("Unlock & Import All") {
                             let candidates = candidatesForUnlimitedImport
                             model.unlockAndImport(candidates)
@@ -310,8 +337,8 @@ struct ScoreImportReviewSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
     }
 
     private var selectedCandidates: [ScoreImportCandidate] {
@@ -320,6 +347,25 @@ struct ScoreImportReviewSheet: View {
 
     private var selectedNewCount: Int {
         selectedCandidates.filter(\.disposition.usesNewSlot).count
+    }
+
+    private var showsGetAriaProAction: Bool {
+        !review.hasUnlimitedScores && !selectedCandidates.isEmpty && selectedNewCount == 0
+    }
+
+    private var freePlanBannerTitle: String {
+        review.availableNewSlots > 0 ? "Free plan · 2 scores" : "Your library is full"
+    }
+
+    private var freePlanBannerMessage: String {
+        switch review.availableNewSlots {
+        case ...0:
+            return "Replace a score to make room, or upgrade to Pro for unlimited scores."
+        case 1:
+            return "Pick the score you want to import. You can replace it anytime; only new additions count toward the limit."
+        default:
+            return "Pick the 2 you want to import. You can replace either one anytime; only new additions count toward the limit."
+        }
     }
 
     private var reviewTitle: String {
@@ -466,9 +512,13 @@ struct FreeScoreAllowancePill: View {
     let used: Int
     let limit: Int
 
+    private var usageLabel: String {
+        "Free plan · \(min(used, limit))/\(limit) slots used"
+    }
+
     var body: some View {
         HStack(spacing: 7) {
-            Text("Free · \(min(used, limit)) of \(limit)")
+            Text(usageLabel)
                 .font(.system(size: 13, weight: .semibold))
             HStack(spacing: 3) {
                 ForEach(0..<limit, id: \.self) { index in
@@ -493,7 +543,7 @@ struct FreeLibraryFullNotice: View {
         HStack(spacing: 12) {
             Image(systemName: "info.circle.fill")
                 .foregroundStyle(LibraryPalette.accent)
-            Text("Your free library is full. Replace a score or unlock Aria Pro.")
+            Text("Your free library is full. Replace a score to make room, or upgrade to Pro for unlimited scores.")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(LibraryPalette.mutedInk)
                 .fixedSize(horizontal: false, vertical: true)

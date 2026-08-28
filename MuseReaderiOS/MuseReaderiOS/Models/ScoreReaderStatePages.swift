@@ -368,6 +368,12 @@ extension ScoreReaderState {
             return
         }
 
+        // Setlist sessions already open on the full score. Avoid an unnecessary
+        // native relayout on every boundary swipe when no temporary part is active.
+        guard activeScorePartIndex != nil || pendingScorePartIndex != nil else {
+            return
+        }
+
         partSelectionTask?.cancel()
         partSelectionTask = nil
         pendingScorePartIndex = nil

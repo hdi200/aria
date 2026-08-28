@@ -410,6 +410,40 @@ final class MuseReaderAppModel: ObservableObject {
         try await loadSession(for: recent)
     }
 
+    /// Opens a managed MuseScore document without making it current or updating
+    /// Recently Opened. Formats that require normalization and legacy bookmarks
+    /// intentionally wait for the normal foreground open path.
+    func preloadReaderSession(for recent: ReaderRecentDocument) async throws -> ScoreSession? {
+        guard let libraryRelativePath = recent.libraryRelativePath,
+              recent.format == .mscz || recent.format == .mscx
+        else {
+            return nil
+        }
+
+        let libraryURL = try scoreLibrary.url(forRelativePath: libraryRelativePath)
+        return try await sessionService.openSession(at: libraryURL)
+    }
+
+    /// Promotes a side-effect-free preloaded session only when the reader
+    /// actually navigates to it.
+    func activatePreloadedReaderSession(
+        _ session: ScoreSession,
+        for recent: ReaderRecentDocument
+    ) {
+        guard let libraryRelativePath = recent.libraryRelativePath else {
+            return
+        }
+
+        cancelPendingLibraryPreviewRefresh(reason: "setlist-preloaded-open")
+        currentSession = session
+        recents = recentStore.record(
+            document: session.document,
+            libraryRelativePath: libraryRelativePath,
+            replacingFileReference: recent.fileReference,
+            in: recents
+        )
+    }
+
     func createScore(from draft: NewScoreDraft) async -> ScoreSession? {
         cancelPendingLibraryPreviewRefresh(reason: "create-score")
         isLoading = true

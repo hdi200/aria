@@ -252,6 +252,7 @@ struct ScoreReaderView: View {
     @State private var viewModeSaveErrorMessage: String?
 
     private let setlistNavigation: ScoreReaderSetlistNavigation?
+    private let readerReadyAction: (@MainActor () -> Void)?
 
     init(
         session: ScoreSession,
@@ -260,7 +261,8 @@ struct ScoreReaderView: View {
         initialInteractionMode: ScoreReaderInteractionMode = .view,
         resumesRememberedPage: Bool = true,
         initialReadingStyle: ScoreReaderReadingStyle? = nil,
-        setlistNavigation: ScoreReaderSetlistNavigation? = nil
+        setlistNavigation: ScoreReaderSetlistNavigation? = nil,
+        readerReadyAction: (@MainActor () -> Void)? = nil
     ) {
         self.session = session
         var rememberedState = initialInteractionMode == .view
@@ -276,6 +278,7 @@ struct ScoreReaderView: View {
         }
         self.initialRememberedState = rememberedState
         self.setlistNavigation = setlistNavigation
+        self.readerReadyAction = readerReadyAction
         _zoomScale = State(
             initialValue: initialInteractionMode == .view
                 ? ScoreReaderZoomLimits.minimumScale
@@ -698,6 +701,7 @@ struct ScoreReaderView: View {
             readerState.loadInitialPages()
             readerState.startPlaybackMonitoring()
             await readerState.prepareInitialInteractionMode()
+            await reportReaderReadyWhenAvailable()
         }
         .onDisappear {
             unlockPhoneOrientation()
@@ -1749,6 +1753,21 @@ struct ScoreReaderView: View {
 
         selectedPartID = part.id
         return part.index
+    }
+
+    private func reportReaderReadyWhenAvailable() async {
+        while !Task.isCancelled,
+              readerState.page(at: readerState.selectedPageIndex) == nil
+        {
+            do {
+                try await Task.sleep(for: .milliseconds(50))
+            } catch {
+                return
+            }
+        }
+
+        guard !Task.isCancelled else { return }
+        readerReadyAction?()
     }
 
     private func saveRememberedReaderState() {

@@ -372,6 +372,7 @@ struct LibraryView: View {
             ScoreSetlistPickerSheet(
                 scoreTitle: score.primaryTitle,
                 setlists: foldersAvailableForAdding(score),
+                hasAnySetlists: !model.setlistFolders.isEmpty,
                 addAction: { setlist in
                     model.addScore(score, to: setlist)
                 }
@@ -1116,6 +1117,8 @@ enum PhoneTab: Int, CaseIterable {
 }
 
 private struct PhoneLibraryView: View {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     let scores: [ReaderRecentDocument]
     let activeSetlistOrderedScores: [ReaderRecentDocument]
     @Binding var selectedCategory: LibraryCategory
@@ -1158,6 +1161,10 @@ private struct PhoneLibraryView: View {
         case .allScores, .setlist: return true
         case .setlists, .settings: return false
         }
+    }
+
+    private var setlistEditorHeight: CGFloat {
+        verticalSizeClass == .compact ? 240 : 480
     }
 
     var body: some View {
@@ -1208,15 +1215,11 @@ private struct PhoneLibraryView: View {
                         .disabled(isEditingSetlist)
                 }
 
-                if selectedCategory == .allScores, accessStatus == .free {
-                    HStack {
-                        FreeScoreAllowancePill(used: managedScoreCount, limit: freeScoreLimit)
-                        Spacer(minLength: 0)
-                    }
-
-                    if managedScoreCount >= freeScoreLimit {
-                        FreeLibraryFullNotice(unlockAction: unlockAction)
-                    }
+                if selectedCategory == .allScores,
+                   accessStatus == .free,
+                   managedScoreCount >= freeScoreLimit
+                {
+                    FreeLibraryFullNotice(unlockAction: unlockAction)
                 }
 
                 // ── Content area ────────────────────────────────────────
@@ -1305,6 +1308,10 @@ private struct PhoneLibraryView: View {
                             sortOrder: $sortOrder,
                             scoreLayout: $scoreLayout,
                             isCompact: true,
+                            freeScoreUsage: selectedCategory == .allScores && accessStatus == .free
+                                ? managedScoreCount
+                                : nil,
+                            freeScoreLimit: freeScoreLimit,
                             includesSetlistOrder: activeFolder != nil
                         )
                     }
@@ -1319,7 +1326,12 @@ private struct PhoneLibraryView: View {
                                 reorderScoresAction(activeFolder, orderedIDs)
                             }
                         )
-                        .frame(height: max(90, CGFloat(activeSetlistOrderedScores.count) * 62 + 18))
+                        .frame(
+                            height: min(
+                                max(90, CGFloat(activeSetlistOrderedScores.count) * 62 + 18),
+                                setlistEditorHeight
+                            )
+                        )
                     } else if scores.isEmpty, activeFolder != nil {
                         VStack(spacing: 10) {
                             Image(systemName: "text.badge.plus")
@@ -1768,6 +1780,7 @@ private struct ScoreSetlistPickerSheet: View {
 
     let scoreTitle: String
     let setlists: [LibrarySetlistFolder]
+    let hasAnySetlists: Bool
     let addAction: (LibrarySetlistFolder) -> Void
 
     var body: some View {
@@ -1778,7 +1791,11 @@ private struct ScoreSetlistPickerSheet: View {
                         Image(systemName: "checkmark.circle")
                             .font(.system(size: 38, weight: .light))
                             .foregroundStyle(LibraryPalette.subtle)
-                        Text("This score is already in every setlist.")
+                        Text(
+                            hasAnySetlists
+                                ? "This score is already in every setlist."
+                                : "Create a setlist before adding this score."
+                        )
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(LibraryPalette.mutedInk)
                             .multilineTextAlignment(.center)
@@ -2015,15 +2032,31 @@ private struct LibraryScoreDisplayBar: View {
         "\(scoreCount) \(scoreCount == 1 ? "score" : "scores")"
     }
 
+    private var freeUsageLabel: String? {
+        guard let freeScoreUsage else {
+            return nil
+        }
+        return "Free plan · \(min(freeScoreUsage, freeScoreLimit))/\(freeScoreLimit) slots used"
+    }
+
     var body: some View {
         HStack(spacing: isCompact ? 8 : 12) {
-            Text(scoreCountLabel)
-                .font(.system(size: isCompact ? 13 : 14, weight: .semibold))
-                .foregroundStyle(LibraryPalette.mutedInk)
-                .lineLimit(1)
+            if let freeUsageLabel {
+                VStack(alignment: .leading, spacing: isCompact ? 2 : 1) {
+                    Text(scoreCountLabel)
+                        .font(.system(size: isCompact ? 13 : 14, weight: .semibold))
+                        .foregroundStyle(LibraryPalette.mutedInk)
 
-            if let freeScoreUsage {
-                FreeScoreAllowancePill(used: freeScoreUsage, limit: freeScoreLimit)
+                    Text(freeUsageLabel)
+                        .font(.system(size: isCompact ? 11 : 12, weight: .semibold))
+                        .foregroundStyle(LibraryPalette.accent.opacity(0.82))
+                }
+                .lineLimit(1)
+            } else {
+                Text(scoreCountLabel)
+                    .font(.system(size: isCompact ? 13 : 14, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.mutedInk)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 8)
@@ -2878,12 +2911,22 @@ struct SetlistReaderNavigationPlan {
             return 0
         }
     }
+
+    static func nextPreloadIndex(from currentIndex: Int, scoreCount: Int) -> Int? {
+        targetIndex(from: currentIndex, direction: .next, scoreCount: scoreCount)
+    }
 }
 
 private struct SetlistScoreReaderHost: View {
     private struct FailedTransition {
         let direction: ScoreReaderSequenceDirection
         let readingStyle: ScoreReaderReadingStyle
+    }
+
+    private struct PreloadedScore {
+        let index: Int
+        let scoreID: ReaderRecentDocument.ID
+        let session: ScoreSession
     }
 
     @ObservedObject var model: MuseReaderAppModel
@@ -2897,6 +2940,11 @@ private struct SetlistScoreReaderHost: View {
     @State private var transitionErrorMessage: String?
     @State private var failedTransition: FailedTransition?
     @State private var retryLoadingTitle: String?
+    @State private var preloadedNextScore: PreloadedScore?
+    @State private var preloadTask: Task<Void, Never>?
+    @State private var preloadingTargetIndex: Int?
+    @State private var preloadGeneration = 0
+    @State private var sessionsAwaitingPreviewRefresh: [ScoreSession] = []
 
     init(model: MuseReaderAppModel, initialSession: ScoreSession, sequence: SetlistReaderSequence) {
         self.model = model
@@ -2914,7 +2962,8 @@ private struct SetlistScoreReaderHost: View {
                 initialPageIndex: initialPageIndex,
                 resumesRememberedPage: false,
                 initialReadingStyle: readingStyleOverride,
-                setlistNavigation: navigation
+                setlistNavigation: navigation,
+                readerReadyAction: readerDidBecomeReady
             )
             .id(currentSession.id)
 
@@ -2942,8 +2991,14 @@ private struct SetlistScoreReaderHost: View {
             Text(transitionErrorMessage ?? "Aria could not open the selected score.")
         }
         .onDisappear {
+            cancelNextScorePreload()
+            let departedSessions = sessionsAwaitingPreviewRefresh
             let finalSession = currentSession
+            sessionsAwaitingPreviewRefresh.removeAll()
             Task {
+                for session in departedSessions {
+                    await model.refreshLibraryPreviewAfterSetlistTransition(session)
+                }
                 await model.refreshLibraryPreviewAfterClosing(finalSession)
             }
         }
@@ -2996,14 +3051,33 @@ private struct SetlistScoreReaderHost: View {
         let targetScore = sequence.scores[targetIndex]
         let outgoingSession = currentSession
         do {
-            let targetSession = try await model.loadReaderSession(for: targetScore)
-            await model.refreshLibraryPreviewAfterSetlistTransition(outgoingSession)
+            let targetSession: ScoreSession
+            if direction == .next {
+                if preloadingTargetIndex == targetIndex {
+                    await preloadTask?.value
+                }
 
+                if let preloadedNextScore,
+                   preloadedNextScore.index == targetIndex,
+                   preloadedNextScore.scoreID == targetScore.id
+                {
+                    targetSession = preloadedNextScore.session
+                    model.activatePreloadedReaderSession(targetSession, for: targetScore)
+                } else {
+                    targetSession = try await model.loadReaderSession(for: targetScore)
+                }
+            } else {
+                cancelNextScorePreload()
+                targetSession = try await model.loadReaderSession(for: targetScore)
+            }
+
+            cancelNextScorePreload()
             readingStyleOverride = readingStyle
             initialPageIndex = SetlistReaderNavigationPlan.initialPageIndex(
                 for: direction,
                 targetPageCount: targetSession.pageCount
             )
+            sessionsAwaitingPreviewRefresh.append(outgoingSession)
             currentIndex = targetIndex
             currentSession = targetSession
             transitionErrorMessage = nil
@@ -3016,6 +3090,90 @@ private struct SetlistScoreReaderHost: View {
             transitionErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return false
         }
+    }
+
+    private func readerDidBecomeReady() {
+        preloadNextScoreIfNeeded()
+        refreshDepartedSessionPreviews()
+    }
+
+    private func refreshDepartedSessionPreviews() {
+        guard !sessionsAwaitingPreviewRefresh.isEmpty else {
+            return
+        }
+
+        let sessions = sessionsAwaitingPreviewRefresh
+        sessionsAwaitingPreviewRefresh.removeAll()
+        Task { @MainActor in
+            // Let the forward preload claim the render-core lane first. Neither
+            // task blocks the newly displayed score.
+            try? await Task.sleep(for: .milliseconds(200))
+            for session in sessions {
+                await model.refreshLibraryPreviewAfterSetlistTransition(session)
+            }
+        }
+    }
+
+    private func preloadNextScoreIfNeeded() {
+        guard let targetIndex = SetlistReaderNavigationPlan.nextPreloadIndex(
+                  from: currentIndex,
+                  scoreCount: sequence.scores.count
+              ),
+              preloadedNextScore?.index != targetIndex,
+              preloadingTargetIndex != targetIndex
+        else {
+            return
+        }
+
+        cancelNextScorePreload()
+        let targetScore = sequence.scores[targetIndex]
+        preloadGeneration += 1
+        let generation = preloadGeneration
+        preloadingTargetIndex = targetIndex
+        preloadTask = Task { @MainActor in
+            do {
+                let session = try await model.preloadReaderSession(for: targetScore)
+                guard !Task.isCancelled,
+                      generation == preloadGeneration,
+                      currentIndex + 1 == targetIndex,
+                      let session
+                else {
+                    if generation == preloadGeneration {
+                        preloadTask = nil
+                        preloadingTargetIndex = nil
+                    }
+                    return
+                }
+
+                preloadedNextScore = PreloadedScore(
+                    index: targetIndex,
+                    scoreID: targetScore.id,
+                    session: session
+                )
+                preloadTask = nil
+                preloadingTargetIndex = nil
+                print("Aria setlist preload ready: score=\(targetScore.primaryTitle)")
+            } catch is CancellationError {
+                if generation == preloadGeneration {
+                    preloadTask = nil
+                    preloadingTargetIndex = nil
+                }
+            } catch {
+                if generation == preloadGeneration {
+                    preloadTask = nil
+                    preloadingTargetIndex = nil
+                }
+                print("Aria setlist preload skipped: score=\(targetScore.primaryTitle) error=\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func cancelNextScorePreload() {
+        preloadGeneration += 1
+        preloadTask?.cancel()
+        preloadTask = nil
+        preloadingTargetIndex = nil
+        preloadedNextScore = nil
     }
 
     private func retryFailedTransition() {
