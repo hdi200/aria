@@ -303,27 +303,42 @@ struct ScoreImportReviewSheet: View {
                 }
 
                 Section {
-                    Button(primaryActionTitle) {
+                    Button {
                         let candidates = selectedCandidates
                         dismiss()
                         model.confirmImportReview(candidates)
+                    } label: {
+                        Text(primaryActionTitle)
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 4)
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(LibraryPalette.accent)
                     .disabled(selectedCandidates.isEmpty)
 
-                    if showsGetAriaProAction {
-                        Button("Get Aria Pro") {
+                    if let upgradeActionTitle {
+                        Button {
                             let candidates = candidatesForUnlimitedImport
                             model.unlockAndImport(candidates)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Text(upgradeActionTitle)
+                                    .font(.system(size: 16, weight: .bold))
+
+                                Spacer(minLength: 8)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
                         }
-                        .foregroundStyle(LibraryPalette.accent)
+                        .buttonStyle(.plain)
                         .disabled(hasUnresolvedDuplicateConflict)
-                    } else if review.exceedsFreeCapacity {
-                        Button("Unlock & Import All") {
-                            let candidates = candidatesForUnlimitedImport
-                            model.unlockAndImport(candidates)
-                        }
-                        .foregroundStyle(LibraryPalette.accent)
-                        .disabled(hasUnresolvedDuplicateConflict)
+                        .opacity(hasUnresolvedDuplicateConflict ? 0.45 : 1)
+                        .listRowBackground(LibraryPalette.accent)
                     }
                 }
             }
@@ -351,6 +366,16 @@ struct ScoreImportReviewSheet: View {
 
     private var showsGetAriaProAction: Bool {
         !review.hasUnlimitedScores && !selectedCandidates.isEmpty && selectedNewCount == 0
+    }
+
+    private var upgradeActionTitle: String? {
+        if showsGetAriaProAction {
+            return "Get Aria Pro"
+        }
+        if review.exceedsFreeCapacity {
+            return "Unlock & Import All"
+        }
+        return nil
     }
 
     private var freePlanBannerTitle: String {
@@ -483,7 +508,7 @@ struct EarlySupporterAccessView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(LibraryPalette.ink)
                     .multilineTextAlignment(.center)
-                Text("Thanks for being with Aria early. You have Aria Pro—no purchase needed.")
+                Text("Thanks for being here early! Your account has been granted Aria Pro at no cost.")
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(LibraryPalette.mutedInk)
                     .multilineTextAlignment(.center)
