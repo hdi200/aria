@@ -303,43 +303,49 @@ struct ScoreImportReviewSheet: View {
                 }
 
                 Section {
-                    Button {
-                        let candidates = selectedCandidates
-                        dismiss()
-                        model.confirmImportReview(candidates)
-                    } label: {
-                        Text(primaryActionTitle)
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(LibraryPalette.accent)
-                    .disabled(selectedCandidates.isEmpty)
-
-                    if let upgradeActionTitle {
+                    VStack(spacing: 12) {
                         Button {
-                            let candidates = candidatesForUnlimitedImport
-                            model.unlockAndImport(candidates)
+                            let candidates = selectedCandidates
+                            dismiss()
+                            model.confirmImportReview(candidates)
                         } label: {
-                            HStack(spacing: 10) {
-                                Text(upgradeActionTitle)
-                                    .font(.system(size: 16, weight: .bold))
-
-                                Spacer(minLength: 8)
-
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12, weight: .bold))
-                            }
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 4)
+                            Text(primaryActionTitle)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(LibraryPalette.accent)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                                }
                         }
                         .buttonStyle(.plain)
-                        .disabled(hasUnresolvedDuplicateConflict)
-                        .opacity(hasUnresolvedDuplicateConflict ? 0.45 : 1)
-                        .listRowBackground(LibraryPalette.accent)
+                        .disabled(selectedCandidates.isEmpty)
+                        .opacity(selectedCandidates.isEmpty ? 0.45 : 1)
+
+                        if let upgradeActionTitle {
+                            Button {
+                                let candidates = candidatesForUnlimitedImport
+                                model.unlockAndImport(candidates)
+                            } label: {
+                                Text(upgradeActionTitle)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 50)
+                                    .background(
+                                        LibraryPalette.accent,
+                                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(hasUnresolvedDuplicateConflict)
+                            .opacity(hasUnresolvedDuplicateConflict ? 0.45 : 1)
+                        }
                     }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
                 }
             }
             .navigationTitle(reviewTitle)
