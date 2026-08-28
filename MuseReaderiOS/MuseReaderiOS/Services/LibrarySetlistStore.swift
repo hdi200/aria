@@ -13,11 +13,13 @@ final class LibrarySetlistStore {
     }
 
     private let fileManager: FileManager
+    private let storageURLOverride: URL?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, storageURL: URL? = nil) {
         self.fileManager = fileManager
+        storageURLOverride = storageURL
     }
 
     func load() -> [LibrarySetlistFolder] {
@@ -54,8 +56,10 @@ final class LibrarySetlistStore {
     }
 
     private func storageURL() throws -> URL {
-        try ManagedScoreLibraryPaths.privateRootURL(fileManager: fileManager)
+        if let storageURLOverride {
+            return storageURLOverride
+        }
+        return try ManagedScoreLibraryPaths.privateRootURL(fileManager: fileManager)
             .appendingPathComponent(Constants.fileName, isDirectory: false)
     }
 }
-

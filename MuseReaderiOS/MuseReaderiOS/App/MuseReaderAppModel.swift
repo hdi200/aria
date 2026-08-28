@@ -289,6 +289,33 @@ final class MuseReaderAppModel: ObservableObject {
         setlistStore.save(setlistFolders)
     }
 
+    func orderedScores(in setlist: LibrarySetlistFolder) -> [ReaderRecentDocument] {
+        setlist.orderedScores(from: recents)
+    }
+
+    func reorderSetlists(using orderedSetlistIDs: [UUID]) {
+        guard orderedSetlistIDs.count == setlistFolders.count,
+              Set(orderedSetlistIDs) == Set(setlistFolders.map(\.id))
+        else {
+            return
+        }
+
+        let setlistsByID = Dictionary(uniqueKeysWithValues: setlistFolders.map { ($0.id, $0) })
+        setlistFolders = orderedSetlistIDs.compactMap { setlistsByID[$0] }
+        setlistStore.save(setlistFolders)
+    }
+
+    func reorderScores(in setlist: LibrarySetlistFolder, using orderedScoreIDs: [ReaderRecentDocument.ID]) {
+        guard let setlistIndex = setlistFolders.firstIndex(where: { $0.id == setlist.id }) else {
+            return
+        }
+
+        guard setlistFolders[setlistIndex].reorderScores(using: orderedScoreIDs, from: recents) else {
+            return
+        }
+        setlistStore.save(setlistFolders)
+    }
+
     func addScore(_ score: ReaderRecentDocument, to folder: LibrarySetlistFolder) {
         addScoreKey(score.setlistKey, to: folder)
     }
@@ -298,8 +325,7 @@ final class MuseReaderAppModel: ObservableObject {
             return
         }
 
-        if !setlistFolders[index].scoreKeys.contains(scoreKey) {
-            setlistFolders[index].scoreKeys.append(scoreKey)
+        if setlistFolders[index].appendScoreKeyIfNeeded(scoreKey) {
             setlistStore.save(setlistFolders)
         }
     }
@@ -378,6 +404,10 @@ final class MuseReaderAppModel: ObservableObject {
             presentError(title: "Could Not Open Score", error: error)
             return nil
         }
+    }
+
+    func loadReaderSession(for recent: ReaderRecentDocument) async throws -> ScoreSession {
+        try await loadSession(for: recent)
     }
 
     func createScore(from draft: NewScoreDraft) async -> ScoreSession? {
@@ -682,6 +712,16 @@ final class MuseReaderAppModel: ObservableObject {
             delay: PreviewConstants.closeRefreshDelay,
             saveBeforeRender: true,
             reason: "close"
+        )
+    }
+
+    func refreshLibraryPreviewAfterSetlistTransition(_ session: ScoreSession) async {
+        guard let libraryRelativePath = try? scoreLibrary.relativePath(for: session.document.url) else {
+            return
+        }
+        await refreshRenderedLibraryPreviewIfPossible(
+            for: session,
+            libraryRelativePath: libraryRelativePath
         )
     }
 

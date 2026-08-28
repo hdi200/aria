@@ -26,12 +26,17 @@ struct LibraryView: View {
     @State private var newSetlistName = ""
     @State private var folderPendingRename: LibrarySetlistFolder?
     @State private var folderPendingScoreAdd: FolderScoreAddRequest?
+    @State private var isSetlistReorderPresented = false
+    @State private var isEditingActiveSetlist = false
     @State private var renameSetlistName = ""
     @State private var scorePendingFolderSelection: ReaderRecentDocument?
     @State private var isOpenSourceLegalPresented = false
     @AppStorage("LibraryScoreSortOrder") private var scoreSortOrder = LibraryScoreSortOrder.recentlyOpened
     @AppStorage("LibraryDashboardScoreLayout") private var dashboardScoreLayout = LibraryScoreLayout.medium
     @AppStorage("LibraryPhoneScoreLayout") private var phoneScoreLayout = LibraryScoreLayout.list
+    @AppStorage("SetlistScoreSortOrder") private var setlistScoreSortOrder = LibraryScoreSortOrder.setlistOrder
+    @AppStorage("SetlistDashboardScoreLayout") private var setlistDashboardScoreLayout = LibraryScoreLayout.medium
+    @AppStorage("SetlistPhoneScoreLayout") private var setlistPhoneScoreLayout = LibraryScoreLayout.list
 
     private let sidebarWidth: CGFloat = 286
 
@@ -49,33 +54,25 @@ struct LibraryView: View {
 
     private var displayedScores: [ReaderRecentDocument] {
         let baseScores: [ReaderRecentDocument]
+        let activeSortOrder: LibraryScoreSortOrder
         switch selectedCategory {
         case .allScores:
             baseScores = model.recents
+            activeSortOrder = scoreSortOrder
         case .setlists, .settings:
             baseScores = []
+            activeSortOrder = scoreSortOrder
         case .setlist(let folderID):
             if let folder = model.setlistFolders.first(where: { $0.id == folderID }) {
-                let scoreKeys = Set(folder.scoreKeys)
-                baseScores = model.recents
-                    .filter { scoreKeys.contains($0.setlistKey) || scoreKeys.contains($0.fileReference) }
+                baseScores = model.orderedScores(in: folder)
             } else {
                 baseScores = []
             }
+            activeSortOrder = setlistScoreSortOrder
         }
 
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let filteredScores = query.isEmpty ? baseScores : baseScores.filter { score in
-            [
-                score.primaryTitle,
-                score.secondaryLine ?? "",
-                score.displayName
-            ]
-            .map { $0.lowercased() }
-            .contains { $0.contains(query) }
-        }
-
-        return scoreSortOrder.sorted(filteredScores)
+        let filteredScores = LibraryScoreDisplayPolicy.filtered(baseScores, query: searchText)
+        return activeSortOrder.sorted(filteredScores)
     }
 
     private var displayedCategoryTitle: String {
@@ -91,16 +88,28 @@ struct LibraryView: View {
         UIDevice.current.userInterfaceIdiom == .phone
     }
 
+    private var isShowingSetlist: Bool {
+        if case .setlist = selectedCategory {
+            return true
+        }
+        return false
+    }
+
+    private var activeSetlistOrderedScores: [ReaderRecentDocument] {
+        activeSetlistFolder.map(model.orderedScores(in:)) ?? []
+    }
+
     var body: some View {
         GeometryReader { geometry in
             if isPhoneInterface {
                 PhoneLibraryView(
                     scores: displayedScores,
+                    activeSetlistOrderedScores: activeSetlistOrderedScores,
                     selectedCategory: $selectedCategory,
                     title: displayedCategoryTitle,
                     searchText: $searchText,
-                    sortOrder: $scoreSortOrder,
-                    scoreLayout: $phoneScoreLayout,
+                    sortOrder: isShowingSetlist ? $setlistScoreSortOrder : $scoreSortOrder,
+                    scoreLayout: isShowingSetlist ? $setlistPhoneScoreLayout : $phoneScoreLayout,
                     folders: model.setlistFolders,
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
@@ -115,6 +124,8 @@ struct LibraryView: View {
                     showAddScoresAction: { folder in
                         folderPendingScoreAdd = FolderScoreAddRequest(id: folder.id)
                     },
+                    isEditingSetlist: $isEditingActiveSetlist,
+                    reorderScoresAction: reorderScores,
                     createFolderAction: {
                         newSetlistName = ""
                         isNewSetlistPresented = true
@@ -123,6 +134,7 @@ struct LibraryView: View {
                         folderPendingRename = folder
                         renameSetlistName = folder.name
                     },
+                    reorderSetlistsAction: presentSetlistReorder,
                     openSourceAction: {
                         isOpenSourceLegalPresented = true
                     },
@@ -160,6 +172,7 @@ struct LibraryView: View {
                         folderPendingRename = folder
                         renameSetlistName = folder.name
                     },
+                    reorderSetlistsAction: presentSetlistReorder,
                     settingsAction: {
                         selectedCategory = .settings
                     },
@@ -175,16 +188,26 @@ struct LibraryView: View {
 
                     LibraryDashboardView(
                     scores: displayedScores,
+                    activeSetlistOrderedScores: activeSetlistOrderedScores,
                     selectedCategory: selectedCategory,
                     title: displayedCategoryTitle,
                     searchText: $searchText,
-                    sortOrder: $scoreSortOrder,
-                    scoreLayout: $dashboardScoreLayout,
+                    sortOrder: isShowingSetlist ? $setlistScoreSortOrder : $scoreSortOrder,
+                    scoreLayout: isShowingSetlist ? $setlistDashboardScoreLayout : $dashboardScoreLayout,
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
                     openAction: openScore,
                     editInfoAction: presentScoreInfoEditor,
                     deleteAction: { scorePendingDeletion = $0 },
+                    activeSetlist: activeSetlistFolder,
+                    showAddScoresAction: { folder in
+                        folderPendingScoreAdd = FolderScoreAddRequest(id: folder.id)
+                    },
+                    isEditingSetlist: $isEditingActiveSetlist,
+                    reorderScoresAction: reorderScores,
+                    removeFromSetlistAction: { score, setlist in
+                        model.removeScore(score, from: setlist)
+                    },
                     openSourceAction: {
                         isOpenSourceLegalPresented = true
                     },
@@ -212,6 +235,9 @@ struct LibraryView: View {
         }
         .onChangeCompatible(of: accessController.status) { _ in
             model.presentEarlySupporterMessageIfNeeded()
+        }
+        .onChangeCompatible(of: selectedCategory) { _ in
+            isEditingActiveSetlist = false
         }
         .onChangeCompatible(of: scenePhase) { phase in
             guard phase == .active else {
@@ -251,8 +277,8 @@ struct LibraryView: View {
         } message: {
             Text(scoreInfoSaveErrorMessage ?? "Aria could not save these score details.")
         }
-        .alert("New Folder", isPresented: $isNewSetlistPresented) {
-            TextField("Folder name", text: $newSetlistName)
+        .alert("New Setlist", isPresented: $isNewSetlistPresented) {
+            TextField("Setlist name", text: $newSetlistName)
             Button("Cancel", role: .cancel) {
                 newSetlistName = ""
             }
@@ -261,10 +287,10 @@ struct LibraryView: View {
                 newSetlistName = ""
             }
         } message: {
-            Text("Create a folder for organizing scores.")
+            Text("Create a setlist for organizing scores in performance order.")
         }
-        .alert("Rename Folder", isPresented: renameConfirmationIsPresented) {
-            TextField("Folder name", text: $renameSetlistName)
+        .alert("Rename Setlist", isPresented: renameConfirmationIsPresented) {
+            TextField("Setlist name", text: $renameSetlistName)
             Button("Cancel", role: .cancel) {
                 folderPendingRename = nil
                 renameSetlistName = ""
@@ -279,29 +305,6 @@ struct LibraryView: View {
                 folderPendingRename = nil
                 renameSetlistName = ""
             }
-        }
-        .confirmationDialog(
-            "Add to Folder",
-            isPresented: addToFolderDialogIsPresented,
-            presenting: scorePendingFolderSelection
-        ) { score in
-            let folders = foldersAvailableForAdding(score)
-            if folders.isEmpty {
-                Button("No available folders") {}
-                    .disabled(true)
-            } else {
-                ForEach(folders) { folder in
-                    Button(folder.name) {
-                        model.addScore(score, to: folder)
-                        scorePendingFolderSelection = nil
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                scorePendingFolderSelection = nil
-            }
-        } message: { score in
-            Text("Choose a folder for \(score.primaryTitle).")
         }
         .fullScreenCover(isPresented: $model.isCreateScorePresented) {
             CreateNewScoreView { draft in
@@ -337,13 +340,26 @@ struct LibraryView: View {
             }
         }
         .fullScreenCover(item: $readerPresentation) { presentation in
-            ScoreReaderView(
-                session: presentation.session,
-                initialPageIndex: presentation.startPageIndex,
-                initialToolCategory: presentation.initialToolCategory,
-                initialInteractionMode: presentation.initialInteractionMode
-            )
+            Group {
+                if let setlistSequence = presentation.setlistSequence {
+                    SetlistScoreReaderHost(
+                        model: model,
+                        initialSession: presentation.session,
+                        sequence: setlistSequence
+                    )
+                } else {
+                    ScoreReaderView(
+                        session: presentation.session,
+                        initialPageIndex: presentation.startPageIndex,
+                        initialToolCategory: presentation.initialToolCategory,
+                        initialInteractionMode: presentation.initialInteractionMode
+                    )
+                }
+            }
                 .onDisappear {
+                    guard presentation.setlistSequence == nil else {
+                        return
+                    }
                     Task {
                         await model.refreshLibraryPreviewAfterClosing(presentation.session)
                     }
@@ -351,6 +367,15 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $isOpenSourceLegalPresented) {
             OpenSourceLegalView()
+        }
+        .sheet(item: $scorePendingFolderSelection) { score in
+            ScoreSetlistPickerSheet(
+                scoreTitle: score.primaryTitle,
+                setlists: foldersAvailableForAdding(score),
+                addAction: { setlist in
+                    model.addScore(score, to: setlist)
+                }
+            )
         }
         .sheet(item: $model.libraryAccessSheet) { sheet in
             switch sheet {
@@ -376,8 +401,13 @@ struct LibraryView: View {
                     }
                 )
             } else {
-                Text("This folder is no longer available.")
+                Text("This setlist is no longer available.")
                     .padding()
+            }
+        }
+        .sheet(isPresented: $isSetlistReorderPresented) {
+            ReorderSetlistsSheet(setlists: model.setlistFolders) { orderedIDs in
+                model.reorderSetlists(using: orderedIDs)
             }
         }
         .fullScreenCover(item: $scoreInfoEditorSession) { session in
@@ -441,16 +471,6 @@ struct LibraryView: View {
         }
     }
 
-    private var addToFolderDialogIsPresented: Binding<Bool> {
-        Binding {
-            scorePendingFolderSelection != nil
-        } set: { isPresented in
-            if !isPresented {
-                scorePendingFolderSelection = nil
-            }
-        }
-    }
-
     private func foldersAvailableForAdding(_ score: ReaderRecentDocument) -> [LibrarySetlistFolder] {
         model.setlistFolders.filter { !folder($0, contains: score) }
     }
@@ -470,13 +490,51 @@ struct LibraryView: View {
     }
 
     private func openScore(_ recent: ReaderRecentDocument) {
+        // Capture the exact visible performance order before opening updates
+        // the score's recent timestamp and potentially changes Recent sorting.
+        let setlist = activeSetlistFolder
+        let visibleScoreSnapshot = displayedScores
+        let selectedSnapshotIndex = visibleScoreSnapshot.firstIndex(where: { $0.id == recent.id })
+
         Task {
             guard let session = await model.readerSession(for: recent) else {
                 return
             }
 
-            readerPresentation = LibraryReaderPresentation(session: session, startPageIndex: 0)
+            let sequence: SetlistReaderSequence?
+            if let setlist,
+               let selectedIndex = selectedSnapshotIndex
+            {
+                sequence = SetlistReaderSequence(
+                    setlistID: setlist.id,
+                    scores: visibleScoreSnapshot,
+                    selectedIndex: selectedIndex
+                )
+            } else {
+                sequence = nil
+            }
+
+            readerPresentation = LibraryReaderPresentation(
+                session: session,
+                startPageIndex: 0,
+                setlistSequence: sequence
+            )
         }
+    }
+
+    private func presentSetlistReorder() {
+        guard model.setlistFolders.count > 1 else {
+            return
+        }
+        isSetlistReorderPresented = true
+    }
+
+    private func reorderScores(
+        in setlist: LibrarySetlistFolder,
+        using orderedScoreIDs: [ReaderRecentDocument.ID]
+    ) {
+        model.reorderScores(in: setlist, using: orderedScoreIDs)
+        setlistScoreSortOrder = .setlistOrder
     }
 
     private func presentScoreInfoEditor(for recent: ReaderRecentDocument) {
@@ -528,16 +586,17 @@ private enum LibraryCategory: Equatable {
         case .allScores:
             return "All Scores"
         case .setlists:
-            return "Folders"
+            return "Setlists"
         case .setlist(_):
-            return "Folder"
+            return "Setlist"
         case .settings:
             return "Settings"
         }
     }
 }
 
-private enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
+enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
+    case setlistOrder
     case recentlyOpened
     case titleAscending
     case titleDescending
@@ -546,6 +605,8 @@ private enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .setlistOrder:
+            return "Custom Order"
         case .recentlyOpened:
             return "Recently Opened"
         case .titleAscending:
@@ -557,6 +618,8 @@ private enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
 
     var compactTitle: String {
         switch self {
+        case .setlistOrder:
+            return "Custom"
         case .recentlyOpened:
             return "Recent"
         case .titleAscending:
@@ -568,6 +631,8 @@ private enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .setlistOrder:
+            return "line.3.horizontal"
         case .recentlyOpened:
             return "clock"
         case .titleAscending, .titleDescending:
@@ -576,8 +641,14 @@ private enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
     }
 
     func sorted(_ scores: [ReaderRecentDocument]) -> [ReaderRecentDocument] {
-        scores.sorted { lhs, rhs in
+        guard self != .setlistOrder else {
+            return scores
+        }
+
+        return scores.sorted { lhs, rhs in
             switch self {
+            case .setlistOrder:
+                return false
             case .recentlyOpened:
                 if lhs.lastOpened != rhs.lastOpened {
                     return lhs.lastOpened > rhs.lastOpened
@@ -602,6 +673,20 @@ private enum LibraryScoreSortOrder: String, CaseIterable, Identifiable {
 
     private func compareTitles(_ lhs: ReaderRecentDocument, _ rhs: ReaderRecentDocument) -> ComparisonResult {
         lhs.primaryTitle.localizedStandardCompare(rhs.primaryTitle)
+    }
+}
+
+struct LibraryScoreDisplayPolicy {
+    static func filtered(_ scores: [ReaderRecentDocument], query rawQuery: String) -> [ReaderRecentDocument] {
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else {
+            return scores
+        }
+        return scores.filter { score in
+            [score.primaryTitle, score.secondaryLine ?? "", score.displayName]
+                .map { $0.lowercased() }
+                .contains { $0.contains(query) }
+        }
     }
 }
 
@@ -705,6 +790,52 @@ private struct FolderScoreAddRequest: Identifiable {
     let id: UUID
 }
 
+private struct ReorderSetlistsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var setlists: [LibrarySetlistFolder]
+
+    let saveAction: ([UUID]) -> Void
+
+    init(setlists: [LibrarySetlistFolder], saveAction: @escaping ([UUID]) -> Void) {
+        _setlists = State(initialValue: setlists)
+        self.saveAction = saveAction
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(setlists) { setlist in
+                    Label(setlist.name, systemImage: "music.note.list")
+                        .font(.system(size: 16, weight: .medium))
+                        .accessibilityLabel("Setlist, \(setlist.name)")
+                }
+                .onMove { source, destination in
+                    setlists.move(fromOffsets: source, toOffset: destination)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Reorder Setlists")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        saveAction(setlists.map(\.id))
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .frame(minWidth: 320, idealWidth: 520, minHeight: 420, idealHeight: 640)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 enum LibraryPalette {
     static let accent = Color(red: 0.00, green: 0.48, blue: 1.00)
     static let accentSoft = Color(red: 0.89, green: 0.95, blue: 1.00)
@@ -734,6 +865,7 @@ private struct LibrarySidebar: View {
     let loadingMessage: String
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
+    let reorderSetlistsAction: () -> Void
     let settingsAction: () -> Void
     let dropScoreAction: (String, LibrarySetlistFolder) -> Void
 
@@ -763,14 +895,26 @@ private struct LibrarySidebar: View {
 
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            SidebarSectionTitle("FOLDERS")
+                            SidebarSectionTitle("SETLISTS")
                             Spacer()
-                            Button(action: createFolderAction) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(LibraryPalette.subtle)
+                            HStack(spacing: 12) {
+                                Button(action: reorderSetlistsAction) {
+                                    Image(systemName: "arrow.up.arrow.down")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(LibraryPalette.subtle)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(folders.count < 2)
+                                .accessibilityLabel("Reorder Setlists")
+
+                                Button(action: createFolderAction) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(LibraryPalette.subtle)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("New Setlist")
                             }
-                            .buttonStyle(.plain)
                         }
 
                         ForEach(folders) { folder in
@@ -907,7 +1051,7 @@ private struct SidebarSetlistButton: View {
     var body: some View {
         Button(action: selectAction) {
             HStack(spacing: 12) {
-                Image(systemName: "folder")
+                Image(systemName: "music.note.list")
                     .font(.system(size: 18, weight: .medium))
                 Text(folder.name)
                     .font(.system(size: 17, weight: .medium))
@@ -925,7 +1069,7 @@ private struct SidebarSetlistButton: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button(action: renameAction) {
-                Label("Rename Folder", systemImage: "pencil")
+                Label("Rename Setlist", systemImage: "pencil")
             }
         }
         .onDrop(of: [UTType.plainText], isTargeted: $isDropTargeted) { providers in
@@ -957,7 +1101,7 @@ enum PhoneTab: Int, CaseIterable {
     var title: String {
         switch self {
         case .all: return "All Scores"
-        case .setlists: return "Folders"
+        case .setlists: return "Setlists"
         case .settings: return "Settings"
         }
     }
@@ -965,7 +1109,7 @@ enum PhoneTab: Int, CaseIterable {
     var systemImage: String {
         switch self {
         case .all: return "square.grid.2x2"
-        case .setlists: return "folder"
+        case .setlists: return "music.note.list"
         case .settings: return "gearshape"
         }
     }
@@ -973,6 +1117,7 @@ enum PhoneTab: Int, CaseIterable {
 
 private struct PhoneLibraryView: View {
     let scores: [ReaderRecentDocument]
+    let activeSetlistOrderedScores: [ReaderRecentDocument]
     @Binding var selectedCategory: LibraryCategory
     let title: String
     @Binding var searchText: String
@@ -988,8 +1133,11 @@ private struct PhoneLibraryView: View {
     let addToFolderAction: (ReaderRecentDocument) -> Void
     let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
     let showAddScoresAction: (LibrarySetlistFolder) -> Void
+    @Binding var isEditingSetlist: Bool
+    let reorderScoresAction: (LibrarySetlistFolder, [ReaderRecentDocument.ID]) -> Void
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
+    let reorderSetlistsAction: () -> Void
     let openSourceAction: () -> Void
     let accessStatus: LibraryAccessStatus
     let accessDisplayPrice: String?
@@ -1057,6 +1205,7 @@ private struct PhoneLibraryView: View {
 
                 if activeTab != .settings {
                     PhoneSearchField(text: $searchText)
+                        .disabled(isEditingSetlist)
                 }
 
                 if selectedCategory == .allScores, accessStatus == .free {
@@ -1076,7 +1225,8 @@ private struct PhoneLibraryView: View {
                         folders: folders,
                         selectedCategory: $selectedCategory,
                         createFolderAction: createFolderAction,
-                        renameFolderAction: renameFolderAction
+                        renameFolderAction: renameFolderAction,
+                        reorderSetlistsAction: reorderSetlistsAction
                     )
                 } else if activeTab == .settings {
                     PhoneSettingsContent(
@@ -1088,6 +1238,17 @@ private struct PhoneLibraryView: View {
                 } else if showsScoreList {
                     if let activeFolder {
                         HStack(alignment: .center, spacing: 12) {
+                            Button {
+                                selectedCategory = .setlists
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(LibraryPalette.accent)
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Back to Setlists")
+
                             Text(title)
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundStyle(LibraryPalette.ink)
@@ -1113,17 +1274,68 @@ private struct PhoneLibraryView: View {
                                 }
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Add Scores to Folder")
+                            .disabled(isEditingSetlist)
+                            .accessibilityLabel("Add Scores to Setlist")
+
+                            Button {
+                                if !isEditingSetlist {
+                                    sortOrder = .setlistOrder
+                                }
+                                isEditingSetlist.toggle()
+                            } label: {
+                                Text(isEditingSetlist ? "Done" : "Edit")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(LibraryPalette.accent)
+                                    .padding(.horizontal, 11)
+                                    .frame(height: 32)
+                                    .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(activeSetlistOrderedScores.isEmpty)
+                            .accessibilityLabel(isEditingSetlist ? "Done Editing Setlist" : "Edit Setlist")
                         }
                     }
-                    LibraryScoreDisplayBar(
-                        scoreCount: scores.count,
-                        sortOrder: $sortOrder,
-                        scoreLayout: $scoreLayout,
-                        isCompact: true
-                    )
+                    if !isEditingSetlist {
+                        LibraryScoreDisplayBar(
+                            scoreCount: scores.count,
+                            sortOrder: $sortOrder,
+                            scoreLayout: $scoreLayout,
+                            isCompact: true,
+                            includesSetlistOrder: activeFolder != nil
+                        )
+                    }
 
-                    if scoreLayout == .list {
+                    if isEditingSetlist, let activeFolder {
+                        SetlistScoreEditingList(
+                            scores: activeSetlistOrderedScores,
+                            removeAction: { score in
+                                removeFromFolderAction(score, activeFolder)
+                            },
+                            reorderAction: { orderedIDs in
+                                reorderScoresAction(activeFolder, orderedIDs)
+                            }
+                        )
+                        .frame(height: max(90, CGFloat(activeSetlistOrderedScores.count) * 62 + 18))
+                    } else if scores.isEmpty, activeFolder != nil {
+                        VStack(spacing: 10) {
+                            Image(systemName: "text.badge.plus")
+                                .font(.system(size: 34, weight: .light))
+                                .foregroundStyle(LibraryPalette.subtle)
+                            Text("No scores in this setlist")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(LibraryPalette.mutedInk)
+                            Text("Tap Add to choose scores from your library.")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(LibraryPalette.subtle)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 36)
+                    } else if scoreLayout == .list {
                         PhoneScoreList(
                             scores: scores,
                             openAction: openAction,
@@ -1247,35 +1459,49 @@ private struct PhoneSetlistContent: View {
     @Binding var selectedCategory: LibraryCategory
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
+    let reorderSetlistsAction: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             // Header row with New Folder button
             HStack {
-                Text("Folders")
+                Text("Setlists")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(LibraryPalette.subtle)
                     .tracking(0.5)
                 Spacer()
-                Button(action: createFolderAction) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                        Text("New Folder")
+                HStack(spacing: 14) {
+                    Button(action: reorderSetlistsAction) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.arrow.down")
+                            Text("Reorder")
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(LibraryPalette.accent)
                     }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LibraryPalette.accent)
+                    .buttonStyle(.plain)
+                    .disabled(folders.count < 2)
+
+                    Button(action: createFolderAction) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus")
+                            Text("New Setlist")
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(LibraryPalette.accent)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 4)
             .padding(.bottom, 8)
 
             if folders.isEmpty {
                 VStack(spacing: 10) {
-                    Image(systemName: "folder.badge.plus")
+                    Image(systemName: "text.badge.plus")
                         .font(.system(size: 36, weight: .light))
                         .foregroundStyle(LibraryPalette.subtle)
-                    Text("No folders yet")
+                    Text("No setlists yet")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(LibraryPalette.subtle)
                 }
@@ -1288,7 +1514,7 @@ private struct PhoneSetlistContent: View {
                             selectedCategory = .setlist(folder.id)
                         } label: {
                             HStack(spacing: 13) {
-                                Image(systemName: "folder")
+                                Image(systemName: "music.note.list")
                                     .font(.system(size: 17, weight: .regular))
                                     .foregroundStyle(LibraryPalette.accent)
                                     .frame(width: 22)
@@ -1309,7 +1535,7 @@ private struct PhoneSetlistContent: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button { renameFolderAction(folder) } label: {
-                                Label("Rename Folder", systemImage: "pencil")
+                                Label("Rename Setlist", systemImage: "pencil")
                             }
                         }
 
@@ -1454,13 +1680,13 @@ private struct PhoneScoreListRow: View {
                 Label("Edit Info", systemImage: "square.and.pencil")
             }
             Button(action: addToFolderAction) {
-                Label("Add to Folder", systemImage: "folder.badge.plus")
+                Label("Add to Setlist", systemImage: "text.badge.plus")
             }
             if let activeFolder {
                 Button {
                     removeFromFolderAction(activeFolder)
                 } label: {
-                    Label("Remove from Folder", systemImage: "folder.badge.minus")
+                    Label("Remove from Setlist", systemImage: "text.badge.minus")
                 }
             }
             Button(role: .destructive, action: deleteAction) {
@@ -1482,10 +1708,10 @@ private struct FolderScorePickerSheet: View {
             Group {
                 if scores.isEmpty {
                     VStack(spacing: 12) {
-                        Image(systemName: "checkmark.folder")
+                        Image(systemName: "checkmark.circle")
                             .font(.system(size: 38, weight: .light))
                             .foregroundStyle(LibraryPalette.subtle)
-                        Text("All scores are already in this folder.")
+                        Text("All scores are already in this setlist.")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(LibraryPalette.mutedInk)
                             .multilineTextAlignment(.center)
@@ -1534,6 +1760,73 @@ private struct FolderScorePickerSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct ScoreSetlistPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let scoreTitle: String
+    let setlists: [LibrarySetlistFolder]
+    let addAction: (LibrarySetlistFolder) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if setlists.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 38, weight: .light))
+                            .foregroundStyle(LibraryPalette.subtle)
+                        Text("This score is already in every setlist.")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(LibraryPalette.mutedInk)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(26)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(LibraryPalette.mainBackground)
+                } else {
+                    List(setlists) { setlist in
+                        Button {
+                            addAction(setlist)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "music.note.list")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(LibraryPalette.accent)
+                                    .frame(width: 24)
+
+                                Text(setlist.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(LibraryPalette.ink)
+                                    .lineLimit(1)
+
+                                Spacer(minLength: 0)
+
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundStyle(LibraryPalette.accent)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            }
+            .navigationTitle("Add \(scoreTitle) to Setlist")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -1586,6 +1879,7 @@ private struct PhoneSettingsContent: View {
 
 private struct LibraryDashboardView: View {
     let scores: [ReaderRecentDocument]
+    let activeSetlistOrderedScores: [ReaderRecentDocument]
     let selectedCategory: LibraryCategory
     let title: String
     @Binding var searchText: String
@@ -1596,6 +1890,11 @@ private struct LibraryDashboardView: View {
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
+    let activeSetlist: LibrarySetlistFolder?
+    let showAddScoresAction: (LibrarySetlistFolder) -> Void
+    @Binding var isEditingSetlist: Bool
+    let reorderScoresAction: (LibrarySetlistFolder, [ReaderRecentDocument.ID]) -> Void
+    let removeFromSetlistAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
     let openSourceAction: () -> Void
     let accessStatus: LibraryAccessStatus
     let accessDisplayPrice: String?
@@ -1609,10 +1908,14 @@ private struct LibraryDashboardView: View {
                 title: title,
                 searchText: $searchText,
                 createAction: createAction,
-                importAction: importAction
+                importAction: importAction,
+                activeSetlist: activeSetlist,
+                showAddScoresAction: showAddScoresAction,
+                canEditSetlist: !activeSetlistOrderedScores.isEmpty,
+                isEditingSetlist: $isEditingSetlist
             )
 
-            if selectedCategory != .settings {
+            if selectedCategory != .settings, !isEditingSetlist {
                 LibraryScoreDisplayBar(
                     scoreCount: scores.count,
                     sortOrder: $sortOrder,
@@ -1621,7 +1924,8 @@ private struct LibraryDashboardView: View {
                     freeScoreUsage: selectedCategory == .allScores && accessStatus == .free
                         ? managedScoreCount
                         : nil,
-                    freeScoreLimit: freeScoreLimit
+                    freeScoreLimit: freeScoreLimit,
+                    includesSetlistOrder: activeSetlist != nil
                 )
             }
 
@@ -1635,7 +1939,18 @@ private struct LibraryDashboardView: View {
                     .background(LibraryPalette.background)
             }
 
-            ScrollView {
+            if isEditingSetlist, let activeSetlist {
+                SetlistScoreEditingList(
+                    scores: activeSetlistOrderedScores,
+                    removeAction: { score in
+                        removeFromSetlistAction(score, activeSetlist)
+                    },
+                    reorderAction: { orderedIDs in
+                        reorderScoresAction(activeSetlist, orderedIDs)
+                    }
+                )
+            } else {
+                ScrollView {
                 if selectedCategory == .settings {
                     LibrarySettingsContent(
                         accessStatus: accessStatus,
@@ -1652,7 +1967,10 @@ private struct LibraryDashboardView: View {
                         scores: scores,
                         openAction: openAction,
                         editInfoAction: editInfoAction,
-                        deleteAction: deleteAction
+                        deleteAction: deleteAction,
+                        removeFromSetlistAction: activeSetlist.map { setlist in
+                            { score in removeFromSetlistAction(score, setlist) }
+                        }
                     )
                     .padding(34)
                 } else {
@@ -1663,15 +1981,24 @@ private struct LibraryDashboardView: View {
                                 paletteIndex: index,
                                 openAction: { openAction(score) },
                                 editInfoAction: { editInfoAction(score) },
-                                deleteAction: { deleteAction(score) }
+                                deleteAction: { deleteAction(score) },
+                                removeFromFolderAction: activeSetlist.map { setlist in
+                                    { removeFromSetlistAction(score, setlist) }
+                                }
                             )
                         }
                     }
                     .padding(34)
                 }
             }
+            }
         }
         .background(LibraryPalette.mainBackground)
+        .onChangeCompatible(of: isEditingSetlist) { isEditing in
+            if isEditing {
+                sortOrder = .setlistOrder
+            }
+        }
     }
 }
 
@@ -1682,6 +2009,7 @@ private struct LibraryScoreDisplayBar: View {
     let isCompact: Bool
     var freeScoreUsage: Int? = nil
     var freeScoreLimit: Int = LibraryAccessPolicy.freeScoreLimit
+    var includesSetlistOrder = false
 
     private var scoreCountLabel: String {
         "\(scoreCount) \(scoreCount == 1 ? "score" : "scores")"
@@ -1702,7 +2030,7 @@ private struct LibraryScoreDisplayBar: View {
 
             Menu {
                 Picker("Sort Order", selection: $sortOrder) {
-                    ForEach(LibraryScoreSortOrder.allCases) { option in
+                    ForEach(LibraryScoreSortOrder.allCases.filter { includesSetlistOrder || $0 != .setlistOrder }) { option in
                         Label(option.title, systemImage: option.systemImage)
                             .tag(option)
                     }
@@ -1777,11 +2105,55 @@ private struct LibraryDisplayMenuLabel: View {
     }
 }
 
+private struct SetlistScoreEditingList: View {
+    let scores: [ReaderRecentDocument]
+    let removeAction: (ReaderRecentDocument) -> Void
+    let reorderAction: ([ReaderRecentDocument.ID]) -> Void
+
+    var body: some View {
+        List {
+            ForEach(scores) { score in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(score.primaryTitle)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(LibraryPalette.ink)
+                        .lineLimit(1)
+
+                    if let secondaryLine = score.secondaryLine?.trimmedToNil {
+                        Text(secondaryLine)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(LibraryPalette.mutedInk)
+                            .lineLimit(1)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+            .onDelete { offsets in
+                for offset in offsets.sorted(by: >) {
+                    guard scores.indices.contains(offset) else { continue }
+                    removeAction(scores[offset])
+                }
+            }
+            .onMove { source, destination in
+                var reorderedScores = scores
+                reorderedScores.move(fromOffsets: source, toOffset: destination)
+                reorderAction(reorderedScores.map(\.id))
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(LibraryPalette.mainBackground)
+        .environment(\.editMode, .constant(.active))
+        .accessibilityLabel("Edit Setlist Scores")
+    }
+}
+
 private struct LibraryScoreList: View {
     let scores: [ReaderRecentDocument]
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
+    let removeFromSetlistAction: ((ReaderRecentDocument) -> Void)?
 
     var body: some View {
         LazyVStack(spacing: 0) {
@@ -1790,7 +2162,10 @@ private struct LibraryScoreList: View {
                     score: score,
                     openAction: { openAction(score) },
                     editInfoAction: { editInfoAction(score) },
-                    deleteAction: { deleteAction(score) }
+                    deleteAction: { deleteAction(score) },
+                    removeFromSetlistAction: removeFromSetlistAction.map { action in
+                        { action(score) }
+                    }
                 )
 
                 if index < scores.count - 1 {
@@ -1815,6 +2190,7 @@ private struct LibraryScoreListRow: View {
     let openAction: () -> Void
     let editInfoAction: () -> Void
     let deleteAction: () -> Void
+    let removeFromSetlistAction: (() -> Void)?
 
     var body: some View {
         Button(action: openAction) {
@@ -1850,6 +2226,11 @@ private struct LibraryScoreListRow: View {
         .contextMenu {
             Button(action: editInfoAction) {
                 Label("Edit Info", systemImage: "square.and.pencil")
+            }
+            if let removeFromSetlistAction {
+                Button(action: removeFromSetlistAction) {
+                    Label("Remove from Setlist", systemImage: "text.badge.minus")
+                }
             }
             Button(role: .destructive, action: deleteAction) {
                 Label("Delete Score", systemImage: "trash")
@@ -1917,6 +2298,10 @@ private struct LibraryDashboardHeader: View {
     @Binding var searchText: String
     let createAction: () -> Void
     let importAction: () -> Void
+    let activeSetlist: LibrarySetlistFolder?
+    let showAddScoresAction: (LibrarySetlistFolder) -> Void
+    let canEditSetlist: Bool
+    @Binding var isEditingSetlist: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 20) {
@@ -1928,38 +2313,95 @@ private struct LibraryDashboardHeader: View {
 
             HStack(spacing: 16) {
                 SearchField(text: $searchText)
-                    .frame(width: 320)
+                    .frame(width: activeSetlist == nil ? 320 : 260)
+                    .disabled(isEditingSetlist)
 
-                Button(action: importAction) {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .foregroundStyle(.white)
-                    .frame(width: 74, height: 48)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(LibraryPalette.accent)
-                    )
-                    .shadow(color: LibraryPalette.accent.opacity(0.22), radius: 12, y: 4)
-                }
-                .buttonStyle(.plain)
-
-                Button(action: createAction) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .foregroundStyle(LibraryPalette.accent)
-                    .frame(width: 70, height: 48)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                if let activeSetlist {
+                    Button {
+                        showAddScoresAction(activeSetlist)
+                    } label: {
+                        Label("Add", systemImage: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(LibraryPalette.accent)
+                            .frame(width: 76, height: 48)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                            }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(isEditingSetlist)
+                    .accessibilityLabel("Add Scores to Setlist")
+
+                    Button {
+                        isEditingSetlist.toggle()
+                    } label: {
+                        Text(isEditingSetlist ? "Done" : "Edit")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(LibraryPalette.accent)
+                            .frame(width: 68, height: 48)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canEditSetlist)
+                    .accessibilityLabel(isEditingSetlist ? "Done Editing Setlist" : "Edit Setlist")
+
+                    Menu {
+                        Button(action: importAction) {
+                            Label("Import Score", systemImage: "doc.badge.plus")
+                        }
+                        Button(action: createAction) {
+                            Label("New Score", systemImage: "plus")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(LibraryPalette.accent)
+                            .frame(width: 48, height: 48)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                            }
+                    }
+                    .accessibilityLabel("More Library Actions")
+                } else {
+                    Button(action: importAction) {
+                        Image(systemName: "doc.badge.plus")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            .foregroundStyle(.white)
+                            .frame(width: 74, height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(LibraryPalette.accent)
+                            )
+                            .shadow(color: LibraryPalette.accent.opacity(0.22), radius: 12, y: 4)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: createAction) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            .foregroundStyle(LibraryPalette.accent)
+                            .frame(width: 70, height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.white)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 34)
@@ -2082,12 +2524,12 @@ private struct LibraryScoreCard: View {
                 }
                 if let addToFolderAction {
                     Button(action: addToFolderAction) {
-                        Label("Add to Folder", systemImage: "folder.badge.plus")
+                        Label("Add to Setlist", systemImage: "text.badge.plus")
                     }
                 }
                 if let removeFromFolderAction {
                     Button(action: removeFromFolderAction) {
-                        Label("Remove from Folder", systemImage: "folder.badge.minus")
+                        Label("Remove from Setlist", systemImage: "text.badge.minus")
                     }
                 }
                 Button(role: .destructive, action: deleteAction) {
@@ -2330,21 +2772,26 @@ private struct LibraryEmptyState: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: "music.note.house")
+            Image(systemName: isSetlist ? "music.note.list" : "music.note.house")
                 .font(.system(size: 40, weight: .medium))
                 .foregroundStyle(LibraryPalette.accent)
 
-            Text("No scores in your library yet")
+            Text(isSetlist ? "No scores in this setlist" : "No scores in your library yet")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(LibraryPalette.ink)
 
-            Text("Create a new score or import a MuseScore file. It will appear here with the new library styling, ready to open in the reader.")
+            Text(
+                isSetlist
+                    ? "Use Add Scores above to choose scores from your library."
+                    : "Create a new score or import a MuseScore file. It will appear here, ready to open in the reader."
+            )
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(LibraryPalette.mutedInk)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 460)
 
-            HStack(spacing: 14) {
+            if !isSetlist {
+                HStack(spacing: 14) {
                 Button(action: createAction) {
                     HStack(spacing: 10) {
                         Image(systemName: "plus")
@@ -2380,9 +2827,217 @@ private struct LibraryEmptyState: View {
                     }
                 }
                 .buttonStyle(.plain)
+                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 420)
+    }
+
+    private var isSetlist: Bool {
+        if case .setlist = selectedCategory {
+            return true
+        }
+        return false
+    }
+}
+
+private struct SetlistReaderSequence {
+    let setlistID: UUID
+    let scores: [ReaderRecentDocument]
+    let selectedIndex: Int
+}
+
+struct SetlistReaderNavigationPlan {
+    static func targetIndex(
+        from currentIndex: Int,
+        direction: ScoreReaderSequenceDirection,
+        scoreCount: Int
+    ) -> Int? {
+        guard scoreCount > 0, currentIndex >= 0, currentIndex < scoreCount else {
+            return nil
+        }
+
+        let candidate: Int
+        switch direction {
+        case .previous:
+            candidate = currentIndex - 1
+        case .next:
+            candidate = currentIndex + 1
+        }
+        return candidate >= 0 && candidate < scoreCount ? candidate : nil
+    }
+
+    static func initialPageIndex(
+        for direction: ScoreReaderSequenceDirection,
+        targetPageCount: Int
+    ) -> Int {
+        switch direction {
+        case .previous:
+            return max(targetPageCount - 1, 0)
+        case .next:
+            return 0
+        }
+    }
+}
+
+private struct SetlistScoreReaderHost: View {
+    private struct FailedTransition {
+        let direction: ScoreReaderSequenceDirection
+        let readingStyle: ScoreReaderReadingStyle
+    }
+
+    @ObservedObject var model: MuseReaderAppModel
+
+    let sequence: SetlistReaderSequence
+
+    @State private var currentSession: ScoreSession
+    @State private var currentIndex: Int
+    @State private var initialPageIndex = 0
+    @State private var readingStyleOverride: ScoreReaderReadingStyle?
+    @State private var transitionErrorMessage: String?
+    @State private var failedTransition: FailedTransition?
+    @State private var retryLoadingTitle: String?
+
+    init(model: MuseReaderAppModel, initialSession: ScoreSession, sequence: SetlistReaderSequence) {
+        self.model = model
+        self.sequence = sequence
+        _currentSession = State(initialValue: initialSession)
+        _currentIndex = State(
+            initialValue: min(max(sequence.selectedIndex, 0), max(sequence.scores.count - 1, 0))
+        )
+    }
+
+    var body: some View {
+        ZStack {
+            ScoreReaderView(
+                session: currentSession,
+                initialPageIndex: initialPageIndex,
+                resumesRememberedPage: false,
+                initialReadingStyle: readingStyleOverride,
+                setlistNavigation: navigation
+            )
+            .id(currentSession.id)
+
+            if let retryLoadingTitle {
+                Color.black.opacity(0.08)
+                    .ignoresSafeArea()
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Opening \(retryLoadingTitle)…")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(Color.black.opacity(0.82))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: Capsule())
+            }
+        }
+        .alert("Couldn’t Open Score", isPresented: transitionErrorIsPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Try Again") {
+                retryFailedTransition()
+            }
+        } message: {
+            Text(transitionErrorMessage ?? "Aria could not open the selected score.")
+        }
+        .onDisappear {
+            let finalSession = currentSession
+            Task {
+                await model.refreshLibraryPreviewAfterClosing(finalSession)
+            }
+        }
+    }
+
+    private var navigation: ScoreReaderSetlistNavigation {
+        let previousTitle = score(at: currentIndex - 1)?.primaryTitle
+        let nextTitle = score(at: currentIndex + 1)?.primaryTitle
+        let nextPosition = min(currentIndex + 2, sequence.scores.count)
+        return ScoreReaderSetlistNavigation(
+            previousScoreTitle: previousTitle,
+            nextScoreTitle: nextTitle,
+            positionLabel: "Score \(nextPosition) of \(sequence.scores.count)",
+            transition: { direction, readingStyle in
+                await transition(direction: direction, readingStyle: readingStyle)
+            }
+        )
+    }
+
+    private var transitionErrorIsPresented: Binding<Bool> {
+        Binding {
+            transitionErrorMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                transitionErrorMessage = nil
+            }
+        }
+    }
+
+    private func score(at index: Int) -> ReaderRecentDocument? {
+        guard sequence.scores.indices.contains(index) else {
+            return nil
+        }
+        return sequence.scores[index]
+    }
+
+    @MainActor
+    private func transition(
+        direction: ScoreReaderSequenceDirection,
+        readingStyle: ScoreReaderReadingStyle
+    ) async -> Bool {
+        guard let targetIndex = SetlistReaderNavigationPlan.targetIndex(
+            from: currentIndex,
+            direction: direction,
+            scoreCount: sequence.scores.count
+        ) else {
+            return false
+        }
+
+        let targetScore = sequence.scores[targetIndex]
+        let outgoingSession = currentSession
+        do {
+            let targetSession = try await model.loadReaderSession(for: targetScore)
+            await model.refreshLibraryPreviewAfterSetlistTransition(outgoingSession)
+
+            readingStyleOverride = readingStyle
+            initialPageIndex = SetlistReaderNavigationPlan.initialPageIndex(
+                for: direction,
+                targetPageCount: targetSession.pageCount
+            )
+            currentIndex = targetIndex
+            currentSession = targetSession
+            transitionErrorMessage = nil
+            failedTransition = nil
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            failedTransition = FailedTransition(direction: direction, readingStyle: readingStyle)
+            transitionErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return false
+        }
+    }
+
+    private func retryFailedTransition() {
+        guard let failedTransition,
+              let targetIndex = SetlistReaderNavigationPlan.targetIndex(
+                  from: currentIndex,
+                  direction: failedTransition.direction,
+                  scoreCount: sequence.scores.count
+              )
+        else {
+            return
+        }
+
+        transitionErrorMessage = nil
+        retryLoadingTitle = sequence.scores[targetIndex].primaryTitle
+        Task { @MainActor in
+            _ = await transition(
+                direction: failedTransition.direction,
+                readingStyle: failedTransition.readingStyle
+            )
+            retryLoadingTitle = nil
+        }
     }
 }
 
@@ -2392,4 +3047,5 @@ private struct LibraryReaderPresentation: Identifiable {
     let startPageIndex: Int
     var initialToolCategory: ScoreReaderToolCategory = .select
     var initialInteractionMode: ScoreReaderInteractionMode = .view
+    var setlistSequence: SetlistReaderSequence? = nil
 }

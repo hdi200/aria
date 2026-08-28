@@ -8,6 +8,29 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
+enum ScoreReaderSequenceDirection: Equatable {
+    case previous
+    case next
+}
+
+struct ScoreReaderSetlistNavigation {
+    let previousScoreTitle: String?
+    let nextScoreTitle: String?
+    let positionLabel: String
+    let transition: @MainActor (ScoreReaderSequenceDirection, ScoreReaderReadingStyle) async -> Bool
+}
+
+struct ScoreReaderPageSwipePolicy {
+    static func direction(for translation: CGSize, threshold: CGFloat = 48) -> ScoreReaderSequenceDirection? {
+        guard abs(translation.width) >= threshold,
+              abs(translation.width) > abs(translation.height)
+        else {
+            return nil
+        }
+        return translation.width < 0 ? .next : .previous
+    }
+}
+
 private enum ScoreReaderTransposeScope {
     case selection
     case score
@@ -219,6 +242,7 @@ struct ScoreReaderView: View {
     @State private var pencilAutoNoteEntryAllowed = true
     @State private var zoomScaleBeforeTextEntry: CGFloat?
     @State private var isClosingScore = false
+    @State private var isTransitioningScore = false
     @State private var measuredNoteEntryPanelHeight: CGFloat = 0
     @State private var measuredTopChromeHeight: CGFloat = 0
     @State private var didApplyInitialToolCategory = false
@@ -227,17 +251,31 @@ struct ScoreReaderView: View {
     @State private var readingStyle: ScoreReaderReadingStyle = .pageTurn
     @State private var viewModeSaveErrorMessage: String?
 
+    private let setlistNavigation: ScoreReaderSetlistNavigation?
+
     init(
         session: ScoreSession,
         initialPageIndex: Int,
         initialToolCategory: ScoreReaderToolCategory = .select,
-        initialInteractionMode: ScoreReaderInteractionMode = .view
+        initialInteractionMode: ScoreReaderInteractionMode = .view,
+        resumesRememberedPage: Bool = true,
+        initialReadingStyle: ScoreReaderReadingStyle? = nil,
+        setlistNavigation: ScoreReaderSetlistNavigation? = nil
     ) {
         self.session = session
-        let rememberedState = initialInteractionMode == .view
+        var rememberedState = initialInteractionMode == .view
             ? ScoreReaderRememberedStateStore().state(for: session.id)
             : ScoreReaderRememberedState()
+        if !resumesRememberedPage {
+            rememberedState.pageIndex = initialPageIndex
+            rememberedState.selectedPartID = "full-score"
+            rememberedState.viewTransposeKey = nil
+        }
+        if let initialReadingStyle {
+            rememberedState.readingStyle = initialReadingStyle
+        }
         self.initialRememberedState = rememberedState
+        self.setlistNavigation = setlistNavigation
         _zoomScale = State(
             initialValue: initialInteractionMode == .view
                 ? ScoreReaderZoomLimits.minimumScale
@@ -408,7 +446,7 @@ struct ScoreReaderView: View {
                             editingState: readerState.editingState,
                             playbackState: readerState.playbackState,
                             metronomeEnabled: readerState.metronomeEnabled,
-                            isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isPreparingExport,
+                            isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isTransitioningScore || isPreparingExport,
                             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
                             isExportBusy: isPreparingExport,
                             playbackPreparationMessage: readerState.playbackPreparationMessage,
@@ -547,7 +585,9 @@ struct ScoreReaderView: View {
                     }
                     .overlay(alignment: .center) {
                         if isClosingScore {
-                            ScoreReaderSavingHUD()
+                            ScoreReaderSavingHUD(label: "Saving…")
+                        } else if isTransitioningScore {
+                            ScoreReaderSavingHUD(label: adjacentScoreLoadingLabel)
                         }
                     }
                     .overlay(alignment: .bottom) {
@@ -637,7 +677,7 @@ struct ScoreReaderView: View {
                             .padding(.bottom, 48)
                         }
                     }
-                    .allowsHitTesting(!isClosingScore)
+                    .allowsHitTesting(!isClosingScore && !isTransitioningScore)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -1185,6 +1225,20 @@ struct ScoreReaderView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .padding(12)
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+                .onEnded { value in
+                    guard let direction = ScoreReaderPageSwipePolicy.direction(for: value.translation) else {
+                        return
+                    }
+                    switch direction {
+                    case .previous:
+                        showPreviousPage()
+                    case .next:
+                        showNextPage()
+                    }
+                }
+        )
     }
 
     private var continuousReaderCanvas: some View {
@@ -1199,6 +1253,48 @@ struct ScoreReaderView: View {
                             .id(pageIndex)
                             .onAppear {
                                 readerState.prefetchPage(pageIndex)
+                            }
+                        }
+
+                        if readerState.interactionMode == .view, let setlistNavigation {
+                            if let nextTitle = setlistNavigation.nextScoreTitle {
+                                Button {
+                                    transitionToAdjacentScore(.next)
+                                } label: {
+                                    VStack(spacing: 6) {
+                                        Text("Next Score")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(Color.blue)
+                                        Text(nextTitle)
+                                            .font(.system(size: 18, weight: .bold))
+                                            .foregroundStyle(Color.black.opacity(0.82))
+                                            .lineLimit(2)
+                                        Text(setlistNavigation.positionLabel)
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(Color.black.opacity(0.52))
+                                    }
+                                    .frame(maxWidth: 520)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 20)
+                                    .padding(.horizontal, 24)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isTransitioningScore)
+                                .accessibilityLabel("Next Score, \(nextTitle)")
+                                .padding(.horizontal, 24)
+                            } else {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundStyle(Color.blue)
+                                    Text("End of Setlist")
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundStyle(Color.black.opacity(0.78))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 24)
+                                .accessibilityElement(children: .combine)
                             }
                         }
                     }
@@ -1433,6 +1529,7 @@ struct ScoreReaderView: View {
 
     private var keyboardShortcutsAreEnabled: Bool {
         !isClosingScore
+            && !isTransitioningScore
             && !textEntryFocusIsActive
             && textEditorDraft == nil
             && !isPartsPanelPresented
@@ -1655,7 +1752,7 @@ struct ScoreReaderView: View {
     }
 
     private func saveRememberedReaderState() {
-        guard !isClosingScore, readerState.interactionMode != .leavingEdit else {
+        guard !isClosingScore, !isTransitioningScore, readerState.interactionMode != .leavingEdit else {
             return
         }
 
@@ -1695,6 +1792,7 @@ struct ScoreReaderView: View {
             readerState.supportsEditing,
             !readerState.isEditingActionInFlight,
             !isClosingScore,
+            !isTransitioningScore,
             !isPreparingExport
         else {
             return
@@ -1826,7 +1924,13 @@ struct ScoreReaderView: View {
         let targetPageIndex = usesTwoPageSpread
             ? twoPageSpreadStartIndex - 2
             : readerState.selectedPageIndex - 1
-        guard readerState.interactionMode == .view, targetPageIndex >= 0 else {
+        guard readerState.interactionMode == .view else {
+            return
+        }
+        guard targetPageIndex >= 0 else {
+            if setlistNavigation?.previousScoreTitle != nil {
+                transitionToAdjacentScore(.previous)
+            }
             return
         }
         zoomScale = 1
@@ -1837,13 +1941,65 @@ struct ScoreReaderView: View {
         let targetPageIndex = usesTwoPageSpread
             ? twoPageSpreadStartIndex + 2
             : readerState.selectedPageIndex + 1
-        guard readerState.interactionMode == .view,
-              targetPageIndex < readerState.pageCount
-        else {
+        guard readerState.interactionMode == .view else {
+            return
+        }
+        guard targetPageIndex < readerState.pageCount else {
+            if setlistNavigation?.nextScoreTitle != nil {
+                transitionToAdjacentScore(.next)
+            }
             return
         }
         zoomScale = 1
         readerState.updatePageTurnSelection(to: targetPageIndex)
+    }
+
+    private var adjacentScoreLoadingLabel: String {
+        guard let setlistNavigation else {
+            return "Opening score…"
+        }
+        let title = isTransitioningTowardPreviousScore
+            ? setlistNavigation.previousScoreTitle
+            : setlistNavigation.nextScoreTitle
+        return title.map { "Opening \($0)…" } ?? "Opening score…"
+    }
+
+    @State private var isTransitioningTowardPreviousScore = false
+
+    private func transitionToAdjacentScore(_ direction: ScoreReaderSequenceDirection) {
+        guard let setlistNavigation,
+              readerState.interactionMode == .view,
+              !isClosingScore,
+              !isTransitioningScore
+        else {
+            return
+        }
+
+        switch direction {
+        case .previous:
+            guard setlistNavigation.previousScoreTitle != nil else { return }
+            isTransitioningTowardPreviousScore = true
+        case .next:
+            guard setlistNavigation.nextScoreTitle != nil else { return }
+            isTransitioningTowardPreviousScore = false
+        }
+
+        saveRememberedReaderState()
+        readerState.stopPlayback()
+        isTransitioningScore = true
+
+        Task { @MainActor in
+            await readerState.resetToFullScoreBeforeClosing()
+            guard await readerState.saveBeforeClosing() else {
+                isTransitioningScore = false
+                return
+            }
+
+            let didTransition = await setlistNavigation.transition(direction, readingStyle)
+            if !didTransition {
+                isTransitioningScore = false
+            }
+        }
     }
 
     private func exportScore() {
@@ -2543,11 +2699,13 @@ private struct ScoreReaderCorruptionMenu: View {
 }
 
 private struct ScoreReaderSavingHUD: View {
+    var label = "Saving…"
+
     var body: some View {
         HStack(spacing: 10) {
             ProgressView()
                 .controlSize(.small)
-            Text("Saving...")
+            Text(label)
                 .font(.system(size: 14, weight: .semibold))
         }
         .foregroundStyle(Color.black.opacity(0.82))

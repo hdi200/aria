@@ -120,6 +120,120 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func setlistResolvesLegacyKeysAndPreservesSavedOrder() {
+        let first = testRecentDocument(
+            id: "first",
+            title: "First",
+            libraryRelativePath: "Scores/First.mscz"
+        )
+        let second = testRecentDocument(
+            id: "second",
+            title: "Second",
+            libraryRelativePath: "Scores/Second.mscz"
+        )
+        let setlist = LibrarySetlistFolder(
+            name: "Show",
+            scoreKeys: [second.fileReference, first.setlistKey, first.fileReference]
+        )
+
+        #expect(setlist.orderedScores(from: [first, second]).map(\.id) == [second.id, first.id])
+    }
+
+    @Test
+    func newSetlistScoresAppendWithoutDuplicateMembership() {
+        var setlist = LibrarySetlistFolder(name: "Show", scoreKeys: ["first"])
+
+        let didAppend = setlist.appendScoreKeyIfNeeded("second")
+        #expect(didAppend)
+        #expect(setlist.scoreKeys == ["first", "second"])
+        let didAppendDuplicate = setlist.appendScoreKeyIfNeeded("second")
+        #expect(!didAppendDuplicate)
+        #expect(setlist.scoreKeys == ["first", "second"])
+    }
+
+    @Test
+    func setlistScoreReorderingValidatesAndStoresCanonicalKeys() {
+        let first = testRecentDocument(
+            id: "first",
+            title: "First",
+            libraryRelativePath: "Scores/First.mscz"
+        )
+        let second = testRecentDocument(
+            id: "second",
+            title: "Second",
+            libraryRelativePath: "Scores/Second.mscz"
+        )
+        var setlist = LibrarySetlistFolder(
+            name: "Show",
+            scoreKeys: [first.fileReference, second.fileReference]
+        )
+
+        let didReorder = setlist.reorderScores(using: [second.id, first.id], from: [first, second])
+        #expect(didReorder)
+        #expect(setlist.scoreKeys == [second.setlistKey, first.setlistKey])
+        let didAcceptIncompleteOrder = setlist.reorderScores(using: [first.id], from: [first, second])
+        #expect(!didAcceptIncompleteOrder)
+    }
+
+    @Test @MainActor
+    func setlistStoreReloadsPersistedOrderWithoutMigration() throws {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AriaSetlistStoreTests-\(UUID().uuidString)", isDirectory: true)
+        let storageURL = directoryURL.appendingPathComponent("setlists.json", isDirectory: false)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+
+        let first = LibrarySetlistFolder(name: "First", scoreKeys: ["a", "b"])
+        let second = LibrarySetlistFolder(name: "Second", scoreKeys: ["c"])
+        let store = LibrarySetlistStore(storageURL: storageURL)
+        store.save([second, first])
+
+        #expect(store.load() == [second, first])
+    }
+
+    @Test
+    func setlistReaderNavigationStopsAtBoundariesAndChoosesEntryPages() {
+        #expect(SetlistReaderNavigationPlan.targetIndex(from: 0, direction: .previous, scoreCount: 3) == nil)
+        #expect(SetlistReaderNavigationPlan.targetIndex(from: 0, direction: .next, scoreCount: 3) == 1)
+        #expect(SetlistReaderNavigationPlan.targetIndex(from: 2, direction: .next, scoreCount: 3) == nil)
+        #expect(SetlistReaderNavigationPlan.targetIndex(from: 2, direction: .previous, scoreCount: 3) == 1)
+        #expect(SetlistReaderNavigationPlan.initialPageIndex(for: .next, targetPageCount: 8) == 0)
+        #expect(SetlistReaderNavigationPlan.initialPageIndex(for: .previous, targetPageCount: 8) == 7)
+        #expect(SetlistReaderNavigationPlan.initialPageIndex(for: .previous, targetPageCount: 0) == 0)
+        #expect(SetlistReaderNavigationPlan.targetIndex(from: 0, direction: .previous, scoreCount: 1) == nil)
+        #expect(SetlistReaderNavigationPlan.targetIndex(from: 0, direction: .next, scoreCount: 1) == nil)
+    }
+
+    @Test
+    func pageTurnSwipePolicySupportsHorizontalNavigationOnly() {
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: -80, height: 4)) == .next)
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 80, height: -4)) == .previous)
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 20, height: 0)) == nil)
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 60, height: 90)) == nil)
+    }
+
+    @Test
+    func setlistDisplaySortingAndSearchProduceStableVisibleSequence() {
+        let older = testRecentDocument(
+            id: "older",
+            title: "Autumn Leaves",
+            libraryRelativePath: "Scores/Autumn Leaves.mscz",
+            lastOpened: Date(timeIntervalSince1970: 100)
+        )
+        let newer = testRecentDocument(
+            id: "newer",
+            title: "Blue Bossa",
+            libraryRelativePath: "Scores/Blue Bossa.mscz",
+            lastOpened: Date(timeIntervalSince1970: 200)
+        )
+        let savedOrder = [older, newer]
+
+        #expect(LibraryScoreSortOrder.setlistOrder.sorted(savedOrder).map(\.id) == [older.id, newer.id])
+        #expect(LibraryScoreSortOrder.recentlyOpened.sorted(savedOrder).map(\.id) == [newer.id, older.id])
+        #expect(LibraryScoreSortOrder.titleDescending.sorted(savedOrder).map(\.id) == [newer.id, older.id])
+        #expect(LibraryScoreDisplayPolicy.filtered(savedOrder, query: "autumn").map(\.id) == [older.id])
+    }
+
+    @Test
     func importReviewSeparatesReplacementsCapacityAndDuplicateNames() {
         let replacement = ScoreImportCandidate(
             url: URL(fileURLWithPath: "/tmp/Autumn Leaves.mscz"),
@@ -1070,6 +1184,41 @@ struct MuseReaderiOSTests {
             scoreExcerpt: "",
             fileSize: nil,
             modificationDate: nil
+        )
+    }
+
+    private func testRecentDocument(
+        id: String,
+        title: String,
+        libraryRelativePath: String,
+        lastOpened: Date = .now
+    ) -> ReaderRecentDocument {
+        let document = ScoreDocument(
+            id: id,
+            fileReference: "legacy-\(id).mscz",
+            url: FileManager.default.temporaryDirectory.appendingPathComponent("\(id).mscz"),
+            displayName: title,
+            format: .mscz,
+            title: title,
+            subtitle: nil,
+            composer: nil,
+            lyricist: nil,
+            arranger: nil,
+            rootFilePath: "score.mscx",
+            museScoreVersion: "4.7",
+            partCount: 1,
+            parts: [ScorePart(id: "part-0", index: 0, name: "Piano", clef: .treble)],
+            packageEntries: [],
+            previewImageData: nil,
+            scoreExcerpt: "",
+            fileSize: nil,
+            modificationDate: nil
+        )
+        return ReaderRecentDocument(
+            document: document,
+            libraryRelativePath: libraryRelativePath,
+            importedAt: lastOpened,
+            lastOpened: lastOpened
         )
     }
 
