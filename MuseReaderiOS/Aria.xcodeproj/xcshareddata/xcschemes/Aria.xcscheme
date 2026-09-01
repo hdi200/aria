@@ -79,6 +79,14 @@
             argument = "-AriaAccessOverride=earlySupporter"
             isEnabled = "NO">
          </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-AriaOriginalAppVersionOverride=1"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-AriaOriginalAppVersionOverride=2"
+            isEnabled = "NO">
+         </CommandLineArgument>
       </CommandLineArguments>
       <StoreKitConfigurationFileReference
          identifier = "../../Products.storekit">

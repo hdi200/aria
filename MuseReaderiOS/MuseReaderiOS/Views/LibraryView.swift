@@ -1859,11 +1859,13 @@ private struct PhoneSettingsContent: View {
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(LibraryPalette.ink)
 
-            LibraryAccessSettingsCard(
-                status: accessStatus,
-                displayPrice: accessDisplayPrice,
-                unlockAction: unlockAction
-            )
+            if accessStatus.showsMonetizationUI {
+                LibraryAccessSettingsCard(
+                    status: accessStatus,
+                    displayPrice: accessDisplayPrice,
+                    unlockAction: unlockAction
+                )
+            }
 
             Button(action: openSourceAction) {
                 HStack(spacing: 14) {
@@ -2283,12 +2285,14 @@ private struct LibrarySettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            LibraryAccessSettingsCard(
-                status: accessStatus,
-                displayPrice: accessDisplayPrice,
-                unlockAction: unlockAction
-            )
-            .frame(width: 420)
+            if accessStatus.showsMonetizationUI {
+                LibraryAccessSettingsCard(
+                    status: accessStatus,
+                    displayPrice: accessDisplayPrice,
+                    unlockAction: unlockAction
+                )
+                .frame(width: 420)
+            }
 
             Button(action: openSourceAction) {
                 HStack(spacing: 14) {

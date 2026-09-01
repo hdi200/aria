@@ -25,15 +25,23 @@ enum UnlimitedScoresReason: String, Codable, Equatable, Sendable {
 }
 
 enum LibraryAccessStatus: Equatable, Sendable {
+    case rolloutDisabled
     case checking
     case free
     case unlimited(UnlimitedScoresReason)
 
     var hasUnlimitedScores: Bool {
+        if case .rolloutDisabled = self {
+            return true
+        }
         if case .unlimited = self {
             return true
         }
         return false
+    }
+
+    var showsMonetizationUI: Bool {
+        self != .rolloutDisabled
     }
 
     var unlimitedReason: UnlimitedScoresReason? {
@@ -91,17 +99,54 @@ enum LibraryAccessSimulationOverride: String, Equatable, Sendable {
     }
 }
 
+struct LibraryOriginalAppVersionSimulation: Equatable, Sendable {
+    let originalAppVersion: String
+
+    static func fromLaunchArguments(_ arguments: [String]) -> Self? {
+        let rawValue: String?
+        if let combined = arguments.first(where: { $0.hasPrefix("-AriaOriginalAppVersionOverride=") }),
+           let value = combined.split(separator: "=", maxSplits: 1).last
+        {
+            rawValue = String(value)
+        } else if let argumentIndex = arguments.firstIndex(of: "-AriaOriginalAppVersionOverride"),
+                  arguments.indices.contains(argumentIndex + 1)
+        {
+            rawValue = arguments[argumentIndex + 1]
+        } else {
+            rawValue = nil
+        }
+
+        guard let rawValue, !rawValue.isEmpty else {
+            return nil
+        }
+        return Self(originalAppVersion: rawValue)
+    }
+}
+
 struct LibraryAccessPolicy {
     static let freeScoreLimit = 2
     static let grandfatheredThroughBuild = "1"
+    // Aria Pro version 4.1 went live on August 29, 2026 at 19:02:37 UTC.
+    // The App Store-signed original purchase date is a second, stable way to
+    // recognize existing users when Apple's historical build number is not
+    // what we expect.
+    static let grandfatheredBeforePurchaseDate = Date(timeIntervalSince1970: 1_788_030_157)
 
     static func resolveStatus(
         originalAppVersion: String?,
-        purchaseReason: UnlimitedScoresReason?
+        originalPurchaseDate: Date? = nil,
+        purchaseReason: UnlimitedScoresReason?,
+        allowsGrandfathering: Bool = true
     ) -> LibraryAccessStatus {
-        if let originalAppVersion,
-           isVersion(originalAppVersion, atOrBefore: grandfatheredThroughBuild)
-        {
+        let hasGrandfatheredVersion = originalAppVersion.map {
+            isVersion($0, atOrBefore: grandfatheredThroughBuild)
+        } ?? false
+        let hasGrandfatheredPurchaseDate = originalPurchaseDate.map {
+            $0 < grandfatheredBeforePurchaseDate
+        } ?? false
+
+        if allowsGrandfathering,
+           hasGrandfatheredVersion || hasGrandfatheredPurchaseDate {
             return .unlimited(.earlySupporter)
         }
 
@@ -110,6 +155,13 @@ struct LibraryAccessPolicy {
         }
 
         return .free
+    }
+
+    static func allowsGrandfathering(in environment: AppStore.Environment) -> Bool {
+        // StoreKit reports a synthetic originalAppVersion of 1.0 in Xcode and
+        // sandbox/TestFlight. Only production carries the customer's real
+        // acquisition build, so only production can safely grandfather users.
+        environment == .production
     }
 
     static func isVersion(_ version: String, atOrBefore cutoff: String) -> Bool {
@@ -148,6 +200,7 @@ final class LibraryAccessController: ObservableObject {
 
     private enum CacheKeys {
         static let verifiedUnlimitedReason = "Aria.LibraryAccess.VerifiedUnlimitedReason"
+        static let verifiedFree = "Aria.LibraryAccess.VerifiedFree"
     }
 
     @Published private(set) var status: LibraryAccessStatus
@@ -157,33 +210,56 @@ final class LibraryAccessController: ObservableObject {
 
     private let userDefaults: UserDefaults
     private let simulationOverride: LibraryAccessSimulationOverride?
+    private let originalAppVersionSimulation: LibraryOriginalAppVersionSimulation?
     private var updatesTask: Task<Void, Never>?
     private var hasStarted = false
 
     init(
         userDefaults: UserDefaults = .standard,
-        simulationOverride explicitSimulationOverride: LibraryAccessSimulationOverride? = nil
+        simulationOverride explicitSimulationOverride: LibraryAccessSimulationOverride? = nil,
+        originalAppVersionSimulation explicitOriginalAppVersionSimulation: LibraryOriginalAppVersionSimulation? = nil
     ) {
         self.userDefaults = userDefaults
         // Xcode Run uses Debug, so these launch arguments can exercise access
         // states on development devices. Archive/App Store builds omit this path.
         #if DEBUG
+        let originalAppVersionSimulation = explicitOriginalAppVersionSimulation
+            ?? LibraryOriginalAppVersionSimulation.fromLaunchArguments(ProcessInfo.processInfo.arguments)
         let simulationOverride = explicitSimulationOverride
-            ?? LibraryAccessSimulationOverride.fromLaunchArguments(ProcessInfo.processInfo.arguments)
+            ?? (originalAppVersionSimulation == nil
+                ? LibraryAccessSimulationOverride.fromLaunchArguments(ProcessInfo.processInfo.arguments)
+                : nil)
         #else
         let simulationOverride: LibraryAccessSimulationOverride? = nil
+        let originalAppVersionSimulation: LibraryOriginalAppVersionSimulation? = nil
         #endif
         self.simulationOverride = simulationOverride
+        self.originalAppVersionSimulation = originalAppVersionSimulation
 
         if let simulationOverride {
             status = simulationOverride.initialStatus
             print("Aria development access override: \(simulationOverride.rawValue)")
         } else if let rawReason = userDefaults.string(forKey: CacheKeys.verifiedUnlimitedReason),
-           let reason = UnlimitedScoresReason(rawValue: rawReason)
+                  let reason = UnlimitedScoresReason(rawValue: rawReason)
         {
+            // Preserve a previously verified entitlement immediately, including
+            // while the device is offline and StoreKit is still resolving.
             status = .unlimited(reason)
+        } else if userDefaults.bool(forKey: CacheKeys.verifiedFree) {
+            // A customer Apple previously classified as new and unpaid remains
+            // Free while offline instead of becoming temporarily unrestricted.
+            status = .free
         } else {
-            status = .checking
+            // Unknown access remains unrestricted until StoreKit proves that
+            // this is a new customer without an unlimited entitlement.
+            status = .rolloutDisabled
+        }
+
+        if let originalAppVersionSimulation {
+            print(
+                "Aria development production original app version override: "
+                    + originalAppVersionSimulation.originalAppVersion
+            )
         }
     }
 
@@ -192,7 +268,7 @@ final class LibraryAccessController: ObservableObject {
     }
 
     var isUsingDevelopmentOverride: Bool {
-        simulationOverride != nil
+        simulationOverride != nil || originalAppVersionSimulation != nil
     }
 
     func start() async {
@@ -215,15 +291,29 @@ final class LibraryAccessController: ObservableObject {
             }
         }
 
-        async let productLoad: Void = loadProduct()
-        async let entitlementRefresh: Void = refreshEntitlements()
-        _ = await (productLoad, entitlementRefresh)
+        await refreshEntitlements()
     }
 
     func refreshEntitlements() async {
         if let simulationOverride, simulationOverride != .free {
             status = simulationOverride.initialStatus
+            if product == nil {
+                await loadProduct()
+            }
             return
+        }
+
+        if case .rolloutDisabled = status,
+           let rawReason = userDefaults.string(forKey: CacheKeys.verifiedUnlimitedReason),
+           let reason = UnlimitedScoresReason(rawValue: rawReason)
+        {
+            status = .unlimited(reason)
+        } else if case .rolloutDisabled = status,
+                  userDefaults.bool(forKey: CacheKeys.verifiedFree)
+        {
+            status = .free
+        } else if case .rolloutDisabled = status {
+            status = .checking
         }
 
         var purchaseReason: UnlimitedScoresReason?
@@ -245,8 +335,14 @@ final class LibraryAccessController: ObservableObject {
         }
 
         var originalAppVersion: String?
+        var originalPurchaseDate: Date?
         var appTransactionResolved = false
-        if simulationOverride == .free {
+        var allowsGrandfathering = false
+        if let originalAppVersionSimulation {
+            originalAppVersion = originalAppVersionSimulation.originalAppVersion
+            appTransactionResolved = true
+            allowsGrandfathering = true
+        } else if simulationOverride == .free {
             originalAppVersion = "2"
             appTransactionResolved = true
         } else {
@@ -254,14 +350,24 @@ final class LibraryAccessController: ObservableObject {
                 let result = try await AppTransaction.shared
                 if case .verified(let appTransaction) = result {
                     originalAppVersion = appTransaction.originalAppVersion
+                    originalPurchaseDate = appTransaction.originalPurchaseDate
                     appTransactionResolved = true
+                    allowsGrandfathering = LibraryAccessPolicy.allowsGrandfathering(
+                        in: appTransaction.environment
+                    )
                 }
             } catch {
                 print("Aria StoreKit app transaction unavailable: \(error.localizedDescription)")
             }
         }
 
-        if hasUnverifiedUnlimitedTransaction, status.hasUnlimitedScores, purchaseReason == nil {
+        if hasUnverifiedUnlimitedTransaction, purchaseReason == nil {
+            // An unverified IAP may belong to a paying customer whose receipt
+            // cannot currently be checked. Do not preserve a cached Free limit
+            // in that ambiguous state.
+            if !status.hasUnlimitedScores {
+                status = .rolloutDisabled
+            }
             return
         }
 
@@ -269,11 +375,22 @@ final class LibraryAccessController: ObservableObject {
             applyVerifiedStatus(
                 LibraryAccessPolicy.resolveStatus(
                     originalAppVersion: originalAppVersion,
-                    purchaseReason: purchaseReason
+                    originalPurchaseDate: originalPurchaseDate,
+                    purchaseReason: purchaseReason,
+                    allowsGrandfathering: allowsGrandfathering
                 )
             )
-        } else if !status.hasUnlimitedScores {
-            status = .free
+        } else if case .checking = status {
+            // AppTransaction can be unavailable when the device is offline or
+            // signed out. Unknown customers fail open, while a previously
+            // verified Free or unlimited classification remains unchanged.
+            status = .rolloutDisabled
+        }
+
+        // Product metadata is only needed to display or make a purchase. It
+        // must not gate entitlement and grandfathering checks when offline.
+        if product == nil {
+            await loadProduct()
         }
     }
 
@@ -341,8 +458,13 @@ final class LibraryAccessController: ObservableObject {
         status = verifiedStatus
         if let reason = verifiedStatus.unlimitedReason {
             userDefaults.set(reason.rawValue, forKey: CacheKeys.verifiedUnlimitedReason)
+            userDefaults.removeObject(forKey: CacheKeys.verifiedFree)
+        } else if verifiedStatus == .free {
+            userDefaults.removeObject(forKey: CacheKeys.verifiedUnlimitedReason)
+            userDefaults.set(true, forKey: CacheKeys.verifiedFree)
         } else {
             userDefaults.removeObject(forKey: CacheKeys.verifiedUnlimitedReason)
+            userDefaults.removeObject(forKey: CacheKeys.verifiedFree)
         }
     }
 }

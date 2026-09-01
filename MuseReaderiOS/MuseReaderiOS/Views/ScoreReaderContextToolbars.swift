@@ -171,6 +171,7 @@ struct ScoreReaderKeyboardContextToolbar: View {
     let applyDurationAction: (ScoreNoteDuration) -> Void
     let toggleDotAction: () -> Void
     let toggleRestAction: () -> Void
+    let deleteSelectionAction: () -> Void
     let toggleTieAction: () -> Void
     let addTupletAction: (Int) -> Void
     let stackedChordInputEnabled: Bool
@@ -354,6 +355,14 @@ struct ScoreReaderKeyboardContextToolbar: View {
                         )
                         ScoreReaderCompactGroupedDivider()
                         ScoreReaderCompactGroupedPaletteButton(
+                            systemImage: "trash",
+                            isSelected: false,
+                            isEnabled: editingState.canDeleteSelection && !isBusy,
+                            accessibilityLabel: "Delete selection",
+                            action: deleteSelectionAction
+                        )
+                        ScoreReaderCompactGroupedDivider()
+                        ScoreReaderCompactGroupedPaletteButton(
                             textSymbol: "⌒",
                             isSelected: editingState.selection?.isTiedForward == true,
                             isEnabled: editingState.selection?.kind == .note && !isBusy,
@@ -435,6 +444,14 @@ struct ScoreReaderKeyboardContextToolbar: View {
                     isEnabled: canUseRhythmTools,
                     accessibilityLabel: selectedIsRest ? "Note entry" : "Rest entry",
                     action: toggleRestAction
+                )
+
+                ScoreReaderCompactGridPaletteButton(
+                    systemImage: "trash",
+                    isSelected: false,
+                    isEnabled: editingState.canDeleteSelection && !isBusy,
+                    accessibilityLabel: "Delete selection",
+                    action: deleteSelectionAction
                 )
             }
         }
@@ -713,6 +730,7 @@ private struct ScoreReaderCompactGroupedDivider: View {
 private struct ScoreReaderCompactGroupedPaletteButton: View {
     var duration: ScoreNoteDuration? = nil
     var textSymbol: String? = nil
+    var systemImage: String? = nil
     var stackedChordIcon = false
     var usesMusicFont = false
     var glyphBaselineOffset: CGFloat = 0
@@ -737,6 +755,9 @@ private struct ScoreReaderCompactGroupedPaletteButton: View {
                     Text(textSymbol)
                         .font(usesMusicFont ? MusicNotationFont.font(size: 23) : .system(size: 22, weight: .semibold))
                         .baselineOffset(glyphBaselineOffset)
+                } else if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 19, weight: .semibold))
                 }
             }
             .foregroundStyle(isSelected ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82))
@@ -758,6 +779,7 @@ private struct ScoreReaderCompactGroupedPaletteButton: View {
 private struct ScoreReaderCompactGridPaletteButton: View {
     var duration: ScoreNoteDuration? = nil
     var textSymbol: String? = nil
+    var systemImage: String? = nil
     var stackedChordIcon = false
     var usesMusicFont = false
     var glyphBaselineOffset: CGFloat = 0
@@ -785,6 +807,9 @@ private struct ScoreReaderCompactGridPaletteButton: View {
                         .font(usesMusicFont ? MusicNotationFont.font(size: musicFontSize) : .system(size: 23, weight: .semibold))
                         .baselineOffset(glyphBaselineOffset)
                         .offset(y: glyphVerticalOffset)
+                } else if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 19, weight: .semibold))
                 }
             }
             .foregroundStyle(isSelected ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.84))

@@ -37,6 +37,17 @@ struct MuseReaderiOSTests {
                 "Aria", "-AriaAccessOverride", "invalid"
             ]) == nil
         )
+
+        #expect(
+            LibraryOriginalAppVersionSimulation.fromLaunchArguments([
+                "Aria", "-AriaOriginalAppVersionOverride=1"
+            ]) == LibraryOriginalAppVersionSimulation(originalAppVersion: "1")
+        )
+        #expect(
+            LibraryOriginalAppVersionSimulation.fromLaunchArguments([
+                "Aria", "-AriaOriginalAppVersionOverride", "2"
+            ]) == LibraryOriginalAppVersionSimulation(originalAppVersion: "2")
+        )
     }
 
     @Test
@@ -62,6 +73,36 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func libraryAccessPolicyGrandfathersProductionUsersByOriginalPurchaseDate() {
+        let existingUserPurchaseDate = LibraryAccessPolicy.grandfatheredBeforePurchaseDate
+            .addingTimeInterval(-1)
+        let newUserPurchaseDate = LibraryAccessPolicy.grandfatheredBeforePurchaseDate
+            .addingTimeInterval(1)
+
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "999",
+                originalPurchaseDate: existingUserPurchaseDate,
+                purchaseReason: nil
+            ) == .unlimited(.earlySupporter)
+        )
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "2",
+                originalPurchaseDate: newUserPurchaseDate,
+                purchaseReason: nil
+            ) == .free
+        )
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "2",
+                originalPurchaseDate: LibraryAccessPolicy.grandfatheredBeforePurchaseDate,
+                purchaseReason: nil
+            ) == .free
+        )
+    }
+
+    @Test
     func verifiedPurchaseAndFamilySharingUnlockNewUsers() {
         #expect(
             LibraryAccessPolicy.resolveStatus(
@@ -77,8 +118,32 @@ struct MuseReaderiOSTests {
         )
     }
 
+    @Test
+    func sandboxAndXcodeDoNotGrandfatherSyntheticOriginalVersion() {
+        #expect(LibraryAccessPolicy.allowsGrandfathering(in: .production))
+        #expect(!LibraryAccessPolicy.allowsGrandfathering(in: .sandbox))
+        #expect(!LibraryAccessPolicy.allowsGrandfathering(in: .xcode))
+
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "1.0",
+                originalPurchaseDate: LibraryAccessPolicy.grandfatheredBeforePurchaseDate
+                    .addingTimeInterval(-1),
+                purchaseReason: nil,
+                allowsGrandfathering: false
+            ) == .free
+        )
+        #expect(
+            LibraryAccessPolicy.resolveStatus(
+                originalAppVersion: "1.0",
+                purchaseReason: .purchased,
+                allowsGrandfathering: false
+            ) == .unlimited(.purchased)
+        )
+    }
+
     @Test @MainActor
-    func cachedVerifiedAccessPreservesOfflineContinuity() throws {
+    func cachedVerifiedAccessIsAvailableBeforeOnlineRefresh() throws {
         let suiteName = "LibraryAccessControllerTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -91,8 +156,43 @@ struct MuseReaderiOSTests {
         #expect(controller.status == .unlimited(.purchased))
     }
 
+    @Test @MainActor
+    func cachedVerifiedFreeStatusSurvivesOfflineLaunch() throws {
+        let suiteName = "LibraryAccessControllerFreeTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            true,
+            forKey: "Aria.LibraryAccess.VerifiedFree"
+        )
+
+        let controller = LibraryAccessController(userDefaults: defaults)
+        #expect(controller.status == .free)
+    }
+
+    @Test @MainActor
+    func unclassifiedOfflineLaunchStillFailsOpen() throws {
+        let suiteName = "LibraryAccessControllerUnknownTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let controller = LibraryAccessController(userDefaults: defaults)
+        #expect(controller.status == .rolloutDisabled)
+    }
+
     @Test
     func scoreAllowanceAccountsForReservationsAndOverLimitLibraries() {
+        #expect(LibraryAccessStatus.rolloutDisabled.hasUnlimitedScores)
+        #expect(!LibraryAccessStatus.rolloutDisabled.showsMonetizationUI)
+
+        let rolloutDisabledAllowance = LibraryScoreAllowance(
+            status: .rolloutDisabled,
+            usedScoreCount: 2_500,
+            reservedScoreCount: 0,
+            freeLimit: 2
+        )
+        #expect(rolloutDisabledAllowance.canReserve(100))
+
         let freeAllowance = LibraryScoreAllowance(
             status: .free,
             usedScoreCount: 1,

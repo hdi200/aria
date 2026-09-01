@@ -476,19 +476,19 @@ struct ScoreReaderNoteEntrySurface: View {
     private var compactSelectionNavigationColumn: some View {
         VStack(spacing: 0) {
             compactEditingSideButton(
-                systemImage: "arrow.up",
-                accessibilityLabel: "Raise pitch by semitone",
-                isEnabled: pitchEditEnabled && !isBusy,
-                action: { semitoneShiftAction(1) }
+                systemImage: "chevron.right",
+                accessibilityLabel: "Select Next",
+                isEnabled: canNavigateSelection && !isBusy,
+                action: selectNextElementAction
             )
 
             compactSideButtonDivider
 
             compactEditingSideButton(
-                systemImage: "arrow.down",
-                accessibilityLabel: "Lower pitch by semitone",
-                isEnabled: pitchEditEnabled && !isBusy,
-                action: { semitoneShiftAction(-1) }
+                systemImage: "chevron.left",
+                accessibilityLabel: "Select Previous",
+                isEnabled: canNavigateSelection && !isBusy,
+                action: selectPreviousElementAction
             )
         }
         .frame(width: 36, height: 80)
@@ -502,25 +502,25 @@ struct ScoreReaderNoteEntrySurface: View {
     private var compactLandscapeSelectionNavigationColumn: some View {
         compactSideColumn {
             compactEditingSideButton(
-                systemImage: "arrow.up",
-                accessibilityLabel: "Raise pitch by semitone",
-                isEnabled: pitchEditEnabled && !isBusy,
+                systemImage: "chevron.right",
+                accessibilityLabel: "Select Next",
+                isEnabled: canNavigateSelection && !isBusy,
                 width: 36,
                 height: 36,
                 fontSize: 16,
-                action: { semitoneShiftAction(1) }
+                action: selectNextElementAction
             )
 
             compactSideButtonDivider
 
             compactEditingSideButton(
-                systemImage: "arrow.down",
-                accessibilityLabel: "Lower pitch by semitone",
-                isEnabled: pitchEditEnabled && !isBusy,
+                systemImage: "chevron.left",
+                accessibilityLabel: "Select Previous",
+                isEnabled: canNavigateSelection && !isBusy,
                 width: 36,
                 height: 36,
                 fontSize: 16,
-                action: { semitoneShiftAction(-1) }
+                action: selectPreviousElementAction
             )
         }
     }
@@ -705,6 +705,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 applyDurationAction: applyDurationAction,
                 toggleDotAction: toggleDotAction,
                 toggleRestAction: toggleRestAction,
+                deleteSelectionAction: deleteSelectionAction,
                 toggleTieAction: toggleTieAction,
                 addTupletAction: addTupletAction,
                 stackedChordInputEnabled: stackedChordInputEnabled,
@@ -760,6 +761,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 applyDurationAction: applyDurationAction,
                 toggleDotAction: toggleDotAction,
                 toggleRestAction: toggleRestAction,
+                deleteSelectionAction: deleteSelectionAction,
                 toggleTieAction: toggleTieAction,
                 addTupletAction: addTupletAction,
                 stackedChordInputEnabled: stackedChordInputEnabled,
@@ -791,6 +793,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 applyDurationAction: applyDurationAction,
                 toggleDotAction: toggleDotAction,
                 toggleRestAction: toggleRestAction,
+                deleteSelectionAction: deleteSelectionAction,
                 toggleTieAction: toggleTieAction,
                 addTupletAction: addTupletAction,
                 stackedChordInputEnabled: stackedChordInputEnabled,
@@ -908,6 +911,7 @@ struct ScoreReaderNoteEntrySurface: View {
             applyDurationAction: applyDurationAction,
             toggleDotAction: toggleDotAction,
             toggleRestAction: toggleRestAction,
+            deleteSelectionAction: deleteSelectionAction,
             toggleTieAction: toggleTieAction,
             addTupletAction: addTupletAction,
             stackedChordInputEnabled: stackedChordInputEnabled,

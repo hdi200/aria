@@ -5,6 +5,29 @@
 
 import SwiftUI
 
+private struct AriaProLogoBadge: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [LibraryPalette.accentSoft, .white],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 96, height: 96)
+                .overlay {
+                    Circle()
+                        .stroke(LibraryPalette.accent.opacity(0.13), lineWidth: 1)
+                }
+
+            AriaLogoMark(size: 64, cornerRadius: 18)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 struct LibraryPaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -49,24 +72,7 @@ struct LibraryPaywallView: View {
                 .padding(.bottom, 30)
 
                 VStack(spacing: 24) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [LibraryPalette.accentSoft, .white],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 96, height: 96)
-                            .overlay {
-                                Circle()
-                                    .stroke(LibraryPalette.accent.opacity(0.13), lineWidth: 1)
-                            }
-
-                        AriaLogoMark(size: 64, cornerRadius: 18)
-                    }
-                    .accessibilityHidden(true)
+                    AriaProLogoBadge()
 
                     VStack(spacing: 10) {
                         if context != .settings {
@@ -617,14 +623,7 @@ struct EarlySupporterAccessView: View {
 
     var body: some View {
         VStack(spacing: 22) {
-            ZStack {
-                Circle()
-                    .fill(LibraryPalette.accentSoft)
-                    .frame(width: 84, height: 84)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(LibraryPalette.accent)
-            }
+            AriaProLogoBadge()
 
             VStack(spacing: 9) {
                 Text("Aria Pro Is Yours")
@@ -637,14 +636,20 @@ struct EarlySupporterAccessView: View {
                     .multilineTextAlignment(.center)
             }
 
-            Button("Continue") {
+            Button {
                 dismiss()
+            } label: {
+                Text("Continue")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        LibraryPalette.accent,
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .font(.system(size: 17, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(LibraryPalette.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .buttonStyle(.plain)
         }
         .padding(30)
@@ -750,6 +755,8 @@ struct LibraryAccessSettingsCard: View {
 
     private var statusDescription: String {
         switch status {
+        case .rolloutDisabled:
+            return ""
         case .checking:
             return "Checking App Store access…"
         case .free:

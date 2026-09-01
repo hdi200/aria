@@ -23,12 +23,28 @@ final class MuseReaderiOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testProductionBuildOneGrandfathersAndContinueButtonEntireSurfaceDismissesSheet() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-AriaOriginalAppVersionOverride=1"]
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        let title = app.staticTexts["Aria Pro Is Yours"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+
+        let continueButton = app.buttons["Continue"]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 3))
+
+        // Tap the blue surface away from the centered text. This regresses the
+        // failure where only the text label, not the full button, was tappable.
+        continueButton
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5))
+            .tap()
+
+        let sheetDismissed = expectation(
+            for: NSPredicate(format: "exists == false"),
+            evaluatedWith: title
+        )
+        wait(for: [sheetDismissed], timeout: 3)
     }
 
     @MainActor
