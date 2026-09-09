@@ -25,6 +25,7 @@ struct LibraryView: View {
     @State private var isNewSetlistPresented = false
     @State private var newSetlistName = ""
     @State private var folderPendingRename: LibrarySetlistFolder?
+    @State private var folderPendingDeletion: LibrarySetlistFolder?
     @State private var folderPendingScoreAdd: FolderScoreAddRequest?
     @State private var isSetlistReorderPresented = false
     @State private var isEditingActiveSetlist = false
@@ -134,6 +135,7 @@ struct LibraryView: View {
                         folderPendingRename = folder
                         renameSetlistName = folder.name
                     },
+                    deleteFolderAction: { folderPendingDeletion = $0 },
                     reorderSetlistsAction: presentSetlistReorder,
                     openSourceAction: {
                         isOpenSourceLegalPresented = true
@@ -172,6 +174,7 @@ struct LibraryView: View {
                         folderPendingRename = folder
                         renameSetlistName = folder.name
                     },
+                    deleteFolderAction: { folderPendingDeletion = $0 },
                     reorderSetlistsAction: presentSetlistReorder,
                     settingsAction: {
                         selectedCategory = .settings
@@ -203,6 +206,7 @@ struct LibraryView: View {
                     showAddScoresAction: { folder in
                         folderPendingScoreAdd = FolderScoreAddRequest(id: folder.id)
                     },
+                    deleteSetlistAction: { folderPendingDeletion = $0 },
                     isEditingSetlist: $isEditingActiveSetlist,
                     reorderScoresAction: reorderScores,
                     removeFromSetlistAction: { score, setlist in
@@ -271,6 +275,19 @@ struct LibraryView: View {
             }
         } message: {
             Text("This removes the score from your library.")
+        }
+        .alert("Delete Setlist?", isPresented: setlistDeleteConfirmationIsPresented) {
+            Button("Cancel", role: .cancel) {
+                folderPendingDeletion = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let folderPendingDeletion {
+                    deleteSetlist(folderPendingDeletion)
+                }
+                folderPendingDeletion = nil
+            }
+        } message: {
+            Text("This deletes the setlist but keeps all of its scores in your library.")
         }
         .alert("Could Not Save Score Info", isPresented: scoreInfoSaveErrorIsPresented) {
             Button("OK", role: .cancel) {}
@@ -371,8 +388,12 @@ struct LibraryView: View {
         .sheet(item: $scorePendingFolderSelection) { score in
             ScoreSetlistPickerSheet(
                 scoreTitle: score.primaryTitle,
-                setlists: foldersAvailableForAdding(score),
-                hasAnySetlists: !model.setlistFolders.isEmpty,
+                setlists: model.setlistFolders,
+                selectedSetlistIDs: Set(
+                    model.setlistFolders
+                        .filter { folder($0, contains: score) }
+                        .map(\.id)
+                ),
                 addAction: { setlist in
                     model.addScore(score, to: setlist)
                 }
@@ -396,7 +417,12 @@ struct LibraryView: View {
             if let folder = model.setlistFolders.first(where: { $0.id == request.id }) {
                 FolderScorePickerSheet(
                     folderName: folder.name,
-                    scores: scoresAvailableForAdding(to: folder),
+                    scores: model.recents.sorted { $0.lastOpened > $1.lastOpened },
+                    selectedScoreIDs: Set(
+                        model.recents
+                            .filter { self.folder(folder, contains: $0) }
+                            .map(\.id)
+                    ),
                     addAction: { score in
                         model.addScore(score, to: folder)
                     }
@@ -462,6 +488,19 @@ struct LibraryView: View {
         }
     }
 
+    private var setlistDeleteConfirmationIsPresented: Binding<Bool> {
+        Binding {
+            folderPendingDeletion != nil
+                && model.errorAlert == nil
+                && !model.isCreateScorePresented
+                && readerPresentation == nil
+        } set: { isPresented in
+            if !isPresented {
+                folderPendingDeletion = nil
+            }
+        }
+    }
+
     private var scoreInfoSaveErrorIsPresented: Binding<Bool> {
         Binding {
             scoreInfoSaveErrorMessage != nil
@@ -470,16 +509,6 @@ struct LibraryView: View {
                 scoreInfoSaveErrorMessage = nil
             }
         }
-    }
-
-    private func foldersAvailableForAdding(_ score: ReaderRecentDocument) -> [LibrarySetlistFolder] {
-        model.setlistFolders.filter { !folder($0, contains: score) }
-    }
-
-    private func scoresAvailableForAdding(to folder: LibrarySetlistFolder) -> [ReaderRecentDocument] {
-        model.recents
-            .filter { !self.folder(folder, contains: $0) }
-            .sorted { $0.lastOpened > $1.lastOpened }
     }
 
     private func folder(_ folder: LibrarySetlistFolder, contains score: ReaderRecentDocument) -> Bool {
@@ -528,6 +557,14 @@ struct LibraryView: View {
             return
         }
         isSetlistReorderPresented = true
+    }
+
+    private func deleteSetlist(_ folder: LibrarySetlistFolder) {
+        model.deleteSetlistFolder(folder)
+        if selectedCategory == .setlist(folder.id) {
+            selectedCategory = isPhoneInterface ? .setlists : .allScores
+        }
+        isEditingActiveSetlist = false
     }
 
     private func reorderScores(
@@ -688,6 +725,16 @@ struct LibraryScoreDisplayPolicy {
                 .map { $0.lowercased() }
                 .contains { $0.contains(query) }
         }
+    }
+}
+
+struct LibrarySetlistDisplayPolicy {
+    static func filtered(_ setlists: [LibrarySetlistFolder], query rawQuery: String) -> [LibrarySetlistFolder] {
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return setlists
+        }
+        return setlists.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 }
 
@@ -866,6 +913,7 @@ private struct LibrarySidebar: View {
     let loadingMessage: String
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
+    let deleteFolderAction: (LibrarySetlistFolder) -> Void
     let reorderSetlistsAction: () -> Void
     let settingsAction: () -> Void
     let dropScoreAction: (String, LibrarySetlistFolder) -> Void
@@ -927,6 +975,9 @@ private struct LibrarySidebar: View {
                                 },
                                 renameAction: {
                                     renameFolderAction(folder)
+                                },
+                                deleteAction: {
+                                    deleteFolderAction(folder)
                                 },
                                 dropScoreAction: { scoreKey in
                                     dropScoreAction(scoreKey, folder)
@@ -1045,6 +1096,7 @@ private struct SidebarSetlistButton: View {
     let isSelected: Bool
     let selectAction: () -> Void
     let renameAction: () -> Void
+    let deleteAction: () -> Void
     let dropScoreAction: (String) -> Void
 
     @State private var isDropTargeted = false
@@ -1071,6 +1123,9 @@ private struct SidebarSetlistButton: View {
         .contextMenu {
             Button(action: renameAction) {
                 Label("Rename Setlist", systemImage: "pencil")
+            }
+            Button(role: .destructive, action: deleteAction) {
+                Label("Delete Setlist", systemImage: "trash")
             }
         }
         .onDrop(of: [UTType.plainText], isTargeted: $isDropTargeted) { providers in
@@ -1140,6 +1195,7 @@ private struct PhoneLibraryView: View {
     let reorderScoresAction: (LibrarySetlistFolder, [ReaderRecentDocument.ID]) -> Void
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
+    let deleteFolderAction: (LibrarySetlistFolder) -> Void
     let reorderSetlistsAction: () -> Void
     let openSourceAction: () -> Void
     let accessStatus: LibraryAccessStatus
@@ -1229,6 +1285,7 @@ private struct PhoneLibraryView: View {
                         selectedCategory: $selectedCategory,
                         createFolderAction: createFolderAction,
                         renameFolderAction: renameFolderAction,
+                        deleteFolderAction: deleteFolderAction,
                         reorderSetlistsAction: reorderSetlistsAction
                     )
                 } else if activeTab == .settings {
@@ -1300,6 +1357,31 @@ private struct PhoneLibraryView: View {
                             .buttonStyle(.plain)
                             .disabled(activeSetlistOrderedScores.isEmpty)
                             .accessibilityLabel(isEditingSetlist ? "Done Editing Setlist" : "Edit Setlist")
+
+                            Menu {
+                                Button {
+                                    renameFolderAction(activeFolder)
+                                } label: {
+                                    Label("Rename Setlist", systemImage: "pencil")
+                                }
+                                Button(role: .destructive) {
+                                    deleteFolderAction(activeFolder)
+                                } label: {
+                                    Label("Delete Setlist", systemImage: "trash")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(LibraryPalette.accent)
+                                    .frame(width: 32, height: 32)
+                                    .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                                    }
+                            }
+                            .disabled(isEditingSetlist)
+                            .accessibilityLabel("More Setlist Actions")
                         }
                     }
                     if !isEditingSetlist {
@@ -1471,6 +1553,7 @@ private struct PhoneSetlistContent: View {
     @Binding var selectedCategory: LibraryCategory
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
+    let deleteFolderAction: (LibrarySetlistFolder) -> Void
     let reorderSetlistsAction: () -> Void
 
     var body: some View {
@@ -1548,6 +1631,11 @@ private struct PhoneSetlistContent: View {
                         .contextMenu {
                             Button { renameFolderAction(folder) } label: {
                                 Label("Rename Setlist", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                deleteFolderAction(folder)
+                            } label: {
+                                Label("Delete Setlist", systemImage: "trash")
                             }
                         }
 
@@ -1710,20 +1798,26 @@ private struct PhoneScoreListRow: View {
 
 private struct FolderScorePickerSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
 
     let folderName: String
     let scores: [ReaderRecentDocument]
+    let selectedScoreIDs: Set<ReaderRecentDocument.ID>
     let addAction: (ReaderRecentDocument) -> Void
+
+    private var filteredScores: [ReaderRecentDocument] {
+        LibraryScoreDisplayPolicy.filtered(scores, query: searchText)
+    }
 
     var body: some View {
         NavigationStack {
             Group {
                 if scores.isEmpty {
                     VStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle")
+                        Image(systemName: "music.note")
                             .font(.system(size: 38, weight: .light))
                             .foregroundStyle(LibraryPalette.subtle)
-                        Text("All scores are already in this setlist.")
+                        Text("There are no scores in your library yet.")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(LibraryPalette.mutedInk)
                             .multilineTextAlignment(.center)
@@ -1731,8 +1825,11 @@ private struct FolderScorePickerSheet: View {
                     .padding(26)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(LibraryPalette.mainBackground)
+                } else if filteredScores.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
                 } else {
-                    List(scores) { score in
+                    List(filteredScores) { score in
+                        let isAdded = selectedScoreIDs.contains(score.id)
                         Button {
                             addAction(score)
                         } label: {
@@ -1751,17 +1848,26 @@ private struct FolderScorePickerSheet: View {
 
                                 Spacer(minLength: 0)
 
-                                Image(systemName: "plus.circle")
+                                Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
                                     .font(.system(size: 20, weight: .medium))
                                     .foregroundStyle(LibraryPalette.accent)
+                                    .accessibilityHidden(true)
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .disabled(isAdded)
+                        .accessibilityLabel(score.primaryTitle)
+                        .accessibilityValue(isAdded ? "Added" : "Not added")
                     }
                     .listStyle(.insetGrouped)
                 }
             }
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search scores"
+            )
             .navigationTitle("Add to \(folderName)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1777,11 +1883,16 @@ private struct FolderScorePickerSheet: View {
 
 private struct ScoreSetlistPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
 
     let scoreTitle: String
     let setlists: [LibrarySetlistFolder]
-    let hasAnySetlists: Bool
+    let selectedSetlistIDs: Set<LibrarySetlistFolder.ID>
     let addAction: (LibrarySetlistFolder) -> Void
+
+    private var filteredSetlists: [LibrarySetlistFolder] {
+        LibrarySetlistDisplayPolicy.filtered(setlists, query: searchText)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1792,9 +1903,7 @@ private struct ScoreSetlistPickerSheet: View {
                             .font(.system(size: 38, weight: .light))
                             .foregroundStyle(LibraryPalette.subtle)
                         Text(
-                            hasAnySetlists
-                                ? "This score is already in every setlist."
-                                : "Create a setlist before adding this score."
+                            "Create a setlist before adding this score."
                         )
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(LibraryPalette.mutedInk)
@@ -1803,8 +1912,11 @@ private struct ScoreSetlistPickerSheet: View {
                     .padding(26)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(LibraryPalette.mainBackground)
+                } else if filteredSetlists.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
                 } else {
-                    List(setlists) { setlist in
+                    List(filteredSetlists) { setlist in
+                        let isAdded = selectedSetlistIDs.contains(setlist.id)
                         Button {
                             addAction(setlist)
                         } label: {
@@ -1821,17 +1933,26 @@ private struct ScoreSetlistPickerSheet: View {
 
                                 Spacer(minLength: 0)
 
-                                Image(systemName: "plus.circle")
+                                Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
                                     .font(.system(size: 20, weight: .medium))
                                     .foregroundStyle(LibraryPalette.accent)
+                                    .accessibilityHidden(true)
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .disabled(isAdded)
+                        .accessibilityLabel(setlist.name)
+                        .accessibilityValue(isAdded ? "Added" : "Not added")
                     }
                     .listStyle(.insetGrouped)
                 }
             }
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search setlists"
+            )
             .navigationTitle("Add \(scoreTitle) to Setlist")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1911,6 +2032,7 @@ private struct LibraryDashboardView: View {
     let deleteAction: (ReaderRecentDocument) -> Void
     let activeSetlist: LibrarySetlistFolder?
     let showAddScoresAction: (LibrarySetlistFolder) -> Void
+    let deleteSetlistAction: (LibrarySetlistFolder) -> Void
     @Binding var isEditingSetlist: Bool
     let reorderScoresAction: (LibrarySetlistFolder, [ReaderRecentDocument.ID]) -> Void
     let removeFromSetlistAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
@@ -1930,6 +2052,7 @@ private struct LibraryDashboardView: View {
                 importAction: importAction,
                 activeSetlist: activeSetlist,
                 showAddScoresAction: showAddScoresAction,
+                deleteSetlistAction: deleteSetlistAction,
                 canEditSetlist: !activeSetlistOrderedScores.isEmpty,
                 isEditingSetlist: $isEditingSetlist
             )
@@ -2337,6 +2460,7 @@ private struct LibraryDashboardHeader: View {
     let importAction: () -> Void
     let activeSetlist: LibrarySetlistFolder?
     let showAddScoresAction: (LibrarySetlistFolder) -> Void
+    let deleteSetlistAction: (LibrarySetlistFolder) -> Void
     let canEditSetlist: Bool
     @Binding var isEditingSetlist: Bool
 
@@ -2394,6 +2518,11 @@ private struct LibraryDashboardHeader: View {
                         }
                         Button(action: createAction) {
                             Label("New Score", systemImage: "plus")
+                        }
+                        Button(role: .destructive) {
+                            deleteSetlistAction(activeSetlist)
+                        } label: {
+                            Label("Delete Setlist", systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis")

@@ -366,8 +366,8 @@ final class ScoreReaderChordKeyboardView: UIView {
     private let naturalNotes = ["C", "D", "E", "F", "G", "A", "B"]
     private let rootRowKeys = ["C", "D", "E", "F", "G", "A", "B", "♭", "#"]
     private let qualities = ["maj", "min", "°", "ø", "+", "sus"]
-    private let extensions = ["4", "5", "6", "7", "8", "9", "11", "13"]
-    private let modifiers = ["add", "no", "♭5", "#5", "/"]
+    private let extensions = ["2", "3", "4", "5", "6", "7", "8", "9", "11", "13"]
+    private let modifiers = ["add", "no", "♭5", "#5", "/", "⌫"]
 
     private var draftText = ""
     private var rootButtons: [UIButton] = []
@@ -504,7 +504,7 @@ final class ScoreReaderChordKeyboardView: UIView {
         let row = UIStackView()
         row.axis = .horizontal
         row.spacing = buttonSpacing
-        row.distribution = .fill
+        row.distribution = .fillEqually
         row.heightAnchor.constraint(equalToConstant: extensionRowHeight).isActive = true
 
         for key in extensions {
@@ -512,8 +512,6 @@ final class ScoreReaderChordKeyboardView: UIView {
             row.addArrangedSubview(button)
         }
 
-        let backspaceButton = makeButton(title: "⌫", style: .secondary)
-        row.addArrangedSubview(backspaceButton)
         return row
     }
 

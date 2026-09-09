@@ -150,10 +150,16 @@ MSRPlaybackAudioData *MakePlaybackAudioData(const msr::render::PlaybackAudioData
 {
     NSData *samples = [NSData dataWithBytes:audioData.interleavedSamples.data()
                                      length:audioData.interleavedSamples.size() * sizeof(float)];
+    NSMutableDictionary<NSString *, NSData *> *stems = [NSMutableDictionary dictionary];
+    for (const auto& pair : audioData.partSamples) {
+        stems[[NSString stringWithUTF8String:pair.first.c_str()]] =
+            [NSData dataWithBytes:pair.second.data() length:pair.second.size() * sizeof(float)];
+    }
     return [[MSRPlaybackAudioData alloc] initWithSampleRate:audioData.sampleRate
                                                channelCount:audioData.channelCount
                                             durationSeconds:audioData.durationSeconds
-                                  interleavedFloat32Samples:samples];
+                                  interleavedFloat32Samples:samples
+                                               partSamples:stems];
 }
 
 MSRSelectionInfo * _Nullable MakeSelectionInfo(const msr::render::ScoreSelectionState& selectionState)
@@ -697,6 +703,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                        channelCount:(NSInteger)channelCount
                     durationSeconds:(NSTimeInterval)durationSeconds
           interleavedFloat32Samples:(NSData *)interleavedFloat32Samples
+                       partSamples:(NSDictionary<NSString *, NSData *> *)partSamples
 {
     self = [super init];
     if (self) {
@@ -704,6 +711,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _channelCount = channelCount;
         _durationSeconds = durationSeconds;
         _interleavedFloat32Samples = [interleavedFloat32Samples copy];
+        _partSamples = [partSamples copy];
     }
     return self;
 }

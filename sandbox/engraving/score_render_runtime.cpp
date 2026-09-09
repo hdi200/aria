@@ -4010,6 +4010,7 @@ struct SynthChannelProgram {
     muse::mpe::layer_idx_t layerIdx = 0;
     muse::midi::Program program;
     std::string setup;
+    std::string partId = "metronome";
 };
 
 struct ActiveSynthNote {
@@ -4718,7 +4719,8 @@ void appendPlaybackModelSynthEvents(mu::engraving::Score* score,
                 channel,
                 layerIdx,
                 baseProgram,
-                setupDataString
+                setupDataString,
+                isMetronomeTrack(trackId) ? "metronome" : std::to_string(trackId.partId.toUint64())
             });
             EventExtractionStats::LayerDebugStats& layerStats = stats.layerDebug[layerIdx];
             layerStats.channel = channel;
@@ -4931,7 +4933,8 @@ void appendEngravingFallbackSynthEvents(mu::engraving::Score* score,
                             channel,
                             0,
                             program,
-                            setupData.toString().toStdString()
+                            setupData.toString().toStdString(),
+                            std::to_string(partId)
                         });
                     }
 
@@ -4978,7 +4981,8 @@ void appendEngravingFallbackSynthEvents(mu::engraving::Score* score,
                             channel,
                             0,
                             program,
-                            setupData.toString().toStdString()
+                            setupData.toString().toStdString(),
+                            std::to_string(partId)
                         });
                     }
 
@@ -5200,6 +5204,14 @@ public:
         }
 
         const int requiredMidiChannels = requiredMidiChannelCount(m_sequence.synthEvents, m_sequence.channelPrograms);
+        if (requiredMidiChannels > 256) {
+            errorMessage = "This score exceeds FluidSynth's 256 MIDI-channel limit.";
+            return false;
+        }
+        // FluidSynth supports 256 MIDI channels but only 128 isolated output groups.
+        // A second sampler avoids folding large-score channels onto another part.
+        m_audioGroups = std::min(requiredMidiChannels, 128);
+        const int synthCount = (requiredMidiChannels + m_audioGroups - 1) / m_audioGroups;
         m_settings.reset(new_fluid_settings());
         if (!m_settings) {
             errorMessage = "FluidSynth could not allocate settings.";
@@ -5208,7 +5220,8 @@ public:
 
         fluid_settings_setnum(m_settings.get(), "synth.sample-rate", kFluidSynthSampleRate);
         fluid_settings_setnum(m_settings.get(), "synth.gain", 1.0);
-        fluid_settings_setint(m_settings.get(), "synth.audio-channels", 1);
+        fluid_settings_setint(m_settings.get(), "synth.audio-channels", m_audioGroups);
+        fluid_settings_setint(m_settings.get(), "synth.audio-groups", m_audioGroups);
         fluid_settings_setint(m_settings.get(), "synth.midi-channels", requiredMidiChannels);
         fluid_settings_setint(m_settings.get(), "synth.polyphony", 512);
         fluid_settings_setint(m_settings.get(), "synth.dynamic-sample-loading", 1);
@@ -5218,21 +5231,22 @@ public:
         fluid_settings_setint(m_settings.get(), "synth.chorus.active", 0);
         fluid_settings_setstr(m_settings.get(), "audio.sample-format", "float");
 
-        m_synth.reset(new_fluid_synth(m_settings.get()));
-        if (!m_synth) {
-            errorMessage = "FluidSynth could not allocate the synthesizer.";
-            return false;
-        }
-
-        const int soundFontId = fluid_synth_sfload(m_synth.get(), m_soundFontPath.c_str(), 1);
-        if (soundFontId == FLUID_FAILED) {
-            errorMessage = "FluidSynth could not load the bundled SoundFont.";
-            return false;
+        for (int index = 0; index < synthCount; ++index) {
+            std::unique_ptr<fluid_synth_t, FluidSynthDeleter> synth(new_fluid_synth(m_settings.get()));
+            if (!synth) {
+                errorMessage = "FluidSynth could not allocate the synthesizer.";
+                return false;
+            }
+            if (fluid_synth_sfload(synth.get(), m_soundFontPath.c_str(), 1) == FLUID_FAILED) {
+                errorMessage = "FluidSynth could not load the bundled SoundFont.";
+                return false;
+            }
+            m_synths.push_back(std::move(synth));
         }
 
         for (const SynthChannelProgram& channelProgram : m_sequence.channelPrograms) {
-            fluid_synth_bank_select(m_synth.get(), channelProgram.channel, channelProgram.program.bank);
-            fluid_synth_program_change(m_synth.get(), channelProgram.channel, channelProgram.program.program);
+            fluid_synth_bank_select(synthForChannel(channelProgram.channel), channelProgram.channel, channelProgram.program.bank);
+            fluid_synth_program_change(synthForChannel(channelProgram.channel), channelProgram.channel, channelProgram.program.program);
             std::cout << "MuseReader event playback routing: channel="
                       << channelProgram.channel
                       << " layer=" << static_cast<int>(channelProgram.layerIdx)
@@ -5256,7 +5270,7 @@ public:
         for (const auto& pair : activeNotes) {
             const int channel = (pair.first >> 8) & 0xff;
             const int key = pair.first & 0xff;
-            fluid_synth_noteon(m_synth.get(), channel, key, pair.second.velocity);
+            fluid_synth_noteon(synthForChannel(channel), channel, key, pair.second.velocity);
         }
 
         m_currentFrame = renderStartFrame;
@@ -5279,6 +5293,9 @@ public:
 
         if (m_empty) {
             makeSilentPlaybackAudio(durationSeconds, output);
+            for (const auto& program : m_sequence.channelPrograms) {
+                output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+            }
             const int requestedFrames = durationSeconds > 0.0
                 ? std::max(1, static_cast<int>(std::ceil(durationSeconds * kFluidSynthSampleRate)))
                 : 1;
@@ -5297,6 +5314,9 @@ public:
 
         if (startFrame >= endFrame) {
             makeSilentPlaybackAudio(durationSeconds, output);
+            for (const auto& program : m_sequence.channelPrograms) {
+                output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+            }
             std::cout << "MuseReader event playback render: silent tail chunk"
                       << " tracks=" << m_sequence.stats.trackCount
                       << " noteEvents=" << m_sequence.stats.noteEventCount
@@ -5317,8 +5337,22 @@ public:
             return false;
         }
 
-        std::vector<float> left(kFluidSynthRenderBlockFrames);
-        std::vector<float> right(kFluidSynthRenderBlockFrames);
+        std::vector<std::vector<float>> channels(m_audioGroups * m_synths.size() * 2,
+            std::vector<float>(kFluidSynthRenderBlockFrames));
+        std::vector<float*> channelPointers;
+        for (auto& channel : channels) {
+            channelPointers.push_back(channel.data());
+        }
+        output.partSamples.clear();
+        const size_t sampleCount = static_cast<size_t>(std::max(endFrame - startFrame, 1) * 2);
+        std::vector<std::pair<int, std::vector<float>*>> stemChannels;
+        std::set<int> copiedChannels;
+        for (const auto& program : m_sequence.channelPrograms) {
+            if (!copiedChannels.insert(program.channel).second) { continue; }
+            auto& stem = output.partSamples[program.partId];
+            stem.resize(sampleCount, 0.0f);
+            stemChannels.emplace_back(program.channel, &stem);
+        }
         std::vector<float> samples;
         samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
 
@@ -5329,13 +5363,16 @@ public:
                 m_eventIndex += 1;
             }
 
-            std::fill(left.begin(), left.end(), 0.0f);
-            std::fill(right.begin(), right.end(), 0.0f);
-            if (fluid_synth_write_float(m_synth.get(), kFluidSynthRenderBlockFrames,
-                                        left.data(), 0, 1,
-                                        right.data(), 0, 1) != FLUID_OK) {
-                errorMessage = "FluidSynth failed while rendering MuseScore playback events.";
-                return false;
+            for (auto& channel : channels) {
+                std::fill(channel.begin(), channel.end(), 0.0f);
+            }
+            for (size_t index = 0; index < m_synths.size(); ++index) {
+                if (fluid_synth_process(m_synths[index].get(), kFluidSynthRenderBlockFrames,
+                                        0, nullptr, m_audioGroups * 2,
+                                        channelPointers.data() + index * m_audioGroups * 2) != FLUID_OK) {
+                    errorMessage = "FluidSynth failed while rendering MuseScore playback events.";
+                    return false;
+                }
             }
 
             const int blockStartFrame = m_currentFrame;
@@ -5345,8 +5382,20 @@ public:
             if (copyStartFrame < copyEndFrame) {
                 for (int absoluteFrame = copyStartFrame; absoluteFrame < copyEndFrame; ++absoluteFrame) {
                     const int blockFrame = absoluteFrame - blockStartFrame;
-                    samples.push_back(left[blockFrame]);
-                    samples.push_back(right[blockFrame]);
+                    float left = 0.0f;
+                    float right = 0.0f;
+                    const size_t sample = static_cast<size_t>(absoluteFrame - startFrame) * 2;
+                    // One program entry per sampler channel; layers sharing a part sum here.
+                    for (size_t channel = 0; channel < channels.size() / 2; ++channel) {
+                        left += channels[channel * 2][blockFrame];
+                        right += channels[channel * 2 + 1][blockFrame];
+                    }
+                    samples.push_back(left);
+                    samples.push_back(right);
+                    for (const auto& route : stemChannels) {
+                        (*route.second)[sample] += channels[route.first * 2][blockFrame];
+                        (*route.second)[sample + 1] += channels[route.first * 2 + 1][blockFrame];
+                    }
                 }
             }
 
@@ -5368,24 +5417,31 @@ public:
     }
 
 private:
+    int m_audioGroups = 16;
+
+    fluid_synth_t* synthForChannel(const int channel) const
+    {
+        return m_synths.at(static_cast<size_t>(channel / m_audioGroups)).get();
+    }
+
     void applySynthEvent(const SynthNoteEvent& event)
     {
         switch (event.kind) {
         case SynthNoteEvent::Kind::ProgramChange:
-            fluid_synth_bank_select(m_synth.get(), event.channel, event.program.bank);
-            fluid_synth_program_change(m_synth.get(), event.channel, event.program.program);
+            fluid_synth_bank_select(synthForChannel(event.channel), event.channel, event.program.bank);
+            fluid_synth_program_change(synthForChannel(event.channel), event.channel, event.program.program);
             break;
         case SynthNoteEvent::Kind::ControlChange:
-            fluid_synth_cc(m_synth.get(), event.channel, event.controller, event.value);
+            fluid_synth_cc(synthForChannel(event.channel), event.channel, event.controller, event.value);
             break;
         case SynthNoteEvent::Kind::PitchBend:
-            fluid_synth_pitch_bend(m_synth.get(), event.channel, event.value);
+            fluid_synth_pitch_bend(synthForChannel(event.channel), event.channel, event.value);
             break;
         case SynthNoteEvent::Kind::NoteOn:
-            fluid_synth_noteon(m_synth.get(), event.channel, event.key, event.velocity);
+            fluid_synth_noteon(synthForChannel(event.channel), event.channel, event.key, event.velocity);
             break;
         case SynthNoteEvent::Kind::NoteOff:
-            fluid_synth_noteoff(m_synth.get(), event.channel, event.key);
+            fluid_synth_noteoff(synthForChannel(event.channel), event.channel, event.key);
             break;
         }
     }
@@ -5472,7 +5528,7 @@ private:
     bool m_empty = false;
     FluidSynthPlaybackSequence m_sequence;
     std::unique_ptr<fluid_settings_t, FluidSettingsDeleter> m_settings;
-    std::unique_ptr<fluid_synth_t, FluidSynthDeleter> m_synth;
+    std::vector<std::unique_ptr<fluid_synth_t, FluidSynthDeleter>> m_synths;
     size_t m_eventIndex = 0;
     int m_currentFrame = 0;
     int m_lastEventFrame = 0;

@@ -202,11 +202,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) NSInteger channelCount;
 @property (nonatomic, readonly) NSTimeInterval durationSeconds;
 @property (nonatomic, copy, readonly) NSData *interleavedFloat32Samples;
+@property (nonatomic, copy, readonly) NSDictionary<NSString *, NSData *> *partSamples;
 
 - (instancetype)initWithSampleRate:(NSInteger)sampleRate
                        channelCount:(NSInteger)channelCount
                     durationSeconds:(NSTimeInterval)durationSeconds
-          interleavedFloat32Samples:(NSData *)interleavedFloat32Samples NS_DESIGNATED_INITIALIZER;
+          interleavedFloat32Samples:(NSData *)interleavedFloat32Samples
+                       partSamples:(NSDictionary<NSString *, NSData *> *)partSamples NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;

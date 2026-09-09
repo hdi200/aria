@@ -57,3 +57,15 @@ The iOS bridge boundary intentionally skips desktop QML/UI controller objects. I
 - FluidSynth MIDI player rendering from exported MIDI
 - full-score PCM pre-render as the default Play button route
 - full-buffer scheduling assumptions
+
+## Practice Mixer
+
+The sliders button beside the metronome opens a bottom sheet on iPhone and a trailing panel on iPad. Narrow phone headers use a separate playback row. Each visible part has volume, mute, solo, and pan; master volume affects all playback. Multiple solos are supported, explicit mute takes precedence, and solo evaluation only includes the active playback streams. Metronome output is independent of part solo/mute.
+
+Native event routing retains the master part ID for each sampler channel, including voices, instrument changes, and fallback harmony events. FluidSynth multi-output rendering produces synchronized stereo stems grouped by part. Scores exceeding 128 sampler channels use a second sampler to avoid FluidSynth's modulo output-group collisions; the existing backend's 256 MIDI-channel ceiling remains. Reverb and chorus remain disabled, as before. The mixed stereo buffer is retained for existing audio export callers.
+
+The bridge's `MSRPlaybackAudioData.partSamples` maps stable part IDs (plus `metronome`) to interleaved float32 stereo PCM. Every stem has the mixed buffer's sample rate, frame count, and requested score start time. `NativePlaybackController` schedules all stems together and starts/resumes them at one host time. Output volume and pan apply to queued audio immediately, preserving MuseScore dynamics. The metronome is always rendered during interactive playback and its node is toggled without rebuilding the queue.
+
+The initial chunk is 125 ms. Subsequent chunks are at most 500 ms, shortened for large stream counts, with a bounded prebuffer. Pause, stop, seek, revision cancellation, and rendering failure apply to every stream together. Rendering failures surface through the reader's existing playback error UI.
+
+`ScoreMixerSettingsStore` stores settings locally in UserDefaults by score ID and stable part ID, separately from remembered reader state and notation. Reset clears the mix for the entire score. Newly added part IDs receive defaults. Mixer changes do not modify exported score files or audio exports.

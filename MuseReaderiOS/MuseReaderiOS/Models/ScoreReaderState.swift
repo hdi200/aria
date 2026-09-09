@@ -94,6 +94,7 @@ final class ScoreReaderState: ObservableObject {
     @Published var isPlaybackActionInFlight = false
     @Published var playbackPreparationMessage: String?
     @Published var playbackMeasureHighlight: ScorePlaybackMeasureHighlight?
+    @Published var mixerSettings = ScoreMixerSettings()
     @Published var metronomeEnabled = false
     @Published var editingState: ScoreEditingState = .inactive
     @Published var measureRangePreviewSelection: ScoreSelectedElement?
@@ -237,9 +238,11 @@ final class ScoreReaderState: ObservableObject {
             : Dictionary(uniqueKeysWithValues: session.previewPages.map { ($0.index, $0) })
         self.corruptionReport = session.corruptionReport
         self.playbackController = session.capabilities.supportsPlayback ? NativePlaybackController() : nil
+        self.mixerSettings = ScoreMixerSettingsStore().load(scoreID: session.document.id)
         self.playbackState = session.capabilities.supportsPlayback
             ? ScorePlaybackState(isAvailable: true, status: .stopped, positionSeconds: 0, durationSeconds: 0)
             : .unavailable
+        self.playbackController?.setMixerSettings(mixerSettings)
         midiInputController.noteOnHandler = { [weak self] midiPitch in
             Task { @MainActor [weak self] in
                 self?.handleMIDINoteOn(midiPitch)

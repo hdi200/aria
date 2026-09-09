@@ -217,6 +217,7 @@ struct ScoreReaderView: View {
     @State private var selectedToolCategory: ScoreReaderToolCategory
     @State private var textEditorDraft: ScoreReaderTextEditorDraft?
     @State private var isPartsPanelPresented = false
+    @State private var isMixerPresented = false
     @State private var isExportPanelPresented = false
     @State private var exportDraft = ScoreReaderExportDraft()
     @State private var sharedExportItems: ScoreReaderSharedExportItems?
@@ -459,6 +460,13 @@ struct ScoreReaderView: View {
                             togglePlaybackAction: readerState.togglePlayback,
                             stopPlaybackAction: readerState.stopPlayback,
                             toggleMetronomeAction: readerState.toggleMetronome,
+                            toggleMixerAction: {
+                                isPartsPanelPresented = false
+                                isExportPanelPresented = false
+                                withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented.toggle() }
+                                isChromeVisible = true
+                            },
+                            isMixerPresented: isMixerPresented,
                             exportAction: {
                                 isPartsPanelPresented = false
                                 if !isExportPanelPresented {
@@ -513,6 +521,19 @@ struct ScoreReaderView: View {
                             }
                         )
                             .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
+                    .overlay(alignment: .trailing) {
+                        if isMixerPresented && UIDevice.current.userInterfaceIdiom != .phone {
+                            ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
+                                withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
+                            }
+                            .frame(maxWidth: 350)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .shadow(color: .black.opacity(0.15), radius: 16)
+                            .padding(.top, max(measuredTopChromeHeight, 80) + 8)
+                            .padding([.trailing, .bottom], 12)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                         }
                     }
                     .overlay(alignment: .top) {
@@ -788,6 +809,17 @@ struct ScoreReaderView: View {
         }
         .onChangeCompatible(of: readerState.scoreParts) { parts in
             synchronizePartPresentation(with: parts)
+        }
+        .sheet(isPresented: Binding(
+            get: { isMixerPresented && UIDevice.current.userInterfaceIdiom == .phone },
+            set: { isMixerPresented = $0 }
+        )) {
+            ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
+                isMixerPresented = false
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationBackgroundInteraction(.enabled)
         }
         .sheet(item: $textEditorDraft) { draft in
             ScoreReaderTextEditSheet(
@@ -1537,6 +1569,7 @@ struct ScoreReaderView: View {
             && !textEntryFocusIsActive
             && textEditorDraft == nil
             && !isPartsPanelPresented
+            && !isMixerPresented
             && !isExportPanelPresented
             && sharedExportItems == nil
             && !isTempoEditorPresented
@@ -1920,7 +1953,7 @@ struct ScoreReaderView: View {
         guard readerState.interactionMode == .view else {
             return
         }
-        guard !isPartsPanelPresented,
+        guard !isPartsPanelPresented, !isMixerPresented,
               !isExportPanelPresented,
               sharedExportItems == nil,
               !isPreparingExport,

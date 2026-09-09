@@ -289,6 +289,15 @@ final class MuseReaderAppModel: ObservableObject {
         setlistStore.save(setlistFolders)
     }
 
+    func deleteSetlistFolder(_ folder: LibrarySetlistFolder) {
+        guard let index = setlistFolders.firstIndex(where: { $0.id == folder.id }) else {
+            return
+        }
+
+        setlistFolders.remove(at: index)
+        setlistStore.save(setlistFolders)
+    }
+
     func orderedScores(in setlist: LibrarySetlistFolder) -> [ReaderRecentDocument] {
         setlist.orderedScores(from: recents)
     }

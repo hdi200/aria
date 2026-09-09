@@ -290,6 +290,22 @@ struct MuseReaderiOSTests {
         #expect(store.load() == [second, first])
     }
 
+    @Test @MainActor
+    func setlistStorePersistsDeletionWithoutDeletingOtherSetlists() throws {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AriaSetlistDeletionTests-\(UUID().uuidString)", isDirectory: true)
+        let storageURL = directoryURL.appendingPathComponent("setlists.json", isDirectory: false)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+
+        let deleted = LibrarySetlistFolder(name: "Delete Me", scoreKeys: ["score-a"])
+        let retained = LibrarySetlistFolder(name: "Keep Me", scoreKeys: ["score-b"])
+        let store = LibrarySetlistStore(storageURL: storageURL)
+        store.save([deleted, retained])
+        store.save([retained])
+
+        #expect(store.load() == [retained])
+    }
+
     @Test
     func setlistReaderNavigationStopsAtBoundariesAndChoosesEntryPages() {
         #expect(SetlistReaderNavigationPlan.targetIndex(from: 0, direction: .previous, scoreCount: 3) == nil)
@@ -334,6 +350,28 @@ struct MuseReaderiOSTests {
         #expect(LibraryScoreSortOrder.recentlyOpened.sorted(savedOrder).map(\.id) == [newer.id, older.id])
         #expect(LibraryScoreSortOrder.titleDescending.sorted(savedOrder).map(\.id) == [newer.id, older.id])
         #expect(LibraryScoreDisplayPolicy.filtered(savedOrder, query: "autumn").map(\.id) == [older.id])
+    }
+
+    @Test
+    func addToSetlistSearchMatchesScoresAndSetlistNamesIgnoringCase() {
+        let autumn = testRecentDocument(
+            id: "autumn",
+            title: "Autumn Leaves",
+            libraryRelativePath: "Scores/Autumn Leaves.mscz"
+        )
+        let blue = testRecentDocument(
+            id: "blue",
+            title: "Blue Bossa",
+            libraryRelativePath: "Scores/Blue Bossa.mscz"
+        )
+        let setlists = [
+            LibrarySetlistFolder(name: "Friday Jazz"),
+            LibrarySetlistFolder(name: "Sunday Service")
+        ]
+
+        #expect(LibraryScoreDisplayPolicy.filtered([autumn, blue], query: "BLUE").map(\.id) == [blue.id])
+        #expect(LibrarySetlistDisplayPolicy.filtered(setlists, query: "jAzZ").map(\.name) == ["Friday Jazz"])
+        #expect(LibrarySetlistDisplayPolicy.filtered(setlists, query: "  ") == setlists)
     }
 
     @Test
@@ -1071,7 +1109,7 @@ struct MuseReaderiOSTests {
     }
 
     @Test
-    func phoneHeaderMovesPlaybackLeftOnlyWhenPartsWouldOverlapIt() {
+    func phoneHeaderUsesTwoRowsWhenMixerWouldCrowdControls() {
         let withoutParts = ScoreReaderPhoneHeaderLayoutPolicy(
             availableWidth: 390,
             isLandscape: false,
@@ -1089,7 +1127,9 @@ struct MuseReaderiOSTests {
         )
 
         #expect(withoutParts.playbackHorizontalOffset == 0)
-        #expect(portraitWithParts.playbackHorizontalOffset == -51)
+        #expect(portraitWithParts.usesTwoRows)
+        #expect(portraitWithParts.playbackHorizontalOffset == 0)
+        #expect(!wideLandscapeWithParts.usesTwoRows)
         #expect(wideLandscapeWithParts.playbackHorizontalOffset == 0)
     }
 

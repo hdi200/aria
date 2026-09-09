@@ -20,17 +20,19 @@ struct ScoreReaderHeaderLayoutPolicy: Equatable {
 }
 
 struct ScoreReaderPhoneHeaderLayoutPolicy: Equatable {
+    let usesTwoRows: Bool
     let playbackHorizontalOffset: CGFloat
 
     init(availableWidth: CGFloat, isLandscape: Bool, hasParts: Bool) {
-        guard hasParts else {
+        usesTwoRows = availableWidth < 620
+        guard hasParts, !usesTwoRows else {
             playbackHorizontalOffset = 0
             return
         }
 
         let outerHorizontalPadding: CGFloat = isLandscape ? 10 : 12
         let contentWidth = max(availableWidth - (outerHorizontalPadding * 2), 0)
-        let compactPlaybackWidth: CGFloat = 116
+        let compactPlaybackWidth: CGFloat = 160
         let partsShareAndEditWidth: CGFloat = 168
         let minimumIslandSpacing: CGFloat = 8
         let centeredPlaybackRightEdge = (contentWidth + compactPlaybackWidth) / 2
@@ -41,6 +43,7 @@ struct ScoreReaderPhoneHeaderLayoutPolicy: Equatable {
 }
 
 struct ScoreReaderChromeBar: View {
+    @State private var availableHeaderWidth: CGFloat = 0
     let scoreTitle: String
     let parts: [ScorePart]
     @Binding var selectedPartID: String
@@ -64,6 +67,8 @@ struct ScoreReaderChromeBar: View {
     let togglePlaybackAction: () -> Void
     let stopPlaybackAction: () -> Void
     let toggleMetronomeAction: () -> Void
+    let toggleMixerAction: () -> Void
+    let isMixerPresented: Bool
     let exportAction: () -> Void
     let editDoneAction: () -> Void
     let selectPartAction: (Int?) -> Void
@@ -104,8 +109,10 @@ struct ScoreReaderChromeBar: View {
                         .padding(.bottom, 10)
                 }
             }
+            .onAppear { availableHeaderWidth = proxy.size.width }
+            .onChangeCompatible(of: proxy.size.width) { availableHeaderWidth = $0 }
         }
-        .frame(height: 62)
+        .frame(height: UIDevice.current.userInterfaceIdiom == .phone && availableHeaderWidth < 620 ? 114 : 62)
     }
 
     private func floatingIslandHeader(
@@ -289,6 +296,8 @@ struct ScoreReaderChromeBar: View {
             .opacity(playbackState.isAvailable ? 1 : 0.45)
             .accessibilityLabel("Metronome")
 
+            mixerButton
+
             if showsElapsedTime {
                 Text(playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)")
                     .font(.system(size: isCompactHeader ? 11 : 13, weight: .semibold))
@@ -298,6 +307,19 @@ struct ScoreReaderChromeBar: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
         }
+    }
+
+    private var mixerButton: some View {
+        Button(action: toggleMixerAction) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isMixerPresented ? Color.blue : Color.black.opacity(0.84))
+        .disabled(!supportsPlayback)
+        .accessibilityLabel("Mixer")
+        .accessibilityValue(isMixerPresented ? "Open" : "Closed")
     }
 
     private func partsIslandButton(iconOnly: Bool = false) -> some View {
@@ -428,7 +450,8 @@ struct ScoreReaderChromeBar: View {
             hasParts: hasTrailingExtras
         )
 
-        return ZStack {
+        return VStack(spacing: 8) {
+            ZStack {
             HStack {
                 floatingIsland(horizontalPadding: showsTitle ? 8 : 5) {
                     Button(action: closeAction) {
@@ -454,7 +477,7 @@ struct ScoreReaderChromeBar: View {
                 Spacer(minLength: 0)
             }
 
-            if supportsPlayback {
+            if supportsPlayback && !phoneLayout.usesTwoRows {
                 floatingIsland(horizontalPadding: 10) {
                     compactPlaybackControls(showsElapsedTime: showsCenteredPlaybackTime)
                 }
@@ -483,6 +506,13 @@ struct ScoreReaderChromeBar: View {
                     }
                     .fixedSize(horizontal: true, vertical: false)
                 }
+            }
+        }
+            if supportsPlayback && phoneLayout.usesTwoRows {
+                floatingIsland(horizontalPadding: 12) {
+                    playbackIslandControls(isCompactHeader: true, showsElapsedTime: false)
+                }
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
         .font(.system(size: 14, weight: .medium))
@@ -532,6 +562,8 @@ struct ScoreReaderChromeBar: View {
             .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
             .disabled(!playbackState.isAvailable || isPlaybackBusy)
             .opacity(playbackState.isAvailable ? 1 : 0.45)
+
+            mixerButton
 
             if showsElapsedTime {
                 Text(playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)")

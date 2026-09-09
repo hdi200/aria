@@ -418,6 +418,9 @@ extension ScoreReaderState {
     }
 
     private func updatePlaybackPreparationMessage(for playbackController: NativePlaybackController) {
+        if let error = playbackController.streamingErrorMessage {
+            playbackErrorMessage = error
+        }
         if playbackController.isWaitingToStartPlayback {
             playbackPreparationMessage = playbackPreparationStartingMessage
         } else if !isPlaybackActionInFlight, playbackPreparationMessage == playbackPreparationStartingMessage {
@@ -547,4 +550,12 @@ extension ScoreReaderState {
         return min(max(rawPositionSeconds - compensationSeconds, 0), playbackState.durationSeconds)
     }
 
+}
+
+extension ScoreReaderState {
+    func updateMixer(_ settings: ScoreMixerSettings) {
+        mixerSettings = settings
+        playbackController?.setMixerSettings(settings)
+        ScoreMixerSettingsStore().save(settings, scoreID: session.document.id)
+    }
 }

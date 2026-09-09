@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -192,6 +193,9 @@ struct PlaybackAudioData {
     int channelCount = 2;
     double durationSeconds = 0.0;
     std::vector<float> interleavedSamples;
+    // Stereo stems share the mixed buffer's sample rate, frame count and start time.
+    // Numeric master-part IDs; "metronome" is independent of part solo/mute.
+    std::map<std::string, std::vector<float>> partSamples;
 };
 
 struct PlaybackTrackSummary {
