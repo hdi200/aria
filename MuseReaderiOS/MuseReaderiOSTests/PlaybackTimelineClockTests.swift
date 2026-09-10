@@ -58,6 +58,33 @@ struct PlaybackTimelineClockTests {
     }
 
     @Test
+    func freshStartFallbackWaitsForSilentPrerollButResumeDoesNot() {
+        var clock = PlaybackTimelineClock()
+        let startedAt = Date(timeIntervalSinceReferenceDate: 100)
+        clock.reset(to: 12)
+        clock.setPreroll(0.05)
+        clock.startFallback(at: 12, waitsForPreroll: true, now: startedAt)
+
+        #expect(clock.positionSeconds(
+            playerSampleTimeSeconds: nil,
+            now: startedAt.addingTimeInterval(0.04)
+        ) == 12)
+        #expect(abs(clock.positionSeconds(
+            playerSampleTimeSeconds: nil,
+            now: startedAt.addingTimeInterval(0.08)
+        ) - 12.03) < 0.000_001)
+        #expect(abs(clock.positionSeconds(playerSampleTimeSeconds: 0.08) - 12.03) < 0.000_001)
+
+        clock.pauseFallback(at: 12.03)
+        let resumedAt = Date(timeIntervalSinceReferenceDate: 200)
+        clock.startFallback(at: 12.03, now: resumedAt)
+        #expect(abs(clock.positionSeconds(
+            playerSampleTimeSeconds: nil,
+            now: resumedAt.addingTimeInterval(0.04)
+        ) - 12.07) < 0.000_001)
+    }
+
+    @Test
     func consumedBufferDoesNotReplaceCapturedPausedPosition() {
         var progress = PlaybackBufferProgress()
         progress.reset(to: 0)

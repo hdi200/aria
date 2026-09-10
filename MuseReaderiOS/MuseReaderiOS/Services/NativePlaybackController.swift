@@ -54,10 +54,19 @@ final class NativePlaybackController {
     private static let mixedStreamID = "mixed"
 
     private var stemPlayers: [String: AVAudioPlayerNode] = [:]
+    /// Synchronized silence rendered ahead of the first score sample in Stems mode.
+    /// With several player nodes, each becomes audible on its own first render cycle,
+    /// which softens the first beat. Warming them all with silence on the shared
+    /// sample timeline means the first score sample lands at full amplitude on every
+    /// node. Mixed mode has one node and does not need it.
+    private static let stemPrerollSeconds: TimeInterval = 0.05
+
     /// All player nodes use this shared sample timeline. Scheduling with an explicit
     /// sample time keeps stems aligned even if their buffers are submitted on different
     /// turns of the audio render loop.
     private var nextScheduledSampleTime: AVAudioFramePosition = 0
+    private var scheduledPrerollFrames: AVAudioFrameCount = 0
+    private var silenceBuffer: AVAudioPCMBuffer?
     private struct StereoSample {
         let left: Float
         let right: Float
@@ -224,6 +233,8 @@ final class NativePlaybackController {
         self.isPaused = false
         self.scheduledBufferCount = 0
         self.nextScheduledSampleTime = 0
+        self.scheduledPrerollFrames = 0
+        self.silenceBuffer = nil
         self.previousScheduledTailByStream.removeAll(keepingCapacity: true)
         self.needsPlayerPriming = true
 
@@ -313,6 +324,7 @@ final class NativePlaybackController {
         bufferProgress.reset(to: pendingStartSeconds)
         queuedUntilSeconds = pendingStartSeconds
         nextScheduledSampleTime = 0
+        scheduledPrerollFrames = 0
         scheduledBufferCount = 0
         previousScheduledTailByStream.removeAll(keepingCapacity: true)
         needsPlayerPriming = true
@@ -338,6 +350,7 @@ final class NativePlaybackController {
         liveRenderSession = nil
         revision += 1
         sampleRate = 48_000
+        silenceBuffer = nil
         durationSeconds = 0
         queuedUntilSeconds = 0
         pendingStartSeconds = 0
@@ -347,6 +360,7 @@ final class NativePlaybackController {
         isScheduling = false
         scheduledBufferCount = 0
         nextScheduledSampleTime = 0
+        scheduledPrerollFrames = 0
         previousScheduledTailByStream.removeAll()
         needsPlayerPriming = true
         playWhenBuffered = false
@@ -561,6 +575,12 @@ final class NativePlaybackController {
         guard uniqueFrameLengths.count == 1 else {
             throw PlaybackError.sequenceLoadFailed("Instrument audio buffers had different frame counts.")
         }
+        // Stems only, and only for the first buffer of a fresh start or seek. Resuming a
+        // paused queue never reaches here, so pause/resume stays immediate.
+        if buffers.count > 1, nextScheduledSampleTime == 0 {
+            scheduleStemPreroll(format: first.1.format)
+        }
+
         let scheduledStartSample = nextScheduledSampleTime
         // A single mixed player can use AVAudioPlayerNode's natural append behavior.
         // Explicit sample times are only needed to keep multiple stem nodes locked.
@@ -603,6 +623,49 @@ final class NativePlaybackController {
 
         nextScheduledSampleTime += AVAudioFramePosition(first.1.frameLength)
         queuedUntilSeconds = max(queuedUntilSeconds, startTime + bufferDuration)
+    }
+
+    /// Queues one shared silent buffer at sample time 0 on every stem node, then moves
+    /// the shared write cursor past it so the first score buffer is scheduled at an
+    /// explicit sample time immediately after the silence. No completion handler is
+    /// attached, so buffer-progress accounting still only tracks score audio.
+    private func scheduleStemPreroll(format: AVAudioFormat) {
+        let frames = AVAudioFrameCount((Self.stemPrerollSeconds * format.sampleRate).rounded())
+        guard frames > 0, let silence = silenceBuffer(format: format, frameCount: frames) else {
+            return
+        }
+
+        let prerollStart = AVAudioTime(sampleTime: 0, atRate: format.sampleRate)
+        for player in stemPlayers.values {
+            player.scheduleBuffer(silence, at: prerollStart, options: [])
+        }
+
+        nextScheduledSampleTime = AVAudioFramePosition(frames)
+        scheduledPrerollFrames = frames
+        let prerollSeconds = Double(frames) / format.sampleRate
+        // The player's sample time counts this silence; the score playhead must not.
+        timelineClock.setPreroll(prerollSeconds)
+        log("stem preroll scheduled frames=\(frames) duration=\(formatSeconds(prerollSeconds))s "
+            + "streams=\(stemPlayers.count) revision=\(revision)")
+    }
+
+    /// One reusable zero-filled stereo buffer, shared by every stem node. It is read-only
+    /// to the render thread, so a single instance is safe across nodes.
+    private func silenceBuffer(format: AVAudioFormat, frameCount: AVAudioFrameCount) -> AVAudioPCMBuffer? {
+        if let silenceBuffer, silenceBuffer.format == format, silenceBuffer.frameLength == frameCount {
+            return silenceBuffer
+        }
+
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            return nil
+        }
+
+        buffer.frameLength = frameCount
+        for channel in 0..<Int(format.channelCount) {
+            buffer.floatChannelData?[channel].update(repeating: 0, count: Int(frameCount))
+        }
+        silenceBuffer = buffer
+        return buffer
     }
 
     private func makeBuffer(samples: Data, sampleRate: Int) -> AVAudioPCMBuffer? {
@@ -672,6 +735,7 @@ final class NativePlaybackController {
         isScheduling = false
         scheduledBufferCount = 0
         nextScheduledSampleTime = 0
+        scheduledPrerollFrames = 0
         previousScheduledTailByStream.removeAll(keepingCapacity: true)
         needsPlayerPriming = true
         playWhenBuffered = false
@@ -699,7 +763,10 @@ final class NativePlaybackController {
             return
         }
 
-        timelineClock.startFallback(at: pendingStartSeconds)
+        timelineClock.startFallback(
+            at: pendingStartSeconds,
+            waitsForPreroll: !isResumingPausedQueue
+        )
         playWhenBuffered = false
         var primedFrameCount: AVAudioFrameCount = 0
         if needsPlayerPriming {
@@ -723,7 +790,7 @@ final class NativePlaybackController {
             + "queued=\(formatSeconds(queuedUntilSeconds - pendingStartSeconds))s streams=\(startedIDs.count) "
             + "scheduledFrames=\(nextScheduledSampleTime) engineRate=\(Int(outputFormat?.sampleRate ?? 0)) "
             + "ioBuffer=\(ioBufferMilliseconds)ms outputLatency=\(outputLatencyMilliseconds)ms "
-            + "meters=\(meterState) primedFrames=\(primedFrameCount)")
+            + "meters=\(meterState) primedFrames=\(primedFrameCount) prerollFrames=\(scheduledPrerollFrames)")
         logStartupAlignmentSnapshots(revision: revision)
     }
 
