@@ -6,7 +6,6 @@ struct ScoreReaderMixerPanel: View {
     @ObservedObject private var mixerLevelMonitor: ScoreMixerLevelMonitor
     let selectedPartID: String
     let close: () -> Void
-    @State private var usesStemPlayback = NativePlaybackController.usesStemPlayback
 
     init(readerState: ScoreReaderState, selectedPartID: String, close: @escaping () -> Void) {
         self.readerState = readerState
@@ -40,22 +39,6 @@ struct ScoreReaderMixerPanel: View {
         }
     }
 
-    /// A/B control for diagnosing the reported part-offset: "Stems" is the per-part path the
-    /// mixer added, "Mixed" plays the single blended buffer the shipping build uses. Mute,
-    /// solo, volume and pan do nothing while it is set to Mixed.
-    private var playbackPathToggle: some View {
-        Button {
-            NativePlaybackController.usesStemPlayback.toggle()
-            usesStemPlayback = NativePlaybackController.usesStemPlayback
-            readerState.invalidatePlaybackAfterScoreMutation(startWarmup: true)
-        } label: {
-            Label(usesStemPlayback ? "Stems" : "Mixed",
-                  systemImage: usesStemPlayback ? "square.stack.3d.up.fill" : "rectangle.fill")
-        }
-        .font(.subheadline.weight(.medium))
-        .tint(usesStemPlayback ? .accentColor : .orange)
-    }
-
     @ViewBuilder
     private var header: some View {
         if UIDevice.current.userInterfaceIdiom == .phone {
@@ -80,8 +63,6 @@ struct ScoreReaderMixerPanel: View {
             }
 
             Spacer(minLength: 4)
-
-            playbackPathToggle
 
             Button {
                 readerState.updateMixer(ScoreMixerSettings())
@@ -125,8 +106,6 @@ struct ScoreReaderMixerPanel: View {
                 }
 
                 Spacer(minLength: 16)
-
-                playbackPathToggle
 
                 Button {
                     readerState.updateMixer(ScoreMixerSettings())

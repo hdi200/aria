@@ -33,45 +33,26 @@ final class NativePlaybackController {
     }
 
     private var chunkDurationSeconds: TimeInterval {
+        if usesSoftwareStemPlayback {
+            // A short queue keeps software-mixed fader, pan, mute, solo, and
+            // metronome changes responsive without putting work on the audio thread.
+            return 0.125
+        }
         let bytesPerSecond = sampleRate * 8 * Double(max(stemPlayers.count, 1))
         return min(0.5, max(0.05, 4 * 1_024 * 1_024 / bytesPerSecond))
     }
     private let prebufferChunks = 4
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
-    /// A/B switch between the per-part stem path added with the mixer and the single mixed
-    /// buffer the app played before it. The mixed buffer is exactly what the shipping build
-    /// plays, so turning this off reproduces production audio. Per-part volume, pan, mute
-    /// and solo have nothing to act on while it is off.
-    static let stemPlaybackDefaultsKey = "AriaUsesStemPlayback"
 
-    static var usesStemPlayback: Bool {
-        get { UserDefaults.standard.object(forKey: stemPlaybackDefaultsKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: stemPlaybackDefaultsKey) }
-    }
-
-    /// Stream id used when playing the single mixed buffer instead of per-part stems.
+    /// Stream ids for the one player node used by either playback source.
     private static let mixedStreamID = "mixed"
+    private static let softwareStemMixStreamID = "stem-software-mix"
 
     private var stemPlayers: [String: AVAudioPlayerNode] = [:]
-    /// Synchronized silence rendered ahead of the first score sample in Stems mode.
-    /// With several player nodes, each becomes audible on its own first render cycle,
-    /// which softens the first beat. Warming them all with silence on the shared
-    /// sample timeline means the first score sample lands at full amplitude on every
-    /// node. Mixed mode has one node and does not need it.
-    private static let stemPrerollSeconds: TimeInterval = 0.05
-
-    /// All player nodes use this shared sample timeline. Scheduling with an explicit
-    /// sample time keeps stems aligned even if their buffers are submitted on different
-    /// turns of the audio render loop.
+    private var usesSoftwareStemPlayback = false
+    private var renderedStemIDs: Set<String> = []
     private var nextScheduledSampleTime: AVAudioFramePosition = 0
-    private var scheduledPrerollFrames: AVAudioFrameCount = 0
-    private var silenceBuffer: AVAudioPCMBuffer?
-    private struct StereoSample {
-        let left: Float
-        let right: Float
-    }
-    private var previousScheduledTailByStream: [String: StereoSample] = [:]
     private var needsPlayerPriming = true
     private var mixerSettings = ScoreMixerSettings()
     private var meterLevelHandler: (([String: Float]) -> Void)?
@@ -114,22 +95,8 @@ final class NativePlaybackController {
         engine?.mainMixerNode.outputVolume = mixerSettings.masterMuted
             ? 0 : min(max(mixerSettings.masterVolume, 0), 1)
         engine?.mainMixerNode.pan = min(max(mixerSettings.masterPan, -1), 1)
-        let passthroughIDs: Set<String> = ["metronome", "silence", Self.mixedStreamID]
-        let activeParts = Set(stemPlayers.keys.filter { !passthroughIDs.contains($0) })
-        for (partID, player) in stemPlayers {
-            if partID == Self.mixedStreamID {
-                // Already contains every part, including the metronome, at its rendered level.
-                player.volume = 1
-                player.pan = 0
-            } else if partID == "metronome" {
-                player.volume = metronomeEnabled ? 1 : 0
-                player.pan = 0
-            } else {
-                player.volume = mixerSettings.gain(for: partID, activePartIDs: activeParts)
-                player.pan = min(max(mixerSettings.settings(for: partID).pan, -1), 1)
-            }
-        }
-
+        playerNode?.volume = 1
+        playerNode?.pan = 0
     }
     private var liveRenderSession: LiveScoreRenderSession?
     private var metronomeEnabled = false
@@ -143,7 +110,6 @@ final class NativePlaybackController {
     private var isPaused = false
     private var isScheduling = false
     private var schedulingTask: Task<Void, Never>?
-    private var scheduledBufferCount = 0
     private var playWhenBuffered = false
 
     var isLoaded: Bool {
@@ -196,9 +162,9 @@ final class NativePlaybackController {
         }
 
         let engine = AVAudioEngine()
-        let useStems = Self.usesStemPlayback && !audioData.partSamples.isEmpty
-        let streamIDs = useStems ? audioData.partSamples.keys.sorted() : [Self.mixedStreamID]
-        log("playback path=\(useStems ? "per-part stems" : "single mixed buffer (production path)") streams=\(streamIDs.count)")
+        let usesSoftwareStemMix = !audioData.partSamples.isEmpty
+        let streamIDs = [usesSoftwareStemMix ? Self.softwareStemMixStreamID : Self.mixedStreamID]
+        log("playback path=\(usesSoftwareStemMix ? "software-mixed stems" : "single mixed fallback") players=1")
         var players: [String: AVAudioPlayerNode] = [:]
         for id in streamIDs {
             let player = AVAudioPlayerNode()
@@ -222,6 +188,8 @@ final class NativePlaybackController {
         self.engine = engine
         self.playerNode = playerNode
         self.stemPlayers = players
+        self.usesSoftwareStemPlayback = usesSoftwareStemMix
+        self.renderedStemIDs = Set(audioData.partSamples.keys)
         applyMixerSettings()
         installMeterTapsIfPossible()
         self.liveRenderSession = liveRenderSession
@@ -231,11 +199,7 @@ final class NativePlaybackController {
         self.timelineClock.reset(to: pendingStartSeconds)
         self.bufferProgress.reset(to: pendingStartSeconds)
         self.isPaused = false
-        self.scheduledBufferCount = 0
         self.nextScheduledSampleTime = 0
-        self.scheduledPrerollFrames = 0
-        self.silenceBuffer = nil
-        self.previousScheduledTailByStream.removeAll(keepingCapacity: true)
         self.needsPlayerPriming = true
 
         try schedule(audioData: audioData, startsAt: pendingStartSeconds, revision: prepareRevision)
@@ -324,9 +288,6 @@ final class NativePlaybackController {
         bufferProgress.reset(to: pendingStartSeconds)
         queuedUntilSeconds = pendingStartSeconds
         nextScheduledSampleTime = 0
-        scheduledPrerollFrames = 0
-        scheduledBufferCount = 0
-        previousScheduledTailByStream.removeAll(keepingCapacity: true)
         needsPlayerPriming = true
         playWhenBuffered = false
         isPaused = !wasPlaying
@@ -350,7 +311,8 @@ final class NativePlaybackController {
         liveRenderSession = nil
         revision += 1
         sampleRate = 48_000
-        silenceBuffer = nil
+        usesSoftwareStemPlayback = false
+        renderedStemIDs.removeAll()
         durationSeconds = 0
         queuedUntilSeconds = 0
         pendingStartSeconds = 0
@@ -358,10 +320,7 @@ final class NativePlaybackController {
         bufferProgress.reset(to: 0)
         isPaused = false
         isScheduling = false
-        scheduledBufferCount = 0
         nextScheduledSampleTime = 0
-        scheduledPrerollFrames = 0
-        previousScheduledTailByStream.removeAll()
         needsPlayerPriming = true
         playWhenBuffered = false
         metronomeEnabled = false
@@ -370,16 +329,6 @@ final class NativePlaybackController {
 
     private func installMeterTapsIfPossible() {
         guard isMeteringEnabled, !meterTapsInstalled, let engine else { return }
-
-        for (partID, player) in stemPlayers {
-            player.installTap(onBus: 0, bufferSize: 1_024, format: nil) { [weak self] buffer, _ in
-                let level = Self.normalizedMeterLevel(in: buffer)
-                guard level > 0 else { return }
-                Task { @MainActor [weak self] in
-                    self?.recordMeterPeak(level, for: partID)
-                }
-            }
-        }
 
         engine.mainMixerNode.installTap(onBus: 0, bufferSize: 1_024, format: nil) { [weak self] buffer, _ in
             let level = Self.normalizedMeterLevel(in: buffer)
@@ -393,7 +342,6 @@ final class NativePlaybackController {
 
     private func removeMeterTaps() {
         guard meterTapsInstalled else { return }
-        stemPlayers.values.forEach { $0.removeTap(onBus: 0) }
         engine?.mainMixerNode.removeTap(onBus: 0)
         meterTapsInstalled = false
     }
@@ -526,7 +474,7 @@ final class NativePlaybackController {
             }
 
             // Do not start from inside schedule(_:). Let this fill pass finish first so
-            // every stem has the complete startup cushion before any player begins.
+            // the output player has its complete startup cushion before it begins.
             if self.playWhenBuffered, self.hasEnoughAudioToStart, let playerNode = self.playerNode {
                 do {
                     try self.startPlaybackWhenBuffered(engine: self.engine, playerNode: playerNode)
@@ -552,120 +500,63 @@ final class NativePlaybackController {
             return
         }
 
-        let streams = (Self.usesStemPlayback && !audioData.partSamples.isEmpty)
-            ? audioData.partSamples
-            : [Self.mixedStreamID: audioData.interleavedFloat32Samples]
-        guard Set(streams.keys) == Set(stemPlayers.keys) else {
-            throw PlaybackError.sequenceLoadFailed("The instrument layout changed. Stop and restart playback.")
-        }
-        // Convert and validate every stem before scheduling any, so errors cannot desynchronize parts.
-        var buffers: [(String, AVAudioPCMBuffer)] = []
-        for id in streams.keys.sorted() {
-            guard let data = streams[id], data.count == audioData.interleavedFloat32Samples.count,
-                  let buffer = makeBuffer(samples: data, sampleRate: audioData.sampleRate) else {
+        let streamID: String
+        let samples: Data
+        let partMeterLevels: [String: Float]
+        if usesSoftwareStemPlayback {
+            guard !audioData.partSamples.isEmpty,
+                  Set(audioData.partSamples.keys) == renderedStemIDs else {
+                throw PlaybackError.sequenceLoadFailed(
+                    "The instrument layout changed. Stop and restart playback."
+                )
+            }
+            do {
+                let mix = try StemSoftwareMixer.mix(
+                    partSamples: audioData.partSamples,
+                    settings: mixerSettings,
+                    metronomeEnabled: metronomeEnabled
+                )
+                streamID = Self.softwareStemMixStreamID
+                samples = mix.interleavedFloat32Samples
+                partMeterLevels = mix.normalizedLevels
+            } catch {
                 throw PlaybackError.sequenceLoadFailed("An instrument audio buffer was invalid.")
             }
-            buffers.append((id, buffer))
+        } else {
+            streamID = Self.mixedStreamID
+            samples = audioData.interleavedFloat32Samples
+            partMeterLevels = [:]
         }
-        guard let first = buffers.first else { return }
-        let bufferDuration = Double(first.1.frameLength) / first.1.format.sampleRate
-        scheduledBufferCount += 1
-        let bufferIndex = scheduledBufferCount
-        let uniqueFrameLengths = Set(buffers.map(\.1.frameLength))
-        guard uniqueFrameLengths.count == 1 else {
-            throw PlaybackError.sequenceLoadFailed("Instrument audio buffers had different frame counts.")
+        guard Set(stemPlayers.keys) == Set([streamID]),
+              samples.count == audioData.interleavedFloat32Samples.count else {
+            throw PlaybackError.sequenceLoadFailed("The instrument layout changed. Stop and restart playback.")
         }
-        // Stems only, and only for the first buffer of a fresh start or seek. Resuming a
-        // paused queue never reaches here, so pause/resume stays immediate.
-        if buffers.count > 1, nextScheduledSampleTime == 0 {
-            scheduleStemPreroll(format: first.1.format)
+        guard let buffer = makeBuffer(samples: samples, sampleRate: audioData.sampleRate) else {
+            throw PlaybackError.sequenceLoadFailed("An instrument audio buffer was invalid.")
         }
-
-        let scheduledStartSample = nextScheduledSampleTime
-        // A single mixed player can use AVAudioPlayerNode's natural append behavior.
-        // Explicit sample times are only needed to keep multiple stem nodes locked.
-        let scheduledTime: AVAudioTime? = buffers.count > 1
-            ? AVAudioTime(sampleTime: scheduledStartSample, atRate: first.1.format.sampleRate)
-            : nil
-        logStartupPCM(
-            buffers: buffers,
-            bufferIndex: bufferIndex,
-            scoreStartTime: startTime,
-            scheduledSampleTime: scheduledStartSample
-        )
-        for (id, buffer) in buffers {
-            guard let player = stemPlayers[id] else { continue }
-            if player === playerNode {
-                player.scheduleBuffer(
-                    buffer,
-                    at: scheduledTime,
-                    options: [],
-                    completionCallbackType: .dataRendered
-                ) { [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        guard let self, revision == self.revision else { return }
-                        self.bufferProgress.recordConsumedBuffer(
-                            startTimeSeconds: startTime, durationSeconds: bufferDuration,
-                            playbackDurationSeconds: self.durationSeconds)
-                        self.logRenderedStartupBuffer(
-                            bufferIndex: bufferIndex,
-                            scoreEndTime: startTime + bufferDuration,
-                            scheduledEndSample: scheduledStartSample + AVAudioFramePosition(buffer.frameLength),
-                            player: player
-                        )
-                        self.fillPlaybackQueue(revision: revision)
+        let bufferDuration = Double(buffer.frameLength) / buffer.format.sampleRate
+        playerNode.scheduleBuffer(
+            buffer,
+            at: nil,
+            options: [],
+            completionCallbackType: .dataRendered
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, revision == self.revision else { return }
+                if self.isMeteringEnabled {
+                    for (partID, level) in partMeterLevels {
+                        self.recordMeterPeak(level, for: partID)
                     }
                 }
-            } else {
-                player.scheduleBuffer(buffer, at: scheduledTime, options: [])
+                self.bufferProgress.recordConsumedBuffer(
+                    startTimeSeconds: startTime, durationSeconds: bufferDuration,
+                    playbackDurationSeconds: self.durationSeconds)
+                self.fillPlaybackQueue(revision: revision)
             }
         }
 
-        nextScheduledSampleTime += AVAudioFramePosition(first.1.frameLength)
+        nextScheduledSampleTime += AVAudioFramePosition(buffer.frameLength)
         queuedUntilSeconds = max(queuedUntilSeconds, startTime + bufferDuration)
-    }
-
-    /// Queues one shared silent buffer at sample time 0 on every stem node, then moves
-    /// the shared write cursor past it so the first score buffer is scheduled at an
-    /// explicit sample time immediately after the silence. No completion handler is
-    /// attached, so buffer-progress accounting still only tracks score audio.
-    private func scheduleStemPreroll(format: AVAudioFormat) {
-        let frames = AVAudioFrameCount((Self.stemPrerollSeconds * format.sampleRate).rounded())
-        guard frames > 0, let silence = silenceBuffer(format: format, frameCount: frames) else {
-            return
-        }
-
-        let prerollStart = AVAudioTime(sampleTime: 0, atRate: format.sampleRate)
-        for player in stemPlayers.values {
-            player.scheduleBuffer(silence, at: prerollStart, options: [])
-        }
-
-        nextScheduledSampleTime = AVAudioFramePosition(frames)
-        scheduledPrerollFrames = frames
-        let prerollSeconds = Double(frames) / format.sampleRate
-        // The player's sample time counts this silence; the score playhead must not.
-        timelineClock.setPreroll(prerollSeconds)
-        log("stem preroll scheduled frames=\(frames) duration=\(formatSeconds(prerollSeconds))s "
-            + "streams=\(stemPlayers.count) revision=\(revision)")
-    }
-
-    /// One reusable zero-filled stereo buffer, shared by every stem node. It is read-only
-    /// to the render thread, so a single instance is safe across nodes.
-    private func silenceBuffer(format: AVAudioFormat, frameCount: AVAudioFrameCount) -> AVAudioPCMBuffer? {
-        if let silenceBuffer, silenceBuffer.format == format, silenceBuffer.frameLength == frameCount {
-            return silenceBuffer
-        }
-
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-            return nil
-        }
-
-        buffer.frameLength = frameCount
-        for channel in 0..<Int(format.channelCount) {
-            buffer.floatChannelData?[channel].update(repeating: 0, count: Int(frameCount))
-        }
-        silenceBuffer = buffer
-        return buffer
     }
 
     private func makeBuffer(samples: Data, sampleRate: Int) -> AVAudioPCMBuffer? {
@@ -733,10 +624,7 @@ final class NativePlaybackController {
         bufferProgress.reset(to: 0)
         isPaused = false
         isScheduling = false
-        scheduledBufferCount = 0
         nextScheduledSampleTime = 0
-        scheduledPrerollFrames = 0
-        previousScheduledTailByStream.removeAll(keepingCapacity: true)
         needsPlayerPriming = true
         playWhenBuffered = false
         log("stop revision=\(revision)")
@@ -752,7 +640,7 @@ final class NativePlaybackController {
             return
         }
 
-        // pause() preserves every player's queue and sample position. Resuming that
+        // pause() preserves the player's queue and sample position. Resuming that
         // queue must not wait for the larger cushion required by a fresh start/seek.
         let isResumingPausedQueue = isPaused && !needsPlayerPriming
         guard isResumingPausedQueue || hasEnoughAudioToStart else {
@@ -763,10 +651,7 @@ final class NativePlaybackController {
             return
         }
 
-        timelineClock.startFallback(
-            at: pendingStartSeconds,
-            waitsForPreroll: !isResumingPausedQueue
-        )
+        timelineClock.startFallback(at: pendingStartSeconds)
         playWhenBuffered = false
         var primedFrameCount: AVAudioFrameCount = 0
         if needsPlayerPriming {
@@ -790,8 +675,7 @@ final class NativePlaybackController {
             + "queued=\(formatSeconds(queuedUntilSeconds - pendingStartSeconds))s streams=\(startedIDs.count) "
             + "scheduledFrames=\(nextScheduledSampleTime) engineRate=\(Int(outputFormat?.sampleRate ?? 0)) "
             + "ioBuffer=\(ioBufferMilliseconds)ms outputLatency=\(outputLatencyMilliseconds)ms "
-            + "meters=\(meterState) primedFrames=\(primedFrameCount) prerollFrames=\(scheduledPrerollFrames)")
-        logStartupAlignmentSnapshots(revision: revision)
+            + "meters=\(meterState) primedFrames=\(primedFrameCount)")
     }
 
     private var hasEnoughAudioToStart: Bool {
@@ -803,110 +687,13 @@ final class NativePlaybackController {
     }
 
     /// Keep scheduled PCM under 32 MiB while retaining several chunks of headroom.
-    /// Fresh starts and seeks wait for this complete cushion before starting the nodes.
+    /// Fresh starts and seeks wait for this complete cushion before starting the player.
     private var targetPrebufferDuration: TimeInterval {
         let bytesPerSecond = sampleRate * 2 * 4 * Double(max(stemPlayers.count, 1))
         return max(
             chunkDurationSeconds,
             min(chunkDurationSeconds * Double(prebufferChunks), 32 * 1_024 * 1_024 / bytesPerSecond)
         )
-    }
-
-    /// A bounded trace for the first few buffers after load or seek. It detects PCM
-    /// discontinuities and clipping without logging from the real-time audio callback.
-    private func logStartupPCM(
-        buffers: [(String, AVAudioPCMBuffer)],
-        bufferIndex: Int,
-        scoreStartTime: TimeInterval,
-        scheduledSampleTime: AVAudioFramePosition
-    ) {
-        guard bufferIndex <= 6 else { return }
-
-        var largestPeak: Float = 0
-        var peakStream = "none"
-        var largestBoundaryJump: Float = 0
-        var boundaryStream = "none"
-        var largestInitialSample: Float = 0
-
-        for (id, buffer) in buffers {
-            guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { continue }
-            let frameCount = Int(buffer.frameLength)
-            let first = StereoSample(left: channels[0][0], right: channels[1][0])
-            let last = StereoSample(left: channels[0][frameCount - 1], right: channels[1][frameCount - 1])
-            largestInitialSample = max(largestInitialSample, max(abs(first.left), abs(first.right)))
-
-            if let previous = previousScheduledTailByStream[id] {
-                let jump = max(abs(first.left - previous.left), abs(first.right - previous.right))
-                if jump > largestBoundaryJump {
-                    largestBoundaryJump = jump
-                    boundaryStream = id
-                }
-            }
-            previousScheduledTailByStream[id] = last
-
-            var peak: Float = 0
-            for frame in 0..<frameCount {
-                peak = max(peak, max(abs(channels[0][frame]), abs(channels[1][frame])))
-            }
-            if peak > largestPeak {
-                largestPeak = peak
-                peakStream = id
-            }
-        }
-
-        let peakDescription = String(format: "%.4f", largestPeak)
-        let initialDescription = String(format: "%.4f", largestInitialSample)
-        let boundaryDescription = String(format: "%.4f", largestBoundaryJump)
-        log("startup pcm chunk=\(bufferIndex) score=\(formatSeconds(scoreStartTime)) "
-            + "sample=\(scheduledSampleTime) frames=\(buffers.first?.1.frameLength ?? 0) "
-            + "peak=\(peakDescription)[\(peakStream)] initial=\(initialDescription) "
-            + "boundaryJump=\(boundaryDescription)[\(boundaryStream)]")
-    }
-
-    private func logRenderedStartupBuffer(
-        bufferIndex: Int,
-        scoreEndTime: TimeInterval,
-        scheduledEndSample: AVAudioFramePosition,
-        player: AVAudioPlayerNode
-    ) {
-        guard bufferIndex <= 6 else { return }
-        let renderedSample: AVAudioFramePosition? = player.lastRenderTime
-            .flatMap { player.playerTime(forNodeTime: $0)?.sampleTime }
-        let renderedDescription = renderedSample.map { String($0) } ?? "unavailable"
-        log("startup rendered chunk=\(bufferIndex) scoreEnd=\(formatSeconds(scoreEndTime)) "
-            + "scheduledEnd=\(scheduledEndSample) playerSample=\(renderedDescription) "
-            + "queuedAhead=\(formatSeconds(max(queuedUntilSeconds - scoreEndTime, 0)))s")
-    }
-
-    private func logStartupAlignmentSnapshots(revision startRevision: Int) {
-        Task { @MainActor [weak self] in
-            let checkpoints: [(Duration, String)] = [
-                (.milliseconds(40), "40ms"),
-                (.milliseconds(160), "200ms"),
-                (.milliseconds(600), "800ms")
-            ]
-            for (delay, label) in checkpoints {
-                try? await Task.sleep(for: delay)
-                guard let self, startRevision == self.revision else { return }
-
-                var samples: [(String, AVAudioFramePosition)] = []
-                var unavailable: [String] = []
-                for id in self.stemPlayers.keys.sorted() {
-                    guard let player = self.stemPlayers[id],
-                          let nodeTime = player.lastRenderTime,
-                          let playerTime = player.playerTime(forNodeTime: nodeTime) else {
-                        unavailable.append(id)
-                        continue
-                    }
-                    samples.append((id, playerTime.sampleTime))
-                }
-                let values = samples.map(\.1)
-                let spread = (values.max() ?? 0) - (values.min() ?? 0)
-                let positions = samples.map { "\($0.0)=\($0.1)" }.joined(separator: ",")
-                self.log("startup alignment \(label) spreadFrames=\(spread) "
-                    + "positions=[\(positions)] unavailable=[\(unavailable.joined(separator: ","))]")
-            }
-        }
     }
 
     private func bounded(_ positionSeconds: TimeInterval) -> TimeInterval {

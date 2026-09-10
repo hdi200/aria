@@ -13,54 +13,37 @@ import Foundation
 /// would count the elapsed samples a second time.
 struct PlaybackTimelineClock {
     private(set) var sampleTimeOriginSeconds: TimeInterval = 0
-    /// Silence rendered ahead of the first score sample. The player's sample time
-    /// counts those frames, so they are subtracted here to keep the score playhead
-    /// parked at the requested position until audible audio actually begins.
-    private(set) var prerollSeconds: TimeInterval = 0
     private var fallbackStartPositionSeconds: TimeInterval = 0
     private var fallbackStartedAt: Date?
-    private var fallbackDelaySeconds: TimeInterval = 0
 
     mutating func reset(to positionSeconds: TimeInterval) {
         sampleTimeOriginSeconds = positionSeconds
         fallbackStartPositionSeconds = positionSeconds
         fallbackStartedAt = nil
-        fallbackDelaySeconds = 0
-        prerollSeconds = 0
-    }
-
-    /// Set when silent preroll is scheduled, before the nodes start. Cleared by `reset`,
-    /// so a seek or stop cannot leave a stale offset behind.
-    mutating func setPreroll(_ seconds: TimeInterval) {
-        prerollSeconds = max(seconds, 0)
     }
 
     mutating func startFallback(
         at positionSeconds: TimeInterval,
-        waitsForPreroll: Bool = false,
         now: Date = Date()
     ) {
         fallbackStartPositionSeconds = positionSeconds
         fallbackStartedAt = now
-        fallbackDelaySeconds = waitsForPreroll ? prerollSeconds : 0
     }
 
     mutating func pauseFallback(at positionSeconds: TimeInterval) {
         fallbackStartPositionSeconds = positionSeconds
         fallbackStartedAt = nil
-        fallbackDelaySeconds = 0
     }
 
     func positionSeconds(playerSampleTimeSeconds: TimeInterval?, now: Date = Date()) -> TimeInterval {
         if let playerSampleTimeSeconds {
-            return sampleTimeOriginSeconds + max(playerSampleTimeSeconds - prerollSeconds, 0)
+            return sampleTimeOriginSeconds + max(playerSampleTimeSeconds, 0)
         }
 
         guard let fallbackStartedAt else {
             return fallbackStartPositionSeconds
         }
-        return fallbackStartPositionSeconds
-            + max(now.timeIntervalSince(fallbackStartedAt) - fallbackDelaySeconds, 0)
+        return fallbackStartPositionSeconds + max(now.timeIntervalSince(fallbackStartedAt), 0)
     }
 }
 
