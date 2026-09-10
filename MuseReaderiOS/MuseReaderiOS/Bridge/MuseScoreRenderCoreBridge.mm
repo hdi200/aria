@@ -202,6 +202,8 @@ MSRSelectionInfo * _Nullable MakeSelectionInfo(const msr::render::ScoreSelection
                                                      isSlur:selectionState.isSlur
                                                       isTie:selectionState.isTie
                                                   isHairpin:selectionState.isHairpin
+                                           isInstrumentName:selectionState.isInstrumentName
+                                         isInstrumentChange:selectionState.isInstrumentChange
                                                 isEditableText:selectionState.isEditableText
                                             isChordText:selectionState.isChordText
                                 canDragMovableElement:selectionState.canDragMovableElement
@@ -211,6 +213,11 @@ MSRSelectionInfo * _Nullable MakeSelectionInfo(const msr::render::ScoreSelection
                                          isTiedForward:selectionState.isTiedForward
                                            textContent:[NSString stringWithUTF8String:selectionState.textContent.c_str()]
                                              textKind:[NSString stringWithUTF8String:selectionState.textKind.c_str()]
+                                                partID:[NSString stringWithUTF8String:selectionState.partId.c_str()]
+                                          instrumentID:[NSString stringWithUTF8String:selectionState.instrumentId.c_str()]
+                                        instrumentName:[NSString stringWithUTF8String:selectionState.instrumentName.c_str()]
+                                          measureIndex:selectionState.measureIndex
+                                                  tick:selectionState.tick
                                              midiPitch:selectionState.midiPitch
                                       chordMidiPitches:chordMidiPitches
                                           playbackBank:selectionState.playbackBank
@@ -431,6 +438,8 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                         isSlur:(BOOL)isSlur
                          isTie:(BOOL)isTie
                      isHairpin:(BOOL)isHairpin
+             isInstrumentName:(BOOL)isInstrumentName
+           isInstrumentChange:(BOOL)isInstrumentChange
                  isEditableText:(BOOL)isEditableText
                         isChordText:(BOOL)isChordText
              canDragMovableElement:(BOOL)canDragMovableElement
@@ -440,6 +449,11 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                     isTiedForward:(BOOL)isTiedForward
                        textContent:(NSString *)textContent
                         textKind:(NSString *)textKind
+                           partID:(NSString *)partID
+                     instrumentID:(NSString *)instrumentID
+                   instrumentName:(NSString *)instrumentName
+                     measureIndex:(NSInteger)measureIndex
+                             tick:(int64_t)tick
                         midiPitch:(NSInteger)midiPitch
                    chordMidiPitches:(NSArray<NSNumber *> *)chordMidiPitches
                   playbackBank:(NSInteger)playbackBank
@@ -495,6 +509,8 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _isSlur = isSlur;
         _isTie = isTie;
         _isHairpin = isHairpin;
+        _isInstrumentName = isInstrumentName;
+        _isInstrumentChange = isInstrumentChange;
         _isEditableText = isEditableText;
         _isChordText = isChordText;
         _canDragMovableElement = canDragMovableElement;
@@ -504,6 +520,11 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _isTiedForward = isTiedForward;
         _textContent = [textContent copy];
         _textKind = [textKind copy];
+        _partID = [partID copy];
+        _instrumentID = [instrumentID copy];
+        _instrumentName = [instrumentName copy];
+        _measureIndex = measureIndex;
+        _tick = tick;
         _midiPitch = midiPitch;
         _chordMidiPitches = [chordMidiPitches copy];
         _playbackBank = playbackBank;
@@ -3228,6 +3249,72 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         return nil;
     }
 
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)replacePartInstrument:(NSString *)partID
+                           instrumentID:(NSString *)instrumentID
+                                  error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->replacePartInstrument(partID.UTF8String ?: "",
+                                         instrumentID.UTF8String ?: "",
+                                         editState,
+                                         errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not replace that instrument."));
+        }
+        return nil;
+    }
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)setInstrumentFromTickForPart:(NSString *)partID
+                                           tick:(int64_t)tick
+                                   instrumentID:(NSString *)instrumentID
+                                          error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->setInstrumentFromTick(partID.UTF8String ?: "",
+                                         tick,
+                                         instrumentID.UTF8String ?: "",
+                                         editState,
+                                         errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not add that instrument change."));
+        }
+        return nil;
+    }
     return MakeEditState(editState);
 #else
     if (error) {

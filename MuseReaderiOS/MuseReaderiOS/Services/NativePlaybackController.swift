@@ -39,7 +39,27 @@ final class NativePlaybackController {
     private let prebufferChunks = 4
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
+    /// A/B switch between the per-part stem path added with the mixer and the single mixed
+    /// buffer the app played before it. The mixed buffer is exactly what the shipping build
+    /// plays, so turning this off reproduces production audio. Per-part volume, pan, mute
+    /// and solo have nothing to act on while it is off.
+    static let stemPlaybackDefaultsKey = "AriaUsesStemPlayback"
+
+    static var usesStemPlayback: Bool {
+        get { UserDefaults.standard.object(forKey: stemPlaybackDefaultsKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: stemPlaybackDefaultsKey) }
+    }
+
+    /// Stream id used when playing the single mixed buffer instead of per-part stems.
+    private static let mixedStreamID = "mixed"
+
     private var stemPlayers: [String: AVAudioPlayerNode] = [:]
+    //! NOTE Diagnostic: buffers scheduled vs. actually consumed, per stem. Unlike
+    //! playerTime.sampleTime (which just counts render time since play started, and so
+    //! matches across stems even when one underruns) this tracks queue progress, which
+    //! is what "the parts are offset" actually means.
+    private var scheduledBuffersPerStem: [String: Int] = [:]
+    private var consumedBuffersPerStem: [String: Int] = [:]
     private var mixerSettings = ScoreMixerSettings()
     private var meterLevelHandler: (([String: Float]) -> Void)?
     private var meterPeaks: [String: Float] = [:]
@@ -81,9 +101,14 @@ final class NativePlaybackController {
         engine?.mainMixerNode.outputVolume = mixerSettings.masterMuted
             ? 0 : min(max(mixerSettings.masterVolume, 0), 1)
         engine?.mainMixerNode.pan = min(max(mixerSettings.masterPan, -1), 1)
-        let activeParts = Set(stemPlayers.keys.filter { $0 != "metronome" && $0 != "silence" })
+        let passthroughIDs: Set<String> = ["metronome", "silence", Self.mixedStreamID]
+        let activeParts = Set(stemPlayers.keys.filter { !passthroughIDs.contains($0) })
         for (partID, player) in stemPlayers {
-            if partID == "metronome" {
+            if partID == Self.mixedStreamID {
+                // Already contains every part, including the metronome, at its rendered level.
+                player.volume = 1
+                player.pan = 0
+            } else if partID == "metronome" {
                 player.volume = metronomeEnabled ? 1 : 0
                 player.pan = 0
             } else {
@@ -91,6 +116,19 @@ final class NativePlaybackController {
                 player.pan = min(max(mixerSettings.settings(for: partID).pan, -1), 1)
             }
         }
+
+        //! NOTE Diagnostic: the last stage where the five stems are treated differently from
+        //! each other, and the only one production has no equivalent of. At unity gain and
+        //! centre pan the summed stems are mathematically identical to the mixed buffer, so
+        //! anything non-default here is the only way this build can differ from production.
+        let applied = stemPlayers.keys.sorted().map { id -> String in
+            guard let player = stemPlayers[id] else { return "\(id)=?" }
+            return String(format: "%@ vol=%.3f pan=%+.2f", id, player.volume, player.pan)
+        }
+        let allDefault = stemPlayers.values.allSatisfy { $0.volume == 1 && $0.pan == 0 }
+        log("mixer applied  master vol=\(engine?.mainMixerNode.outputVolume ?? -1) "
+            + "pan=\(engine?.mainMixerNode.pan ?? -1)  \(applied.joined(separator: "  "))"
+            + (allDefault ? "  [all stems at unity/centre]" : "  [NON-DEFAULT]"))
     }
     private var liveRenderSession: LiveScoreRenderSession?
     private var metronomeEnabled = false
@@ -157,7 +195,9 @@ final class NativePlaybackController {
         }
 
         let engine = AVAudioEngine()
-        let streamIDs = audioData.partSamples.isEmpty ? ["silence"] : audioData.partSamples.keys.sorted()
+        let useStems = Self.usesStemPlayback && !audioData.partSamples.isEmpty
+        let streamIDs = useStems ? audioData.partSamples.keys.sorted() : [Self.mixedStreamID]
+        log("playback path=\(useStems ? "per-part stems" : "single mixed buffer (production path)") streams=\(streamIDs.count)")
         var players: [String: AVAudioPlayerNode] = [:]
         for id in streamIDs {
             let player = AVAudioPlayerNode()
@@ -481,8 +521,9 @@ final class NativePlaybackController {
             return
         }
 
-        let streams = audioData.partSamples.isEmpty
-            ? ["silence": audioData.interleavedFloat32Samples] : audioData.partSamples
+        let streams = (Self.usesStemPlayback && !audioData.partSamples.isEmpty)
+            ? audioData.partSamples
+            : [Self.mixedStreamID: audioData.interleavedFloat32Samples]
         guard Set(streams.keys) == Set(stemPlayers.keys) else {
             throw PlaybackError.sequenceLoadFailed("The instrument layout changed. Stop and restart playback.")
         }
@@ -498,20 +539,34 @@ final class NativePlaybackController {
         guard let first = buffers.first else { return }
         let bufferDuration = Double(first.1.frameLength) / first.1.format.sampleRate
         scheduledBufferCount += 1
+        //! NOTE Diagnostic: every stem must carry an identical frame count for the
+        //! `at: nil` appends below to stay in lockstep. A mismatch here is a desync.
+        let frameCounts = buffers.map { "\($0.0):\($0.1.frameLength)" }.joined(separator: " ")
+        let uniqueFrameLengths = Set(buffers.map(\.1.frameLength))
+        log("chunk #\(scheduledBufferCount) start=\(formatSeconds(startTime)) dur=\(formatSeconds(bufferDuration)) "
+            + "frames=[\(frameCounts)]\(uniqueFrameLengths.count == 1 ? "" : "  ⚠️ FRAME COUNT MISMATCH")")
         for (id, buffer) in buffers {
             guard let player = stemPlayers[id] else { continue }
+            scheduledBuffersPerStem[id, default: 0] += 1
             if player === playerNode {
                 player.scheduleBuffer(buffer, at: nil, options: []) { [weak self] in
                     Task { @MainActor [weak self] in
                         guard let self, revision == self.revision else { return }
+                        self.consumedBuffersPerStem[id, default: 0] += 1
                         self.bufferProgress.recordConsumedBuffer(
                             startTimeSeconds: startTime, durationSeconds: bufferDuration,
                             playbackDurationSeconds: self.durationSeconds)
+                        self.logStemAlignment("chunk boundary \(self.formatSeconds(startTime))")
                         self.fillPlaybackQueue(revision: revision)
                     }
                 }
             } else {
-                player.scheduleBuffer(buffer, at: nil, options: [])
+                player.scheduleBuffer(buffer, at: nil, options: []) { [weak self] in
+                    Task { @MainActor [weak self] in
+                        guard let self, revision == self.revision else { return }
+                        self.consumedBuffersPerStem[id, default: 0] += 1
+                    }
+                }
             }
         }
 
@@ -587,6 +642,8 @@ final class NativePlaybackController {
         isPaused = false
         isScheduling = false
         scheduledBufferCount = 0
+        scheduledBuffersPerStem.removeAll()
+        consumedBuffersPerStem.removeAll()
         playWhenBuffered = false
         log("stop revision=\(revision)")
     }
@@ -597,6 +654,12 @@ final class NativePlaybackController {
         }
 
         guard !playerNode.isPlaying else {
+            //! NOTE Diagnostic: this early return only inspects the lead stem. If other
+            //! stems are stopped here they never get started at all.
+            let idle = stemPlayers.filter { !$0.value.isPlaying }.keys.sorted()
+            if !idle.isEmpty {
+                log("⚠️ lead stem already playing but these never started: \(idle.joined(separator: " "))")
+            }
             playWhenBuffered = false
             return
         }
@@ -612,9 +675,14 @@ final class NativePlaybackController {
         timelineClock.startFallback(at: pendingStartSeconds)
         playWhenBuffered = false
         let start = AVAudioTime(hostTime: mach_absolute_time() + AVAudioTime.hostTime(forSeconds: 0.03))
+        let startedIDs = stemPlayers.keys.sorted()
         for player in stemPlayers.values { player.play(at: start) }
         isPaused = false
         log("play started position=\(formatSeconds(pendingStartSeconds)) queuedUntil=\(formatSeconds(queuedUntilSeconds)) revision=\(revision)")
+        //! NOTE Diagnostic: all stems are handed one shared host time here. If they still
+        //! drift, the divergence is upstream of the start, not in this call.
+        log("play issued to \(startedIDs.count) stems at one host time: \(startedIDs.joined(separator: " "))")
+        logStemAlignmentAfterStart()
     }
 
     private func bounded(_ positionSeconds: TimeInterval) -> TimeInterval {
@@ -622,6 +690,69 @@ final class NativePlaybackController {
             return min(max(positionSeconds, 0), durationSeconds)
         }
         return max(positionSeconds, 0)
+    }
+
+    /// Diagnostic: prints every stem's current playback position alongside its drift
+    /// from the lead stem. Parts that are audibly offset show up here as a non-zero
+    /// delta; a stem reporting `idle` while others advance means it never started.
+    private func logStemAlignment(_ label: String) {
+        guard !stemPlayers.isEmpty else {
+            return
+        }
+
+        var reference: (sampleTime: AVAudioFramePosition, sampleRate: Double)?
+        var columns: [String] = []
+
+        for id in stemPlayers.keys.sorted() {
+            guard let player = stemPlayers[id] else { continue }
+            guard player.isPlaying,
+                  let nodeTime = player.lastRenderTime,
+                  let playerTime = player.playerTime(forNodeTime: nodeTime) else {
+                columns.append("\(id)=idle")
+                continue
+            }
+
+            if reference == nil {
+                reference = (playerTime.sampleTime, playerTime.sampleRate)
+            }
+
+            let deltaFrames = playerTime.sampleTime - (reference?.sampleTime ?? playerTime.sampleTime)
+            let deltaMilliseconds = Double(deltaFrames) / playerTime.sampleRate * 1000
+            columns.append(String(format: "%@=%lld(%+.2fms)", id, playerTime.sampleTime, deltaMilliseconds))
+        }
+
+        log("stem alignment [\(label)] \(columns.joined(separator: "  "))")
+
+        // Queue progress: sched/consumed. Any stem whose consumed count trails the others
+        // is playing older audio than they are — that is an audible offset.
+        let queueColumns = stemPlayers.keys.sorted().map { id in
+            "\(id)=\(scheduledBuffersPerStem[id] ?? 0)/\(consumedBuffersPerStem[id] ?? 0)"
+        }
+        let consumedCounts = Set(stemPlayers.keys.map { consumedBuffersPerStem[$0] ?? 0 })
+        log("stem queue    [\(label)] sched/consumed \(queueColumns.joined(separator: "  "))"
+            + (consumedCounts.count == 1 ? "" : "  ⚠️ STEMS OUT OF STEP"))
+    }
+
+    /// Diagnostic: samples alignment on its own timer rather than from inside a stem's
+    /// completion callback. A callback-driven sample always reads the callback's own stem
+    /// as one buffer ahead of stems whose callbacks have not run yet, which shows up as a
+    /// fixed ±1 that is an artifact, not drift. These samples are taken with no callback
+    /// in flight, so a difference here is real.
+    private func logStemAlignmentAfterStart() {
+        let startRevision = revision
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, startRevision == self.revision else { return }
+            self.logStemAlignment("250ms after start")
+
+            var sample = 1
+            while startRevision == self.revision, self.playerNode?.isPlaying == true, sample <= 20 {
+                try? await Task.sleep(for: .milliseconds(750))
+                guard startRevision == self.revision else { return }
+                self.logStemAlignment("neutral sample \(sample)")
+                sample += 1
+            }
+        }
     }
 
     private func log(_ message: String) {

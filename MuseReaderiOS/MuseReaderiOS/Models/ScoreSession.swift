@@ -307,6 +307,8 @@ enum ScoreSelectedElementKind: Sendable, Equatable {
     case tie
     case dynamic
     case marker
+    case instrumentName
+    case instrumentChange
     case text
     case chordText
     case other
@@ -352,6 +354,11 @@ struct ScoreSelectedElement: Sendable, Equatable {
     let isTiedForward: Bool
     let textContent: String?
     let textKind: String?
+    let partID: String?
+    let instrumentID: String?
+    let instrumentName: String?
+    let measureIndex: Int?
+    let tick: Int64?
     let midiPitch: Int?
     let chordMidiPitches: [Int]
     let playbackBank: Int
@@ -507,6 +514,23 @@ struct ScoreSelectedElement: Sendable, Equatable {
 
         return bestStep
     }
+}
+
+enum InstrumentReplacementScope: String, CaseIterable, Identifiable, Sendable {
+    case entireScore
+    case fromMeasure
+
+    var id: String { rawValue }
+}
+
+struct InstrumentReplacementContext: Identifiable, Sendable, Equatable {
+    let id = UUID()
+    let partID: String
+    let currentInstrumentID: String
+    let currentInstrumentName: String
+    let measureIndex: Int?
+    let tick: Int64?
+    let defaultsToMeasureScope: Bool
 }
 
 enum ScoreEditRefreshScope: String, Sendable, Equatable {

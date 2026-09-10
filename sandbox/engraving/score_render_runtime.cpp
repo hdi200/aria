@@ -3302,6 +3302,21 @@ bool supportsBowingArticulations(const mu::engraving::Staff* staff, const mu::en
         && !setupData.contains(muse::mpe::SoundSubCategory::Plucked);
 }
 
+int zeroBasedMeasureIndex(const mu::engraving::Score* score, const mu::engraving::Measure* target)
+{
+    if (!score || !target) {
+        return -1;
+    }
+
+    int index = 0;
+    for (const mu::engraving::Measure* measure = score->firstMeasure(); measure; measure = measure->nextMeasure(), ++index) {
+        if (measure == target) {
+            return index;
+        }
+    }
+    return -1;
+}
+
 msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* score)
 {
     msr::render::ScoreSelectionState selectionState;
@@ -3428,6 +3443,8 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         selectionState.isMeasure = true;
         selectionState.isSingleMeasure = rangeStart == rangeEnd;
         if (rangeStart) {
+            selectionState.measureIndex = zeroBasedMeasureIndex(score, rangeStart);
+            selectionState.tick = rangeStart->tick().ticks();
             const mu::engraving::Fraction nominal = currentTimeSignatureForSelection(score, rangeStart);
             selectionState.currentTimeSignatureNumerator = nominal.numerator();
             selectionState.currentTimeSignatureDenominator = nominal.denominator();
@@ -3484,6 +3501,8 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     const bool timeSignatureSelection = selectedItem->isTimeSig();
     const bool keySignatureSelection = selectedItem->isKeySig();
     const bool tempoSelection = selectedItem->isTempoText();
+    const bool instrumentNameSelection = selectedItem->isInstrumentName();
+    const bool instrumentChangeSelection = selectedItem->isInstrumentChange();
     const bool systemLockSelection = selectedItem->isSystemLockIndicator();
     const bool layoutBreakSelection = selectedItem->isLayoutBreak() || systemLockSelection;
     mu::engraving::Spanner* expressionSpanner = expressionSpannerForItem(selectedItem);
@@ -3509,7 +3528,9 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     const double pageWidth = page->width();
     const double pageHeight = page->height();
     const bool noteLikeSelection = selectedItem->isNote() || selectedItem->isChord();
-    const bool editableTextSelection = isEditableTextItem(selectedItem);
+    const bool editableTextSelection = isEditableTextItem(selectedItem)
+        && !instrumentNameSelection
+        && !instrumentChangeSelection;
     mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(selectedItem);
     const mu::engraving::Staff* staff = chordRest ? chordRest->staff() : nullptr;
     const mu::engraving::Fraction tick = chordRest ? chordRest->tick() : mu::engraving::Fraction(0, 1);
@@ -3543,6 +3564,8 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     selectionState.isSlur = expressionSpanner ? expressionSpanner->isSlurTie() : false;
     selectionState.isTie = expressionSpanner ? expressionSpanner->isTie() : false;
     selectionState.isHairpin = expressionSpanner ? expressionSpanner->isHairpin() : false;
+    selectionState.isInstrumentName = instrumentNameSelection;
+    selectionState.isInstrumentChange = instrumentChangeSelection;
     selectionState.isEditableText = editableTextSelection;
     selectionState.isChordText = selectedItem->isHarmony();
     selectionState.canDragMovableElement = isDirectlyDraggableTextItem(selectedItem);
@@ -3552,6 +3575,8 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         staff ? staff->idx() : static_cast<mu::engraving::staff_idx_t>(0)
     );
     if (measure) {
+        selectionState.measureIndex = zeroBasedMeasureIndex(score, measure);
+        selectionState.tick = measure->tick().ticks();
         const mu::engraving::Measure* firstMeasure = score->firstMeasure();
         const mu::engraving::Fraction nominal = currentTimeSignatureForSelection(score, measure);
         const mu::engraving::Fraction actual = measure->ticks();
@@ -3564,6 +3589,23 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         selectionState.currentTimeSignatureDenominator = nominal.denominator();
         selectionState.isPickupMeasure = selectionState.isFirstMeasure
             && (measure->excludeFromNumbering() || actual < nominal);
+    }
+    if (instrumentNameSelection || instrumentChangeSelection) {
+        const mu::engraving::Part* part = selectedItem->part();
+        const mu::engraving::Instrument* instrument = nullptr;
+        if (instrumentChangeSelection) {
+            instrument = mu::engraving::toInstrumentChange(selectedItem)->instrument();
+            selectionState.tick = selectedItem->tick().ticks();
+        } else if (part) {
+            instrument = part->instrument(selectedItem->tick());
+        }
+        if (part) {
+            selectionState.partId = std::to_string(part->id().toUint64());
+        }
+        if (instrument) {
+            selectionState.instrumentId = instrument->id().toStdString();
+            selectionState.instrumentName = instrument->trackName().toStdString();
+        }
     }
     if (editableTextSelection && selectedItem->isTextBase()) {
         mu::engraving::TextBase* text = mu::engraving::toTextBase(selectedItem);
@@ -5264,6 +5306,7 @@ public:
         // FluidSynth supports 256 MIDI channels but only 128 isolated output groups.
         // A second sampler avoids folding large-score channels onto another part.
         m_audioGroups = std::min(requiredMidiChannels, 128);
+        m_logStemRouting = true;
         const int synthCount = (requiredMidiChannels + m_audioGroups - 1) / m_audioGroups;
         m_settings.reset(new_fluid_settings());
         if (!m_settings) {
@@ -5302,6 +5345,7 @@ public:
             fluid_synth_program_change(synthForChannel(channelProgram.channel), channelProgram.channel, channelProgram.program.program);
             std::cout << "MuseReader event playback routing: channel="
                       << channelProgram.channel
+                      << " partId=" << channelProgram.partId
                       << " layer=" << static_cast<int>(channelProgram.layerIdx)
                       << " bank=" << channelProgram.program.bank
                       << " program=" << channelProgram.program.program
@@ -5406,8 +5450,22 @@ public:
             stem.resize(sampleCount, 0.0f);
             stemChannels.emplace_back(program.channel, &stem);
         }
+        //! NOTE Diagnostic: shows which sampler channel each part stem is actually filled
+        //! from, and which FluidSynth output group that channel lands in. A stem reading a
+        //! group that FluidSynth did not write that channel to picks up another part.
+        if (m_logStemRouting) {
+            m_logStemRouting = false;
+            std::cout << "MuseReader event playback stem routing: audioGroups=" << m_audioGroups
+                      << " synths=" << m_synths.size() << " outputBuffers=" << channels.size();
+            for (const auto& program : m_sequence.channelPrograms) {
+                std::cout << " | " << program.partId << "<-ch" << program.channel
+                          << "(grp" << (program.channel % std::max(m_audioGroups, 1)) << ")";
+            }
+            std::cout << std::endl;
+        }
         std::vector<float> samples;
         samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
+        float maxStemMixDelta = 0.0f;
 
         while (m_currentFrame < endFrame) {
             while (m_eventIndex < m_sequence.synthEvents.size() && m_sequence.synthEvents[m_eventIndex].frame <= m_currentFrame) {
@@ -5445,15 +5503,31 @@ public:
                     }
                     samples.push_back(left);
                     samples.push_back(right);
+                    //! NOTE Diagnostic: the stems must sum back to the mixed buffer. The mix
+                    //! sums every output group while each stem reads only its own, so audio
+                    //! landing in an unclaimed group is lost from the stems but not the mix.
+                    //! Swift plays the stems and never the mix, so any drift here is audible.
+                    float stemLeft = 0.0f;
+                    float stemRight = 0.0f;
                     for (const auto& route : stemChannels) {
-                        (*route.second)[sample] += channels[route.first * 2][blockFrame];
-                        (*route.second)[sample + 1] += channels[route.first * 2 + 1][blockFrame];
+                        const float routeLeft = channels[route.first * 2][blockFrame];
+                        const float routeRight = channels[route.first * 2 + 1][blockFrame];
+                        (*route.second)[sample] += routeLeft;
+                        (*route.second)[sample + 1] += routeRight;
+                        stemLeft += routeLeft;
+                        stemRight += routeRight;
                     }
+                    maxStemMixDelta = std::max(maxStemMixDelta,
+                        std::max(std::fabs(stemLeft - left), std::fabs(stemRight - right)));
                 }
             }
 
             m_currentFrame = blockEndFrame;
         }
+
+        std::cout << "MuseReader event playback stem/mix check: maxDelta=" << maxStemMixDelta
+                  << (maxStemMixDelta > 1e-6f ? "  MISMATCH (stems do not reconstruct the mix)" : "  ok")
+                  << std::endl;
 
         if (samples.empty()) {
             errorMessage = "FluidSynth rendered no audio samples from MuseScore playback events.";
@@ -5471,6 +5545,8 @@ public:
 
 private:
     int m_audioGroups = 16;
+    //! NOTE Diagnostic only: logs the stem routing table once per prepared sequence.
+    bool m_logStemRouting = true;
 
     fluid_synth_t* synthForChannel(const int channel) const
     {

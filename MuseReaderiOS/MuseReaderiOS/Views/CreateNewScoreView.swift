@@ -1598,7 +1598,7 @@ private struct AddInstrumentSheetLayout {
     }
 }
 
-private struct CreateScoreClef: View {
+struct CreateScoreClef: View {
     let clef: ScorePartClef
     let size: CGFloat
 

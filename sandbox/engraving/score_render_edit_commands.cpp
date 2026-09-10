@@ -3616,6 +3616,112 @@
         return true;
     }
 
+    bool replacePartInstrument(const std::string& partId,
+                               const std::string& instrumentId,
+                               msr::render::ScoreEditState& output,
+                               std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Part* part = m_masterScore->partById(muse::ID(partId));
+        if (!part) {
+            errorMessage = "Aria could not find the selected instrument part.";
+            return false;
+        }
+        if (!mu::engraving::searchTemplate(u"piano")) {
+            mu::engraving::loadInstrumentTemplates(":/engraving/instruments/instruments.xml");
+        }
+        const mu::engraving::InstrumentTemplate* instrumentTemplate
+            = mu::engraving::searchTemplate(muse::String::fromUtf8(instrumentId.c_str()));
+        if (!instrumentTemplate) {
+            errorMessage = "Aria could not find the MuseScore instrument template: " + instrumentId;
+            return false;
+        }
+
+        const mu::engraving::Instrument replacement
+            = mu::engraving::Instrument::fromTemplate(instrumentTemplate);
+        m_masterScore->startCmd(muse::TranslatableString::untranslatable("Aria change instrument"));
+        mu::engraving::EditPart::replacePartInstrument(m_masterScore.get(), part, replacement);
+        m_masterScore->endCmd();
+
+        refreshAfterEdit();
+        output = makeEditState(activeScore());
+        return true;
+    }
+
+    bool setInstrumentFromTick(const std::string& partId,
+                               const int64_t tickValue,
+                               const std::string& instrumentId,
+                               msr::render::ScoreEditState& output,
+                               std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+        if (tickValue < 0) {
+            errorMessage = "Select a measure before changing the instrument from that point.";
+            return false;
+        }
+
+        mu::engraving::Part* part = m_masterScore->partById(muse::ID(partId));
+        if (!part) {
+            errorMessage = "Aria could not find the selected instrument part.";
+            return false;
+        }
+        if (!mu::engraving::searchTemplate(u"piano")) {
+            mu::engraving::loadInstrumentTemplates(":/engraving/instruments/instruments.xml");
+        }
+        const mu::engraving::InstrumentTemplate* instrumentTemplate
+            = mu::engraving::searchTemplate(muse::String::fromUtf8(instrumentId.c_str()));
+        if (!instrumentTemplate) {
+            errorMessage = "Aria could not find the MuseScore instrument template: " + instrumentId;
+            return false;
+        }
+
+        const mu::engraving::Instrument replacement
+            = mu::engraving::Instrument::fromTemplate(instrumentTemplate);
+        const mu::engraving::Fraction tick = mu::engraving::Fraction::fromTicks(tickValue);
+        if (tick.isZero()) {
+            return replacePartInstrument(partId, instrumentId, output, errorMessage);
+        }
+
+        mu::engraving::Segment* segment = m_masterScore->tick2segment(
+            tick,
+            true,
+            mu::engraving::SegmentType::ChordRest
+        );
+        if (!segment) {
+            errorMessage = "Aria could not find the selected measure in the score.";
+            return false;
+        }
+
+        m_masterScore->startCmd(muse::TranslatableString::untranslatable("Aria change instrument from measure"));
+        if (!mu::engraving::EditPart::replaceInstrumentAtTick(m_masterScore.get(), part, tick, replacement)) {
+            const mu::engraving::Instrument* currentInstrument = part->instrument(tick);
+            if (!currentInstrument) {
+                m_masterScore->endCmd(true);
+                errorMessage = "Aria could not read the instrument at the selected measure.";
+                return false;
+            }
+
+            mu::engraving::InstrumentChange* instrumentChange
+                = mu::engraving::Factory::createInstrumentChange(segment, *currentInstrument);
+            instrumentChange->setTrack(part->startTrack());
+            m_masterScore->undoAddElement(instrumentChange);
+            instrumentChange->setInit(true);
+            instrumentChange->setupInstrument(&replacement);
+        }
+        m_masterScore->endCmd();
+
+        refreshAfterEdit();
+        output = makeEditState(activeScore());
+        return true;
+    }
+
     bool replaceInstruments(const std::vector<std::string>& instrumentIds,
                             msr::render::ScoreEditState& output,
                             std::string& errorMessage)

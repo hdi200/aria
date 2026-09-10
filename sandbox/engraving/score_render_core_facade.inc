@@ -667,6 +667,23 @@ bool msr::render::ScoreRenderSession::redo(ScoreEditState& output, std::string& 
     return m_impl->redo(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::replacePartInstrument(const std::string& partId,
+                                                            const std::string& instrumentId,
+                                                            ScoreEditState& output,
+                                                            std::string& errorMessage)
+{
+    return m_impl->replacePartInstrument(partId, instrumentId, output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::setInstrumentFromTick(const std::string& partId,
+                                                            const int64_t tick,
+                                                            const std::string& instrumentId,
+                                                            ScoreEditState& output,
+                                                            std::string& errorMessage)
+{
+    return m_impl->setInstrumentFromTick(partId, tick, instrumentId, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::replaceInstruments(const std::vector<std::string>& instrumentIds,
                                                          ScoreEditState& output,
                                                          std::string& errorMessage)

@@ -1297,6 +1297,51 @@ extension ScoreReaderState {
         }
     }
 
+    func instrumentReplacementContext() -> InstrumentReplacementContext? {
+        guard let selection = editingState.selection,
+              selection.kind == .instrumentName || selection.kind == .instrumentChange,
+              let partID = selection.partID,
+              let instrumentID = selection.instrumentID
+        else {
+            return nil
+        }
+
+        let isExistingChange = selection.kind == .instrumentChange
+        return InstrumentReplacementContext(
+            partID: partID,
+            currentInstrumentID: instrumentID,
+            currentInstrumentName: selection.instrumentName ?? "Instrument",
+            measureIndex: isExistingChange ? selection.measureIndex : lastSelectedMeasureIndex,
+            tick: isExistingChange ? selection.tick : lastSelectedMeasureTick,
+            defaultsToMeasureScope: isExistingChange
+        )
+    }
+
+    func replaceInstrument(
+        with instrument: NewScoreInstrument,
+        context: InstrumentReplacementContext,
+        scope: InstrumentReplacementScope
+    ) {
+        performEditingAction(mutatesScore: true) { liveRenderSession in
+            switch scope {
+            case .entireScore:
+                return try await liveRenderSession.replacePartInstrument(
+                    partID: context.partID,
+                    instrumentID: instrument.instrumentID
+                )
+            case .fromMeasure:
+                guard let tick = context.tick else {
+                    throw ScoreDocumentServiceError.bridgeFailure("Select a measure before changing the instrument from that point.")
+                }
+                return try await liveRenderSession.setInstrumentFromTick(
+                    partID: context.partID,
+                    tick: tick,
+                    instrumentID: instrument.instrumentID
+                )
+            }
+        }
+    }
+
     func handleKeyboardPitchClass(_ pitchClass: Int, preferFlats: Bool) {
         guard isEditingMode else {
             return
@@ -1752,6 +1797,13 @@ extension ScoreReaderState {
     }
 
     func applyEditingState(_ editingState: ScoreEditingState) {
+        if let selection = editingState.selection,
+           selection.kind != .instrumentName,
+           let measureIndex = selection.measureIndex,
+           let tick = selection.tick
+        {
+            updateLastSelectedMeasure(index: measureIndex, tick: tick)
+        }
         self.editingState = editingState
         if !editingState.scoreParts.isEmpty {
             updateScoreParts(editingState.scoreParts)

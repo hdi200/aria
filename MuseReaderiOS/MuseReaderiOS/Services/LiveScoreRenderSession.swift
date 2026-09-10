@@ -32,7 +32,10 @@ actor LiveScoreRenderSession {
     let totalPageCount: Int
     let supportsPlayback: Bool
     let supportsEditing: Bool
-    let parts: [ScorePart]
+    //! NOTE Read synchronously from nonisolated contexts (session construction, autosave),
+    //! so it cannot become actor-isolated; the instrument-editing methods below refresh it
+    //! after the core reports a new part list.
+    nonisolated(unsafe) var parts: [ScorePart]
 
     init(bridgeSession: MSRRenderSession) {
         self.bridgeSession = bridgeSession
@@ -1057,6 +1060,34 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func replacePartInstrument(partID: String, instrumentID: String) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(
+            from: bridgeSession.replacePartInstrument(partID: partID, instrumentID: instrumentID),
+            refreshScope: .all
+        )
+        parts = editState.scoreParts
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
+    func setInstrumentFromTick(partID: String, tick: Int64, instrumentID: String) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(
+            from: bridgeSession.setInstrumentFromTick(partID: partID, tick: tick, instrumentID: instrumentID),
+            refreshScope: .all
+        )
+        parts = editState.scoreParts
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func addInstrument(_ instrumentId: String) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
@@ -1217,6 +1248,10 @@ actor LiveScoreRenderSession {
                 kind = .expressionSpanner
             } else if bridgeSelection.isBar {
                 kind = .bar
+            } else if bridgeSelection.isInstrumentChange {
+                kind = .instrumentChange
+            } else if bridgeSelection.isInstrumentName {
+                kind = .instrumentName
             } else if bridgeSelection.isChordText {
                 kind = .chordText
             } else if bridgeSelection.isEditableText && bridgeSelection.textKind == "Marker" {
@@ -1265,6 +1300,11 @@ actor LiveScoreRenderSession {
                 isTiedForward: bridgeSelection.isTiedForward,
                 textContent: bridgeSelection.isEditableText ? bridgeSelection.textContent : nil,
                 textKind: bridgeSelection.isEditableText ? bridgeSelection.textKind : nil,
+                partID: bridgeSelection.partID.isEmpty ? nil : bridgeSelection.partID,
+                instrumentID: bridgeSelection.instrumentID.isEmpty ? nil : bridgeSelection.instrumentID,
+                instrumentName: bridgeSelection.instrumentName.isEmpty ? nil : bridgeSelection.instrumentName,
+                measureIndex: bridgeSelection.measureIndex >= 0 ? Int(bridgeSelection.measureIndex) : nil,
+                tick: bridgeSelection.tick >= 0 ? bridgeSelection.tick : nil,
                 midiPitch: bridgeSelection.midiPitch >= 0 ? Int(bridgeSelection.midiPitch) : nil,
                 chordMidiPitches: bridgeSelection.chordMidiPitches.map { Int(truncating: $0) },
                 playbackBank: Int(bridgeSelection.playbackBank),

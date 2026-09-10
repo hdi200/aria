@@ -92,6 +92,8 @@ struct ScoreSelectionState {
     bool isSlur = false;
     bool isTie = false;
     bool isHairpin = false;
+    bool isInstrumentName = false;
+    bool isInstrumentChange = false;
     bool isEditableText = false;
     bool isChordText = false;
     bool canDragMovableElement = false;
@@ -101,6 +103,11 @@ struct ScoreSelectionState {
     bool isTiedForward = false;
     std::string textContent;
     std::string textKind;
+    std::string partId;
+    std::string instrumentId;
+    std::string instrumentName;
+    int measureIndex = -1;
+    int64_t tick = -1;
     int midiPitch = -1;
     std::vector<int> chordMidiPitches;
     int playbackBank = 0;
@@ -345,6 +352,8 @@ public:
     bool selectAdjacentElement(bool next, ScoreEditState& output, std::string& errorMessage);
     bool undo(ScoreEditState& output, std::string& errorMessage);
     bool redo(ScoreEditState& output, std::string& errorMessage);
+    bool replacePartInstrument(const std::string& partId, const std::string& instrumentId, ScoreEditState& output, std::string& errorMessage);
+    bool setInstrumentFromTick(const std::string& partId, int64_t tick, const std::string& instrumentId, ScoreEditState& output, std::string& errorMessage);
     bool replaceInstruments(const std::vector<std::string>& instrumentIds, ScoreEditState& output, std::string& errorMessage);
     bool addInstrument(const std::string& instrumentId, ScoreEditState& output, std::string& errorMessage);
     bool removeInstrumentAtIndex(int partIndex, ScoreEditState& output, std::string& errorMessage);

@@ -62,6 +62,7 @@
 #include "engraving/dom/harmony.h"
 #include "engraving/dom/imageStore.h"
 #include "engraving/dom/input.h"
+#include "engraving/dom/instrchange.h"
 #include "engraving/dom/instrtemplate.h"
 #include "engraving/dom/jump.h"
 #include "engraving/dom/layoutbreak.h"

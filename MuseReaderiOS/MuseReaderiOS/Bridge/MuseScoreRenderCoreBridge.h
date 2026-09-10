@@ -240,6 +240,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isSlur;
 @property (nonatomic, readonly) BOOL isTie;
 @property (nonatomic, readonly) BOOL isHairpin;
+@property (nonatomic, readonly) BOOL isInstrumentName;
+@property (nonatomic, readonly) BOOL isInstrumentChange;
 @property (nonatomic, readonly) BOOL isEditableText;
 @property (nonatomic, readonly) BOOL isChordText;
 @property (nonatomic, readonly) BOOL canDragMovableElement;
@@ -249,6 +251,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isTiedForward;
 @property (nonatomic, copy, readonly) NSString *textContent;
 @property (nonatomic, copy, readonly) NSString *textKind;
+@property (nonatomic, copy, readonly) NSString *partID;
+@property (nonatomic, copy, readonly) NSString *instrumentID;
+@property (nonatomic, copy, readonly) NSString *instrumentName;
+@property (nonatomic, readonly) NSInteger measureIndex;
+@property (nonatomic, readonly) int64_t tick;
 @property (nonatomic, readonly) NSInteger midiPitch;
 @property (nonatomic, copy, readonly) NSArray<NSNumber *> *chordMidiPitches;
 @property (nonatomic, readonly) NSInteger playbackBank;
@@ -300,6 +307,8 @@ isExpressionSpanner:(BOOL)isExpressionSpanner
           isSlur:(BOOL)isSlur
            isTie:(BOOL)isTie
        isHairpin:(BOOL)isHairpin
+isInstrumentName:(BOOL)isInstrumentName
+isInstrumentChange:(BOOL)isInstrumentChange
 isEditableText:(BOOL)isEditableText
                         isChordText:(BOOL)isChordText
              canDragMovableElement:(BOOL)canDragMovableElement
@@ -309,6 +318,11 @@ isEditableText:(BOOL)isEditableText
 	                    isTiedForward:(BOOL)isTiedForward
 	                      textContent:(NSString *)textContent
 	                        textKind:(NSString *)textKind
+	                           partID:(NSString *)partID
+	                     instrumentID:(NSString *)instrumentID
+	                   instrumentName:(NSString *)instrumentName
+	                     measureIndex:(NSInteger)measureIndex
+	                             tick:(int64_t)tick
 	                        midiPitch:(NSInteger)midiPitch
 	                   chordMidiPitches:(NSArray<NSNumber *> *)chordMidiPitches
 	                 playbackBank:(NSInteger)playbackBank
@@ -639,6 +653,13 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)selectNextElementWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(selectNextElement());
 - (nullable MSREditState *)undoWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(undoEdit());
 - (nullable MSREditState *)redoWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(redoEdit());
+- (nullable MSREditState *)replacePartInstrument:(NSString *)partID
+                                   instrumentID:(NSString *)instrumentID
+                                          error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(replacePartInstrument(partID:instrumentID:));
+- (nullable MSREditState *)setInstrumentFromTickForPart:(NSString *)partID
+                                                   tick:(int64_t)tick
+                                           instrumentID:(NSString *)instrumentID
+                                                  error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setInstrumentFromTick(partID:tick:instrumentID:));
 - (nullable MSREditState *)replaceInstruments:(NSArray<NSString *> *)instrumentIds
                                         error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(replaceInstruments(_:));
 - (nullable MSREditState *)addInstrument:(NSString *)instrumentId

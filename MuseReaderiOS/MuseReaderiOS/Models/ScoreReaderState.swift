@@ -128,6 +128,8 @@ final class ScoreReaderState: ObservableObject {
     @Published var viewTransposeErrorMessage: String?
     @Published var corruptionReport: ScoreCorruptionReport
     @Published var pickupEditorContext: ScorePickupEditorContext?
+    @Published private(set) var lastSelectedMeasureIndex: Int?
+    @Published private(set) var lastSelectedMeasureTick: Int64?
     @Published private(set) var interactionMode: ScoreReaderInteractionMode
     @Published var playbackFollowIsSuspended = false
     @Published var playbackFollowEnabled = true
@@ -198,6 +200,11 @@ final class ScoreReaderState: ObservableObject {
             return
         }
         scoreParts = parts
+    }
+
+    func updateLastSelectedMeasure(index: Int, tick: Int64) {
+        lastSelectedMeasureIndex = index
+        lastSelectedMeasureTick = tick
     }
 
     var currentPageLabel: String {

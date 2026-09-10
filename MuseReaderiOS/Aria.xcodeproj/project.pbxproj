@@ -529,9 +529,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Aria.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Aria.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
@@ -710,9 +710,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Aria.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Aria.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;

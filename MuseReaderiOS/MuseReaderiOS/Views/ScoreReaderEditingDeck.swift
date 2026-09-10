@@ -536,6 +536,10 @@ extension ScoreSelectedElementKind {
             return "Dynamic"
         case .marker:
             return "Marker"
+        case .instrumentName:
+            return "Instrument"
+        case .instrumentChange:
+            return "Instrument Change"
         case .text:
             return "Text"
         case .chordText:

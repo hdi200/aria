@@ -864,6 +864,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
     let openTransposeSheetAction: (Int) -> Void
     let changeEnharmonicAction: () -> Void
     let flipStemAction: () -> Void
+    let changeInstrumentAction: () -> Void
     let keySignatureAction: () -> Void
     let timeSignatureAction: () -> Void
     let tempoAction: () -> Void
@@ -881,6 +882,10 @@ struct ScoreReaderSelectionCommandOverlay: View {
 
     private var isNoteSelection: Bool {
         selectedElement.kind == .note
+    }
+
+    private var isInstrumentSelection: Bool {
+        selectedElement.kind == .instrumentName || selectedElement.kind == .instrumentChange
     }
 
     private var showsEnharmonicAction: Bool {
@@ -921,7 +926,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
                         .frame(width: 34, height: 34)
                         .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Circle())
                         .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
-                        .accessibilityLabel(isNoteRestSelection ? "Selection options" : "Measure options")
+                        .accessibilityLabel(isInstrumentSelection ? "Instrument options" : (isNoteRestSelection ? "Selection options" : "Measure options"))
                 }
                 .buttonStyle(.plain)
                 .position(anchor.actionPosition)
@@ -934,7 +939,23 @@ struct ScoreReaderSelectionCommandOverlay: View {
 
     @ViewBuilder
     private var commandMenu: some View {
-        if isNoteRestSelection {
+        if isInstrumentSelection {
+            VStack(spacing: 0) {
+                ScoreReaderMeasureCommandRow(
+                    title: "Change Instrument",
+                    systemImage: "music.note.list",
+                    action: perform(changeInstrumentAction)
+                )
+            }
+            .padding(.vertical, 6)
+            .frame(width: 238)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.14), radius: 16, y: 8)
+        } else if isNoteRestSelection {
             ScoreReaderNoteRestCommandMenu(
                 isNoteSelection: isNoteSelection,
                 supportsBowingArticulations: selectedElement.supportsBowingArticulations,
@@ -1014,9 +1035,14 @@ struct ScoreReaderSelectionCommandOverlay: View {
 
     private func menuPosition(in size: CGSize) -> CGPoint {
         // Note selections also carry the Flip Stem row, rest selections do not.
-        let menuSize = isNoteRestSelection
-            ? CGSize(width: 218, height: isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216)
-            : CGSize(width: 238, height: selectedElement.isSingleMeasure ? 472 : 362)
+        let menuSize: CGSize
+        if isInstrumentSelection {
+            menuSize = CGSize(width: 238, height: 56)
+        } else if isNoteRestSelection {
+            menuSize = CGSize(width: 218, height: isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216)
+        } else {
+            menuSize = CGSize(width: 238, height: selectedElement.isSingleMeasure ? 472 : 362)
+        }
         let rawX = anchor.actionPosition.x - menuSize.width / 2 + 2
         let rawY = anchor.actionPosition.y + 16 + menuSize.height / 2
         return CGPoint(

@@ -230,6 +230,7 @@ struct ScoreReaderView: View {
     @State private var isScoreSetupPresented = false
     @State private var isPageSettingsPresented = false
     @State private var isInstrumentLayoutPresented = false
+    @State private var instrumentReplacementContext: InstrumentReplacementContext?
     @State private var transposeSheetContext: ScoreReaderTransposeSheetContext?
     @State private var isAddMeasuresPresented = false
     @State private var isAutoBreaksPresented = false
@@ -603,6 +604,7 @@ struct ScoreReaderView: View {
                                 openTransposeSheetAction: openTransposeSheet,
                                 changeEnharmonicAction: readerState.changeSelectedEnharmonicSpelling,
                                 flipStemAction: readerState.flipSelectedStemDirection,
+                                changeInstrumentAction: presentInstrumentReplacement,
                                 keySignatureAction: { isKeySignaturePresented = true },
                                 timeSignatureAction: { isTimeSignaturePresented = true },
                                 tempoAction: { isTempoEditorPresented = true },
@@ -909,6 +911,15 @@ struct ScoreReaderView: View {
                 }
             )
         }
+        .sheet(item: $instrumentReplacementContext) { context in
+            ScoreReaderInstrumentReplacementSheet(
+                context: context,
+                isBusy: readerState.isEditingActionInFlight,
+                replaceAction: { instrument, scope in
+                    readerState.replaceInstrument(with: instrument, context: context, scope: scope)
+                }
+            )
+        }
         .sheet(item: $transposeSheetContext) { context in
             ScoreReaderTransposePanel(
                 currentKey: context.currentKey,
@@ -1025,6 +1036,8 @@ struct ScoreReaderView: View {
         case .text, .chordText:
             return .text
         case .tempo, .timeSignature, .keySignature:
+            return nil
+        case .instrumentName, .instrumentChange:
             return nil
         case .layoutBreak:
             return nil
@@ -1886,6 +1899,7 @@ struct ScoreReaderView: View {
         isScoreSetupPresented = false
         isPageSettingsPresented = false
         isInstrumentLayoutPresented = false
+        instrumentReplacementContext = nil
         transposeSheetContext = nil
         isAddMeasuresPresented = false
         isAutoBreaksPresented = false
@@ -1895,6 +1909,10 @@ struct ScoreReaderView: View {
         clearSelectionCommandMenu()
         exitTextEntryFocusIfNeeded()
         selectedToolCategory = .select
+    }
+
+    private func presentInstrumentReplacement() {
+        instrumentReplacementContext = readerState.instrumentReplacementContext()
     }
 
     private func retryViewModeSave() {
