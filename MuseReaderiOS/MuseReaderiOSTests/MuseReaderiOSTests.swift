@@ -1109,7 +1109,7 @@ struct MuseReaderiOSTests {
     }
 
     @Test
-    func phoneHeaderUsesTwoRowsWhenMixerWouldCrowdControls() {
+    func phoneHeaderMovesPlaybackLeftOnlyWhenPartsWouldOverlapIt() {
         let withoutParts = ScoreReaderPhoneHeaderLayoutPolicy(
             availableWidth: 390,
             isLandscape: false,
@@ -1127,9 +1127,7 @@ struct MuseReaderiOSTests {
         )
 
         #expect(withoutParts.playbackHorizontalOffset == 0)
-        #expect(portraitWithParts.usesTwoRows)
-        #expect(portraitWithParts.playbackHorizontalOffset == 0)
-        #expect(!wideLandscapeWithParts.usesTwoRows)
+        #expect(portraitWithParts.playbackHorizontalOffset == -56)
         #expect(wideLandscapeWithParts.playbackHorizontalOffset == 0)
     }
 

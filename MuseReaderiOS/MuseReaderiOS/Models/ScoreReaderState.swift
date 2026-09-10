@@ -82,6 +82,15 @@ struct ScoreReaderRememberedStateStore {
 }
 
 @MainActor
+final class ScoreMixerLevelMonitor: ObservableObject {
+    @Published private(set) var levels: [String: Float] = [:]
+
+    func update(_ levels: [String: Float]) {
+        self.levels = levels
+    }
+}
+
+@MainActor
 final class ScoreReaderState: ObservableObject {
     let session: ScoreSession
 
@@ -125,6 +134,7 @@ final class ScoreReaderState: ObservableObject {
 
     let preferredDPI: Int
     let playbackController: NativePlaybackController?
+    let mixerLevelMonitor = ScoreMixerLevelMonitor()
     let notePreviewController = NativeNotePreviewController()
     let midiInputController = MIDIInputController()
     let prefetchDistance = 1
@@ -243,6 +253,9 @@ final class ScoreReaderState: ObservableObject {
             ? ScorePlaybackState(isAvailable: true, status: .stopped, positionSeconds: 0, durationSeconds: 0)
             : .unavailable
         self.playbackController?.setMixerSettings(mixerSettings)
+        self.playbackController?.setMeterLevelHandler { [weak self] levels in
+            self?.mixerLevelMonitor.update(levels)
+        }
         midiInputController.noteOnHandler = { [weak self] midiPitch in
             Task { @MainActor [weak self] in
                 self?.handleMIDINoteOn(midiPitch)

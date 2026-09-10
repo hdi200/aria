@@ -1,0 +1,351 @@
+//
+//  SetlistShareExporter.swift
+//  MuseReaderiOS
+//
+//
+
+import Foundation
+import PDFKit
+import UIKit
+
+extension ScoreReaderExportFormat {
+    /// The formats a whole setlist can be shared as. MIDI, audio, and page
+    /// images stay with single-score export, where the reader can still offer
+    /// the part and page choices those formats depend on.
+    static let setlistShareFormats: [ScoreReaderExportFormat] = [.pdf, .museScore, .musicXML]
+
+    var setlistFileExtension: String {
+        switch self {
+        case .pdf:
+            return "pdf"
+        case .museScore:
+            return "mscz"
+        case .musicXML:
+            return "musicxml"
+        case .midi:
+            return "mid"
+        case .audio:
+            return "wav"
+        case .images:
+            return "png"
+        }
+    }
+}
+
+struct SetlistShareFailure: Identifiable {
+    let id = UUID()
+    let scoreTitle: String
+    let message: String
+}
+
+struct SetlistSharePreparation {
+    let urls: [URL]
+    let failures: [SetlistShareFailure]
+}
+
+enum SetlistShareError: LocalizedError {
+    case emptySetlist
+    case unsupportedFormat(String)
+    case unavailableScore(String)
+    case pdfMergeFailed
+    case noSharableScores(String?)
+
+    var errorDescription: String? {
+        switch self {
+        case .emptySetlist:
+            return "Add scores to this setlist before sharing it."
+        case .unsupportedFormat(let format):
+            return "\(format) is not available for setlist sharing."
+        case .unavailableScore(let scoreTitle):
+            return "Aria could not open “\(scoreTitle)”. Open it once in the reader and try again."
+        case .pdfMergeFailed:
+            return "Aria could not combine these scores into one PDF."
+        case .noSharableScores(let reason):
+            let summary = "Aria could not prepare any of the scores in this setlist."
+            guard let reason else {
+                return summary
+            }
+            return "\(summary) \(reason)"
+        }
+    }
+}
+
+/// Turns a setlist into files the system share sheet can hand to another app.
+///
+/// Scores are exported one at a time: every format except an already-packaged
+/// `.mscz` needs a live render session, and the render core only tolerates one
+/// open score at a time. Keeping each session scoped to a single iteration also
+/// keeps a long setlist from holding every native score in memory at once.
+@MainActor
+enum SetlistShareExporter {
+    static func prepareShareItems(
+        setlistName: String,
+        scores: [ReaderRecentDocument],
+        format: ScoreReaderExportFormat,
+        combinesPDFPages: Bool,
+        model: MuseReaderAppModel,
+        progress: (Int) -> Void
+    ) async throws -> SetlistSharePreparation {
+        guard !scores.isEmpty else {
+            throw SetlistShareError.emptySetlist
+        }
+        guard ScoreReaderExportFormat.setlistShareFormats.contains(format) else {
+            throw SetlistShareError.unsupportedFormat(format.title)
+        }
+
+        let exportDirectory = try makeExportDirectory(for: setlistName)
+        var shareURLs: [URL] = []
+        var combinedPDFDocuments: [Data] = []
+        var failures: [SetlistShareFailure] = []
+        var usedBaseNames: Set<String> = []
+
+        for (index, score) in scores.enumerated() {
+            try Task.checkCancellation()
+            progress(index)
+
+            do {
+                let baseName = uniqueFileBaseName(for: score, usedBaseNames: &usedBaseNames)
+                switch format {
+                case .pdf:
+                    let pdfData = try await pdfData(for: score, model: model)
+                    if combinesPDFPages {
+                        combinedPDFDocuments.append(pdfData)
+                    } else {
+                        shareURLs.append(
+                            try write(pdfData, to: exportDirectory, baseName: baseName, format: format)
+                        )
+                    }
+                case .museScore:
+                    shareURLs.append(
+                        try await writeMuseScoreCopy(
+                            for: score,
+                            baseName: baseName,
+                            in: exportDirectory,
+                            model: model
+                        )
+                    )
+                case .musicXML:
+                    let musicXMLData = try await musicXMLData(for: score, model: model)
+                    shareURLs.append(
+                        try write(musicXMLData, to: exportDirectory, baseName: baseName, format: format)
+                    )
+                case .midi, .audio, .images:
+                    throw SetlistShareError.unsupportedFormat(format.title)
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                failures.append(
+                    SetlistShareFailure(
+                        scoreTitle: score.primaryTitle,
+                        message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    )
+                )
+            }
+        }
+
+        if !combinedPDFDocuments.isEmpty {
+            shareURLs = [
+                try writeCombinedPDF(combinedPDFDocuments, to: exportDirectory, setlistName: setlistName)
+            ]
+        }
+
+        progress(scores.count)
+
+        guard !shareURLs.isEmpty else {
+            throw SetlistShareError.noSharableScores(failures.first?.message)
+        }
+
+        return SetlistSharePreparation(urls: shareURLs, failures: failures)
+    }
+
+    /// Opens a score for export without disturbing Recently Opened. Scores that
+    /// still need import normalization fall back to the regular library open;
+    /// legacy bookmark-only scores are skipped so sharing never kicks off a
+    /// re-import or the unlock flow.
+    private static func openSession(
+        for score: ReaderRecentDocument,
+        model: MuseReaderAppModel
+    ) async throws -> ScoreSession {
+        if let preloadedSession = try await model.preloadReaderSession(for: score) {
+            return preloadedSession
+        }
+
+        guard score.libraryRelativePath != nil else {
+            throw SetlistShareError.unavailableScore(score.primaryTitle)
+        }
+
+        return try await model.loadReaderSession(for: score)
+    }
+
+    private static func pdfData(
+        for score: ReaderRecentDocument,
+        model: MuseReaderAppModel
+    ) async throws -> Data {
+        let session = try await openSession(for: score, model: model)
+        if let liveRenderSession = session.liveRenderSession {
+            return try await liveRenderSession.pdfData()
+        }
+
+        return try pdfData(fromPreviewPages: session.previewPages, scoreTitle: score.primaryTitle)
+    }
+
+    private static func pdfData(fromPreviewPages pages: [ScorePage], scoreTitle: String) throws -> Data {
+        let pageImages = pages.compactMap { $0.rasterizedImage() }
+        guard let firstPageImage = pageImages.first else {
+            throw SetlistShareError.unavailableScore(scoreTitle)
+        }
+
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: firstPageImage.size))
+        return renderer.pdfData { context in
+            for pageImage in pageImages {
+                let pageBounds = CGRect(origin: .zero, size: pageImage.size)
+                context.beginPage(withBounds: pageBounds, pageInfo: [:])
+                pageImage.draw(in: pageBounds)
+            }
+        }
+    }
+
+    private static func musicXMLData(
+        for score: ReaderRecentDocument,
+        model: MuseReaderAppModel
+    ) async throws -> Data {
+        let session = try await openSession(for: score, model: model)
+        guard let liveRenderSession = session.liveRenderSession else {
+            throw ScoreReaderExportError.unsupportedFormat("MusicXML")
+        }
+
+        return try await liveRenderSession.musicXMLData()
+    }
+
+    private static func writeMuseScoreCopy(
+        for score: ReaderRecentDocument,
+        baseName: String,
+        in directory: URL,
+        model: MuseReaderAppModel
+    ) async throws -> URL {
+        let exportURL = try exportURL(in: directory, baseName: baseName, format: .museScore)
+
+        // Library scores are already packaged, so copying the file avoids paying
+        // for a render session per score on a long setlist.
+        if score.format == .mscz, let sourceURL = model.managedDocumentURL(for: score) {
+            try FileManager.default.copyItem(at: sourceURL, to: exportURL)
+            return exportURL
+        }
+
+        let session = try await openSession(for: score, model: model)
+        guard let liveRenderSession = session.liveRenderSession else {
+            throw ScoreReaderExportError.unsupportedFormat(".mscz")
+        }
+
+        try await liveRenderSession.save(to: exportURL)
+        return exportURL
+    }
+
+    private static func writeCombinedPDF(
+        _ documents: [Data],
+        to directory: URL,
+        setlistName: String
+    ) throws -> URL {
+        // The source documents stay alive until the merged data is generated:
+        // a PDFPage keeps a reference back to the document it came from.
+        let sourceDocuments = try documents.map { documentData -> PDFDocument in
+            guard let document = PDFDocument(data: documentData) else {
+                throw SetlistShareError.pdfMergeFailed
+            }
+            return document
+        }
+
+        let combinedDocument = PDFDocument()
+        var insertionIndex = 0
+        for sourceDocument in sourceDocuments {
+            for pageIndex in 0..<sourceDocument.pageCount {
+                guard let page = sourceDocument.page(at: pageIndex) else {
+                    continue
+                }
+                combinedDocument.insert(page, at: insertionIndex)
+                insertionIndex += 1
+            }
+        }
+
+        guard insertionIndex > 0, let combinedData = combinedDocument.dataRepresentation() else {
+            throw SetlistShareError.pdfMergeFailed
+        }
+
+        return try write(
+            combinedData,
+            to: directory,
+            baseName: sanitizedName(setlistName, fallback: "Aria Setlist"),
+            format: .pdf
+        )
+    }
+
+    private static func write(
+        _ data: Data,
+        to directory: URL,
+        baseName: String,
+        format: ScoreReaderExportFormat
+    ) throws -> URL {
+        let exportURL = try exportURL(in: directory, baseName: baseName, format: format)
+        try data.write(to: exportURL, options: .atomic)
+        return exportURL
+    }
+
+    private static func exportURL(
+        in directory: URL,
+        baseName: String,
+        format: ScoreReaderExportFormat
+    ) throws -> URL {
+        let exportURL = directory
+            .appendingPathComponent("\(baseName).\(format.setlistFileExtension)", isDirectory: false)
+        if FileManager.default.fileExists(atPath: exportURL.path) {
+            try FileManager.default.removeItem(at: exportURL)
+        }
+        return exportURL
+    }
+
+    /// Each share starts from a clean directory so files from an earlier run
+    /// never ride along in the share sheet.
+    private static func makeExportDirectory(for setlistName: String) throws -> URL {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AriaExports", isDirectory: true)
+            .appendingPathComponent("Setlists", isDirectory: true)
+            .appendingPathComponent(sanitizedName(setlistName, fallback: "Aria Setlist"), isDirectory: true)
+
+        if FileManager.default.fileExists(atPath: directoryURL.path) {
+            try FileManager.default.removeItem(at: directoryURL)
+        }
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        return directoryURL
+    }
+
+    /// Prefer the score's title verbatim. If a setlist contains two scores with
+    /// the same title, add a trailing suffix so neither export is overwritten.
+    private static func uniqueFileBaseName(
+        for score: ReaderRecentDocument,
+        usedBaseNames: inout Set<String>
+    ) -> String {
+        let title = sanitizedName(score.primaryTitle, fallback: "Aria Score")
+        var candidate = title
+        var duplicateNumber = 2
+
+        while !usedBaseNames.insert(candidate.lowercased()).inserted {
+            candidate = "\(title) (\(duplicateNumber))"
+            duplicateNumber += 1
+        }
+
+        return candidate
+    }
+
+    private static func sanitizedName(_ name: String, fallback: String) -> String {
+        let sanitized = name
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .replacingOccurrences(of: "\n", with: " ")
+        return sanitized.trimmedToNil ?? fallback
+    }
+}

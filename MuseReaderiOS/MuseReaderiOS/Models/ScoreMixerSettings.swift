@@ -9,7 +9,36 @@ struct ScoreMixerPartSettings: Codable, Equatable {
 
 struct ScoreMixerSettings: Codable, Equatable {
     var masterVolume: Float = 1
+    var masterPan: Float = 0
+    var masterMuted = false
     var parts: [String: ScoreMixerPartSettings] = [:]
+
+    init(
+        masterVolume: Float = 1,
+        masterPan: Float = 0,
+        masterMuted: Bool = false,
+        parts: [String: ScoreMixerPartSettings] = [:]
+    ) {
+        self.masterVolume = masterVolume
+        self.masterPan = masterPan
+        self.masterMuted = masterMuted
+        self.parts = parts
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case masterVolume
+        case masterPan
+        case masterMuted
+        case parts
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        masterVolume = try container.decodeIfPresent(Float.self, forKey: .masterVolume) ?? 1
+        masterPan = try container.decodeIfPresent(Float.self, forKey: .masterPan) ?? 0
+        masterMuted = try container.decodeIfPresent(Bool.self, forKey: .masterMuted) ?? false
+        parts = try container.decodeIfPresent([String: ScoreMixerPartSettings].self, forKey: .parts) ?? [:]
+    }
 
     func settings(for partID: String) -> ScoreMixerPartSettings {
         parts[partID] ?? ScoreMixerPartSettings()

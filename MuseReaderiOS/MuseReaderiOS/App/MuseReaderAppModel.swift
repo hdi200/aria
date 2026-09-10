@@ -97,6 +97,7 @@ enum ScoreImportBatchRunner {
             progress(ScoreImportProgress(itemNumber: index + 1, totalCount: urls.count))
             do {
                 try await importDocument(url)
+                ShareInbox.acknowledgeImport(of: url)
                 importedCount += 1
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -431,6 +432,17 @@ final class MuseReaderAppModel: ObservableObject {
 
         let libraryURL = try scoreLibrary.url(forRelativePath: libraryRelativePath)
         return try await sessionService.openSession(at: libraryURL)
+    }
+
+    /// Resolves the on-disk location of a managed library score without opening
+    /// a render session. Setlist sharing uses this to copy already-packaged
+    /// `.mscz` files straight from the library.
+    func managedDocumentURL(for recent: ReaderRecentDocument) -> URL? {
+        guard let libraryRelativePath = recent.libraryRelativePath else {
+            return nil
+        }
+
+        return try? scoreLibrary.url(forRelativePath: libraryRelativePath)
     }
 
     /// Promotes a side-effect-free preloaded session only when the reader
@@ -947,6 +959,7 @@ final class MuseReaderAppModel: ObservableObject {
                         setsCurrentSession: candidates.count == 1
                     )
                 }
+                ShareInbox.acknowledgeImport(of: candidate.url)
                 importedCount += 1
                 if candidates.count == 1 {
                     singleImportedSession = session

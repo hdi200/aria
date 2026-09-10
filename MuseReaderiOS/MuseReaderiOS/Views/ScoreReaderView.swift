@@ -523,17 +523,22 @@ struct ScoreReaderView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
-                    .overlay(alignment: .trailing) {
+                    .overlay(alignment: .bottom) {
                         if isMixerPresented && UIDevice.current.userInterfaceIdiom != .phone {
-                            ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
-                                withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
+                            GeometryReader { proxy in
+                                VStack(spacing: 0) {
+                                    Spacer(minLength: 0)
+                                    ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
+                                        withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
+                                    }
+                                    .frame(height: min(max(proxy.size.height * 0.48, 390), 500))
+                                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                                    .shadow(color: .black.opacity(0.16), radius: 18, y: -2)
+                                    .padding(.horizontal, 8)
+                                    .padding(.bottom, 8)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                }
                             }
-                            .frame(maxWidth: 350)
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
-                            .shadow(color: .black.opacity(0.15), radius: 16)
-                            .padding(.top, max(measuredTopChromeHeight, 80) + 8)
-                            .padding([.trailing, .bottom], 12)
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
                         }
                     }
                     .overlay(alignment: .top) {
@@ -597,6 +602,7 @@ struct ScoreReaderView: View {
                                 useTransposeSheet: isPhoneInterface,
                                 openTransposeSheetAction: openTransposeSheet,
                                 changeEnharmonicAction: readerState.changeSelectedEnharmonicSpelling,
+                                flipStemAction: readerState.flipSelectedStemDirection,
                                 keySignatureAction: { isKeySignaturePresented = true },
                                 timeSignatureAction: { isTimeSignaturePresented = true },
                                 tempoAction: { isTempoEditorPresented = true },
@@ -817,7 +823,7 @@ struct ScoreReaderView: View {
             ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
                 isMixerPresented = false
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.fraction(0.58), .large])
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled)
         }

@@ -624,6 +624,7 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)changeSelectedEnharmonicSpellingWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(changeSelectedEnharmonicSpelling());
 - (nullable MSREditState *)changeSelectedAccidental:(NSInteger)accidentalKind
                                               error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(changeSelectedAccidental(_:));
+- (nullable MSREditState *)flipSelectedStemDirectionWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(flipSelectedStemDirection());
 - (nullable MSREditState *)setSelectedPitchClass:(NSInteger)pitchClass
                                      preferFlats:(BOOL)preferFlats
                                            error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setSelectedPitchClass(_:preferFlats:));

@@ -12,11 +12,18 @@ struct ContentView: View {
     @Environment(\.requestReview) private var requestReview
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var appModel = MuseReaderAppModel()
+    @State private var offeredSharedScores: Set<URL> = []
     @State private var reviewRequestTracker = ReviewRequestTracker()
 
     var body: some View {
         LibraryView(model: appModel)
+            .onAppear { importSharedScores() }
             .onOpenURL { url in
+                guard !ShareInbox.handles(url) else {
+                    importSharedScores()
+                    return
+                }
+
                 appModel.handleOpenURL(url)
             }
             .onChangeCompatible(of: scenePhase) { phase in
@@ -24,6 +31,9 @@ struct ContentView: View {
                     return
                 }
 
+                // Covers the case where the share extension staged a score but
+                // could not open the app directly.
+                importSharedScores()
                 reviewRequestTracker.recordActiveSession()
             }
             .onChangeCompatible(of: appModel.currentSession?.id) { _ in
@@ -53,6 +63,17 @@ struct ContentView: View {
 
                 reviewRequestTracker.recordFrictionEvent()
             }
+    }
+
+    private func importSharedScores() {
+        let staged = ShareInbox.drain().filter { !offeredSharedScores.contains($0) }
+
+        guard !staged.isEmpty else {
+            return
+        }
+
+        offeredSharedScores.formUnion(staged)
+        appModel.handleImportSelection(result: .success(staged))
     }
 }
 

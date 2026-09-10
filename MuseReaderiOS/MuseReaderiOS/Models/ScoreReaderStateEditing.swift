@@ -1290,6 +1290,13 @@ extension ScoreReaderState {
         }
     }
 
+    // Flipping a stem is engraving-only, so it never auditions the selection.
+    func flipSelectedStemDirection() {
+        performEditingAction(mutatesScore: true) { liveRenderSession in
+            try await liveRenderSession.flipSelectedStemDirection()
+        }
+    }
+
     func handleKeyboardPitchClass(_ pitchClass: Int, preferFlats: Bool) {
         guard isEditingMode else {
             return

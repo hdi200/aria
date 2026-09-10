@@ -558,4 +558,11 @@ extension ScoreReaderState {
         playbackController?.setMixerSettings(settings)
         ScoreMixerSettingsStore().save(settings, scoreID: session.document.id)
     }
+
+    func setMixerMeteringEnabled(_ enabled: Bool) {
+        playbackController?.setMeteringEnabled(enabled)
+        if !enabled {
+            mixerLevelMonitor.update([:])
+        }
+    }
 }

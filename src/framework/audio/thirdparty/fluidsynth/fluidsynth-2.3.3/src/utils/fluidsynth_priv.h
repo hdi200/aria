@@ -94,10 +94,10 @@ typedef double fluid_real_t;
 #include <stdlib.h>
 #ifdef _MSC_VER
 #  define FLUID_DECLARE_VLA(_type, _name, _len) \
-     _type* _name = _alloca(_len*sizeof(_type))
+     _type* _name = _alloca((_len) * sizeof(_type))
 #else
 #  define FLUID_DECLARE_VLA(_type, _name, _len) \
-     _type* _name = alloca(_len*sizeof(_type))
+     _type* _name = alloca((_len) * sizeof(_type))
 #endif
 
 #else // NO_GLIB

@@ -1017,6 +1017,16 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func flipSelectedStemDirection() throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.flipSelectedStemDirection())
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func setSelectedPitchClass(_ pitchClass: Int, preferFlats: Bool) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()

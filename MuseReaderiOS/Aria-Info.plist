@@ -7,14 +7,29 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>MuseScore and MusicXML scores</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
 			<key>LSHandlerRank</key>
-			<string>Alternate</string>
+			<string>Default</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>org.musescore.mscz</string>
 				<string>org.musescore.mscx</string>
 				<string>com.recordare.musicxml</string>
 				<string>com.recordare.mxl</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.hdi200.ariascore.share</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aria-share</string>
 			</array>
 		</dict>
 	</array>
@@ -72,6 +87,8 @@
 					<string>musicxml</string>
 					<string>xml</string>
 				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.recordare.musicxml+xml</string>
 			</dict>
 		</dict>
 		<dict>
@@ -89,6 +106,8 @@
 				<array>
 					<string>mxl</string>
 				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.recordare.musicxml</string>
 			</dict>
 		</dict>
 	</array>

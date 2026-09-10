@@ -369,16 +369,34 @@ public:
         const QString lyricist = normalizedMetadataValue(metadata.lyricist);
         const QString arranger = normalizedMetadataValue(metadata.arranger);
 
-        m_masterScore->setMetaTag(u"workTitle", title);
-        m_masterScore->setMetaTag(u"subtitle", subtitle);
-        m_masterScore->setMetaTag(u"composer", composer);
-        m_masterScore->setMetaTag(u"lyricist", lyricist);
-        m_masterScore->setMetaTag(u"arranger", arranger);
+        mu::engraving::MasterScore* masterScore = m_masterScore.get();
 
-        setStyledMetadataText(m_masterScore.get(), mu::engraving::TextStyleType::TITLE, title);
-        setStyledMetadataText(m_masterScore.get(), mu::engraving::TextStyleType::SUBTITLE, subtitle);
-        setStyledMetadataText(m_masterScore.get(), mu::engraving::TextStyleType::COMPOSER, composer);
-        setStyledMetadataText(m_masterScore.get(), mu::engraving::TextStyleType::LYRICIST, lyricist);
+        //! NOTE Start from the existing tags so unrelated ones (creationDate, source, ...)
+        //! survive, then replace the five the Score Setup sheet owns.
+        std::map<muse::String, muse::String> tags = masterScore->metaTags();
+        tags[u"workTitle"] = muse::String::fromQString(title);
+        tags[u"subtitle"] = muse::String::fromQString(subtitle);
+        tags[u"composer"] = muse::String::fromQString(composer);
+        tags[u"lyricist"] = muse::String::fromQString(lyricist);
+        tags[u"arranger"] = muse::String::fromQString(arranger);
+
+        //! NOTE Everything below must sit inside one undo macro. Without it the meta tag and
+        //! title-frame writes bypass the undo stack entirely (UndoStack::pushAndPerform just
+        //! performs and deletes commands when no macro is active), which leaves the previous
+        //! macro on top of the stack: a single undo then jumps past this change and restores
+        //! the value from before the *earlier* edit.
+        masterScore->startCmd(muse::TranslatableString::untranslatable("MuseReader edit score details"));
+
+        if (tags != masterScore->metaTags()) {
+            masterScore->undo(new mu::engraving::ChangeMetaTags(masterScore, tags));
+        }
+
+        setStyledMetadataText(masterScore, mu::engraving::TextStyleType::TITLE, title);
+        setStyledMetadataText(masterScore, mu::engraving::TextStyleType::SUBTITLE, subtitle);
+        setStyledMetadataText(masterScore, mu::engraving::TextStyleType::COMPOSER, composer);
+        setStyledMetadataText(masterScore, mu::engraving::TextStyleType::LYRICIST, lyricist);
+
+        masterScore->endCmd();
 
         for (mu::engraving::Score* score : m_masterScore->scoreList()) {
             if (!score) {

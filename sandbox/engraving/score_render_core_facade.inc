@@ -619,6 +619,12 @@ bool msr::render::ScoreRenderSession::changeSelectionAccidental(const int accide
     return m_impl->changeSelectionAccidental(accidentalKind, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::flipSelectionStemDirection(ScoreEditState& output,
+                                                                 std::string& errorMessage)
+{
+    return m_impl->flipSelectionStemDirection(output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::setSelectionPitchClass(const int pitchClass,
                                                              const bool preferFlats,
                                                              ScoreEditState& output,

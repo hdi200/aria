@@ -44,4 +44,21 @@ struct ScoreMixerSettingsTests {
         defaults.set(Data("invalid".utf8), forKey: "ScoreMixerSettings.score")
         #expect(ScoreMixerSettingsStore(defaults: defaults).load(scoreID: "score") == ScoreMixerSettings())
     }
+
+    @Test func savedMixFromBeforeMasterPanAndMuteKeepsPartSettings() throws {
+        let legacyJSON = """
+        {
+          "masterVolume": 0.75,
+          "parts": {
+            "violin": { "volume": 0.5, "pan": -0.25, "muted": false, "solo": true }
+          }
+        }
+        """
+
+        let mix = try JSONDecoder().decode(ScoreMixerSettings.self, from: Data(legacyJSON.utf8))
+        #expect(mix.masterVolume == 0.75)
+        #expect(mix.masterPan == 0)
+        #expect(!mix.masterMuted)
+        #expect(mix.settings(for: "violin") == ScoreMixerPartSettings(volume: 0.5, pan: -0.25, solo: true))
+    }
 }

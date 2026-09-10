@@ -863,6 +863,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
     let useTransposeSheet: Bool
     let openTransposeSheetAction: (Int) -> Void
     let changeEnharmonicAction: () -> Void
+    let flipStemAction: () -> Void
     let keySignatureAction: () -> Void
     let timeSignatureAction: () -> Void
     let tempoAction: () -> Void
@@ -944,6 +945,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
                 transposeAction: presentTransposePanel,
                 showsEnharmonicAction: showsEnharmonicAction,
                 changeEnharmonicAction: perform(changeEnharmonicAction),
+                flipStemAction: perform(flipStemAction),
                 accentAction: { expressionKind in
                     perform { accentAction(expressionKind) }()
                 }
@@ -1011,8 +1013,9 @@ struct ScoreReaderSelectionCommandOverlay: View {
     }
 
     private func menuPosition(in size: CGSize) -> CGPoint {
+        // Note selections also carry the Flip Stem row, rest selections do not.
         let menuSize = isNoteRestSelection
-            ? CGSize(width: 218, height: isNoteSelection ? (showsEnharmonicAction ? 428 : 392) : 216)
+            ? CGSize(width: 218, height: isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216)
             : CGSize(width: 238, height: selectedElement.isSingleMeasure ? 472 : 362)
         let rawX = anchor.actionPosition.x - menuSize.width / 2 + 2
         let rawY = anchor.actionPosition.y + 16 + menuSize.height / 2
@@ -1096,6 +1099,7 @@ private struct ScoreReaderNoteRestCommandMenu: View {
     let transposeAction: () -> Void
     let showsEnharmonicAction: Bool
     let changeEnharmonicAction: () -> Void
+    let flipStemAction: () -> Void
     let accentAction: (String) -> Void
 
     var body: some View {
@@ -1132,6 +1136,16 @@ private struct ScoreReaderNoteRestCommandMenu: View {
                     title: "Respell",
                     symbolText: "#♭",
                     action: changeEnharmonicAction
+                )
+            }
+
+            // Rests have no stem to flip, so this matches MuseScore's own flip
+            // command and only appears for notes and chords.
+            if isNoteSelection {
+                ScoreReaderMeasureCommandRow(
+                    title: "Flip Stem",
+                    systemImage: "music.note",
+                    action: flipStemAction
                 )
             }
 

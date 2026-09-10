@@ -26,6 +26,7 @@ struct LibraryView: View {
     @State private var newSetlistName = ""
     @State private var folderPendingRename: LibrarySetlistFolder?
     @State private var folderPendingDeletion: LibrarySetlistFolder?
+    @State private var folderPendingShare: LibrarySetlistFolder?
     @State private var folderPendingScoreAdd: FolderScoreAddRequest?
     @State private var isSetlistReorderPresented = false
     @State private var isEditingActiveSetlist = false
@@ -136,6 +137,7 @@ struct LibraryView: View {
                         renameSetlistName = folder.name
                     },
                     deleteFolderAction: { folderPendingDeletion = $0 },
+                    shareFolderAction: { folderPendingShare = $0 },
                     reorderSetlistsAction: presentSetlistReorder,
                     openSourceAction: {
                         isOpenSourceLegalPresented = true
@@ -175,6 +177,7 @@ struct LibraryView: View {
                         renameSetlistName = folder.name
                     },
                     deleteFolderAction: { folderPendingDeletion = $0 },
+                    shareFolderAction: { folderPendingShare = $0 },
                     reorderSetlistsAction: presentSetlistReorder,
                     settingsAction: {
                         selectedCategory = .settings
@@ -207,6 +210,7 @@ struct LibraryView: View {
                         folderPendingScoreAdd = FolderScoreAddRequest(id: folder.id)
                     },
                     deleteSetlistAction: { folderPendingDeletion = $0 },
+                    shareSetlistAction: { folderPendingShare = $0 },
                     isEditingSetlist: $isEditingActiveSetlist,
                     reorderScoresAction: reorderScores,
                     removeFromSetlistAction: { score, setlist in
@@ -431,6 +435,9 @@ struct LibraryView: View {
                 Text("This setlist is no longer available.")
                     .padding()
             }
+        }
+        .sheet(item: $folderPendingShare) { folder in
+            SetlistShareSheet(model: model, setlist: folder)
         }
         .sheet(isPresented: $isSetlistReorderPresented) {
             ReorderSetlistsSheet(setlists: model.setlistFolders) { orderedIDs in
@@ -914,6 +921,7 @@ private struct LibrarySidebar: View {
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
     let deleteFolderAction: (LibrarySetlistFolder) -> Void
+    let shareFolderAction: (LibrarySetlistFolder) -> Void
     let reorderSetlistsAction: () -> Void
     let settingsAction: () -> Void
     let dropScoreAction: (String, LibrarySetlistFolder) -> Void
@@ -978,6 +986,9 @@ private struct LibrarySidebar: View {
                                 },
                                 deleteAction: {
                                     deleteFolderAction(folder)
+                                },
+                                shareAction: {
+                                    shareFolderAction(folder)
                                 },
                                 dropScoreAction: { scoreKey in
                                     dropScoreAction(scoreKey, folder)
@@ -1097,6 +1108,7 @@ private struct SidebarSetlistButton: View {
     let selectAction: () -> Void
     let renameAction: () -> Void
     let deleteAction: () -> Void
+    let shareAction: () -> Void
     let dropScoreAction: (String) -> Void
 
     @State private var isDropTargeted = false
@@ -1121,6 +1133,10 @@ private struct SidebarSetlistButton: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button(action: shareAction) {
+                Label("Share Setlist", systemImage: "square.and.arrow.up")
+            }
+            .disabled(folder.scoreKeys.isEmpty)
             Button(action: renameAction) {
                 Label("Rename Setlist", systemImage: "pencil")
             }
@@ -1196,6 +1212,7 @@ private struct PhoneLibraryView: View {
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
     let deleteFolderAction: (LibrarySetlistFolder) -> Void
+    let shareFolderAction: (LibrarySetlistFolder) -> Void
     let reorderSetlistsAction: () -> Void
     let openSourceAction: () -> Void
     let accessStatus: LibraryAccessStatus
@@ -1286,6 +1303,7 @@ private struct PhoneLibraryView: View {
                         createFolderAction: createFolderAction,
                         renameFolderAction: renameFolderAction,
                         deleteFolderAction: deleteFolderAction,
+                        shareFolderAction: shareFolderAction,
                         reorderSetlistsAction: reorderSetlistsAction
                     )
                 } else if activeTab == .settings {
@@ -1357,6 +1375,23 @@ private struct PhoneLibraryView: View {
                             .buttonStyle(.plain)
                             .disabled(activeSetlistOrderedScores.isEmpty)
                             .accessibilityLabel(isEditingSetlist ? "Done Editing Setlist" : "Edit Setlist")
+
+                            Button {
+                                shareFolderAction(activeFolder)
+                            } label: {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(LibraryPalette.accent)
+                                    .frame(width: 32, height: 32)
+                                    .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(activeSetlistOrderedScores.isEmpty || isEditingSetlist)
+                            .accessibilityLabel("Share Setlist")
 
                             Menu {
                                 Button {
@@ -1554,6 +1589,7 @@ private struct PhoneSetlistContent: View {
     let createFolderAction: () -> Void
     let renameFolderAction: (LibrarySetlistFolder) -> Void
     let deleteFolderAction: (LibrarySetlistFolder) -> Void
+    let shareFolderAction: (LibrarySetlistFolder) -> Void
     let reorderSetlistsAction: () -> Void
 
     var body: some View {
@@ -1629,6 +1665,10 @@ private struct PhoneSetlistContent: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button { shareFolderAction(folder) } label: {
+                                Label("Share Setlist", systemImage: "square.and.arrow.up")
+                            }
+                            .disabled(folder.scoreKeys.isEmpty)
                             Button { renameFolderAction(folder) } label: {
                                 Label("Rename Setlist", systemImage: "pencil")
                             }
@@ -2033,6 +2073,7 @@ private struct LibraryDashboardView: View {
     let activeSetlist: LibrarySetlistFolder?
     let showAddScoresAction: (LibrarySetlistFolder) -> Void
     let deleteSetlistAction: (LibrarySetlistFolder) -> Void
+    let shareSetlistAction: (LibrarySetlistFolder) -> Void
     @Binding var isEditingSetlist: Bool
     let reorderScoresAction: (LibrarySetlistFolder, [ReaderRecentDocument.ID]) -> Void
     let removeFromSetlistAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
@@ -2053,6 +2094,7 @@ private struct LibraryDashboardView: View {
                 activeSetlist: activeSetlist,
                 showAddScoresAction: showAddScoresAction,
                 deleteSetlistAction: deleteSetlistAction,
+                shareSetlistAction: shareSetlistAction,
                 canEditSetlist: !activeSetlistOrderedScores.isEmpty,
                 isEditingSetlist: $isEditingSetlist
             )
@@ -2461,6 +2503,7 @@ private struct LibraryDashboardHeader: View {
     let activeSetlist: LibrarySetlistFolder?
     let showAddScoresAction: (LibrarySetlistFolder) -> Void
     let deleteSetlistAction: (LibrarySetlistFolder) -> Void
+    let shareSetlistAction: (LibrarySetlistFolder) -> Void
     let canEditSetlist: Bool
     @Binding var isEditingSetlist: Bool
 
@@ -2511,6 +2554,23 @@ private struct LibraryDashboardHeader: View {
                     .buttonStyle(.plain)
                     .disabled(!canEditSetlist)
                     .accessibilityLabel(isEditingSetlist ? "Done Editing Setlist" : "Edit Setlist")
+
+                    Button {
+                        shareSetlistAction(activeSetlist)
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(LibraryPalette.accent)
+                            .frame(width: 48, height: 48)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canEditSetlist || isEditingSetlist)
+                    .accessibilityLabel("Share Setlist")
 
                     Menu {
                         Button(action: importAction) {

@@ -525,6 +525,11 @@
 
         commandScore->startCmd(muse::TranslatableString::untranslatable("MuseReader edit text"));
         commandItem->undoChangeProperty(mu::engraving::Pid::TEXT, newText);
+        //! NOTE Editing a title-frame text (title/subtitle/composer/lyricist) directly on the
+        //! page must also move the matching meta tag, otherwise the score shows one value while
+        //! the Score Setup sheet, the library row and the saved <metaTag> still hold the old one.
+        //! It joins this macro so one undo reverts the text and the tag together.
+        syncMetaTagForStyledText(m_masterScore.get(), commandItem);
         commandScore->endCmd();
         refreshAfterEdit();
         if (commandScore != score) {
@@ -3025,6 +3030,31 @@
         continueNoteInputAfterChord(score, targetNote->chord());
         score->inputState().setAccidentalType(mu::engraving::AccidentalType::NONE);
         score->endCmd();
+        refreshAfterEdit();
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool flipSelectionStemDirection(msr::render::ScoreEditState& output,
+                                    std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        if (score->selection().elements().empty()) {
+            errorMessage = "Select a note or chord before flipping its stem.";
+            return false;
+        }
+
+        // Use the same command as MuseScore Studio. It already handles regular
+        // stems, beams, cross-staff beams, and two-chord tremolos as one undo.
+        score->startCmd(muse::TranslatableString::untranslatable("Aria flip stem"));
+        score->cmdFlip();
+        score->endCmd();
+
         refreshAfterEdit();
         output = makeEditState(score);
         return true;

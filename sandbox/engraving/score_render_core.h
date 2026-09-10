@@ -338,6 +338,7 @@ public:
     bool shiftSelectionPitchByOctaves(int octaveDelta, ScoreEditState& output, std::string& errorMessage);
     bool changeSelectionEnharmonicSpelling(ScoreEditState& output, std::string& errorMessage);
     bool changeSelectionAccidental(int accidentalKind, ScoreEditState& output, std::string& errorMessage);
+    bool flipSelectionStemDirection(ScoreEditState& output, std::string& errorMessage);
     bool setSelectionPitchClass(int pitchClass, bool preferFlats, ScoreEditState& output, std::string& errorMessage);
     bool setSelectionMIDIPitch(int midiPitch, bool preferFlats, ScoreEditState& output, std::string& errorMessage);
     bool setSelectionPitchAtPagePosition(int pageIndex, double normalizedX, double normalizedY, ScoreEditState& output, std::string& errorMessage);

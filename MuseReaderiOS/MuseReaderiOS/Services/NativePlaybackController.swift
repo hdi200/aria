@@ -41,15 +41,46 @@ final class NativePlaybackController {
     private var playerNode: AVAudioPlayerNode?
     private var stemPlayers: [String: AVAudioPlayerNode] = [:]
     private var mixerSettings = ScoreMixerSettings()
+    private var meterLevelHandler: (([String: Float]) -> Void)?
+    private var meterPeaks: [String: Float] = [:]
+    private var displayedMeterLevels: [String: Float] = [:]
+    private var meterUpdateTask: Task<Void, Never>?
+    private var isMeteringEnabled = false
+    private var meterTapsInstalled = false
     private(set) var streamingErrorMessage: String?
+
+    nonisolated static let masterMeterID = "__muse_reader_master__"
 
     func setMixerSettings(_ settings: ScoreMixerSettings) {
         mixerSettings = settings
         applyMixerSettings()
     }
 
+    func setMeterLevelHandler(_ handler: (([String: Float]) -> Void)?) {
+        meterLevelHandler = handler
+    }
+
+    func setMeteringEnabled(_ enabled: Bool) {
+        guard enabled != isMeteringEnabled else { return }
+        isMeteringEnabled = enabled
+
+        if enabled {
+            installMeterTapsIfPossible()
+            startMeterUpdates()
+        } else {
+            removeMeterTaps()
+            meterUpdateTask?.cancel()
+            meterUpdateTask = nil
+            meterPeaks.removeAll()
+            displayedMeterLevels.removeAll()
+            meterLevelHandler?([:])
+        }
+    }
+
     private func applyMixerSettings() {
-        engine?.mainMixerNode.outputVolume = min(max(mixerSettings.masterVolume, 0), 1)
+        engine?.mainMixerNode.outputVolume = mixerSettings.masterMuted
+            ? 0 : min(max(mixerSettings.masterVolume, 0), 1)
+        engine?.mainMixerNode.pan = min(max(mixerSettings.masterPan, -1), 1)
         let activeParts = Set(stemPlayers.keys.filter { $0 != "metronome" && $0 != "silence" })
         for (partID, player) in stemPlayers {
             if partID == "metronome" {
@@ -151,6 +182,7 @@ final class NativePlaybackController {
         self.playerNode = playerNode
         self.stemPlayers = players
         applyMixerSettings()
+        installMeterTapsIfPossible()
         self.liveRenderSession = liveRenderSession
         self.sampleRate = Double(audioData.sampleRate)
         self.durationSeconds = max(durationSeconds, audioData.durationSeconds)
@@ -248,6 +280,7 @@ final class NativePlaybackController {
     }
 
     func invalidate() {
+        removeMeterTaps()
         stemPlayers.values.forEach { $0.stop() }
         engine?.stop()
         cancelSchedulingTask()
@@ -269,6 +302,82 @@ final class NativePlaybackController {
         playWhenBuffered = false
         metronomeEnabled = false
         log("invalidate revision=\(revision)")
+    }
+
+    private func installMeterTapsIfPossible() {
+        guard isMeteringEnabled, !meterTapsInstalled, let engine else { return }
+
+        for (partID, player) in stemPlayers {
+            player.installTap(onBus: 0, bufferSize: 1_024, format: nil) { [weak self] buffer, _ in
+                let level = Self.normalizedMeterLevel(in: buffer)
+                guard level > 0 else { return }
+                Task { @MainActor [weak self] in
+                    self?.recordMeterPeak(level, for: partID)
+                }
+            }
+        }
+
+        engine.mainMixerNode.installTap(onBus: 0, bufferSize: 1_024, format: nil) { [weak self] buffer, _ in
+            let level = Self.normalizedMeterLevel(in: buffer)
+            guard level > 0 else { return }
+            Task { @MainActor [weak self] in
+                self?.recordMeterPeak(level, for: Self.masterMeterID)
+            }
+        }
+        meterTapsInstalled = true
+    }
+
+    private func removeMeterTaps() {
+        guard meterTapsInstalled else { return }
+        stemPlayers.values.forEach { $0.removeTap(onBus: 0) }
+        engine?.mainMixerNode.removeTap(onBus: 0)
+        meterTapsInstalled = false
+    }
+
+    private func recordMeterPeak(_ level: Float, for id: String) {
+        meterPeaks[id] = max(meterPeaks[id] ?? 0, level)
+    }
+
+    private func startMeterUpdates() {
+        guard meterUpdateTask == nil else { return }
+        meterUpdateTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.isMeteringEnabled else { return }
+                let ids = Set(self.displayedMeterLevels.keys).union(self.meterPeaks.keys)
+                var nextLevels: [String: Float] = [:]
+                for id in ids {
+                    let peak = self.meterPeaks[id] ?? 0
+                    let previous = self.displayedMeterLevels[id] ?? 0
+                    // Fast attack and a gentler release absorb fluctuations
+                    // between tap buffers without hiding note onsets.
+                    let response: Float = peak >= previous ? 0.65 : 0.12
+                    let level = previous + (peak - previous) * response
+                    if level >= 0.01 {
+                        nextLevels[id] = level
+                    }
+                }
+                self.meterPeaks.removeAll(keepingCapacity: true)
+                self.displayedMeterLevels = nextLevels
+                self.meterLevelHandler?(nextLevels)
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+    }
+
+    nonisolated private static func normalizedMeterLevel(in buffer: AVAudioPCMBuffer) -> Float {
+        guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
+        let frameCount = Int(buffer.frameLength)
+        let channelCount = Int(buffer.format.channelCount)
+        var peak: Float = 0
+        for channel in 0..<channelCount {
+            let samples = channels[channel]
+            for frame in 0..<frameCount {
+                peak = max(peak, abs(samples[frame]))
+            }
+        }
+        guard peak > 0.000_01 else { return 0 }
+        let decibels = 20 * log10(peak)
+        return min(max((decibels + 60) / 60, 0), 1)
     }
 
     func visualLatencyCompensationSeconds() -> TimeInterval {

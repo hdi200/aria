@@ -578,6 +578,28 @@ QString normalizedMetadataValue(const std::string& value)
     return QString::fromUtf8(value.c_str()).trimmed();
 }
 
+//! NOTE The title frame carries four texts that mirror score meta tags. Keeping the two in
+//! sync matters because the score text is what the user reads, while the meta tag is what
+//! the Score Setup sheet, the library row and the saved <metaTag> elements read back.
+muse::String metadataTagForTextStyle(const mu::engraving::TextStyleType textStyleType)
+{
+    switch (textStyleType) {
+    case mu::engraving::TextStyleType::TITLE:
+        return muse::String(u"workTitle");
+    case mu::engraving::TextStyleType::SUBTITLE:
+        return muse::String(u"subtitle");
+    case mu::engraving::TextStyleType::COMPOSER:
+        return muse::String(u"composer");
+    case mu::engraving::TextStyleType::LYRICIST:
+        return muse::String(u"lyricist");
+    default:
+        return muse::String();
+    }
+}
+
+//! NOTE Must be called inside a startCmd()/endCmd() macro: the writes go through the undo
+//! stack so that a single undo reverts them, and so that a later undo of an earlier edit
+//! cannot silently discard them.
 void setStyledMetadataText(mu::engraving::MasterScore* score,
                            const mu::engraving::TextStyleType textStyleType,
                            const QString& text)
@@ -586,14 +608,45 @@ void setStyledMetadataText(mu::engraving::MasterScore* score,
         return;
     }
 
+    const muse::String newXmlText
+        = mu::engraving::TextBase::plainToXmlText(muse::String::fromQString(text));
+
     mu::engraving::TextBase* textItem = score->getText(textStyleType);
-    if (!textItem && !text.isEmpty()) {
+    if (!textItem) {
+        if (newXmlText.empty()) {
+            return;
+        }
+        // Score::addText() routes through undoAddElement(), so it joins the active macro.
         textItem = score->addText(textStyleType);
     }
 
-    if (textItem) {
-        textItem->setPlainText(text);
+    if (!textItem || textItem->xmlText() == newXmlText) {
+        return;
     }
+
+    textItem->undoChangeProperty(mu::engraving::Pid::TEXT, newXmlText);
+}
+
+//! NOTE Must be called inside a startCmd()/endCmd() macro, right after the text element
+//! itself was changed, so that the meta tag travels with it on undo/redo.
+void syncMetaTagForStyledText(mu::engraving::MasterScore* score, const mu::engraving::EngravingItem* item)
+{
+    if (!score || !item || !item->isTextBase()) {
+        return;
+    }
+
+    const mu::engraving::TextBase* textItem = mu::engraving::toTextBase(item);
+    const muse::String tag = metadataTagForTextStyle(textItem->textStyleType());
+    if (tag.empty()) {
+        return;
+    }
+
+    const muse::String value = textItem->plainText();
+    if (score->metaTag(tag) == value) {
+        return;
+    }
+
+    score->undo(new mu::engraving::ChangeMetaText(score, tag, value));
 }
 
 mu::engraving::DurationType durationTypeForCode(const int durationCode)
