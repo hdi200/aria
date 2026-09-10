@@ -97,7 +97,6 @@ enum ScoreImportBatchRunner {
             progress(ScoreImportProgress(itemNumber: index + 1, totalCount: urls.count))
             do {
                 try await importDocument(url)
-                ShareInbox.acknowledgeImport(of: url)
                 importedCount += 1
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -959,7 +958,6 @@ final class MuseReaderAppModel: ObservableObject {
                         setsCurrentSession: candidates.count == 1
                     )
                 }
-                ShareInbox.acknowledgeImport(of: candidate.url)
                 importedCount += 1
                 if candidates.count == 1 {
                     singleImportedSession = session

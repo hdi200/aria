@@ -306,7 +306,7 @@ struct ScoreReaderChromeBar: View {
 
     private var mixerButton: some View {
         Button(action: toggleMixerAction) {
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "slider.vertical.3")
                 .font(.system(size: 18, weight: .medium))
                 .frame(width: 44, height: 44)
         }
@@ -319,7 +319,7 @@ struct ScoreReaderChromeBar: View {
 
     private var compactMixerButton: some View {
         Button(action: toggleMixerAction) {
-            Image(systemName: "slider.horizontal.3")
+            Image(systemName: "slider.vertical.3")
                 .font(.system(size: 17, weight: .medium))
                 .frame(width: 24, height: 30)
         }

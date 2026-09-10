@@ -52,6 +52,7 @@ struct ScoreReaderMixerPanel: View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
                 .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.black.opacity(0.84))
                 .frame(width: 30, height: 40)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -93,7 +94,7 @@ struct ScoreReaderMixerPanel: View {
             HStack(spacing: 14) {
                 Image(systemName: "waveform")
                     .font(.title2.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.black.opacity(0.84))
                     .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
