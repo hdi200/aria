@@ -5306,7 +5306,6 @@ public:
         // FluidSynth supports 256 MIDI channels but only 128 isolated output groups.
         // A second sampler avoids folding large-score channels onto another part.
         m_audioGroups = std::min(requiredMidiChannels, 128);
-        m_logStemRouting = true;
         const int synthCount = (requiredMidiChannels + m_audioGroups - 1) / m_audioGroups;
         m_settings.reset(new_fluid_settings());
         if (!m_settings) {
@@ -5343,14 +5342,6 @@ public:
         for (const SynthChannelProgram& channelProgram : m_sequence.channelPrograms) {
             fluid_synth_bank_select(synthForChannel(channelProgram.channel), channelProgram.channel, channelProgram.program.bank);
             fluid_synth_program_change(synthForChannel(channelProgram.channel), channelProgram.channel, channelProgram.program.program);
-            std::cout << "MuseReader event playback routing: channel="
-                      << channelProgram.channel
-                      << " partId=" << channelProgram.partId
-                      << " layer=" << static_cast<int>(channelProgram.layerIdx)
-                      << " bank=" << channelProgram.program.bank
-                      << " program=" << channelProgram.program.program
-                      << " setup=" << channelProgram.setup
-                      << std::endl;
         }
 
         m_lastEventFrame = m_sequence.synthEvents.back().frame + (kFluidSynthTailSeconds * kFluidSynthSampleRate);
@@ -5450,22 +5441,8 @@ public:
             stem.resize(sampleCount, 0.0f);
             stemChannels.emplace_back(program.channel, &stem);
         }
-        //! NOTE Diagnostic: shows which sampler channel each part stem is actually filled
-        //! from, and which FluidSynth output group that channel lands in. A stem reading a
-        //! group that FluidSynth did not write that channel to picks up another part.
-        if (m_logStemRouting) {
-            m_logStemRouting = false;
-            std::cout << "MuseReader event playback stem routing: audioGroups=" << m_audioGroups
-                      << " synths=" << m_synths.size() << " outputBuffers=" << channels.size();
-            for (const auto& program : m_sequence.channelPrograms) {
-                std::cout << " | " << program.partId << "<-ch" << program.channel
-                          << "(grp" << (program.channel % std::max(m_audioGroups, 1)) << ")";
-            }
-            std::cout << std::endl;
-        }
         std::vector<float> samples;
         samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
-        float maxStemMixDelta = 0.0f;
 
         while (m_currentFrame < endFrame) {
             while (m_eventIndex < m_sequence.synthEvents.size() && m_sequence.synthEvents[m_eventIndex].frame <= m_currentFrame) {
@@ -5503,31 +5480,17 @@ public:
                     }
                     samples.push_back(left);
                     samples.push_back(right);
-                    //! NOTE Diagnostic: the stems must sum back to the mixed buffer. The mix
-                    //! sums every output group while each stem reads only its own, so audio
-                    //! landing in an unclaimed group is lost from the stems but not the mix.
-                    //! Swift plays the stems and never the mix, so any drift here is audible.
-                    float stemLeft = 0.0f;
-                    float stemRight = 0.0f;
                     for (const auto& route : stemChannels) {
                         const float routeLeft = channels[route.first * 2][blockFrame];
                         const float routeRight = channels[route.first * 2 + 1][blockFrame];
                         (*route.second)[sample] += routeLeft;
                         (*route.second)[sample + 1] += routeRight;
-                        stemLeft += routeLeft;
-                        stemRight += routeRight;
                     }
-                    maxStemMixDelta = std::max(maxStemMixDelta,
-                        std::max(std::fabs(stemLeft - left), std::fabs(stemRight - right)));
                 }
             }
 
             m_currentFrame = blockEndFrame;
         }
-
-        std::cout << "MuseReader event playback stem/mix check: maxDelta=" << maxStemMixDelta
-                  << (maxStemMixDelta > 1e-6f ? "  MISMATCH (stems do not reconstruct the mix)" : "  ok")
-                  << std::endl;
 
         if (samples.empty()) {
             errorMessage = "FluidSynth rendered no audio samples from MuseScore playback events.";
@@ -5545,8 +5508,6 @@ public:
 
 private:
     int m_audioGroups = 16;
-    //! NOTE Diagnostic only: logs the stem routing table once per prepared sequence.
-    bool m_logStemRouting = true;
 
     fluid_synth_t* synthForChannel(const int channel) const
     {
@@ -5582,6 +5543,10 @@ private:
                    const SteadyClock::time_point started,
                    const msr::render::PlaybackAudioData& output) const
     {
+        if (!streamReset) {
+            return;
+        }
+
         if (m_sequence.synthEvents.empty()) {
             std::cout << "MuseReader event playback render: silent chunk, playback model note events=0"
                       << " tracks=" << m_sequence.stats.trackCount

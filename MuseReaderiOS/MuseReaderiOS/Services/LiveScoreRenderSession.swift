@@ -27,7 +27,6 @@ actor LiveScoreRenderSession {
     private var cachedPlaybackMeasureRegions: [ScorePlaybackMeasureRegion]?
     private var cachedPlaybackSoundFontURL: URL?
     private var playbackRevision = 0
-    private var playbackChunkRequestCount = 0
 
     let totalPageCount: Int
     let supportsPlayback: Bool
@@ -176,21 +175,18 @@ actor LiveScoreRenderSession {
     }
 
     func playbackAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval, metronomeEnabled: Bool) throws -> MSRPlaybackAudioData {
-        playbackChunkRequestCount += 1
         guard let soundFontURL = playbackSoundFontURL() else {
             throw NativePlaybackController.PlaybackError.soundBankUnavailable(
                 "Add `MuseScore_General.sf2`, `MuseScore_General.sf3`, or `MS Basic.sf3` to the app bundle resources."
             )
         }
 
-        print("MuseReader event playback chunk request: count=\(playbackChunkRequestCount) soundfont=\(soundFontURL.lastPathComponent) start=\(String(format: "%.2f", startTimeSeconds)) duration=\(String(format: "%.2f", durationSeconds)) revision=\(playbackRevision)")
         let audioData = try bridgeSession.playbackEventAudioData(
             soundFontPath: soundFontURL.path,
             startTimeSeconds: startTimeSeconds,
             durationSeconds: durationSeconds,
             metronomeEnabled: metronomeEnabled
         )
-        print("MuseReader event playback chunk result: count=\(playbackChunkRequestCount) sampleRate=\(audioData.sampleRate) channels=\(audioData.channelCount) bytes=\(audioData.interleavedFloat32Samples.count) duration=\(String(format: "%.2f", audioData.durationSeconds)) revision=\(playbackRevision)")
         return audioData
     }
 
@@ -1405,7 +1401,6 @@ actor LiveScoreRenderSession {
         cachedPlaybackMIDIData = nil
         cachedPlaybackMeasureRegions = nil
         playbackRevision += 1
-        playbackChunkRequestCount = 0
         print("MuseReader playback invalidated: revision=\(playbackRevision)")
     }
 

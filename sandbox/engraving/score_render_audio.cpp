@@ -14,14 +14,6 @@
             return false;
         }
 
-        std::cout << "MuseReader event playback request: activeScore="
-                  << (m_activePartIndex.has_value() ? "part" : "full")
-                  << " partIndex=" << (m_activePartIndex.has_value() ? *m_activePartIndex : -1)
-                  << " start=" << startTimeSeconds
-                  << " duration=" << durationSeconds
-                  << " metronome=" << (metronomeEnabled ? "on" : "off")
-                  << std::endl;
-
         if (blockDelayedSubsystemIfCorrupted(m_masterScore.get(), "event playback render", errorMessage)) {
             output = {};
             return false;
@@ -36,10 +28,6 @@
                 }
             }
         }
-
-        std::cout << "MuseReader event playback part filter: "
-                  << (activePartId.has_value() ? std::to_string(*activePartId) : std::string("full"))
-                  << std::endl;
 
         return renderFluidSynthPlaybackEvents(presentationScore(),
                                               m_sessionContext->context(),
