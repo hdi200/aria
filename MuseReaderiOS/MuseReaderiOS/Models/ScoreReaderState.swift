@@ -103,6 +103,7 @@ final class ScoreReaderState: ObservableObject {
     @Published var isPlaybackActionInFlight = false
     @Published var playbackPreparationMessage: String?
     @Published var playbackMeasureHighlight: ScorePlaybackMeasureHighlight?
+    @Published var playFromHereTarget: ScorePlayFromHereTarget?
     @Published var mixerSettings = ScoreMixerSettings()
     @Published var metronomeEnabled = false
     @Published var editingState: ScoreEditingState = .inactive
@@ -221,6 +222,10 @@ final class ScoreReaderState: ObservableObject {
 
     var supportsEditing: Bool {
         session.capabilities.supportsEditing && !corruptionReport.isCorrupted
+    }
+
+    var supportsPlayback: Bool {
+        session.capabilities.supportsPlayback
     }
 
     var isEditingMode: Bool {
@@ -454,6 +459,14 @@ final class ScoreReaderState: ObservableObject {
         }
 
         return playbackMeasureHighlight
+    }
+
+    func playFromHereTarget(for pageIndex: Int) -> ScorePlayFromHereTarget? {
+        guard playFromHereTarget?.pageIndex == pageIndex else {
+            return nil
+        }
+
+        return playFromHereTarget
     }
 
     func noteEntryPreview(for pageIndex: Int) -> ScoreNoteEntryPreview? {

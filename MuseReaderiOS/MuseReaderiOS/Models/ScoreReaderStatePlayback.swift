@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 private let playbackPreparationStartingMessage = "Preparing playback..."
@@ -548,6 +549,132 @@ extension ScoreReaderState {
 
         let compensationSeconds = (playbackController?.visualLatencyCompensationSeconds() ?? 0) + playbackVisualSyncTrimSeconds
         return min(max(rawPositionSeconds - compensationSeconds, 0), playbackState.durationSeconds)
+    }
+
+    // MARK: - Play from here
+
+    /// View-mode long press: resolve the measure under the finger and offer to
+    /// start playback from its first beat. Measure regions load lazily with
+    /// playback prep, so a press before anything has played kicks the load and
+    /// retries once it lands.
+    func presentPlayFromHere(atNormalizedPoint point: CGPoint, pageIndex: Int) {
+        guard session.capabilities.supportsPlayback else {
+            return
+        }
+
+        if let region = playbackRegion(atNormalizedPoint: point, pageIndex: pageIndex) {
+            playFromHereTarget = ScorePlayFromHereTarget(region: region)
+            return
+        }
+
+        guard playbackMeasureRegions.isEmpty, let liveRenderSession = session.liveRenderSession else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard
+                let self,
+                let regions = try? await liveRenderSession.playbackMeasureRegions()
+            else {
+                return
+            }
+
+            if self.playbackMeasureRegions.isEmpty {
+                self.playbackMeasureRegions = regions
+            }
+
+            if let region = self.playbackRegion(atNormalizedPoint: point, pageIndex: pageIndex) {
+                self.playFromHereTarget = ScorePlayFromHereTarget(region: region)
+            }
+        }
+    }
+
+    func dismissPlayFromHere() {
+        playFromHereTarget = nil
+    }
+
+    /// The measure containing `point`. A press landing in the gap between
+    /// staves falls back to the nearest measure, preferring one whose
+    /// horizontal span already covers the press so the choice tracks the
+    /// column the finger is in.
+    func playbackRegion(atNormalizedPoint point: CGPoint, pageIndex: Int) -> ScorePlaybackMeasureRegion? {
+        let pageRegions = playbackMeasureRegions.filter { $0.pageIndex == pageIndex }
+        guard !pageRegions.isEmpty else {
+            return nil
+        }
+
+        let x = Double(point.x)
+        let y = Double(point.y)
+
+        if let hit = pageRegions.first(where: { $0.normalizedRect.contains(x: x, y: y) }) {
+            return hit
+        }
+
+        let horizontallyAligned = pageRegions.filter { $0.normalizedRect.spansHorizontally(x) }
+        if !horizontallyAligned.isEmpty {
+            return horizontallyAligned.min {
+                $0.normalizedRect.verticalDistance(to: y) < $1.normalizedRect.verticalDistance(to: y)
+            }
+        }
+
+        return pageRegions.min {
+            $0.normalizedRect.distanceSquared(toX: x, y: y) < $1.normalizedRect.distanceSquared(toX: x, y: y)
+        }
+    }
+
+    /// Starts playback at the pending target. Mirrors `playFromSelection()`,
+    /// which sources its region from the edit-mode selection instead.
+    func playFromHere() {
+        guard
+            let target = playFromHereTarget,
+            let liveRenderSession = session.liveRenderSession,
+            let playbackController,
+            session.capabilities.supportsPlayback,
+            !isPlaybackActionInFlight
+        else {
+            return
+        }
+
+        notePreviewController.stopAll()
+
+        playFromHereTarget = nil
+        isPlaybackActionInFlight = true
+        playbackErrorMessage = nil
+        playbackPreparationMessage = playbackController.isLoaded ? nil : playbackPreparationStartingMessage
+
+        Task { @MainActor [weak self] in
+            defer {
+                self?.isPlaybackActionInFlight = false
+                self?.updatePlaybackPreparationMessage(for: playbackController)
+            }
+
+            do {
+                guard let self else {
+                    return
+                }
+
+                try await self.waitForPendingPartSelection()
+                if self.playbackMeasureRegions.isEmpty {
+                    self.playbackMeasureRegions = try await liveRenderSession.playbackMeasureRegions()
+                } else {
+                    self.loadPlaybackContextIfNeeded()
+                }
+                try await self.preparePlaybackIfNeeded(
+                    liveRenderSession: liveRenderSession,
+                    playbackController: playbackController
+                )
+
+                try playbackController.seek(to: target.startTimeSeconds)
+                try playbackController.play()
+
+                let latestPlaybackState = playbackController.state()
+                self.playbackState = latestPlaybackState
+                self.updatePlaybackFollowState(with: latestPlaybackState)
+                self.playbackErrorMessage = nil
+            } catch {
+                self?.playbackErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
     }
 
 }

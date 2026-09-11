@@ -1448,6 +1448,7 @@ struct ScoreReaderView: View {
             isLoading: readerState.isLoadingPage(pageIndex),
             errorText: readerState.pageErrorMessage(for: pageIndex),
             playbackHighlight: readerState.playbackMeasureHighlight(for: pageIndex),
+            playFromHereTarget: readerState.playFromHereTarget(for: pageIndex),
             selectedElement: editingEnabled ? readerState.selectedElement(for: pageIndex) : nil,
             noteEntryPreview: editingEnabled ? readerState.noteEntryPreview(for: pageIndex) : nil,
             zoomScale: isActivePage ? $zoomScale : .constant(1),
@@ -1484,6 +1485,7 @@ struct ScoreReaderView: View {
             changeSelectedEnharmonicSpellingAction: readerState.changeSelectedEnharmonicSpelling,
             addExpressionAction: readerState.addExpression,
             tapAction: { normalizedPoint, inputKind in
+                readerState.dismissPlayFromHere()
                 if editingEnabled {
                     clearSelectionCommandMenu()
                     readerState.handlePageTap(pageIndex: pageIndex, normalizedPoint: normalizedPoint, inputKind: inputKind)
@@ -1519,8 +1521,14 @@ struct ScoreReaderView: View {
             pencilDoubleTapAction: toggleNoteInputFromPencilDoubleTap,
             swipePreviousPageAction: showPreviousPage,
             swipeNextPageAction: showNextPage,
-            viewModeLongPressAction: enterEditModeFromViewLongPress,
-            manualScrollAction: readerState.suspendPlaybackFollow
+            viewModeLongPressAction: { normalizedPoint in
+                presentPlayFromHere(at: normalizedPoint, pageIndex: pageIndex)
+            },
+            playFromHereAction: readerState.playFromHere,
+            manualScrollAction: {
+                readerState.suspendPlaybackFollow()
+                readerState.dismissPlayFromHere()
+            }
         )
     }
 
@@ -1857,11 +1865,10 @@ struct ScoreReaderView: View {
         }
     }
 
-    private func enterEditModeFromViewLongPress() {
+    private func presentPlayFromHere(at normalizedPoint: CGPoint, pageIndex: Int) {
         guard
             readerState.interactionMode == .view,
-            readerState.supportsEditing,
-            !readerState.isEditingActionInFlight,
+            readerState.supportsPlayback,
             !isClosingScore,
             !isTransitioningScore,
             !isPreparingExport
@@ -1869,7 +1876,7 @@ struct ScoreReaderView: View {
             return
         }
 
-        toggleInteractionMode()
+        readerState.presentPlayFromHere(atNormalizedPoint: normalizedPoint, pageIndex: pageIndex)
     }
 
     private func finishEditingAndEnterViewMode() {

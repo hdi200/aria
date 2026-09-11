@@ -103,6 +103,7 @@ struct ScoreReaderPageCanvas: View {
     let isLoading: Bool
     let errorText: String?
     let playbackHighlight: ScorePlaybackMeasureHighlight?
+    let playFromHereTarget: ScorePlayFromHereTarget?
     let selectedElement: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
     @Binding var zoomScale: CGFloat
@@ -149,7 +150,8 @@ struct ScoreReaderPageCanvas: View {
     let pencilDoubleTapAction: () -> Void
     var swipePreviousPageAction: () -> Void = {}
     var swipeNextPageAction: () -> Void = {}
-    var viewModeLongPressAction: () -> Void = {}
+    var viewModeLongPressAction: (CGPoint) -> Void = { _ in }
+    var playFromHereAction: () -> Void = {}
     var manualScrollAction: () -> Void = {}
 
     var body: some View {
@@ -176,6 +178,7 @@ struct ScoreReaderPageCanvas: View {
                 isLoading: isLoading,
                 errorText: errorText,
                 playbackHighlight: playbackHighlight,
+                playFromHereTarget: playFromHereTarget,
                 selectedElement: selectedElement,
                 noteEntryPreview: noteEntryPreview,
                 zoomScale: $zoomScale,
@@ -225,6 +228,7 @@ struct ScoreReaderPageCanvas: View {
                 swipePreviousPageAction: swipePreviousPageAction,
                 swipeNextPageAction: swipeNextPageAction,
                 viewModeLongPressAction: viewModeLongPressAction,
+                playFromHereAction: playFromHereAction,
                 manualScrollAction: manualScrollAction
             )
             // CATiledLayer renders PDF tiles asynchronously. A viewport-size
@@ -377,6 +381,7 @@ struct ScoreReaderPageSurface: View {
     let isLoading: Bool
     let errorText: String?
     let playbackHighlight: ScorePlaybackMeasureHighlight?
+    let playFromHereTarget: ScorePlayFromHereTarget?
     let selectedElement: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
     @Binding var zoomScale: CGFloat
@@ -425,7 +430,8 @@ struct ScoreReaderPageSurface: View {
     let pencilDoubleTapAction: () -> Void
     let swipePreviousPageAction: () -> Void
     let swipeNextPageAction: () -> Void
-    let viewModeLongPressAction: () -> Void
+    let viewModeLongPressAction: (CGPoint) -> Void
+    let playFromHereAction: () -> Void
     let manualScrollAction: () -> Void
 
     var body: some View {
@@ -565,6 +571,15 @@ struct ScoreReaderPageSurface: View {
                             addExpressionAction(expressionKind)
                         }
                     }
+                )
+            }
+
+            if let playFromHereTarget {
+                ScoreReaderPlayFromHereOverlay(
+                    target: playFromHereTarget,
+                    imageSize: page?.displaySize,
+                    zoomViewport: zoomViewport,
+                    playAction: playFromHereAction
                 )
             }
         }
@@ -733,6 +748,65 @@ struct ScoreReaderSelectedDynamicActions: View {
 
     private func actionAnchorCGRect(in size: CGSize) -> CGRect {
         coordinateSpace.rect(for: selectedElement.actionRect, in: size)
+    }
+
+    private var coordinateSpace: ScoreReaderOverlayCoordinateSpace {
+        ScoreReaderOverlayCoordinateSpace(imageSize: imageSize, viewport: zoomViewport)
+    }
+}
+
+/// The view-mode long-press affordance: the pressed bar is outlined in place
+/// and a pill offers to start playback from it. Both are anchored to score
+/// content through the live zoom viewport, so they track the bar while the
+/// reader pans and pinches.
+struct ScoreReaderPlayFromHereOverlay: View {
+    let target: ScorePlayFromHereTarget
+    let imageSize: CGSize?
+    let zoomViewport: ScoreReaderZoomViewport
+    let playAction: () -> Void
+
+    private static let accent = Color(red: 0.12, green: 0.36, blue: 0.88)
+
+    var body: some View {
+        GeometryReader { geometry in
+            let rect = coordinateSpace.rect(for: target.normalizedRect, in: geometry.size)
+
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Self.accent.opacity(0.14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(Self.accent.opacity(0.55), lineWidth: 1.5)
+                    )
+                    .frame(width: max(rect.width, 1), height: max(rect.height, 1))
+                    .position(x: rect.midX, y: rect.midY)
+                    .allowsHitTesting(false)
+
+                Button(action: playAction) {
+                    Label("Play from here", systemImage: "play.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Self.accent, in: Capsule())
+                        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
+                }
+                .buttonStyle(.plain)
+                .position(pillPosition(for: rect, in: geometry.size))
+            }
+        }
+        .allowsHitTesting(true)
+    }
+
+    private func pillPosition(for rect: CGRect, in size: CGSize) -> CGPoint {
+        // Sit above the bar, flipping underneath it when the bar is close
+        // enough to the top edge that the pill would be clipped.
+        let preferredY = rect.minY - 26
+        let rawY = preferredY < 30 ? rect.maxY + 26 : preferredY
+        return CGPoint(
+            x: min(max(rect.midX, 82), max(size.width - 82, 82)),
+            y: min(max(rawY, 30), max(size.height - 30, 30))
+        )
     }
 
     private var coordinateSpace: ScoreReaderOverlayCoordinateSpace {

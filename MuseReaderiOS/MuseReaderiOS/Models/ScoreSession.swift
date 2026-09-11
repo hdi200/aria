@@ -226,6 +226,38 @@ struct ScoreNormalizedRect: Sendable, Equatable {
     var center: CGPoint {
         CGPoint(x: x + width / 2, y: y + height / 2)
     }
+
+    func contains(x pointX: Double, y pointY: Double) -> Bool {
+        spansHorizontally(pointX) && pointY >= y && pointY <= y + height
+    }
+
+    func spansHorizontally(_ pointX: Double) -> Bool {
+        pointX >= x && pointX <= x + width
+    }
+
+    func verticalDistance(to pointY: Double) -> Double {
+        if pointY < y {
+            return y - pointY
+        }
+        if pointY > y + height {
+            return pointY - (y + height)
+        }
+        return 0
+    }
+
+    func distanceSquared(toX pointX: Double, y pointY: Double) -> Double {
+        let horizontal: Double
+        if pointX < x {
+            horizontal = x - pointX
+        } else if pointX > x + width {
+            horizontal = pointX - (x + width)
+        } else {
+            horizontal = 0
+        }
+
+        let vertical = verticalDistance(to: pointY)
+        return horizontal * horizontal + vertical * vertical
+    }
 }
 
 struct ScorePlaybackMeasureRegion: Identifiable, Sendable, Equatable {
@@ -244,6 +276,24 @@ struct ScorePlaybackMeasureHighlight: Sendable, Equatable {
     let pageIndex: Int
     let normalizedRect: ScoreNormalizedRect
     let progress: Double
+}
+
+/// A measure the reader has long-pressed in view mode, offering to start
+/// playback from its first beat. Kept separate from
+/// `ScorePlaybackMeasureHighlight` because the playback monitor rewrites that
+/// highlight on every poll and would clear a pending target.
+struct ScorePlayFromHereTarget: Sendable, Equatable {
+    let pageIndex: Int
+    let measureIndex: Int
+    let normalizedRect: ScoreNormalizedRect
+    let startTimeSeconds: TimeInterval
+
+    init(region: ScorePlaybackMeasureRegion) {
+        self.pageIndex = region.pageIndex
+        self.measureIndex = region.measureIndex
+        self.normalizedRect = region.normalizedRect
+        self.startTimeSeconds = region.startTimeSeconds
+    }
 }
 
 struct ScoreNoteEntryPreview: Sendable, Equatable {

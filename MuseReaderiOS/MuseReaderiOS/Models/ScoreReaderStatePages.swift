@@ -282,6 +282,7 @@ extension ScoreReaderState {
         cachedPagesByIndex.removeAll()
         staleLivePageIndices.removeAll()
         playbackMeasureHighlight = nil
+        playFromHereTarget = nil
         playbackMeasureRegions.removeAll()
         playbackContextTask?.cancel()
         playbackContextTask = nil

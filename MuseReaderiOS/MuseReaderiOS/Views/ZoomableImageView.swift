@@ -147,7 +147,7 @@ struct ZoomableImageView: UIViewRepresentable {
     var onPencilDoubleTap: (() -> Void)? = nil
     var onSwipePreviousPage: (() -> Void)? = nil
     var onSwipeNextPage: (() -> Void)? = nil
-    var onReadingCenterLongPress: (() -> Void)? = nil
+    var onReadingCenterLongPress: ((CGPoint) -> Void)? = nil
     var onManualScroll: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
@@ -386,7 +386,7 @@ struct ZoomableImageView: UIViewRepresentable {
         var onPencilDoubleTap: (() -> Void)?
         var onSwipePreviousPage: (() -> Void)?
         var onSwipeNextPage: (() -> Void)?
-        var onReadingCenterLongPress: (() -> Void)?
+        var onReadingCenterLongPress: ((CGPoint) -> Void)?
         var onManualScroll: (() -> Void)?
         var allowsPlaybackFollow = true
         var allowsPencilInsertionFineTune = false
@@ -449,7 +449,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilDoubleTap: (() -> Void)? = nil,
             onSwipePreviousPage: (() -> Void)? = nil,
             onSwipeNextPage: (() -> Void)? = nil,
-            onReadingCenterLongPress: (() -> Void)? = nil,
+            onReadingCenterLongPress: ((CGPoint) -> Void)? = nil,
             onManualScroll: (() -> Void)? = nil
         ) {
             self.zoomScale = zoomScale
@@ -827,7 +827,7 @@ struct ZoomableImageView: UIViewRepresentable {
                 return
             }
 
-            onReadingCenterLongPress?()
+            onReadingCenterLongPress?(normalizedPoint)
         }
 
         @objc

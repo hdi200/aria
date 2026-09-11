@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		6DAA000B2FD0A10000DD6DE1 /* AriaShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6DAA00022FD0A10000DD6DE1 /* AriaShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		6D8D1FD22F8D3F3E00DD6DE1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -25,62 +21,39 @@
 			remoteGlobalIDString = 6D8D1FC32F8D3F3C00DD6DE1;
 			remoteInfo = MuseReaderiOS;
 		};
-		6DAA000D2FD0A10000DD6DE1 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 6DAA00012FD0A10000DD6DE1;
-			remoteInfo = AriaShareExtension;
-		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		6DAA000A2FD0A10000DD6DE1 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				6DAA000B2FD0A10000DD6DE1 /* AriaShareExtension.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Aria-Info.plist"; sourceTree = "<group>"; };
-		6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
+		6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
 		6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
 		6D60B4C22FC4F69B007C2FEE /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 		6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aria.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AriaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AriaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		6DAA00022FD0A10000DD6DE1 /* AriaShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AriaShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		6DAA000E2FD0A10000DD6DE1 /* AriaShareExtension-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AriaShareExtension-Info.plist"; sourceTree = "<group>"; };
 		6DAA000F2FD0A10000DD6DE1 /* Aria.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Aria.entitlements; sourceTree = "<group>"; };
-		6DAA00102FD0A10000DD6DE1 /* AriaShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AriaShareExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = MuseReaderiOS;
 			sourceTree = "<group>";
 		};
 		6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = MuseReaderiOSTests;
 			sourceTree = "<group>";
 		};
 		6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = MuseReaderiOSUITests;
-			sourceTree = "<group>";
-		};
-		6DAA00032FD0A10000DD6DE1 /* AriaShareExtension */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AriaShareExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -107,13 +80,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6DAA00052FD0A10000DD6DE1 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -121,13 +87,10 @@
 			isa = PBXGroup;
 			children = (
 				6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */,
-				6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */,
+				6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */,
 				6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */,
 				6D60B4C22FC4F69B007C2FEE /* Products.storekit */,
 				6DAA000F2FD0A10000DD6DE1 /* Aria.entitlements */,
-				6DAA000E2FD0A10000DD6DE1 /* AriaShareExtension-Info.plist */,
-				6DAA00102FD0A10000DD6DE1 /* AriaShareExtension.entitlements */,
-				6DAA00032FD0A10000DD6DE1 /* AriaShareExtension */,
 				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
 				6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */,
 				6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */,
@@ -141,7 +104,6 @@
 				6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */,
 				6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */,
 				6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */,
-				6DAA00022FD0A10000DD6DE1 /* AriaShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -157,19 +119,15 @@
 				6D8D1FC02F8D3F3C00DD6DE1 /* Sources */,
 				6D8D1FC12F8D3F3C00DD6DE1 /* Frameworks */,
 				6D8D1FC22F8D3F3C00DD6DE1 /* Resources */,
-				6DAA000A2FD0A10000DD6DE1 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				6DAA000C2FD0A10000DD6DE1 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
 			);
 			name = Aria;
-			packageProductDependencies = (
-			);
 			productName = MuseReaderiOS;
 			productReference = 6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */;
 			productType = "com.apple.product-type.application";
@@ -191,8 +149,6 @@
 				6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */,
 			);
 			name = AriaTests;
-			packageProductDependencies = (
-			);
 			productName = MuseReaderiOSTests;
 			productReference = 6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -214,33 +170,9 @@
 				6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */,
 			);
 			name = AriaUITests;
-			packageProductDependencies = (
-			);
 			productName = MuseReaderiOSUITests;
 			productReference = 6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
-		};
-		6DAA00012FD0A10000DD6DE1 /* AriaShareExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 6DAA00072FD0A10000DD6DE1 /* Build configuration list for PBXNativeTarget "AriaShareExtension" */;
-			buildPhases = (
-				6DAA00042FD0A10000DD6DE1 /* Sources */,
-				6DAA00052FD0A10000DD6DE1 /* Frameworks */,
-				6DAA00062FD0A10000DD6DE1 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				6DAA00032FD0A10000DD6DE1 /* AriaShareExtension */,
-			);
-			name = AriaShareExtension;
-			packageProductDependencies = (
-			);
-			productName = AriaShareExtension;
-			productReference = 6DAA00022FD0A10000DD6DE1 /* AriaShareExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -285,7 +217,6 @@
 				6D8D1FC32F8D3F3C00DD6DE1 /* Aria */,
 				6D8D1FD02F8D3F3E00DD6DE1 /* AriaTests */,
 				6D8D1FDA2F8D3F3E00DD6DE1 /* AriaUITests */,
-				6DAA00012FD0A10000DD6DE1 /* AriaShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -306,13 +237,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6D8D1FD92F8D3F3E00DD6DE1 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		6DAA00062FD0A10000DD6DE1 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -373,13 +297,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6DAA00042FD0A10000DD6DE1 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -393,17 +310,12 @@
 			target = 6D8D1FC32F8D3F3C00DD6DE1 /* Aria */;
 			targetProxy = 6D8D1FDC2F8D3F3E00DD6DE1 /* PBXContainerItemProxy */;
 		};
-		6DAA000C2FD0A10000DD6DE1 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 6DAA00012FD0A10000DD6DE1 /* AriaShareExtension */;
-			targetProxy = 6DAA000D2FD0A10000DD6DE1 /* PBXContainerItemProxy */;
-		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		6D8D1FE32F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -468,7 +380,7 @@
 		};
 		6D8D1FE42F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -527,7 +439,7 @@
 		};
 		6D8D1FE62F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -708,7 +620,7 @@
 		};
 		6D8D1FE72F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -889,7 +801,7 @@
 		};
 		6D8D1FE92F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -911,7 +823,7 @@
 		};
 		6D8D1FEA2F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -933,7 +845,7 @@
 		};
 		6D8D1FEC2F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -954,7 +866,7 @@
 		};
 		6D8D1FED2F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -970,58 +882,6 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Aria;
-			};
-			name = Release;
-		};
-		6DAA00082FD0A10000DD6DE1 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = AriaShareExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "AriaShareExtension-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Aria;
-				IPHONEOS_DEPLOYMENT_TARGET = 17;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 5.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.ShareExtension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		6DAA00092FD0A10000DD6DE1 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = AriaShareExtension.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "AriaShareExtension-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Aria;
-				IPHONEOS_DEPLOYMENT_TARGET = 17;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 5.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.ShareExtension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -1060,15 +920,6 @@
 			buildConfigurations = (
 				6D8D1FEC2F8D3F3E00DD6DE1 /* Debug */,
 				6D8D1FED2F8D3F3E00DD6DE1 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		6DAA00072FD0A10000DD6DE1 /* Build configuration list for PBXNativeTarget "AriaShareExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				6DAA00082FD0A10000DD6DE1 /* Debug */,
-				6DAA00092FD0A10000DD6DE1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
