@@ -21,6 +21,25 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func featureTourUsesOriginalInstallDate() {
+        let beforeRelease = ScoreReaderFeatureTourStore.featureReleaseDate.addingTimeInterval(-1)
+        let atRelease = ScoreReaderFeatureTourStore.featureReleaseDate
+        let afterRelease = ScoreReaderFeatureTourStore.featureReleaseDate.addingTimeInterval(1)
+
+        #expect(ScoreReaderFeatureTourStore.isExistingInstall(originalPurchaseDate: beforeRelease))
+        #expect(!ScoreReaderFeatureTourStore.isExistingInstall(originalPurchaseDate: atRelease))
+        #expect(!ScoreReaderFeatureTourStore.isExistingInstall(originalPurchaseDate: afterRelease))
+    }
+
+    @Test
+    func featureTourUsesApprovedMixerCopy() {
+        #expect(
+            ScoreReaderFeatureTour.defaultSteps.first?.message
+                == "Use the mixer to adjust volume and pan, or mute and solo any part. Your mix is saved with this score."
+        )
+    }
+
+    @Test
     func simulatorAccessOverrideParsesBothXcodeArgumentForms() {
         #expect(
             LibraryAccessSimulationOverride.fromLaunchArguments([

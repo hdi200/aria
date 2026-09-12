@@ -141,6 +141,7 @@ private:
     std::string m_measureClipboardMimeType;
     int m_totalPageCount = 0;
     int m_maxObservedMasterHarmonyCount = 0;
+    std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> m_persistedLayoutModes;
     mutable std::unique_ptr<FluidSynthPlaybackStream> m_playbackStream;
     int m_playbackStreamRevision = 0;
     muse::GlobalInject<mu::engraving::rendering::IScoreRenderer> m_scoreRenderer;

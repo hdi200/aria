@@ -28,7 +28,18 @@ public:
             return nullptr;
         }
 
+        std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> persistedLayoutModes;
+
+        // MuseReader presents and exports physical pages. A MuseScore file can
+        // persist the editor's continuous/linear view as <layoutMode>line</layoutMode>;
+        // preserving that transient desktop view here turns an entire score into
+        // one extremely wide "page" and makes PDF export do the same. Normalize
+        // every loaded score (master and existing excerpts) to page layout before
+        // the first render, while remembering the mode so save can preserve the
+        // user's preferred desktop view.
         for (mu::engraving::Score* score : masterScore->scoreList()) {
+            persistedLayoutModes.emplace(score, score->layoutMode());
+            score->setLayoutMode(mu::engraving::LayoutMode::PAGE);
             score->doLayout();
         }
 
@@ -41,7 +52,12 @@ public:
         }
 
         return std::unique_ptr<Impl>(
-            new Impl(std::move(sessionContext), std::move(masterScore), scorePath, totalPageCount, sourceHarmonyCount)
+            new Impl(std::move(sessionContext),
+                     std::move(masterScore),
+                     scorePath,
+                     totalPageCount,
+                     sourceHarmonyCount,
+                     std::move(persistedLayoutModes))
         );
     }
 
@@ -49,11 +65,13 @@ public:
          std::unique_ptr<mu::engraving::MasterScore> masterScore,
          const std::string& scorePath,
          const int totalPageCount,
-         const int sourceHarmonyCount)
+         const int sourceHarmonyCount,
+         std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> persistedLayoutModes)
         : m_sessionContext(std::move(sessionContext)),
           m_masterScore(std::move(masterScore)),
           m_scorePath(scorePath),
-          m_totalPageCount(totalPageCount)
+          m_totalPageCount(totalPageCount),
+          m_persistedLayoutModes(std::move(persistedLayoutModes))
     {
         if (m_masterScore) {
             m_activeScore = m_masterScore.get();
@@ -512,6 +530,19 @@ public:
             return false;
         }
 
+        // Layout mode is editor-view metadata in MuseScore files. Serialize the
+        // modes that were loaded from disk, then immediately restore Aria's page
+        // presentation without relayout so rendering and PDF export stay paged.
+        std::vector<std::pair<mu::engraving::Score*, mu::engraving::LayoutMode> > presentationLayoutModes;
+        for (mu::engraving::Score* score : m_masterScore->scoreList()) {
+            const auto persisted = m_persistedLayoutModes.find(score);
+            if (!score || persisted == m_persistedLayoutModes.end() || score->layoutMode() == persisted->second) {
+                continue;
+            }
+            presentationLayoutModes.emplace_back(score, score->layoutMode());
+            score->setLayoutMode(persisted->second);
+        }
+
         const bool saved = saveScoreToPath(
             m_sessionContext->context(),
             m_masterScore.get(),
@@ -519,6 +550,9 @@ public:
             muse::io::path_t(resolvedTargetPath),
             errorMessage
         );
+        for (const auto& [score, presentationMode] : presentationLayoutModes) {
+            score->setLayoutMode(presentationMode);
+        }
         std::cout << "Aria corruption guard: save end"
                   << " success=" << (saved ? "true" : "false")
                   << " elapsed=" << elapsedSecondsSince(started)

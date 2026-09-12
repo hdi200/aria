@@ -218,6 +218,35 @@ struct ScoreReaderView: View {
     @State private var textEditorDraft: ScoreReaderTextEditorDraft?
     @State private var isPartsPanelPresented = false
     @State private var isMixerPresented = false
+    @State private var isFeatureTourPresented = false
+    private let featureTourStore = ScoreReaderFeatureTourStore()
+
+    private func handleReaderAppear() {
+        updatePhoneOrientation(for: readerState.interactionMode)
+    }
+
+    @MainActor
+    private func presentFeatureTourIfNeeded() async {
+        guard await featureTourStore.shouldPresentTour() else {
+            return
+        }
+        isFeatureTourPresented = true
+    }
+
+    /// Waits for the first page so the tour never appears over an empty or failed
+    /// reader. Informational only: neither step asks the reader to perform the action.
+    @ViewBuilder
+    private var featureTourOverlay: some View {
+        if isFeatureTourPresented, readerState.pageCount > 0 {
+            ScoreReaderFeatureTour(steps: ScoreReaderFeatureTour.defaultSteps) {
+                featureTourStore.markTourSeen()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isFeatureTourPresented = false
+                }
+            }
+            .transition(.opacity)
+        }
+    }
     @State private var isExportPanelPresented = false
     @State private var exportDraft = ScoreReaderExportDraft()
     @State private var sharedExportItems: ScoreReaderSharedExportItems?
@@ -300,6 +329,11 @@ struct ScoreReaderView: View {
     }
 
     var body: some View {
+        readerBody
+            .overlay { featureTourOverlay }
+    }
+
+    private var readerBody: some View {
         ZStack {
             ScoreReaderBackground(usesImmersiveWhite: readerState.interactionMode == .view)
 
@@ -717,9 +751,8 @@ struct ScoreReaderView: View {
                 compactPhoneModeBar
             }
         }
-        .onAppear {
-            updatePhoneOrientation(for: readerState.interactionMode)
-        }
+        .onAppear { handleReaderAppear() }
+        .task { await presentFeatureTourIfNeeded() }
         .task {
             readerState.playbackFollowEnabled = initialRememberedState.playbackFollowEnabled
             let rememberedPartIndex = rememberedPartIndexForInitialLoad()
@@ -825,7 +858,7 @@ struct ScoreReaderView: View {
             ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
                 isMixerPresented = false
             }
-            .presentationDetents([.fraction(0.58), .large])
+            .presentationDetents([.height(350), .large])
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled)
         }

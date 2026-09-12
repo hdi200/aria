@@ -843,6 +843,7 @@ bool isDirectlySelectable(const mu::engraving::EngravingItem* item)
         || item->isSystemText()
         || item->isLayoutBreak()
         || item->isSystemLockIndicator()
+        || item->isHBox()
         || item->isSlurTie()
         || item->isSlurTieSegment()
         || item->isSpanner()
@@ -2809,6 +2810,12 @@ mu::engraving::Page* pageForItem(mu::engraving::EngravingItem* item)
     if (item->isSystemLockIndicator()) {
         mu::engraving::SystemLockIndicator* indicator = mu::engraving::toSystemLockIndicator(item);
         mu::engraving::System* system = indicator ? indicator->system() : nullptr;
+        return system ? system->page() : nullptr;
+    }
+
+    if (item->isHBox()) {
+        mu::engraving::Box* box = static_cast<mu::engraving::Box*>(item);
+        mu::engraving::System* system = box ? box->system() : nullptr;
         return system ? system->page() : nullptr;
     }
 

@@ -148,6 +148,40 @@ std::string scoreXml(const int key, const std::vector<NoteSpec>& referenceNotes,
     return xml.str();
 }
 
+std::string horizontalFrameScoreXml()
+{
+    return R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="violin">
+        <trackName>Violin</trackName>
+        <instrumentId>strings.violin</instrumentId>
+        <Channel><program value="40"/></Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Clef><concertClefType>G</concertClefType></Clef>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+      <HBox><width>5</width></HBox>
+      <Measure>
+        <voice>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+}
+
 std::unique_ptr<msr::render::ScoreRenderSession> openSession(const std::filesystem::path& root,
                                                              const std::string& name,
                                                              const std::string& xml)
@@ -511,6 +545,60 @@ void testPointEntryKeySignatures(const std::filesystem::path& root)
     }
 }
 
+void testLinearScoresOpenInPageMode(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 99);
+    const size_t scoreTagStart = xml.find("<Score>");
+    expect(scoreTagStart != std::string::npos, "Could not add the linear layout fixture tag");
+    const size_t scoreTagEnd = scoreTagStart + std::string("<Score>").size();
+    xml.insert(scoreTagEnd, "\n    <layoutMode>line</layoutMode>");
+
+    auto session = openSession(root, "linear-layout", xml);
+    expect(session->totalPageCount() > 1, "A linear-view score did not normalize to physical pages");
+
+    const std::string saved = saveSnapshot(*session, root, "linear-layout-saved");
+    expect(saved.find("<layoutMode>line</layoutMode>") != std::string::npos,
+           "Saving did not preserve the score's preferred MuseScore desktop view");
+}
+
+void testHorizontalFrameCanBeSelectedAndDeleted(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "horizontal-frame", horizontalFrameScoreXml());
+    bool deletedFrame = false;
+    std::string error;
+
+    for (double y = 0.02; y <= 0.98 && !deletedFrame; y += 0.01) {
+        for (double x = 0.02; x <= 0.98 && !deletedFrame; x += 0.01) {
+            msr::render::ScoreEditState state;
+            expect(session->selectElement(0, x, y, 1.0, state, error), "Horizontal-frame hit testing failed: " + error);
+            const auto& selection = state.selection;
+            const bool isOtherElement = selection.hasSelection
+                && !selection.isNote
+                && !selection.isRest
+                && !selection.isBar
+                && !selection.isMeasure
+                && !selection.isTimeSignature
+                && !selection.isKeySignature
+                && !selection.isTempo
+                && !selection.isLayoutBreak
+                && !selection.isExpressionSpanner
+                && !selection.isInstrumentName
+                && !selection.isInstrumentChange
+                && !selection.isEditableText;
+            if (!isOtherElement) {
+                continue;
+            }
+
+            expect(session->deleteSelection(state, error), "Could not delete the selected horizontal frame: " + error);
+            deletedFrame = true;
+        }
+    }
+
+    expect(deletedFrame, "Could not select the horizontal frame through page hit testing");
+    const std::string saved = saveSnapshot(*session, root, "horizontal-frame-deleted");
+    expect(saved.find("<HBox>") == std::string::npos, "Deleting the horizontal-frame selection left it in the score");
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -533,5 +621,7 @@ int main()
     passed &= runTest("selected accidentals across key signatures", [&] { testSelectedAccidentals(testDirectory.path); });
     passed &= runTest("point-entry accidentals are one-shot", [&] { testPointEntryAccidentalsAreOneShot(testDirectory.path); });
     passed &= runTest("point-entry key-signature accidentals", [&] { testPointEntryKeySignatures(testDirectory.path); });
+    passed &= runTest("linear scores render pages and preserve their desktop view", [&] { testLinearScoresOpenInPageMode(testDirectory.path); });
+    passed &= runTest("horizontal frames can be selected and deleted", [&] { testHorizontalFrameCanBeSelectedAndDeleted(testDirectory.path); });
     return passed ? 0 : 1;
 }

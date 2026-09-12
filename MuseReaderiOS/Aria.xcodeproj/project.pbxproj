@@ -25,7 +25,7 @@
 
 /* Begin PBXFileReference section */
 		6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Aria-Info.plist"; sourceTree = "<group>"; };
-		6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
+		6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
 		6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
 		6D60B4C22FC4F69B007C2FEE /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 		6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aria.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -37,22 +37,16 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = MuseReaderiOS;
 			sourceTree = "<group>";
 		};
 		6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = MuseReaderiOSTests;
 			sourceTree = "<group>";
 		};
 		6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = MuseReaderiOSUITests;
 			sourceTree = "<group>";
 		};
@@ -87,7 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */,
-				6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */,
+				6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */,
 				6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */,
 				6D60B4C22FC4F69B007C2FEE /* Products.storekit */,
 				6DAA000F2FD0A10000DD6DE1 /* Aria.entitlements */,
@@ -194,9 +188,6 @@
 					6D8D1FDA2F8D3F3E00DD6DE1 = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 6D8D1FC32F8D3F3C00DD6DE1;
-					};
-					6DAA00012FD0A10000DD6DE1 = {
-						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -315,7 +306,7 @@
 /* Begin XCBuildConfiguration section */
 		6D8D1FE32F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -380,7 +371,7 @@
 		};
 		6D8D1FE42F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -439,7 +430,7 @@
 		};
 		6D8D1FE62F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -481,7 +472,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.1;
+				MARKETING_VERSION = 6.0;
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";
@@ -620,7 +611,7 @@
 		};
 		6D8D1FE72F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -662,7 +653,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.1;
+				MARKETING_VERSION = 6.0;
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";
@@ -801,7 +792,7 @@
 		};
 		6D8D1FE92F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -823,7 +814,7 @@
 		};
 		6D8D1FEA2F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -845,7 +836,7 @@
 		};
 		6D8D1FEC2F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -866,7 +857,7 @@
 		};
 		6D8D1FED2F8D3F3E00DD6DE1 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Aria.xcconfig */;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
