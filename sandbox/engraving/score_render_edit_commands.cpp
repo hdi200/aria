@@ -3708,10 +3708,28 @@
                 return false;
             }
 
-            mu::engraving::InstrumentChange* instrumentChange
-                = mu::engraving::Factory::createInstrumentChange(segment, *currentInstrument);
-            instrumentChange->setTrack(part->startTrack());
-            m_masterScore->undoAddElement(instrumentChange);
+            const mu::engraving::staff_idx_t staffIndex = mu::engraving::track2staff(part->startTrack());
+            mu::engraving::ChordRest* chordRest = firstChordRestAtSegment(m_masterScore.get(), segment, staffIndex);
+            if (!chordRest) {
+                chordRest = firstStandardChordRestInMeasure(m_masterScore.get(), segment->measure(), staffIndex);
+            }
+            if (!chordRest) {
+                m_masterScore->endCmd(true);
+                errorMessage = "Aria could not find a note or rest for the instrument change.";
+                return false;
+            }
+
+            mu::engraving::TextBase* text = m_masterScore->addText(
+                mu::engraving::TextStyleType::INSTRUMENT_CHANGE,
+                chordRest
+            );
+            if (!text || !text->isInstrumentChange()) {
+                m_masterScore->endCmd(true);
+                errorMessage = "Aria could not add the instrument change at the selected measure.";
+                return false;
+            }
+
+            mu::engraving::InstrumentChange* instrumentChange = mu::engraving::toInstrumentChange(text);
             instrumentChange->setInit(true);
             instrumentChange->setupInstrument(&replacement);
         }

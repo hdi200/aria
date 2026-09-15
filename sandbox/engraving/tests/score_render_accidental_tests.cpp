@@ -599,6 +599,48 @@ void testHorizontalFrameCanBeSelectedAndDeleted(const std::filesystem::path& roo
     expect(saved.find("<HBox>") == std::string::npos, "Deleting the horizontal-frame selection left it in the score");
 }
 
+void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "measure-instrument-context", scoreXml(0, { { 60, 14 } }, 1));
+    const std::vector<LocatedItem> items = scanScore(*session, { 60 }, 1);
+    const std::vector<LocatedItem> rests = restsByX(items);
+    expect(!rests.empty(), "Could not locate a measure-selection target rest");
+
+    const LocatedItem target = rests.back();
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectMeasureRange(
+               target.pageIndex,
+               target.x,
+               target.y,
+               target.x,
+               target.y,
+               state,
+               error),
+           "Could not select the target measure: " + error);
+    expect(state.selection.isMeasure, "Measure selection did not return measure state");
+    expect(!state.selection.partId.empty(), "Measure selection did not identify its part");
+    expect(state.selection.instrumentId == "strings.violin", "Measure selection returned the wrong instrument ID");
+    expect(state.selection.instrumentName == "Violin", "Measure selection returned the wrong instrument name");
+    expect(state.selection.measureIndex >= 0, "Measure selection did not return a measure index");
+    expect(state.selection.tick > 0, "Test did not select a later measure for an instrument change");
+
+    msr::render::ScoreEditState changedState;
+    expect(session->setInstrumentFromTick(
+               state.selection.partId,
+               state.selection.tick,
+               "strings.viola",
+               changedState,
+               error),
+           "Could not change instrument from the selected measure: " + error);
+
+    const std::string saved = saveSnapshot(*session, root, "measure-instrument-context-saved");
+    expect(saved.find("<InstrumentChange>") != std::string::npos,
+           "Measure-level replacement did not save an instrument change");
+    expect(saved.find("<instrumentId>strings.viola</instrumentId>") != std::string::npos,
+           "Measure-level replacement saved the wrong instrument");
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -623,5 +665,6 @@ int main()
     passed &= runTest("point-entry key-signature accidentals", [&] { testPointEntryKeySignatures(testDirectory.path); });
     passed &= runTest("linear scores render pages and preserve their desktop view", [&] { testLinearScoresOpenInPageMode(testDirectory.path); });
     passed &= runTest("horizontal frames can be selected and deleted", [&] { testHorizontalFrameCanBeSelectedAndDeleted(testDirectory.path); });
+    passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
     return passed ? 0 : 1;
 }

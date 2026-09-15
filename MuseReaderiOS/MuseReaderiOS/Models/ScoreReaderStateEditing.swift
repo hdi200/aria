@@ -260,7 +260,12 @@ extension ScoreReaderState {
         }
     }
 
-    func handlePageTap(pageIndex: Int, normalizedPoint: CGPoint, inputKind: ScorePageTapInputKind = .direct) {
+    func handlePageTap(
+        pageIndex: Int,
+        normalizedPoint: CGPoint,
+        inputKind: ScorePageTapInputKind = .direct,
+        selectionAction: ((ScoreSelectedElement?) -> Void)? = nil
+    ) {
         guard
             supportsEditing,
             isEditingMode,
@@ -338,6 +343,7 @@ extension ScoreReaderState {
                     self?.applyEditingState(newState)
                     self?.auditionSelectedChordSymbol(in: newState)
                 }
+                selectionAction?(newState.selection)
             } catch {
                 self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
@@ -1299,21 +1305,23 @@ extension ScoreReaderState {
 
     func instrumentReplacementContext() -> InstrumentReplacementContext? {
         guard let selection = editingState.selection,
-              selection.kind == .instrumentName || selection.kind == .instrumentChange,
+              selection.kind == .instrumentName
+                || selection.kind == .instrumentChange
+                || selection.kind == .measure,
               let partID = selection.partID,
               let instrumentID = selection.instrumentID
         else {
             return nil
         }
 
-        let isExistingChange = selection.kind == .instrumentChange
+        let startsAtSelectedMeasure = selection.kind == .instrumentChange || selection.kind == .measure
         return InstrumentReplacementContext(
             partID: partID,
             currentInstrumentID: instrumentID,
             currentInstrumentName: selection.instrumentName ?? "Instrument",
-            measureIndex: isExistingChange ? selection.measureIndex : lastSelectedMeasureIndex,
-            tick: isExistingChange ? selection.tick : lastSelectedMeasureTick,
-            defaultsToMeasureScope: isExistingChange
+            measureIndex: startsAtSelectedMeasure ? selection.measureIndex : lastSelectedMeasureIndex,
+            tick: startsAtSelectedMeasure ? selection.tick : lastSelectedMeasureTick,
+            defaultsToMeasureScope: startsAtSelectedMeasure
         )
     }
 

@@ -3361,6 +3361,18 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             score->nstaves()
         );
         const mu::engraving::staff_idx_t lastStaff = staffEnd - 1;
+        const mu::engraving::Staff* selectedStaff = score->staff(staffStart);
+        const mu::engraving::Part* selectedPart = selectedStaff ? selectedStaff->part() : nullptr;
+        const mu::engraving::Instrument* selectedInstrument = selectedPart
+            ? selectedPart->instrument(rangeStart->tick())
+            : nullptr;
+        if (selectedPart) {
+            selectionState.partId = std::to_string(selectedPart->id().toUint64());
+        }
+        if (selectedInstrument) {
+            selectionState.instrumentId = selectedInstrument->id().toStdString();
+            selectionState.instrumentName = selectedInstrument->trackName().toStdString();
+        }
         mu::engraving::System* activeSystem = nullptr;
         mu::engraving::RectF systemRect;
         mu::engraving::RectF actionRect;

@@ -1203,6 +1203,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
                 timeSignatureAction: perform(timeSignatureAction),
                 tempoAction: perform(tempoAction),
                 pickupMeasureAction: perform(pickupMeasureAction),
+                changeInstrumentAction: perform(changeInstrumentAction),
                 removeAction: perform(removeSelectedMeasureAction),
                 clearAction: perform(clearSelectedMeasureAction)
             )
@@ -1258,7 +1259,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
         } else if isNoteRestSelection {
             menuSize = CGSize(width: 218, height: isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216)
         } else {
-            menuSize = CGSize(width: 238, height: selectedElement.isSingleMeasure ? 472 : 362)
+            menuSize = CGSize(width: 238, height: selectedElement.isSingleMeasure ? 508 : 362)
         }
         let rawX = anchor.actionPosition.x - menuSize.width / 2 + 2
         let rawY = anchor.actionPosition.y + 16 + menuSize.height / 2
@@ -1494,6 +1495,7 @@ private struct ScoreReaderMeasureCommandMenu: View {
     let timeSignatureAction: () -> Void
     let tempoAction: () -> Void
     let pickupMeasureAction: () -> Void
+    let changeInstrumentAction: () -> Void
     let removeAction: () -> Void
     let clearAction: () -> Void
 
@@ -1561,6 +1563,12 @@ private struct ScoreReaderMeasureCommandMenu: View {
                     title: "Time Signature",
                     symbolText: "4\n4",
                     action: timeSignatureAction
+                )
+
+                ScoreReaderMeasureCommandRow(
+                    title: "Change Instrument",
+                    systemImage: "music.note.list",
+                    action: changeInstrumentAction
                 )
 
             }

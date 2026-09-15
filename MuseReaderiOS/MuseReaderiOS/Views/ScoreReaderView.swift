@@ -1545,7 +1545,15 @@ struct ScoreReaderView: View {
                 readerState.dismissPlayFromHere()
                 if editingEnabled {
                     clearSelectionCommandMenu()
-                    readerState.handlePageTap(pageIndex: pageIndex, normalizedPoint: normalizedPoint, inputKind: inputKind)
+                    readerState.handlePageTap(
+                        pageIndex: pageIndex,
+                        normalizedPoint: normalizedPoint,
+                        inputKind: inputKind
+                    ) { selection in
+                        if selection?.kind == .instrumentName || selection?.kind == .instrumentChange {
+                            presentInstrumentReplacement()
+                        }
+                    }
                 } else if isPageTurn {
                     handleViewModePageTap(normalizedPoint, pageIndex: pageIndex)
                 } else {
