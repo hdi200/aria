@@ -620,7 +620,7 @@ void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& r
            "Could not select the target measure: " + error);
     expect(state.selection.isMeasure, "Measure selection did not return measure state");
     expect(!state.selection.partId.empty(), "Measure selection did not identify its part");
-    expect(state.selection.instrumentId == "strings.violin", "Measure selection returned the wrong instrument ID");
+    expect(state.selection.instrumentId == "violin", "Measure selection returned the wrong instrument ID");
     expect(state.selection.instrumentName == "Violin", "Measure selection returned the wrong instrument name");
     expect(state.selection.measureIndex >= 0, "Measure selection did not return a measure index");
     expect(state.selection.tick > 0, "Test did not select a later measure for an instrument change");

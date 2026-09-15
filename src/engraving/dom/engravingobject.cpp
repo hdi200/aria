@@ -242,7 +242,12 @@ EngravingObject* EngravingObject::parent() const
     return m_parent;
 }
 
-0
+EngravingObject* EngravingObject::explicitParent() const
+{
+    if (!m_isParentExplicitlySet) {
+        return nullptr;
+    }
+    return m_parent;
 }
 
 void EngravingObject::setParent(EngravingObject* p)
