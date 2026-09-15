@@ -519,7 +519,7 @@ struct ScoreReaderPageSurface: View {
                     .padding(18)
             }
 
-            if let selectedElement, selectedElement.kind == .text || selectedElement.kind == .chordText {
+            if let selectedElement, selectedElement.kind == .text || selectedElement.kind == .chordText || selectedElement.kind == .instrumentChange {
                 ScoreReaderSelectedTextActions(
                     selectedElement: selectedElement,
                     imageSize: page?.displaySize,

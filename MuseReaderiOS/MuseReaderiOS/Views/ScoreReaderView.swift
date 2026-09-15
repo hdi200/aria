@@ -1550,7 +1550,7 @@ struct ScoreReaderView: View {
                         normalizedPoint: normalizedPoint,
                         inputKind: inputKind
                     ) { selection in
-                        if selection?.kind == .instrumentName || selection?.kind == .instrumentChange {
+                        if selection?.kind == .instrumentName {
                             presentInstrumentReplacement()
                         }
                     }
@@ -1676,6 +1676,7 @@ struct ScoreReaderView: View {
             && !isScoreSetupPresented
             && !isPageSettingsPresented
             && !isInstrumentLayoutPresented
+            && instrumentReplacementContext == nil
             && transposeSheetContext == nil
             && !isAddMeasuresPresented
             && !isAutoBreaksPresented
@@ -2618,6 +2619,12 @@ struct ScoreReaderView: View {
     }
 
     private func presentTextEditor(_ selection: ScoreSelectedElement) {
+        // Like MuseScore, editing an instrument change means choosing its instrument.
+        if selection.kind == .instrumentChange {
+            presentInstrumentReplacement()
+            return
+        }
+
         guard selection.kind == .text || selection.kind == .chordText else {
             return
         }
