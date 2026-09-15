@@ -19,10 +19,11 @@ struct ScoreReaderFeatureTourStore {
     static let currentVersion = 1
 
     // Version 6.0, which introduced the mixer and play-from-here tour, began its
-    // release on September 13, 2026. AppTransaction supplies Apple's signed date
-    // for when this customer first acquired the app. That remains available across
-    // an update, unlike a UserDefaults marker introduced by the update itself.
-    static let featureReleaseDate = Date(timeIntervalSince1970: 1_789_257_600)
+    // release on September 15, 2026 at 2:00 PM Eastern. AppTransaction supplies
+    // Apple's signed date for when this customer first acquired the app. That
+    // remains available across an update, unlike a UserDefaults marker introduced
+    // by the update itself.
+    static let featureReleaseDate = Date(timeIntervalSince1970: 1_789_495_200)
 
     private let defaultsKey = "ScoreReaderFeatureTour.seenVersion"
     private var audienceKey: String {
@@ -101,9 +102,9 @@ struct ScoreReaderFeatureTour: View {
         ScoreReaderFeatureTourStep(
             id: 1,
             systemImage: "play.circle.fill",
-            title: "Play from anywhere",
-            message: "In View mode, touch and hold a measure, then choose Play from here "
-                + "to start playback at that spot."
+            title: "Play or loop any passage",
+            message: "In View mode, touch and hold a measure, then choose Play from here. "
+                + "Drag across measures to loop a section instead."
         )
     ]
 

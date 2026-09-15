@@ -283,6 +283,11 @@ extension ScoreReaderState {
         staleLivePageIndices.removeAll()
         playbackMeasureHighlight = nil
         playFromHereTarget = nil
+        playbackLoopRange = nil
+        playbackLoopIsActive = false
+        pendingPlaybackSelectionStartPoint = nil
+        pendingPlaybackSelectionEndPoint = nil
+        pendingPlaybackSelectionPageIndex = nil
         playbackMeasureRegions.removeAll()
         playbackContextTask?.cancel()
         playbackContextTask = nil

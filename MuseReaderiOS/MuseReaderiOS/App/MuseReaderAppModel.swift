@@ -385,6 +385,30 @@ final class MuseReaderAppModel: ObservableObject {
         handleImport(result: .success(url))
     }
 
+    /// Routes files dragged from Files, Finder, or another app through the same
+    /// duplicate review, library-capacity, normalization, and opening flow as
+    /// the document picker.
+    @discardableResult
+    func handleDroppedDocuments(_ urls: [URL]) -> Bool {
+        let compatibleURLs = urls.filter(Self.isSupportedScoreURL)
+        guard !compatibleURLs.isEmpty else {
+            presentError(
+                title: "Unsupported File",
+                message: "Drop a MuseScore or MusicXML score (.mscz, .mscx, .mxl, .musicxml, or .xml)."
+            )
+            return false
+        }
+
+        handleImportSelection(result: .success(compatibleURLs))
+        return true
+    }
+
+    nonisolated static func isSupportedScoreURL(_ url: URL) -> Bool {
+        guard url.isFileURL else { return false }
+        return ["mscz", "mscx", "mxl", "musicxml", "xml"]
+            .contains(url.pathExtension.lowercased())
+    }
+
     func confirmImportReview(_ candidates: [ScoreImportCandidate]) {
         libraryAccessSheet = nil
         Task { @MainActor in

@@ -107,7 +107,7 @@ extension ScoreReaderState {
                     let shouldUseSelection = self.isEditingMode && self.editingState.selection != nil
                     let startTimeSeconds = shouldUseSelection
                         ? (self.playbackRegionForCurrentSelection()?.startTimeSeconds ?? 0)
-                        : 0
+                        : (self.playbackLoopIsActive ? (self.playbackLoopRange?.startTimeSeconds ?? 0) : 0)
                     try playbackController.seek(to: startTimeSeconds)
                     try playbackController.play()
                     self.playbackWasExplicitlyStopped = false
@@ -133,6 +133,7 @@ extension ScoreReaderState {
         }
 
         isPlaybackActionInFlight = true
+        playbackWasExplicitlyStopped = true
         playbackErrorMessage = nil
         playbackPreparationMessage = nil
 
@@ -146,7 +147,6 @@ extension ScoreReaderState {
                 if playbackController.isLoaded {
                     try playbackController.stop()
                 }
-                self?.playbackWasExplicitlyStopped = true
                 let latestPlaybackState = playbackController.state()
                 self?.playbackState = latestPlaybackState
                 self?.updatePlaybackFollowState(with: latestPlaybackState)
@@ -406,6 +406,7 @@ extension ScoreReaderState {
         playbackMeasureRegions = []
         playbackMeasureHighlight = nil
         playbackController?.invalidate()
+        clearPlaybackLoop()
         playbackState = session.capabilities.supportsPlayback
             ? ScorePlaybackState(isAvailable: true, status: .stopped, positionSeconds: 0, durationSeconds: 0)
             : .unavailable
@@ -551,7 +552,7 @@ extension ScoreReaderState {
         return min(max(rawPositionSeconds - compensationSeconds, 0), playbackState.durationSeconds)
     }
 
-    // MARK: - Play from here
+    // MARK: - View-mode playback selection
 
     /// View-mode long press: resolve the measure under the finger and offer to
     /// start playback from its first beat. Measure regions load lazily with
@@ -561,6 +562,11 @@ extension ScoreReaderState {
         guard session.capabilities.supportsPlayback else {
             return
         }
+
+        clearPlaybackLoop()
+        pendingPlaybackSelectionStartPoint = point
+        pendingPlaybackSelectionEndPoint = point
+        pendingPlaybackSelectionPageIndex = pageIndex
 
         if let region = playbackRegion(atNormalizedPoint: point, pageIndex: pageIndex) {
             playFromHereTarget = ScorePlayFromHereTarget(region: region)
@@ -583,14 +589,122 @@ extension ScoreReaderState {
                 self.playbackMeasureRegions = regions
             }
 
-            if let region = self.playbackRegion(atNormalizedPoint: point, pageIndex: pageIndex) {
-                self.playFromHereTarget = ScorePlayFromHereTarget(region: region)
-            }
+            self.resolvePendingPlaybackSelection()
         }
+    }
+
+    /// Extends the view-mode long press into a measure range. Keeping this in
+    /// playback state means the highlighted bars and loop times are resolved
+    /// from the same MuseScore timeline.
+    func updatePlaybackLoopSelection(
+        fromNormalizedPoint startPoint: CGPoint,
+        toNormalizedPoint endPoint: CGPoint,
+        pageIndex: Int
+    ) {
+        guard session.capabilities.supportsPlayback else {
+            return
+        }
+
+        pendingPlaybackSelectionStartPoint = startPoint
+        pendingPlaybackSelectionEndPoint = endPoint
+        pendingPlaybackSelectionPageIndex = pageIndex
+        resolvePendingPlaybackSelection()
+    }
+
+    private func resolvePendingPlaybackSelection() {
+        guard
+            let startPoint = pendingPlaybackSelectionStartPoint,
+            let endPoint = pendingPlaybackSelectionEndPoint,
+            let pageIndex = pendingPlaybackSelectionPageIndex,
+            let startRegion = playbackRegion(atNormalizedPoint: startPoint, pageIndex: pageIndex),
+            let endRegion = playbackRegion(atNormalizedPoint: endPoint, pageIndex: pageIndex)
+        else {
+            return
+        }
+
+        guard startRegion.measureIndex != endRegion.measureIndex else {
+            playbackLoopRange = nil
+            playbackLoopIsActive = false
+            playFromHereTarget = ScorePlayFromHereTarget(region: startRegion)
+            return
+        }
+
+        guard let range = playbackLoopRange(from: startRegion, through: endRegion) else {
+            return
+        }
+
+        playFromHereTarget = nil
+        playbackLoopRange = range
+        playbackLoopIsActive = false
+    }
+
+    private func playbackLoopRange(
+        from firstRegion: ScorePlaybackMeasureRegion,
+        through secondRegion: ScorePlaybackMeasureRegion
+    ) -> ScorePlaybackLoopRange? {
+        guard firstRegion.pageIndex == secondRegion.pageIndex else {
+            return nil
+        }
+
+        let lowerMeasureIndex = min(firstRegion.measureIndex, secondRegion.measureIndex)
+        let upperMeasureIndex = max(firstRegion.measureIndex, secondRegion.measureIndex)
+        let pageRegions = playbackMeasureRegions.filter {
+            $0.pageIndex == firstRegion.pageIndex
+                && (lowerMeasureIndex...upperMeasureIndex).contains($0.measureIndex)
+        }
+
+        var visualRegionByMeasureIndex: [Int: ScorePlaybackMeasureRegion] = [:]
+        for region in pageRegions where visualRegionByMeasureIndex[region.measureIndex] == nil {
+            visualRegionByMeasureIndex[region.measureIndex] = region
+        }
+        let visualRegions = visualRegionByMeasureIndex.values.sorted {
+            $0.measureIndex < $1.measureIndex
+        }
+
+        guard
+            let timelineStart = pageRegions
+                .filter({ $0.measureIndex == lowerMeasureIndex })
+                .min(by: { $0.startTimeSeconds < $1.startTimeSeconds }),
+            let timelineEnd = pageRegions
+                .filter({
+                    $0.measureIndex == upperMeasureIndex
+                        && $0.startTimeSeconds >= timelineStart.startTimeSeconds
+                })
+                .min(by: { $0.startTimeSeconds < $1.startTimeSeconds }),
+            timelineEnd.endTimeSeconds > timelineStart.startTimeSeconds,
+            !visualRegions.isEmpty
+        else {
+            return nil
+        }
+
+        return ScorePlaybackLoopRange(
+            pageIndex: firstRegion.pageIndex,
+            startMeasureIndex: lowerMeasureIndex,
+            endMeasureIndex: upperMeasureIndex,
+            normalizedRects: visualRegions.map(\.normalizedRect),
+            startTimeSeconds: timelineStart.startTimeSeconds,
+            endTimeSeconds: timelineEnd.endTimeSeconds
+        )
     }
 
     func dismissPlayFromHere() {
         playFromHereTarget = nil
+        pendingPlaybackSelectionStartPoint = nil
+        pendingPlaybackSelectionEndPoint = nil
+        pendingPlaybackSelectionPageIndex = nil
+        if !playbackLoopIsActive {
+            playbackLoopRange = nil
+        }
+    }
+
+    func clearPlaybackLoop() {
+        playbackController?.clearLoopRange()
+        playbackLoopIsActive = false
+        playbackLoopRange = nil
+        playFromHereTarget = nil
+        pendingPlaybackSelectionStartPoint = nil
+        pendingPlaybackSelectionEndPoint = nil
+        pendingPlaybackSelectionPageIndex = nil
     }
 
     /// The measure containing `point`. A press landing in the gap between
@@ -672,6 +786,99 @@ extension ScoreReaderState {
                 self.updatePlaybackFollowState(with: latestPlaybackState)
                 self.playbackErrorMessage = nil
             } catch {
+                self?.playbackErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    func loopFromHere() {
+        guard let target = playFromHereTarget else {
+            return
+        }
+
+        playbackLoopRange = ScorePlaybackLoopRange(
+            pageIndex: target.pageIndex,
+            startMeasureIndex: target.measureIndex,
+            endMeasureIndex: target.measureIndex,
+            normalizedRects: [target.normalizedRect],
+            startTimeSeconds: target.startTimeSeconds,
+            endTimeSeconds: playbackMeasureRegions
+                .first(where: {
+                    $0.measureIndex == target.measureIndex
+                        && $0.pageIndex == target.pageIndex
+                        && $0.startTimeSeconds == target.startTimeSeconds
+                })?.endTimeSeconds ?? target.startTimeSeconds
+        )
+        playFromHereTarget = nil
+        startSelectedPlaybackLoop()
+    }
+
+    func toggleSelectedPlaybackLoop() {
+        if playbackLoopIsActive {
+            clearPlaybackLoop()
+        } else {
+            startSelectedPlaybackLoop()
+        }
+    }
+
+    private func startSelectedPlaybackLoop() {
+        guard
+            let range = playbackLoopRange,
+            range.endTimeSeconds > range.startTimeSeconds,
+            let liveRenderSession = session.liveRenderSession,
+            let playbackController,
+            session.capabilities.supportsPlayback,
+            !isPlaybackActionInFlight
+        else {
+            return
+        }
+
+        notePreviewController.stopAll()
+        playbackLoopIsActive = true
+        playbackWasExplicitlyStopped = false
+        isPlaybackActionInFlight = true
+        playbackErrorMessage = nil
+        playbackPreparationMessage = playbackController.isLoaded ? nil : playbackPreparationStartingMessage
+
+        Task { @MainActor [weak self] in
+            defer {
+                self?.isPlaybackActionInFlight = false
+                self?.updatePlaybackPreparationMessage(for: playbackController)
+            }
+
+            do {
+                guard let self else {
+                    return
+                }
+
+                try await self.waitForPendingPartSelection()
+                if self.playbackMeasureRegions.isEmpty {
+                    self.playbackMeasureRegions = try await liveRenderSession.playbackMeasureRegions()
+                } else {
+                    self.loadPlaybackContextIfNeeded()
+                }
+                try await self.preparePlaybackIfNeeded(
+                    liveRenderSession: liveRenderSession,
+                    playbackController: playbackController
+                )
+
+                guard self.playbackLoopIsActive, self.playbackLoopRange == range else {
+                    return
+                }
+
+                try await playbackController.setLoopRange(
+                    startTimeSeconds: range.startTimeSeconds,
+                    endTimeSeconds: range.endTimeSeconds
+                )
+                try playbackController.play()
+
+                let latestPlaybackState = playbackController.state()
+                self.playbackState = latestPlaybackState
+                self.updatePlaybackFollowState(with: latestPlaybackState)
+                self.playbackErrorMessage = nil
+            } catch {
+                self?.playbackController?.clearLoopRange()
+                self?.playbackLoopIsActive = false
                 self?.playbackErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
         }

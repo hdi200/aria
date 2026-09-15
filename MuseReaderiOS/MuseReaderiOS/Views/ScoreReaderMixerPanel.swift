@@ -49,15 +49,15 @@ struct ScoreReaderMixerPanel: View {
     }
 
     private var phoneHeader: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: "waveform")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.black.opacity(0.84))
-                .frame(width: 30, height: 40)
+                .foregroundStyle(Color.blue)
+                .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Mixer")
-                    .font(.headline)
+                    .font(.system(size: 17, weight: .bold))
                 Text("\(parts.count) \(parts.count == 1 ? "instrument" : "instruments")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -65,24 +65,36 @@ struct ScoreReaderMixerPanel: View {
 
             Spacer(minLength: 4)
 
+            phoneHeaderActions
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .padding(.vertical, 6)
+        .overlay(alignment: .bottom) { Divider().opacity(0.7) }
+    }
+
+    private var phoneHeaderActions: some View {
+        HStack(spacing: 8) {
             Button {
                 readerState.updateMixer(ScoreMixerSettings())
             } label: {
                 Label("Reset", systemImage: "arrow.counterclockwise")
             }
             .font(.subheadline.weight(.medium))
+            .foregroundStyle(Color.blue)
 
             Button(action: close) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.tertiary)
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.blue)
+                    .frame(width: 32, height: 32)
+                    .background(Color.blue.opacity(0.10), in: Circle())
+                    .overlay(Circle().strokeBorder(Color.blue.opacity(0.12), lineWidth: 1))
                     .frame(width: 44, height: 44)
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Close mixer")
         }
-        .padding(.horizontal)
-        .padding(.vertical, 6)
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     private var tabletHeader: some View {
@@ -94,7 +106,7 @@ struct ScoreReaderMixerPanel: View {
             HStack(spacing: 14) {
                 Image(systemName: "waveform")
                     .font(.title2.weight(.semibold))
-                    .foregroundStyle(Color.black.opacity(0.84))
+                    .foregroundStyle(Color.blue)
                     .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -114,13 +126,18 @@ struct ScoreReaderMixerPanel: View {
                     Label("Reset mix", systemImage: "arrow.counterclockwise")
                 }
                 .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.blue)
 
                 Button(action: close) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.tertiary)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.blue)
+                        .frame(width: 34, height: 34)
+                        .background(Color.blue.opacity(0.10), in: Circle())
+                        .overlay(Circle().strokeBorder(Color.blue.opacity(0.12), lineWidth: 1))
                         .frame(width: 44, height: 44)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Close mixer")
             }
             .padding(.horizontal, 24)
@@ -242,13 +259,13 @@ struct ScoreReaderMixerPanel: View {
     ) -> some View {
         let cardCornerRadius: CGFloat = compact ? 13 : 16
 
-        return VStack(spacing: compact ? 5 : 8) {
+        return VStack(spacing: compact ? 4 : 8) {
             HStack(spacing: compact ? 6 : 9) {
                 Circle()
                     .fill(color)
                     .frame(width: compact ? 10 : 13, height: compact ? 10 : 13)
                 Text(name)
-                    .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
@@ -274,9 +291,14 @@ struct ScoreReaderMixerPanel: View {
                     )
                 } else {
                     // Keeps Master's fader aligned with the part channels beside it.
-                    Color.clear.frame(maxWidth: .infinity).frame(height: compact ? 32 : 38)
+                    Color.clear
+                        .frame(
+                            width: compact ? 34 : 46,
+                            height: compact ? 32 : 36
+                        )
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .center)
 
             HStack(alignment: .center, spacing: compact ? 8 : 12) {
                 VerticalMixerFader(
@@ -287,7 +309,7 @@ struct ScoreReaderMixerPanel: View {
                 )
                 StereoLevelMeter(level: level)
             }
-            .frame(height: compact ? 112 : 138)
+            .frame(height: compact ? 92 : 138)
 
             Text(decibelLabel(volume.wrappedValue))
                 .font(compact ? .caption.monospacedDigit() : .subheadline.monospacedDigit())
@@ -318,8 +340,8 @@ struct ScoreReaderMixerPanel: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, compact ? 9 : 14)
-        .padding(.vertical, compact ? 8 : 12)
+        .padding(.horizontal, compact ? 8 : 14)
+        .padding(.vertical, compact ? 7 : 12)
         .frame(width: width)
         .background(
             RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
@@ -340,15 +362,20 @@ struct ScoreReaderMixerPanel: View {
     ) -> some View {
         Button { selected.wrappedValue.toggle() } label: {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity)
-                .frame(height: compact ? 32 : 38)
+                .frame(height: compact ? 28 : 32)
                 .foregroundStyle(selected.wrappedValue ? Color.white : Color.primary)
                 .background(
                     selected.wrappedValue ? color : Color.secondary.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                 )
         }
+        .frame(
+            width: compact ? 34 : 46,
+            height: compact ? 32 : 36
+        )
+        .contentShape(Rectangle())
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityName)
         .accessibilityValue(selected.wrappedValue ? "On" : "Off")
@@ -367,7 +394,7 @@ struct ScoreReaderMixerPanel: View {
 
     private var phoneMixer: some View {
         GeometryReader { proxy in
-            let channelWidth = min(116, max(104, proxy.size.width * 0.285))
+            let channelWidth = min(108, max(98, proxy.size.width * 0.27))
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 7) {
@@ -376,7 +403,7 @@ struct ScoreReaderMixerPanel: View {
 
                     if !parts.isEmpty {
                         Divider()
-                            .frame(height: 252)
+                            .frame(height: 220)
                     }
 
                     ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
@@ -395,8 +422,8 @@ struct ScoreReaderMixerPanel: View {
                     }
                 }
                 .scrollTargetLayout()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollBounceBehavior(.basedOnSize)
@@ -431,7 +458,7 @@ private struct VerticalMixerFader: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let thumbDiameter: CGFloat = compact ? 24 : 28
+            let thumbDiameter: CGFloat = compact ? 22 : 28
             let travel = max(proxy.size.height - thumbDiameter, 1)
             let boundedValue = min(max(CGFloat(value), 0), 1)
             let thumbY = thumbDiameter / 2 + (1 - boundedValue) * travel
@@ -466,7 +493,7 @@ private struct VerticalMixerFader: View {
                     }
             )
         }
-        .frame(width: compact ? 36 : 44)
+        .frame(width: compact ? 34 : 44)
         .accessibilityElement()
         .accessibilityLabel(accessibilityName)
         .accessibilityValue("\(Int(value * 100)) percent")

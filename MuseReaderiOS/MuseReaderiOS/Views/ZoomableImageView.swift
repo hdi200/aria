@@ -147,7 +147,7 @@ struct ZoomableImageView: UIViewRepresentable {
     var onPencilDoubleTap: (() -> Void)? = nil
     var onSwipePreviousPage: (() -> Void)? = nil
     var onSwipeNextPage: (() -> Void)? = nil
-    var onReadingCenterLongPress: ((CGPoint) -> Void)? = nil
+    var onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)? = nil
     var onManualScroll: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
@@ -255,7 +255,7 @@ struct ZoomableImageView: UIViewRepresentable {
             action: #selector(Coordinator.handleReadingCenterLongPress(_:))
         )
         readingLongPressGestureRecognizer.minimumPressDuration = 0.45
-        readingLongPressGestureRecognizer.allowableMovement = 18
+        readingLongPressGestureRecognizer.allowableMovement = 2_000
         readingLongPressGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         readingLongPressGestureRecognizer.isEnabled = !allowsEditingInteractions
         overlayView.addGestureRecognizer(readingLongPressGestureRecognizer)
@@ -386,7 +386,7 @@ struct ZoomableImageView: UIViewRepresentable {
         var onPencilDoubleTap: (() -> Void)?
         var onSwipePreviousPage: (() -> Void)?
         var onSwipeNextPage: (() -> Void)?
-        var onReadingCenterLongPress: ((CGPoint) -> Void)?
+        var onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)?
         var onManualScroll: (() -> Void)?
         var allowsPlaybackFollow = true
         var allowsPencilInsertionFineTune = false
@@ -429,6 +429,7 @@ struct ZoomableImageView: UIViewRepresentable {
         private var expressionEndpointDragIsStart: Bool?
         private var measureRangeDragStartPoint: CGPoint?
         private var measureRangeDragAnchorFrame: CGRect?
+        private var readingLongPressStartPoint: CGPoint?
         private var insertionDragStartPoint: CGPoint?
         private var lastPencilHoverPoint: CGPoint?
         private let pencilHoverPreviewMovementThreshold: CGFloat = 4
@@ -449,7 +450,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilDoubleTap: (() -> Void)? = nil,
             onSwipePreviousPage: (() -> Void)? = nil,
             onSwipeNextPage: (() -> Void)? = nil,
-            onReadingCenterLongPress: ((CGPoint) -> Void)? = nil,
+            onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)? = nil,
             onManualScroll: (() -> Void)? = nil
         ) {
             self.zoomScale = zoomScale
@@ -816,18 +817,51 @@ struct ZoomableImageView: UIViewRepresentable {
 
         @objc
         func handleReadingCenterLongPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
-            guard
-                gestureRecognizer.state == .began,
-                let overlayView,
-                let scrollView = zoomScrollView,
-                scrollView.zoomScale <= 1.01,
-                let normalizedPoint = overlayView.normalizedPoint(at: gestureRecognizer.location(in: overlayView)),
-                ScoreReaderReadingGesturePolicy.isCenterEditLongPress(normalizedPoint)
-            else {
+            guard let overlayView else {
                 return
             }
 
-            onReadingCenterLongPress?(normalizedPoint)
+            switch gestureRecognizer.state {
+            case .began:
+                guard
+                    let scrollView = zoomScrollView,
+                    scrollView.zoomScale <= 1.01,
+                    let normalizedPoint = overlayView.normalizedPoint(
+                        at: gestureRecognizer.location(in: overlayView)
+                    ),
+                    ScoreReaderReadingGesturePolicy.isCenterEditLongPress(normalizedPoint)
+                else {
+                    readingLongPressStartPoint = nil
+                    return
+                }
+
+                readingLongPressStartPoint = normalizedPoint
+                onReadingCenterLongPress?(normalizedPoint, normalizedPoint)
+
+            case .changed, .ended:
+                guard
+                    let startPoint = readingLongPressStartPoint,
+                    let normalizedPoint = overlayView.normalizedPoint(
+                        at: gestureRecognizer.location(in: overlayView)
+                    )
+                else {
+                    if gestureRecognizer.state == .ended {
+                        readingLongPressStartPoint = nil
+                    }
+                    return
+                }
+
+                onReadingCenterLongPress?(startPoint, normalizedPoint)
+                if gestureRecognizer.state == .ended {
+                    readingLongPressStartPoint = nil
+                }
+
+            case .cancelled, .failed:
+                readingLongPressStartPoint = nil
+
+            default:
+                break
+            }
         }
 
         @objc

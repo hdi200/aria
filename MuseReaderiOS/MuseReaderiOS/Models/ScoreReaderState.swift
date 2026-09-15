@@ -104,6 +104,8 @@ final class ScoreReaderState: ObservableObject {
     @Published var playbackPreparationMessage: String?
     @Published var playbackMeasureHighlight: ScorePlaybackMeasureHighlight?
     @Published var playFromHereTarget: ScorePlayFromHereTarget?
+    @Published var playbackLoopRange: ScorePlaybackLoopRange?
+    @Published var playbackLoopIsActive = false
     @Published var mixerSettings = ScoreMixerSettings()
     @Published var metronomeEnabled = false
     @Published var editingState: ScoreEditingState = .inactive
@@ -164,6 +166,9 @@ final class ScoreReaderState: ObservableObject {
     var playbackWarmupRevision = 0
     var playbackMeasureRegions: [ScorePlaybackMeasureRegion] = []
     var playbackWasExplicitlyStopped = false
+    var pendingPlaybackSelectionStartPoint: CGPoint?
+    var pendingPlaybackSelectionEndPoint: CGPoint?
+    var pendingPlaybackSelectionPageIndex: Int?
     var activeScorePartIndex: Int?
     var pendingScorePartIndex: Int?
     var partSelectionRevision = 0
@@ -291,6 +296,7 @@ final class ScoreReaderState: ObservableObject {
         }
 
         editingErrorMessage = nil
+        clearPlaybackLoop()
         stopMIDIInput()
         isEditingActionInFlight = true
         Task { @MainActor [weak self] in
@@ -467,6 +473,14 @@ final class ScoreReaderState: ObservableObject {
         }
 
         return playFromHereTarget
+    }
+
+    func playbackLoopRange(for pageIndex: Int) -> ScorePlaybackLoopRange? {
+        guard playbackLoopRange?.pageIndex == pageIndex else {
+            return nil
+        }
+
+        return playbackLoopRange
     }
 
     func noteEntryPreview(for pageIndex: Int) -> ScoreNoteEntryPreview? {

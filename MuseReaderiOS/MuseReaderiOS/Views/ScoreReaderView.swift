@@ -334,6 +334,10 @@ struct ScoreReaderView: View {
     }
 
     private var readerBody: some View {
+        readerPresentedBody
+    }
+
+    private var readerContent: some View {
         ZStack {
             ScoreReaderBackground(usesImmersiveWhite: readerState.interactionMode == .view)
 
@@ -566,7 +570,7 @@ struct ScoreReaderView: View {
                                     ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
                                         withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
                                     }
-                                    .frame(height: min(max(proxy.size.height * 0.48, 390), 500))
+                                    .frame(height: min(max(proxy.size.height * 0.40, 390), 410))
                                     .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                                     .shadow(color: .black.opacity(0.16), radius: 18, y: -2)
                                     .padding(.horizontal, 8)
@@ -657,7 +661,11 @@ struct ScoreReaderView: View {
                         }
                     }
                     .overlay(alignment: .bottom) {
-                        if readerState.interactionMode == .view, readingStyle == .pageTurn, readerState.pageCount > 1 {
+                        if readerState.interactionMode == .view,
+                           readingStyle == .pageTurn,
+                           readerState.pageCount > 1,
+                           !isMixerPresented
+                        {
                             Text(viewModePageLabel)
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(Color.black.opacity(0.62))
@@ -672,7 +680,8 @@ struct ScoreReaderView: View {
                         if readerState.interactionMode == .view,
                            readingStyle == .pageTurn,
                            readerState.pageCount > 1,
-                           isChromeVisible
+                           isChromeVisible,
+                           !isMixerPresented
                         {
                             Button(action: toggleTwoPageView) {
                                 VStack(spacing: 4) {
@@ -698,6 +707,7 @@ struct ScoreReaderView: View {
                     .overlay(alignment: .bottomTrailing) {
                         if readerState.interactionMode == .view,
                            isChromeVisible,
+                           !isMixerPresented,
                            let viewKey = readerState.viewTransposeKey
                         {
                             ScoreReaderViewKeyControl(
@@ -746,6 +756,10 @@ struct ScoreReaderView: View {
                     .allowsHitTesting(!isClosingScore && !isTransitioningScore)
             }
         }
+    }
+
+    private var readerLifecycleBody: some View {
+        readerContent
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if readerState.isEditingMode && isPhoneInterface && !plainTextEditorIsActive {
                 compactPhoneModeBar
@@ -851,6 +865,10 @@ struct ScoreReaderView: View {
         .onChangeCompatible(of: readerState.scoreParts) { parts in
             synchronizePartPresentation(with: parts)
         }
+    }
+
+    private var readerSheetsBody: some View {
+        readerLifecycleBody
         .sheet(isPresented: Binding(
             get: { isMixerPresented && UIDevice.current.userInterfaceIdiom == .phone },
             set: { isMixerPresented = $0 }
@@ -858,7 +876,7 @@ struct ScoreReaderView: View {
             ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
                 isMixerPresented = false
             }
-            .presentationDetents([.height(350), .large])
+            .presentationDetents([.height(285), .large])
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled)
         }
@@ -1002,6 +1020,10 @@ struct ScoreReaderView: View {
                 }
             )
         }
+    }
+
+    private var readerPresentedBody: some View {
+        readerSheetsBody
         .confirmationDialog("Change Clef", isPresented: $isClefPickerPresented, titleVisibility: .visible) {
             Button("Treble Clef") { readerState.changeClef("Treble") }
             Button("Alto Clef") { readerState.changeClef("Alto") }
@@ -1482,6 +1504,8 @@ struct ScoreReaderView: View {
             errorText: readerState.pageErrorMessage(for: pageIndex),
             playbackHighlight: readerState.playbackMeasureHighlight(for: pageIndex),
             playFromHereTarget: readerState.playFromHereTarget(for: pageIndex),
+            playbackLoopRange: readerState.playbackLoopRange(for: pageIndex),
+            playbackLoopIsActive: readerState.playbackLoopIsActive,
             selectedElement: editingEnabled ? readerState.selectedElement(for: pageIndex) : nil,
             noteEntryPreview: editingEnabled ? readerState.noteEntryPreview(for: pageIndex) : nil,
             zoomScale: isActivePage ? $zoomScale : .constant(1),
@@ -1554,10 +1578,16 @@ struct ScoreReaderView: View {
             pencilDoubleTapAction: toggleNoteInputFromPencilDoubleTap,
             swipePreviousPageAction: showPreviousPage,
             swipeNextPageAction: showNextPage,
-            viewModeLongPressAction: { normalizedPoint in
-                presentPlayFromHere(at: normalizedPoint, pageIndex: pageIndex)
+            viewModeLongPressAction: { startPoint, endPoint in
+                presentViewModePlaybackSelection(
+                    from: startPoint,
+                    through: endPoint,
+                    pageIndex: pageIndex
+                )
             },
             playFromHereAction: readerState.playFromHere,
+            loopFromHereAction: readerState.loopFromHere,
+            togglePlaybackLoopAction: readerState.toggleSelectedPlaybackLoop,
             manualScrollAction: {
                 readerState.suspendPlaybackFollow()
                 readerState.dismissPlayFromHere()
@@ -1898,7 +1928,11 @@ struct ScoreReaderView: View {
         }
     }
 
-    private func presentPlayFromHere(at normalizedPoint: CGPoint, pageIndex: Int) {
+    private func presentViewModePlaybackSelection(
+        from startPoint: CGPoint,
+        through endPoint: CGPoint,
+        pageIndex: Int
+    ) {
         guard
             readerState.interactionMode == .view,
             readerState.supportsPlayback,
@@ -1909,7 +1943,15 @@ struct ScoreReaderView: View {
             return
         }
 
-        readerState.presentPlayFromHere(atNormalizedPoint: normalizedPoint, pageIndex: pageIndex)
+        if startPoint == endPoint {
+            readerState.presentPlayFromHere(atNormalizedPoint: startPoint, pageIndex: pageIndex)
+        } else {
+            readerState.updatePlaybackLoopSelection(
+                fromNormalizedPoint: startPoint,
+                toNormalizedPoint: endPoint,
+                pageIndex: pageIndex
+            )
+        }
     }
 
     private func finishEditingAndEnterViewMode() {

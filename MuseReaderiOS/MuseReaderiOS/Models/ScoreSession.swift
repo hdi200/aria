@@ -296,6 +296,22 @@ struct ScorePlayFromHereTarget: Sendable, Equatable {
     }
 }
 
+/// A view-mode measure range selected for repeated playback. The timing comes
+/// from MuseScore's expanded playback timeline, while the rectangles keep the
+/// selection attached to the rendered score page.
+struct ScorePlaybackLoopRange: Sendable, Equatable {
+    let pageIndex: Int
+    let startMeasureIndex: Int
+    let endMeasureIndex: Int
+    let normalizedRects: [ScoreNormalizedRect]
+    let startTimeSeconds: TimeInterval
+    let endTimeSeconds: TimeInterval
+
+    var measureCount: Int {
+        normalizedRects.count
+    }
+}
+
 struct ScoreNoteEntryPreview: Sendable, Equatable {
     let pageIndex: Int
     let overlayNormalizedRect: ScoreNormalizedRect

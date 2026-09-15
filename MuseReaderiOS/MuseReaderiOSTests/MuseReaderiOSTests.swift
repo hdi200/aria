@@ -40,6 +40,16 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func scoreDropAcceptsOnlySupportedFileURLs() {
+        for fileName in ["Score.mscz", "Score.MSCX", "Score.mxl", "Score.musicxml", "Score.xml"] {
+            #expect(MuseReaderAppModel.isSupportedScoreURL(URL(fileURLWithPath: "/tmp/\(fileName)")))
+        }
+
+        #expect(!MuseReaderAppModel.isSupportedScoreURL(URL(fileURLWithPath: "/tmp/Score.pdf")))
+        #expect(!MuseReaderAppModel.isSupportedScoreURL(URL(string: "https://example.com/Score.mscz")!))
+    }
+
+    @Test
     func simulatorAccessOverrideParsesBothXcodeArgumentForms() {
         #expect(
             LibraryAccessSimulationOverride.fromLaunchArguments([

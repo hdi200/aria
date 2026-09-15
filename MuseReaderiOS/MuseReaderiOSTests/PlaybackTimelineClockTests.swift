@@ -4,6 +4,23 @@ import Testing
 
 struct PlaybackTimelineClockTests {
     @Test
+    func loopTimelineWrapsWithoutResettingScheduledAudioTime() {
+        let loop = PlaybackLoopTimeline(startTimeSeconds: 12, endTimeSeconds: 16)
+
+        #expect(loop.wrappedPosition(for: 12) == 12)
+        #expect(loop.wrappedPosition(for: 15.5) == 15.5)
+        #expect(loop.wrappedPosition(for: 16) == 12)
+        #expect(loop.wrappedPosition(for: 21) == 13)
+    }
+
+    @Test
+    func loopFrameCountUsesTheExactSelectedDuration() {
+        let loop = PlaybackLoopTimeline(startTimeSeconds: 12, endTimeSeconds: 16)
+
+        #expect(loop.frameCount(sampleRate: 48_000) == 192_000)
+    }
+
+    @Test
     func resumePreservesPlayerSampleTimelineOrigin() {
         var clock = PlaybackTimelineClock()
         clock.reset(to: 12)

@@ -6,6 +6,25 @@
 
 import Foundation
 
+/// Maps an ever-increasing audio timeline onto a bounded score-time loop.
+struct PlaybackLoopTimeline: Equatable, Sendable {
+    let startTimeSeconds: TimeInterval
+    let endTimeSeconds: TimeInterval
+
+    var durationSeconds: TimeInterval {
+        endTimeSeconds - startTimeSeconds
+    }
+
+    func wrappedPosition(for timelinePosition: TimeInterval) -> TimeInterval {
+        let elapsed = max(timelinePosition - startTimeSeconds, 0)
+        return startTimeSeconds + elapsed.truncatingRemainder(dividingBy: durationSeconds)
+    }
+
+    func frameCount(sampleRate: Double) -> Int {
+        max(1, Int((durationSeconds * sampleRate).rounded()))
+    }
+}
+
 /// Maps an `AVAudioPlayerNode` sample timeline to score time.
 ///
 /// Pausing a player node preserves its sample timeline. Resuming must therefore

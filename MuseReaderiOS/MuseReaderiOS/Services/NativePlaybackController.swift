@@ -15,6 +15,7 @@ final class NativePlaybackController {
         case sequenceLoadFailed(String)
         case playerInitializationFailed(String)
         case playerUnavailable
+        case invalidLoopRange
 
         var errorDescription: String? {
             switch self {
@@ -28,6 +29,8 @@ final class NativePlaybackController {
                 return "Aria could not prepare playback: \(message)"
             case .playerUnavailable:
                 return "Playback is unavailable because the audio engine player is not ready yet."
+            case .invalidLoopRange:
+                return "The selected playback loop is too short."
             }
         }
     }
@@ -68,6 +71,7 @@ final class NativePlaybackController {
     func setMixerSettings(_ settings: ScoreMixerSettings) {
         mixerSettings = settings
         applyMixerSettings()
+        refreshScheduledLoopBuffer()
     }
 
     func setMeterLevelHandler(_ handler: (([String: Float]) -> Void)?) {
@@ -111,6 +115,11 @@ final class NativePlaybackController {
     private var isScheduling = false
     private var schedulingTask: Task<Void, Never>?
     private var playWhenBuffered = false
+    private var loopRange: PlaybackLoopTimeline?
+    private var loopAudioData: MSRPlaybackAudioData?
+    private var loopBufferIsScheduled = false
+    private var loopPartMeterLevels: [String: Float] = [:]
+    private var loopRemixTask: Task<Void, Never>?
 
     var isLoaded: Bool {
         engine != nil && playerNode != nil && liveRenderSession != nil
@@ -215,7 +224,7 @@ final class NativePlaybackController {
         var positionSeconds = currentPositionSeconds()
         var status: ScorePlaybackStatus = (playerNode.isPlaying || playWhenBuffered) ? .playing : (isPaused ? .paused : .stopped)
 
-        if durationSeconds > 0, positionSeconds >= durationSeconds {
+        if loopRange == nil, durationSeconds > 0, positionSeconds >= durationSeconds {
             stopInternally()
             positionSeconds = 0
             status = .stopped
@@ -230,6 +239,9 @@ final class NativePlaybackController {
         }
 
         streamingErrorMessage = nil
+        if loopRange != nil, !loopBufferIsScheduled {
+            try scheduleLoopBuffer()
+        }
         try startPlaybackWhenBuffered(engine: engine, playerNode: playerNode)
         fillPlaybackQueue(revision: revision)
 
@@ -271,7 +283,10 @@ final class NativePlaybackController {
             throw PlaybackError.playerUnavailable
         }
 
-        let targetPosition = bounded(positionSeconds)
+        // A looping player always begins at the start of its cached PCM pass.
+        // Keeping the visual clock on the same origin avoids a scrub action
+        // making the highlight disagree with the audio.
+        let targetPosition = loopRange?.startTimeSeconds ?? bounded(positionSeconds)
         let wasPlaying = playerNode?.isPlaying == true || playWhenBuffered
         let samePositionTolerance = 1 / max(sampleRate, 1)
         if !wasPlaying, abs(targetPosition - pendingStartSeconds) <= samePositionTolerance {
@@ -280,23 +295,73 @@ final class NativePlaybackController {
             return
         }
 
-        stemPlayers.values.forEach { $0.stop() }
-        cancelSchedulingTask()
-        revision += 1
-        pendingStartSeconds = targetPosition
-        timelineClock.reset(to: pendingStartSeconds)
-        bufferProgress.reset(to: pendingStartSeconds)
-        queuedUntilSeconds = pendingStartSeconds
-        nextScheduledSampleTime = 0
-        needsPlayerPriming = true
-        playWhenBuffered = false
-        isPaused = !wasPlaying
-        fillPlaybackQueue(revision: revision)
+        resetPlaybackQueue(to: targetPosition, wasPlaying: wasPlaying)
         log("seek position=\(formatSeconds(pendingStartSeconds)) wasPlaying=\(wasPlaying) revision=\(revision)")
 
         if wasPlaying {
             try play()
         }
+    }
+
+    /// Renders a score-time range once and schedules that exact PCM pass as a
+    /// continuous audio-node loop.
+    func setLoopRange(startTimeSeconds: TimeInterval, endTimeSeconds: TimeInterval) async throws {
+        guard playerNode != nil, let liveRenderSession else {
+            throw PlaybackError.playerUnavailable
+        }
+
+        let startTime = bounded(startTimeSeconds)
+        let endTime = bounded(endTimeSeconds)
+        guard endTime - startTime > 1 / max(sampleRate, 1) else {
+            throw PlaybackError.invalidLoopRange
+        }
+
+        let requestedRange = PlaybackLoopTimeline(
+            startTimeSeconds: startTime,
+            endTimeSeconds: endTime
+        )
+        let loopAudioData = try await liveRenderSession.playbackAudioChunk(
+            startTimeSeconds: startTime,
+            durationSeconds: requestedRange.durationSeconds,
+            metronomeEnabled: true
+        )
+
+        loopRange = requestedRange
+        self.loopAudioData = loopAudioData
+        resetPlaybackQueue(to: startTime, wasPlaying: false)
+        try scheduleLoopBuffer()
+        log("loop configured start=\(formatSeconds(startTime)) end=\(formatSeconds(endTime)) revision=\(revision)")
+    }
+
+    /// Leaves loop mode at the current musical position. If playback is
+    /// running, rebuild the ordinary forward queue once and continue.
+    func clearLoopRange() {
+        guard loopRange != nil else {
+            return
+        }
+
+        let resumePosition = currentPositionSeconds()
+        let wasPlaying = playerNode?.isPlaying == true || playWhenBuffered
+        loopRange = nil
+        loopAudioData = nil
+        loopBufferIsScheduled = false
+        loopPartMeterLevels = [:]
+        loopRemixTask?.cancel()
+        loopRemixTask = nil
+
+        guard playerNode != nil else {
+            return
+        }
+
+        resetPlaybackQueue(to: resumePosition, wasPlaying: wasPlaying)
+        if wasPlaying {
+            do {
+                try play()
+            } catch {
+                streamingErrorMessage = error.localizedDescription
+            }
+        }
+        log("loop cleared position=\(formatSeconds(resumePosition)) revision=\(revision)")
     }
 
     func invalidate() {
@@ -323,6 +388,12 @@ final class NativePlaybackController {
         nextScheduledSampleTime = 0
         needsPlayerPriming = true
         playWhenBuffered = false
+        loopRange = nil
+        loopAudioData = nil
+        loopBufferIsScheduled = false
+        loopPartMeterLevels = [:]
+        loopRemixTask?.cancel()
+        loopRemixTask = nil
         metronomeEnabled = false
         log("invalidate revision=\(revision)")
     }
@@ -355,6 +426,11 @@ final class NativePlaybackController {
         meterUpdateTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.isMeteringEnabled else { return }
+                if self.playerNode?.isPlaying == true {
+                    for (partID, level) in self.loopPartMeterLevels {
+                        self.recordMeterPeak(level, for: partID)
+                    }
+                }
                 let ids = Set(self.displayedMeterLevels.keys).union(self.meterPeaks.keys)
                 var nextLevels: [String: Float] = [:]
                 for id in ids {
@@ -406,10 +482,11 @@ final class NativePlaybackController {
     func setMetronomeEnabled(_ enabled: Bool) {
         metronomeEnabled = enabled
         applyMixerSettings()
+        refreshScheduledLoopBuffer()
     }
 
     private func fillPlaybackQueue(revision: Int) {
-        guard !isScheduling else {
+        guard loopRange == nil, !isScheduling else {
             return
         }
 
@@ -442,7 +519,11 @@ final class NativePlaybackController {
                         metronomeEnabled: true
                     )
                     try Task.checkCancellation()
-                    try self.schedule(audioData: audioData, startsAt: startTime, revision: revision)
+                    try self.schedule(
+                        audioData: audioData,
+                        startsAt: startTime,
+                        revision: revision
+                    )
                 } catch is CancellationError {
                     if revision == self.revision {
                         self.playWhenBuffered = false
@@ -494,15 +575,32 @@ final class NativePlaybackController {
         isScheduling = false
     }
 
-    private func schedule(audioData: MSRPlaybackAudioData, startsAt startTime: TimeInterval, revision: Int) throws {
-        guard revision == self.revision, let playerNode else {
-            log("schedule skipped stale revision=\(revision) current=\(self.revision)")
-            return
-        }
+    private func resetPlaybackQueue(to positionSeconds: TimeInterval, wasPlaying: Bool) {
+        stemPlayers.values.forEach { $0.stop() }
+        cancelSchedulingTask()
+        revision += 1
+        pendingStartSeconds = positionSeconds
+        timelineClock.reset(to: pendingStartSeconds)
+        bufferProgress.reset(to: pendingStartSeconds)
+        queuedUntilSeconds = pendingStartSeconds
+        nextScheduledSampleTime = 0
+        needsPlayerPriming = true
+        loopBufferIsScheduled = false
+        loopRemixTask?.cancel()
+        loopRemixTask = nil
+        playWhenBuffered = false
+        isPaused = !wasPlaying
+        fillPlaybackQueue(revision: revision)
+    }
 
+    private struct PreparedPlaybackSamples {
         let streamID: String
         let samples: Data
         let partMeterLevels: [String: Float]
+    }
+
+    private func preparedPlaybackSamples(from audioData: MSRPlaybackAudioData) throws -> PreparedPlaybackSamples {
+        let prepared: PreparedPlaybackSamples
         if usesSoftwareStemPlayback {
             guard !audioData.partSamples.isEmpty,
                   Set(audioData.partSamples.keys) == renderedStemIDs else {
@@ -516,22 +614,96 @@ final class NativePlaybackController {
                     settings: mixerSettings,
                     metronomeEnabled: metronomeEnabled
                 )
-                streamID = Self.softwareStemMixStreamID
-                samples = mix.interleavedFloat32Samples
-                partMeterLevels = mix.normalizedLevels
+                prepared = PreparedPlaybackSamples(
+                    streamID: Self.softwareStemMixStreamID,
+                    samples: mix.interleavedFloat32Samples,
+                    partMeterLevels: mix.normalizedLevels
+                )
             } catch {
                 throw PlaybackError.sequenceLoadFailed("An instrument audio buffer was invalid.")
             }
         } else {
-            streamID = Self.mixedStreamID
-            samples = audioData.interleavedFloat32Samples
-            partMeterLevels = [:]
+            prepared = PreparedPlaybackSamples(
+                streamID: Self.mixedStreamID,
+                samples: audioData.interleavedFloat32Samples,
+                partMeterLevels: [:]
+            )
         }
-        guard Set(stemPlayers.keys) == Set([streamID]),
-              samples.count == audioData.interleavedFloat32Samples.count else {
+
+        guard Set(stemPlayers.keys) == Set([prepared.streamID]),
+              prepared.samples.count == audioData.interleavedFloat32Samples.count else {
             throw PlaybackError.sequenceLoadFailed("The instrument layout changed. Stop and restart playback.")
         }
-        guard let buffer = makeBuffer(samples: samples, sampleRate: audioData.sampleRate) else {
+        return prepared
+    }
+
+    /// A loop reuses one complete rendered pass instead of asking the synth to
+    /// reconstruct note state at every wrap. This keeps sustained notes exactly
+    /// as they sounded on the first pass and leaves the audio thread gapless.
+    private func scheduleLoopBuffer(
+        options: AVAudioPlayerNodeBufferOptions = .loops
+    ) throws {
+        guard let loopRange, let loopAudioData, let playerNode else {
+            throw PlaybackError.playerUnavailable
+        }
+
+        let prepared = try preparedPlaybackSamples(from: loopAudioData)
+        let exactFrameCount = loopRange.frameCount(sampleRate: Double(loopAudioData.sampleRate))
+        let availableFrameCount = prepared.samples.count / MemoryLayout<Float>.size / 2
+        guard availableFrameCount >= exactFrameCount,
+              let buffer = makeBuffer(
+                samples: prepared.samples,
+                sampleRate: loopAudioData.sampleRate,
+                maximumFrameCount: exactFrameCount
+              ) else {
+            throw PlaybackError.sequenceLoadFailed("The selected loop audio was incomplete.")
+        }
+
+        let wasAlreadyScheduled = loopBufferIsScheduled
+        playerNode.scheduleBuffer(buffer, at: nil, options: options)
+        loopBufferIsScheduled = true
+        loopPartMeterLevels = prepared.partMeterLevels
+        if !wasAlreadyScheduled {
+            nextScheduledSampleTime = AVAudioFramePosition(buffer.frameLength)
+            queuedUntilSeconds = loopRange.startTimeSeconds
+                + Double(buffer.frameLength) / buffer.format.sampleRate
+        }
+    }
+
+    /// Software stem mixing can rebuild the cached pass immediately. When a
+    /// pass is already sounding, AVAudioPlayerNode swaps it at the loop edge.
+    private func refreshScheduledLoopBuffer() {
+        loopRemixTask?.cancel()
+        guard loopRange != nil, loopAudioData != nil else {
+            loopRemixTask = nil
+            return
+        }
+
+        // Fader drags can publish dozens of values per second. Coalesce them so
+        // only the final mix is queued for the next loop boundary.
+        loopRemixTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled, let self else { return }
+            self.loopRemixTask = nil
+            do {
+                let options: AVAudioPlayerNodeBufferOptions = self.loopBufferIsScheduled
+                    ? [.loops, .interruptsAtLoop]
+                    : .loops
+                try self.scheduleLoopBuffer(options: options)
+            } catch {
+                self.streamingErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func schedule(audioData: MSRPlaybackAudioData, startsAt startTime: TimeInterval, revision: Int) throws {
+        guard revision == self.revision, let playerNode else {
+            log("schedule skipped stale revision=\(revision) current=\(self.revision)")
+            return
+        }
+
+        let prepared = try preparedPlaybackSamples(from: audioData)
+        guard let buffer = makeBuffer(samples: prepared.samples, sampleRate: audioData.sampleRate) else {
             throw PlaybackError.sequenceLoadFailed("An instrument audio buffer was invalid.")
         }
         let bufferDuration = Double(buffer.frameLength) / buffer.format.sampleRate
@@ -544,7 +716,7 @@ final class NativePlaybackController {
             Task { @MainActor [weak self] in
                 guard let self, revision == self.revision else { return }
                 if self.isMeteringEnabled {
-                    for (partID, level) in partMeterLevels {
+                    for (partID, level) in prepared.partMeterLevels {
                         self.recordMeterPeak(level, for: partID)
                     }
                 }
@@ -559,8 +731,13 @@ final class NativePlaybackController {
         queuedUntilSeconds = max(queuedUntilSeconds, startTime + bufferDuration)
     }
 
-    private func makeBuffer(samples: Data, sampleRate: Int) -> AVAudioPCMBuffer? {
-        let frameCount = samples.count / MemoryLayout<Float>.size / 2
+    private func makeBuffer(
+        samples: Data,
+        sampleRate: Int,
+        maximumFrameCount: Int? = nil
+    ) -> AVAudioPCMBuffer? {
+        let availableFrameCount = samples.count / MemoryLayout<Float>.size / 2
+        let frameCount = min(availableFrameCount, maximumFrameCount ?? availableFrameCount)
         guard frameCount > 0 else {
             return nil
         }
@@ -598,34 +775,47 @@ final class NativePlaybackController {
            playerNode.isPlaying,
            let nodeTime = playerNode.lastRenderTime,
            let playerTime = playerNode.playerTime(forNodeTime: nodeTime) {
-            return bounded(timelineClock.positionSeconds(
+            let timelinePosition = timelineClock.positionSeconds(
                 playerSampleTimeSeconds: Double(playerTime.sampleTime) / playerTime.sampleRate
-            ))
+            )
+            return scorePosition(for: timelinePosition)
         }
 
         if playerNode?.isPlaying == true {
-            return bounded(timelineClock.positionSeconds(playerSampleTimeSeconds: nil))
+            return scorePosition(for: timelineClock.positionSeconds(playerSampleTimeSeconds: nil))
         }
 
-        return bounded(bufferProgress.positionWhenNotRendering(
+        let timelinePosition = bufferProgress.positionWhenNotRendering(
             capturedPositionSeconds: pendingStartSeconds,
             playbackDurationSeconds: durationSeconds,
             isPausedOrWaiting: isPaused || playWhenBuffered
-        ))
+        )
+        return scorePosition(for: timelinePosition)
+    }
+
+    private func scorePosition(for timelinePosition: TimeInterval) -> TimeInterval {
+        if let loopRange {
+            return loopRange.wrappedPosition(for: timelinePosition)
+        }
+        return bounded(timelinePosition)
     }
 
     private func stopInternally() {
         stemPlayers.values.forEach { $0.stop() }
         cancelSchedulingTask()
         revision += 1
-        queuedUntilSeconds = 0
-        pendingStartSeconds = 0
-        timelineClock.reset(to: 0)
-        bufferProgress.reset(to: 0)
+        let restartPosition = loopRange?.startTimeSeconds ?? 0
+        queuedUntilSeconds = restartPosition
+        pendingStartSeconds = restartPosition
+        timelineClock.reset(to: restartPosition)
+        bufferProgress.reset(to: restartPosition)
         isPaused = false
         isScheduling = false
         nextScheduledSampleTime = 0
         needsPlayerPriming = true
+        loopBufferIsScheduled = false
+        loopRemixTask?.cancel()
+        loopRemixTask = nil
         playWhenBuffered = false
         log("stop revision=\(revision)")
     }
@@ -679,10 +869,15 @@ final class NativePlaybackController {
     }
 
     private var hasEnoughAudioToStart: Bool {
+        if loopRange != nil {
+            return loopBufferIsScheduled
+        }
+
+        let requiredDuration: TimeInterval
         let remainingDuration = durationSeconds > 0
             ? max(durationSeconds - pendingStartSeconds, 0)
             : targetPrebufferDuration
-        let requiredDuration = min(targetPrebufferDuration, remainingDuration)
+        requiredDuration = min(targetPrebufferDuration, remainingDuration)
         return queuedUntilSeconds - pendingStartSeconds + 0.000_001 >= requiredDuration
     }
 

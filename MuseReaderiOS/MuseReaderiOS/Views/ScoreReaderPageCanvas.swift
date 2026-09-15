@@ -104,6 +104,8 @@ struct ScoreReaderPageCanvas: View {
     let errorText: String?
     let playbackHighlight: ScorePlaybackMeasureHighlight?
     let playFromHereTarget: ScorePlayFromHereTarget?
+    let playbackLoopRange: ScorePlaybackLoopRange?
+    let playbackLoopIsActive: Bool
     let selectedElement: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
     @Binding var zoomScale: CGFloat
@@ -150,8 +152,10 @@ struct ScoreReaderPageCanvas: View {
     let pencilDoubleTapAction: () -> Void
     var swipePreviousPageAction: () -> Void = {}
     var swipeNextPageAction: () -> Void = {}
-    var viewModeLongPressAction: (CGPoint) -> Void = { _ in }
+    var viewModeLongPressAction: (CGPoint, CGPoint) -> Void = { _, _ in }
     var playFromHereAction: () -> Void = {}
+    var loopFromHereAction: () -> Void = {}
+    var togglePlaybackLoopAction: () -> Void = {}
     var manualScrollAction: () -> Void = {}
 
     var body: some View {
@@ -179,6 +183,8 @@ struct ScoreReaderPageCanvas: View {
                 errorText: errorText,
                 playbackHighlight: playbackHighlight,
                 playFromHereTarget: playFromHereTarget,
+                playbackLoopRange: playbackLoopRange,
+                playbackLoopIsActive: playbackLoopIsActive,
                 selectedElement: selectedElement,
                 noteEntryPreview: noteEntryPreview,
                 zoomScale: $zoomScale,
@@ -229,6 +235,8 @@ struct ScoreReaderPageCanvas: View {
                 swipeNextPageAction: swipeNextPageAction,
                 viewModeLongPressAction: viewModeLongPressAction,
                 playFromHereAction: playFromHereAction,
+                loopFromHereAction: loopFromHereAction,
+                togglePlaybackLoopAction: togglePlaybackLoopAction,
                 manualScrollAction: manualScrollAction
             )
             // CATiledLayer renders PDF tiles asynchronously. A viewport-size
@@ -382,6 +390,8 @@ struct ScoreReaderPageSurface: View {
     let errorText: String?
     let playbackHighlight: ScorePlaybackMeasureHighlight?
     let playFromHereTarget: ScorePlayFromHereTarget?
+    let playbackLoopRange: ScorePlaybackLoopRange?
+    let playbackLoopIsActive: Bool
     let selectedElement: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
     @Binding var zoomScale: CGFloat
@@ -430,8 +440,10 @@ struct ScoreReaderPageSurface: View {
     let pencilDoubleTapAction: () -> Void
     let swipePreviousPageAction: () -> Void
     let swipeNextPageAction: () -> Void
-    let viewModeLongPressAction: (CGPoint) -> Void
+    let viewModeLongPressAction: (CGPoint, CGPoint) -> Void
     let playFromHereAction: () -> Void
+    let loopFromHereAction: () -> Void
+    let togglePlaybackLoopAction: () -> Void
     let manualScrollAction: () -> Void
 
     var body: some View {
@@ -579,7 +591,18 @@ struct ScoreReaderPageSurface: View {
                     target: playFromHereTarget,
                     imageSize: page?.displaySize,
                     zoomViewport: zoomViewport,
-                    playAction: playFromHereAction
+                    playAction: playFromHereAction,
+                    loopAction: loopFromHereAction
+                )
+            }
+
+            if let playbackLoopRange {
+                ScoreReaderPlaybackLoopOverlay(
+                    range: playbackLoopRange,
+                    isActive: playbackLoopIsActive,
+                    imageSize: page?.displaySize,
+                    zoomViewport: zoomViewport,
+                    toggleAction: togglePlaybackLoopAction
                 )
             }
         }
@@ -764,6 +787,7 @@ struct ScoreReaderPlayFromHereOverlay: View {
     let imageSize: CGSize?
     let zoomViewport: ScoreReaderZoomViewport
     let playAction: () -> Void
+    let loopAction: () -> Void
 
     private static let accent = Color(red: 0.12, green: 0.36, blue: 0.88)
 
@@ -782,16 +806,30 @@ struct ScoreReaderPlayFromHereOverlay: View {
                     .position(x: rect.midX, y: rect.midY)
                     .allowsHitTesting(false)
 
-                Button(action: playAction) {
-                    Label("Play from here", systemImage: "play.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Self.accent, in: Capsule())
-                        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
+                HStack(spacing: 6) {
+                    Button(action: playAction) {
+                        Label("Play from here", systemImage: "play.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .background(Self.accent, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: loopAction) {
+                        Label("Loop measure", systemImage: "repeat")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Self.accent)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .background(.regularMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(4)
+                .background(.thinMaterial, in: Capsule())
+                .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
                 .position(pillPosition(for: rect, in: geometry.size))
             }
         }
@@ -801,6 +839,111 @@ struct ScoreReaderPlayFromHereOverlay: View {
     private func pillPosition(for rect: CGRect, in size: CGSize) -> CGPoint {
         // Sit above the bar, flipping underneath it when the bar is close
         // enough to the top edge that the pill would be clipped.
+        let preferredY = rect.minY - 26
+        let rawY = preferredY < 30 ? rect.maxY + 26 : preferredY
+        return CGPoint(
+            x: min(max(rect.midX, 132), max(size.width - 132, 132)),
+            y: min(max(rawY, 30), max(size.height - 30, 30))
+        )
+    }
+
+    private var coordinateSpace: ScoreReaderOverlayCoordinateSpace {
+        ScoreReaderOverlayCoordinateSpace(imageSize: imageSize, viewport: zoomViewport)
+    }
+}
+
+/// The range created by dragging after a view-mode long press. It stays
+/// visible while looping so the repeat boundary remains obvious and provides
+/// an in-place way to end the loop without entering Edit mode.
+struct ScoreReaderPlaybackLoopOverlay: View {
+    let range: ScorePlaybackLoopRange
+    let isActive: Bool
+    let imageSize: CGSize?
+    let zoomViewport: ScoreReaderZoomViewport
+    let toggleAction: () -> Void
+
+    private static let accent = Color(red: 0.46, green: 0.24, blue: 0.82)
+
+    var body: some View {
+        GeometryReader { geometry in
+            let rects = range.normalizedRects.map {
+                coordinateSpace.rect(for: $0, in: geometry.size)
+            }
+            let highlightRects = mergedSystemRects(rects)
+            let bounds = highlightRects.reduce(CGRect.null) { $0.union($1) }
+
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(highlightRects.enumerated()), id: \.offset) { _, rect in
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Self.accent.opacity(isActive ? 0.18 : 0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .strokeBorder(
+                                    Self.accent.opacity(isActive ? 0.82 : 0.58),
+                                    lineWidth: isActive ? 2 : 1.5
+                                )
+                        )
+                        .frame(width: max(rect.width, 1), height: max(rect.height, 1))
+                        .position(x: rect.midX, y: rect.midY)
+                        .allowsHitTesting(false)
+                }
+
+                if !bounds.isNull {
+                    Button(action: toggleAction) {
+                        Label(
+                            isActive ? "End loop" : "Loop range",
+                            systemImage: isActive ? "repeat.circle.fill" : "repeat"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Self.accent, in: Capsule())
+                        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
+                    }
+                    .buttonStyle(.plain)
+                    .position(pillPosition(for: bounds, in: geometry.size))
+                    .accessibilityLabel(isActive ? "End playback loop" : "Loop selected measures")
+                    .accessibilityValue(
+                        "\(range.measureCount) \(range.measureCount == 1 ? "measure" : "measures")"
+                    )
+                }
+            }
+        }
+        .allowsHitTesting(true)
+    }
+
+    /// Adjacent selected measures share one highlight on each system. Ranges
+    /// that wrap onto another system remain separate so the overlay does not
+    /// cover unrelated music between the two rows.
+    private func mergedSystemRects(_ rects: [CGRect]) -> [CGRect] {
+        let sortedRects = rects.sorted {
+            if abs($0.midY - $1.midY) > 1 {
+                return $0.midY < $1.midY
+            }
+            return $0.minX < $1.minX
+        }
+
+        return sortedRects.reduce(into: [CGRect]()) { mergedRects, rect in
+            guard let previous = mergedRects.last else {
+                mergedRects.append(rect)
+                return
+            }
+
+            let verticalOverlap = max(
+                min(previous.maxY, rect.maxY) - max(previous.minY, rect.minY),
+                0
+            )
+            let sharedSystem = verticalOverlap >= min(previous.height, rect.height) * 0.5
+            if sharedSystem {
+                mergedRects[mergedRects.count - 1] = previous.union(rect)
+            } else {
+                mergedRects.append(rect)
+            }
+        }
+    }
+
+    private func pillPosition(for rect: CGRect, in size: CGSize) -> CGPoint {
         let preferredY = rect.minY - 26
         let rawY = preferredY < 30 ? rect.maxY + 26 : preferredY
         return CGPoint(

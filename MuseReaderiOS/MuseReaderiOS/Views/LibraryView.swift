@@ -30,6 +30,7 @@ struct LibraryView: View {
     @State private var folderPendingScoreAdd: FolderScoreAddRequest?
     @State private var isSetlistReorderPresented = false
     @State private var isEditingActiveSetlist = false
+    @State private var isScoreDropTargeted = false
     @State private var renameSetlistName = ""
     @State private var scorePendingFolderSelection: ReaderRecentDocument?
     @State private var isOpenSourceLegalPresented = false
@@ -237,6 +238,42 @@ struct LibraryView: View {
             allowsMultipleSelection: true,
             onCompletion: model.handleImportSelection
         )
+        .onDrop(
+            of: [.fileURL] + model.supportedContentTypes + [.data],
+            isTargeted: $isScoreDropTargeted,
+            perform: receiveScoreDrop
+        )
+        .overlay {
+            if isScoreDropTargeted {
+                ZStack {
+                    LibraryPalette.accent.opacity(0.08)
+                        .ignoresSafeArea()
+
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .strokeBorder(
+                                    LibraryPalette.accent,
+                                    style: StrokeStyle(lineWidth: 3, dash: [10, 7])
+                                )
+                        }
+                        .overlay {
+                            VStack(spacing: 12) {
+                                Image(systemName: "doc.badge.plus")
+                                    .font(.system(size: 38, weight: .semibold))
+                                Text("Drop scores to import")
+                                    .font(.headline)
+                            }
+                            .foregroundStyle(LibraryPalette.accent)
+                        }
+                        .padding(isPhoneInterface ? 16 : 28)
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+                .accessibilityHidden(true)
+            }
+        }
         .task {
             await model.refreshVisibleLibrary()
             model.presentEarlySupporterMessageIfNeeded()
@@ -524,6 +561,164 @@ struct LibraryView: View {
             keys.append(libraryRelativePath)
         }
         return !Set(folder.scoreKeys).isDisjoint(with: keys)
+    }
+
+    private func receiveScoreDrop(_ providers: [NSItemProvider]) -> Bool {
+        let supportedTypes = model.supportedContentTypes
+        let compatibleProviders = providers.filter { provider in
+            provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+                || provider.hasItemConformingToTypeIdentifier(UTType.data.identifier)
+                || supportedTypes.contains {
+                    provider.hasItemConformingToTypeIdentifier($0.identifier)
+                }
+        }
+
+        guard !compatibleProviders.isEmpty else {
+            return false
+        }
+
+        Task {
+            var urls: [URL] = []
+            for provider in compatibleProviders {
+                if let url = await Self.stageDroppedScore(
+                    from: provider,
+                    supportedTypes: supportedTypes
+                ) {
+                    urls.append(url)
+                }
+            }
+
+            await MainActor.run {
+                _ = model.handleDroppedDocuments(urls)
+            }
+        }
+        return true
+    }
+
+    private static func stageDroppedScore(
+        from provider: NSItemProvider,
+        supportedTypes: [UTType]
+    ) async -> URL? {
+        if let contentType = supportedTypes.first(where: {
+            provider.hasItemConformingToTypeIdentifier($0.identifier)
+        }) {
+            let suggestedName = provider.suggestedName
+            return await withCheckedContinuation { continuation in
+                provider.loadFileRepresentation(forTypeIdentifier: contentType.identifier) { url, _ in
+                    guard let url else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(
+                        returning: stagedDropCopy(
+                            of: url,
+                            suggestedName: suggestedName,
+                            contentType: contentType
+                        )
+                    )
+                }
+            }
+        }
+
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            let suggestedName = provider.suggestedName
+            return await withCheckedContinuation { continuation in
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    let sourceURL: URL?
+                    if let url = item as? URL {
+                        sourceURL = url
+                    } else if let data = item as? Data {
+                        sourceURL = URL(dataRepresentation: data, relativeTo: nil)
+                    } else if let url = item as? NSURL {
+                        sourceURL = url as URL
+                    } else {
+                        sourceURL = nil
+                    }
+
+                    guard let sourceURL else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(
+                        returning: stagedDropCopy(
+                            of: sourceURL,
+                            suggestedName: suggestedName,
+                            contentType: nil
+                        )
+                    )
+                }
+            }
+        }
+
+        guard provider.hasItemConformingToTypeIdentifier(UTType.data.identifier) else {
+            return nil
+        }
+
+        let suggestedName = provider.suggestedName
+        return await withCheckedContinuation { continuation in
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.data.identifier) { url, _ in
+                guard let url else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(
+                    returning: stagedDropCopy(
+                        of: url,
+                        suggestedName: suggestedName,
+                        contentType: nil
+                    )
+                )
+            }
+        }
+    }
+
+    private static func stagedDropCopy(
+        of sourceURL: URL,
+        suggestedName: String?,
+        contentType: UTType?
+    ) -> URL? {
+        let fileManager = FileManager.default
+        let dropDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("AriaScoreDrops", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        var fileName = suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if fileName?.isEmpty != false {
+            fileName = sourceURL.lastPathComponent
+        }
+
+        if let currentName = fileName,
+           URL(fileURLWithPath: currentName).pathExtension.isEmpty
+        {
+            let fileExtension = sourceURL.pathExtension.isEmpty
+                ? contentType?.preferredFilenameExtension
+                : sourceURL.pathExtension
+            if let fileExtension, !fileExtension.isEmpty {
+                fileName = currentName + "." + fileExtension
+            }
+        }
+
+        guard let fileName, !fileName.isEmpty else {
+            return nil
+        }
+
+        let didAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            try fileManager.createDirectory(at: dropDirectory, withIntermediateDirectories: true)
+            let destinationURL = dropDirectory.appendingPathComponent(
+                URL(fileURLWithPath: fileName).lastPathComponent
+            )
+            try fileManager.copyItem(at: sourceURL, to: destinationURL)
+            return destinationURL
+        } catch {
+            return nil
+        }
     }
 
     private func openScore(_ recent: ReaderRecentDocument) {
