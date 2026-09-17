@@ -59,6 +59,11 @@ std::vector<msr::render::ScorePartInfo> msr::render::ScoreRenderSession::partInf
     return m_impl->partInfoList();
 }
 
+msr::render::ScoreMetadata msr::render::ScoreRenderSession::metadata() const
+{
+    return m_impl->metadata();
+}
+
 bool msr::render::ScoreRenderSession::setActivePartIndex(const std::optional<int> partIndex,
                                                          int& totalPageCount,
                                                          std::string& errorMessage)

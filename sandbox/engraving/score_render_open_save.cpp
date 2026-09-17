@@ -374,6 +374,31 @@ public:
         return totalPageCount > 0;
     }
 
+    //! NOTE Reads the live values, preferring the title-frame text the reader sees on the page
+    //! over the meta tag, so edits made on the page and undo/redo are reflected.
+    msr::render::ScoreMetadata metadata() const
+    {
+        msr::render::ScoreMetadata output;
+        if (!m_masterScore) {
+            return output;
+        }
+
+        const mu::engraving::MasterScore* masterScore = m_masterScore.get();
+        const auto styledValue = [masterScore](const mu::engraving::TextStyleType textStyleType, const char16_t* tag) {
+            if (const mu::engraving::Text* textItem = masterScore->getText(textStyleType)) {
+                return textItem->plainText().toStdString();
+            }
+            return masterScore->metaTag(muse::String(tag)).toStdString();
+        };
+
+        output.title = styledValue(mu::engraving::TextStyleType::TITLE, u"workTitle");
+        output.subtitle = styledValue(mu::engraving::TextStyleType::SUBTITLE, u"subtitle");
+        output.composer = styledValue(mu::engraving::TextStyleType::COMPOSER, u"composer");
+        output.lyricist = styledValue(mu::engraving::TextStyleType::LYRICIST, u"lyricist");
+        output.arranger = masterScore->metaTag(u"arranger").toStdString();
+        return output;
+    }
+
     bool updateMetadata(const msr::render::ScoreMetadata& metadata, std::string& errorMessage)
     {
         if (!m_masterScore) {

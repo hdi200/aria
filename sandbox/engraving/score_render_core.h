@@ -248,6 +248,7 @@ public:
     bool hasConcertPitchRelevantTransposition() const;
     int scoreStartKey() const;
     std::vector<ScorePartInfo> partInfoList() const;
+    ScoreMetadata metadata() const;
     bool setActivePartIndex(std::optional<int> partIndex, int& totalPageCount, std::string& errorMessage);
     bool setViewTransposeKey(int targetKey, int& totalPageCount, std::string& errorMessage);
     bool clearViewTranspose(int& totalPageCount, std::string& errorMessage);

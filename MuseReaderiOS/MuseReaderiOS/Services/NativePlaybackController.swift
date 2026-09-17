@@ -139,12 +139,18 @@ final class NativePlaybackController {
         let prepareRevision = revision
         log("prepare begin pendingStart=\(formatSeconds(pendingStartSeconds)) requestedDuration=\(formatSeconds(durationSeconds)) revision=\(revision)")
         self.metronomeEnabled = metronomeEnabled
-        let audioSession = AVAudioSession.sharedInstance()
         do {
-            try audioSession.setCategory(.playback, mode: .default, options: [])
-            try audioSession.setActive(true)
+            try await Task.detached(priority: .userInitiated) {
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playback, mode: .default, options: [])
+                try audioSession.setActive(true)
+            }.value
         } catch {
             throw PlaybackError.audioSessionUnavailable(error.localizedDescription)
+        }
+        try Task.checkCancellation()
+        guard prepareRevision == revision else {
+            throw CancellationError()
         }
 
         let audioData = try await liveRenderSession.playbackAudioChunk(

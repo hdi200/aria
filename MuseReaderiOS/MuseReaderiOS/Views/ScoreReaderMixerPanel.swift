@@ -112,7 +112,7 @@ struct ScoreReaderMixerPanel: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mixer")
                         .font(.title2.bold())
-                    Text("\(parts.count) \(parts.count == 1 ? "instrument" : "instruments") · \(readerState.session.document.primaryTitle)")
+                    Text("\(parts.count) \(parts.count == 1 ? "instrument" : "instruments") · \(readerState.scoreTitle)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

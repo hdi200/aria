@@ -78,6 +78,25 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+@interface MSRScoreMetadata : NSObject
+
+@property (nonatomic, copy, readonly) NSString *title;
+@property (nonatomic, copy, readonly) NSString *subtitle;
+@property (nonatomic, copy, readonly) NSString *composer;
+@property (nonatomic, copy, readonly) NSString *lyricist;
+@property (nonatomic, copy, readonly) NSString *arranger;
+
+- (instancetype)initWithTitle:(NSString *)title
+                     subtitle:(NSString *)subtitle
+                     composer:(NSString *)composer
+                     lyricist:(NSString *)lyricist
+                     arranger:(NSString *)arranger NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
 @interface MSRPlaybackMeasureRegion : NSObject
 
 @property (nonatomic, readonly) NSInteger measureIndex;
@@ -437,6 +456,7 @@ isEditableText:(BOOL)isEditableText
 @property (nonatomic, readonly) BOOL hasConcertPitchRelevantTransposition;
 @property (nonatomic, readonly) NSInteger scoreStartKey;
 @property (nonatomic, copy, readonly) NSArray<MSRScorePartInfo *> *scoreParts;
+@property (nonatomic, readonly) MSRScoreMetadata *currentMetadata;
 
 - (nullable MSRRenderedPage *)renderPageAtIndex:(NSInteger)pageIndex
                                             dpi:(NSInteger)dpi

@@ -1186,7 +1186,8 @@ actor LiveScoreRenderSession {
         return editState
     }
 
-    func updateMetadata(_ metadata: ScoreEditableMetadata) throws {
+    @discardableResult
+    func updateMetadata(_ metadata: ScoreEditableMetadata) throws -> ScoreEditingState {
         guard supportsEditing else {
             throw ScoreDocumentServiceError.bridgeFailure("This score session does not support editing yet.")
         }
@@ -1199,6 +1200,20 @@ actor LiveScoreRenderSession {
             arranger: metadata.arranger
         )
         invalidateCachedPlaybackArtifacts()
+        return try makeEditingState(from: bridgeSession.currentEditState(), refreshScope: .all)
+    }
+
+    func currentMetadata() -> ScoreEditableMetadata {
+        let bridgeMetadata = RenderCoreWorkGate.sync {
+            bridgeSession.currentMetadata
+        }
+        return ScoreEditableMetadata(
+            title: bridgeMetadata.title,
+            subtitle: bridgeMetadata.subtitle,
+            composer: bridgeMetadata.composer,
+            lyricist: bridgeMetadata.lyricist,
+            arranger: bridgeMetadata.arranger
+        )
     }
 
     func updateInitialKeySignature(_ keyValue: Int) throws {

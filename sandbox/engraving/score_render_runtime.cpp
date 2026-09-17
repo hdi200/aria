@@ -624,6 +624,13 @@ void setStyledMetadataText(mu::engraving::MasterScore* score,
         return;
     }
 
+    // Clearing a field removes the text element, as MuseScore does when title text is emptied,
+    // rather than leaving an invisible empty item in the title frame.
+    if (newXmlText.empty()) {
+        score->undoRemoveElement(textItem);
+        return;
+    }
+
     textItem->undoChangeProperty(mu::engraving::Pid::TEXT, newXmlText);
 }
 

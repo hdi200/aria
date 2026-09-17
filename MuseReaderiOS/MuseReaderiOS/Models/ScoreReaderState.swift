@@ -114,6 +114,10 @@ final class ScoreReaderState: ObservableObject {
     @Published var autosaveFailureMessage: String?
     @Published var hasUnsavedAutosaveChanges = false
     @Published var isEditingActionInFlight = false
+    //! NOTE Live score info. session.document is a snapshot from when the score was opened,
+    //! so it goes stale after metadata edits, on-page title edits, and undo/redo.
+    @Published var scoreMetadata: ScoreEditableMetadata
+    var scoreMetadataRefreshRevision = 0
     @Published private(set) var scoreParts: [ScorePart]
     @Published var pendingPitchClass: Int?
     @Published var pendingMIDIPitch: Int?
@@ -237,6 +241,10 @@ final class ScoreReaderState: ObservableObject {
         interactionMode.allowsScoreEditing
     }
 
+    var scoreTitle: String {
+        scoreMetadata.title.trimmedToNil ?? session.document.displayName
+    }
+
     var shouldFollowPlayback: Bool {
         playbackFollowEnabled && !playbackFollowIsSuspended
     }
@@ -260,6 +268,7 @@ final class ScoreReaderState: ObservableObject {
         self.activePageCount = session.pageCount
         self.selectedPageIndex = ScoreReaderState.boundedIndex(initialPageIndex, pageCount: session.pageCount)
         self.scoreParts = session.document.parts
+        self.scoreMetadata = ScoreEditableMetadata(document: session.document)
         self.cachedPagesByIndex = initialInteractionMode == .view && initialViewTransposeKey != nil
             ? [:]
             : Dictionary(uniqueKeysWithValues: session.previewPages.map { ($0.index, $0) })

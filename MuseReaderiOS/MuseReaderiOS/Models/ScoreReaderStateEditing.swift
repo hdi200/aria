@@ -941,32 +941,43 @@ extension ScoreReaderState {
         }
     }
 
-    func updateScoreSetupMetadata(_ metadata: ScoreEditableMetadata) {
-        guard
-            supportsEditing,
-            isEditingMode,
-            let liveRenderSession = session.liveRenderSession,
-            !isEditingActionInFlight
-        else {
-            return
+    /// Throws instead of silently returning so the Score Setup sheet stays open and can show
+    /// why nothing was saved.
+    func updateScoreSetupMetadata(_ metadata: ScoreEditableMetadata) async throws {
+        guard supportsEditing, let liveRenderSession = session.liveRenderSession else {
+            throw ScoreDocumentServiceError.bridgeFailure("This score cannot be edited.")
+        }
+        guard isEditingMode else {
+            throw ScoreDocumentServiceError.bridgeFailure("Switch to editing mode to change score info.")
+        }
+        guard !isEditingActionInFlight else {
+            throw ScoreDocumentServiceError.bridgeFailure("Another edit is still being applied. Try again in a moment.")
         }
 
         isEditingActionInFlight = true
         editingErrorMessage = nil
+        defer {
+            isEditingActionInFlight = false
+        }
 
+        let newState = try await liveRenderSession.updateMetadata(metadata)
+        scoreMetadata = metadata
+        refreshAfterScoreMutation(with: newState)
+    }
+
+    func refreshScoreMetadata() {
+        guard let liveRenderSession = session.liveRenderSession else {
+            return
+        }
+
+        scoreMetadataRefreshRevision += 1
+        let revision = scoreMetadataRefreshRevision
         Task { @MainActor [weak self] in
-            defer {
-                self?.isEditingActionInFlight = false
+            let metadata = await liveRenderSession.currentMetadata()
+            guard let self, self.scoreMetadataRefreshRevision == revision else {
+                return
             }
-
-            do {
-                try await liveRenderSession.updateMetadata(metadata)
-                self?.invalidatePlaybackAfterScoreMutation()
-                self?.invalidateRenderedPages()
-                self?.scheduleAutosave()
-            } catch {
-                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
+            self.scoreMetadata = metadata
         }
     }
 
@@ -1909,6 +1920,7 @@ extension ScoreReaderState {
             self.selectedPageIndex = selectedPageIndex
         }
         invalidatePlaybackAfterScoreMutation()
+        refreshScoreMetadata()
         let playbackInvalidatedAt = Date()
         invalidateRenderedPages(
             scope: editingState.refreshScope,

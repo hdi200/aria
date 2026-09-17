@@ -2050,7 +2050,8 @@ final class ScorePageOverlayView: UIView {
                     }
                     if selection.kind == .chordText {
                         selectionFrame = paddedChordTextSelectionFrame(selectionFrame, inside: imageRect)
-                    } else if selection.kind == .text || selection.kind == .tempo || selection.kind == .dynamic {
+                    } else if selection.kind == .text || selection.kind == .tempo || selection.kind == .dynamic
+                        || selection.kind == .instrumentName || selection.kind == .instrumentChange {
                         selectionFrame = paddedTextSelectionFrame(selectionFrame, inside: imageRect)
                     }
                     container.isHidden = selectionFrame.width <= 1 || selectionFrame.height <= 1

@@ -1166,9 +1166,11 @@ private struct ScoreReaderKeySignaturePreviewCard: View {
 struct ScoreReaderSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State var metadata: ScoreEditableMetadata
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     let isBusy: Bool
-    let commitAction: (ScoreEditableMetadata) -> Void
+    let commitAction: (ScoreEditableMetadata) async throws -> Void
 
     var body: some View {
         NavigationStack {
@@ -1181,6 +1183,14 @@ struct ScoreReaderSetupSheet: View {
                     TextField("Arranger", text: $metadata.arranger)
                 }
 
+                if let saveErrorMessage {
+                    Section {
+                        Text(saveErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+
                 Section("Initial Setup") {
                     Label("Instruments and part setup use the current score structure.", systemImage: "music.note.list")
                     Label("Initial key, time, and tempo are available from More.", systemImage: "slider.horizontal.3")
@@ -1189,15 +1199,32 @@ struct ScoreReaderSetupSheet: View {
             .navigationTitle("Score Setup")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        commitAction(metadata)
-                        dismiss()
-                    }
-                    .disabled(isBusy)
+                    Button(isSaving ? "Saving…" : "Save", action: save)
+                        .disabled(isBusy || isSaving)
                 }
             }
+        }
+        .interactiveDismissDisabled(isSaving)
+    }
+
+    private func save() {
+        isSaving = true
+        saveErrorMessage = nil
+        let metadataToSave = metadata
+
+        Task { @MainActor in
+            do {
+                try await commitAction(metadataToSave)
+                dismiss()
+            } catch {
+                saveErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            isSaving = false
         }
     }
 }

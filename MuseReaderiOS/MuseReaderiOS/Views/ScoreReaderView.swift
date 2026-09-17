@@ -476,7 +476,7 @@ struct ScoreReaderView: View {
                     .overlay(alignment: .top) {
                         if isChromeVisible || readerState.interactionMode != .view {
                             ScoreReaderChromeBar(
-                            scoreTitle: session.document.primaryTitle,
+                            scoreTitle: readerState.scoreTitle,
                             parts: displayedScoreParts,
                             selectedPartID: $selectedPartID,
                             isPartsPanelPresented: $isPartsPanelPresented,
@@ -538,7 +538,7 @@ struct ScoreReaderView: View {
                             exportPanelContent: {
                                 AnyView(
                                     ScoreReaderExportPanel(
-                                        scoreTitle: session.document.primaryTitle,
+                                        scoreTitle: readerState.scoreTitle,
                                         sharingDescription: sharingDescription,
                                         parts: displayedScoreParts,
                                         isShowingTemporaryTransposedView: isShowingTemporaryTransposedView,
@@ -938,9 +938,9 @@ struct ScoreReaderView: View {
         }
         .sheet(isPresented: $isScoreSetupPresented) {
             ScoreReaderSetupSheet(
-                metadata: ScoreEditableMetadata(document: session.document),
+                metadata: readerState.scoreMetadata,
                 isBusy: readerState.isEditingActionInFlight,
-                commitAction: readerState.updateScoreSetupMetadata
+                commitAction: { try await readerState.updateScoreSetupMetadata($0) }
             )
         }
         .sheet(isPresented: $isPageSettingsPresented) {

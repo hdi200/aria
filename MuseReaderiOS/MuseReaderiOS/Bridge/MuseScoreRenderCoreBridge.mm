@@ -360,6 +360,27 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
 @end
 
+@implementation MSRScoreMetadata
+
+- (instancetype)initWithTitle:(NSString *)title
+                     subtitle:(NSString *)subtitle
+                     composer:(NSString *)composer
+                     lyricist:(NSString *)lyricist
+                     arranger:(NSString *)arranger
+{
+    self = [super init];
+    if (self) {
+        _title = [title copy];
+        _subtitle = [subtitle copy];
+        _composer = [composer copy];
+        _lyricist = [lyricist copy];
+        _arranger = [arranger copy];
+    }
+    return self;
+}
+
+@end
+
 @implementation MSRNoteEntryPreviewInfo
 
 - (instancetype)initWithPageIndex:(NSInteger)pageIndex
@@ -972,6 +993,21 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #else
     return @[];
 #endif
+}
+
+- (MSRScoreMetadata *)currentMetadata
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (_session) {
+        const msr::render::ScoreMetadata metadata = _session->metadata();
+        return [[MSRScoreMetadata alloc] initWithTitle:[NSString stringWithUTF8String:metadata.title.c_str()] ?: @""
+                                              subtitle:[NSString stringWithUTF8String:metadata.subtitle.c_str()] ?: @""
+                                              composer:[NSString stringWithUTF8String:metadata.composer.c_str()] ?: @""
+                                              lyricist:[NSString stringWithUTF8String:metadata.lyricist.c_str()] ?: @""
+                                              arranger:[NSString stringWithUTF8String:metadata.arranger.c_str()] ?: @""];
+    }
+#endif
+    return [[MSRScoreMetadata alloc] initWithTitle:@"" subtitle:@"" composer:@"" lyricist:@"" arranger:@""];
 }
 
 - (BOOL)setConcertPitchEnabled:(BOOL)enabled
