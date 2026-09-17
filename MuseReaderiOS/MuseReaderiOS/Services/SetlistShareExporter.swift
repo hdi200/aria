@@ -95,7 +95,7 @@ enum SetlistShareExporter {
 
         let exportDirectory = try makeExportDirectory(for: setlistName)
         var shareURLs: [URL] = []
-        var combinedPDFDocuments: [Data] = []
+        var combinedPDFDocuments: [(title: String, data: Data)] = []
         var failures: [SetlistShareFailure] = []
         var usedBaseNames: Set<String> = []
 
@@ -109,7 +109,7 @@ enum SetlistShareExporter {
                 case .pdf:
                     let pdfData = try await pdfData(for: score, model: model)
                     if combinesPDFPages {
-                        combinedPDFDocuments.append(pdfData)
+                        combinedPDFDocuments.append((title: score.primaryTitle, data: pdfData))
                     } else {
                         shareURLs.append(
                             try write(pdfData, to: exportDirectory, baseName: baseName, format: format)
@@ -243,29 +243,44 @@ enum SetlistShareExporter {
     }
 
     private static func writeCombinedPDF(
-        _ documents: [Data],
+        _ documents: [(title: String, data: Data)],
         to directory: URL,
         setlistName: String
     ) throws -> URL {
         // The source documents stay alive until the merged data is generated:
         // a PDFPage keeps a reference back to the document it came from.
-        let sourceDocuments = try documents.map { documentData -> PDFDocument in
-            guard let document = PDFDocument(data: documentData) else {
+        let sourceDocuments = try documents.map { source -> (title: String, document: PDFDocument) in
+            guard let document = PDFDocument(data: source.data) else {
                 throw SetlistShareError.pdfMergeFailed
             }
-            return document
+            return (title: source.title, document: document)
         }
 
         let combinedDocument = PDFDocument()
+        // One bookmark per score, so a PDF reader's sidebar can jump straight
+        // to the start of each piece instead of scrolling the whole setlist.
+        let outlineRoot = PDFOutline()
+        combinedDocument.outlineRoot = outlineRoot
         var insertionIndex = 0
-        for sourceDocument in sourceDocuments {
-            for pageIndex in 0..<sourceDocument.pageCount {
-                guard let page = sourceDocument.page(at: pageIndex) else {
+        for source in sourceDocuments {
+            let firstPageIndex = insertionIndex
+            for pageIndex in 0..<source.document.pageCount {
+                guard let page = source.document.page(at: pageIndex) else {
                     continue
                 }
                 combinedDocument.insert(page, at: insertionIndex)
                 insertionIndex += 1
             }
+
+            guard insertionIndex > firstPageIndex, let firstPage = combinedDocument.page(at: firstPageIndex) else {
+                continue
+            }
+            let title = source.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let bookmark = PDFOutline()
+            bookmark.label = title.isEmpty ? "Aria Score" : title
+            let pageBounds = firstPage.bounds(for: .mediaBox)
+            bookmark.destination = PDFDestination(page: firstPage, at: CGPoint(x: pageBounds.minX, y: pageBounds.maxY))
+            outlineRoot.insertChild(bookmark, at: outlineRoot.numberOfChildren)
         }
 
         guard insertionIndex > 0, let combinedData = combinedDocument.dataRepresentation() else {
