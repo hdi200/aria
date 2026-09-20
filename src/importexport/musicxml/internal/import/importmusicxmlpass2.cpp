@@ -2954,17 +2954,19 @@ void MusicXmlParserPass2::measure(const String& partId, const Fraction time)
     for (auto& harmony : delayedHarmony) {
         HarmonyDesc harmonyDesc = harmony.second;
         Fraction tick = Fraction::fromTicks(harmony.first);
-        if (harmonyDesc.m_fretDiagram) {
-            harmonyDesc.m_fretDiagram->setTrack(harmonyDesc.m_track);
+        if (FretDiagram* fd = harmonyDesc.m_fretDiagram) {
+            fd->setTrack(harmonyDesc.m_track);
             Segment* s = measure->getSegment(SegmentType::ChordRest, tick);
-            harmonyDesc.m_harmony->setProperty(Pid::ALIGN, Align(AlignH::HCENTER, AlignV::TOP));
-            s->add(harmonyDesc.m_fretDiagram);
-        }
-
-        if (harmonyDesc.m_harmony) {
-            harmonyDesc.m_harmony->setTrack(harmonyDesc.m_track);
+            if (Harmony* harmony = harmonyDesc.m_harmony) {
+                harmony->setProperty(Pid::ALIGN, Align(AlignH::HCENTER, AlignV::TOP));
+                harmony->setTrack(harmonyDesc.m_track);
+                fd->add(harmony);
+            }
+            s->add(fd);
+        } else if (Harmony* harmony = harmonyDesc.m_harmony) {
+            harmony->setTrack(harmonyDesc.m_track);
             Segment* s = measure->getSegment(SegmentType::ChordRest, tick);
-            s->add(harmonyDesc.m_harmony);
+            s->add(harmony);
         }
     }
 
@@ -5282,6 +5284,8 @@ void MusicXmlParserDirection::octaveShift(const String& type, const int number,
                     o->setOttavaType(OttavaType::OTTAVA_8VA);
                 } else if (ottavasize == 15) {
                     o->setOttavaType(OttavaType::OTTAVA_15MA);
+                } else if (ottavasize == 22) {
+                    o->setOttavaType(OttavaType::OTTAVA_22MA);
                 }
             } else if (type == u"up") {
                 m_placement = m_placement.empty() ? u"below" : m_placement;
@@ -5289,6 +5293,8 @@ void MusicXmlParserDirection::octaveShift(const String& type, const int number,
                     o->setOttavaType(OttavaType::OTTAVA_8VB);
                 } else if (ottavasize == 15) {
                     o->setOttavaType(OttavaType::OTTAVA_15MB);
+                } else if (ottavasize == 22) {
+                    o->setOttavaType(OttavaType::OTTAVA_22MB);
                 }
             }
 
@@ -5657,7 +5663,8 @@ String MusicXmlParserDirection::metronome(double& r)
 //---------------------------------------------------------
 
 static bool determineBarLineType(const String& barStyle, const String& repeat,
-                                 BarLineType& type, bool& visible)
+                                 BarLineType& type, bool& visible,
+                                 const MusicXmlExporterSoftware& exporter)
 {
     // set defaults
     type = BarLineType::NORMAL;
@@ -5666,6 +5673,8 @@ static bool determineBarLineType(const String& barStyle, const String& repeat,
     if (barStyle == u"light-heavy" && repeat == u"backward") {
         type = BarLineType::END_REPEAT;
     } else if (barStyle == u"heavy-light" && repeat == u"forward") {
+        type = BarLineType::START_REPEAT;
+    } else if (barStyle == u"light-heavy" && repeat == u"forward" && exporter == MusicXmlExporterSoftware::NOTEFLIGHT) {
         type = BarLineType::START_REPEAT;
     } else if (barStyle == u"light-heavy" && repeat.empty()) {
         type = BarLineType::END;
@@ -5801,7 +5810,7 @@ void MusicXmlParserPass2::barline(const String& partId, Measure* measure, const 
 
     BarLineType type = BarLineType::NORMAL;
     bool visible = true;
-    if (determineBarLineType(barStyle, repeat, type, visible)) {
+    if (determineBarLineType(barStyle, repeat, type, visible, m_pass1.exporterSoftware())) {
         const track_idx_t track = m_pass1.trackForPart(partId);
         if (type & BarLineType::START_REPEAT) {
             // combine start_repeat flag with current state initialized during measure parsing
@@ -7690,7 +7699,9 @@ FretDiagram* MusicXmlParserPass2::frame()
             int val = m_e.readInt();
             if (val > 0) {
                 fd->setProperty(Pid::FRET_FRETS, val);
-                fd->setPropertyFlags(Pid::FRET_FRETS, PropertyFlags::UNSTYLED);
+                if (val != fd->propertyDefault(Pid::FRET_FRETS).toInt()) {
+                    fd->setPropertyFlags(Pid::FRET_FRETS, PropertyFlags::UNSTYLED);
+                }
             } else {
                 m_logger->logError(String(u"FretDiagram::readMusicXml: illegal frame-fret %1").arg(val), &m_e);
             }

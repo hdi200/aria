@@ -76,6 +76,8 @@
 #include "engraving/dom/hammeronpulloff.h"
 #include "engraving/dom/harmonicmark.h"
 #include "engraving/dom/harmony.h"
+#include "engraving/dom/image.h"
+#include "engraving/dom/imageStore.h"
 #include "engraving/dom/harppedaldiagram.h"
 #include "engraving/dom/instrchange.h"
 #include "engraving/dom/jump.h"
@@ -346,6 +348,7 @@ public:
     void moveToTickIfNeed(const Fraction& t, track_idx_t track, const Fraction& measureTick);
     void words(TextBase const* const text, staff_idx_t staff);
     void tboxTextAsWords(TextBase const* const text, const staff_idx_t staff, PointF position);
+    void image(const Image* const img, staff_idx_t staff);
     void rehearsal(RehearsalMark const* const rmk, staff_idx_t staff);
     void harpPedals(HarpPedalDiagram const* const hpd, staff_idx_t staff);
     void hairpin(Hairpin const* const hp, staff_idx_t staff, const Fraction& tick);
@@ -381,7 +384,7 @@ private:
     void rest(Rest* chord, staff_idx_t staff, const std::vector<Lyrics*>& ll);
     void clef(staff_idx_t staff, const ClefType ct, const String& extraAttributes = u"");
     void timesig(const TimeSig* tsig, staff_idx_t staff);
-    void keysig(const KeySig* ks, ClefType ct, staff_idx_t staff = 0, bool visible = true);
+    void keysig(const KeySig* ks, ClefType ct, staff_idx_t staff = 0);
     void barlineLeft(const Measure* const m, const track_idx_t track);
     void barlineMiddle(const BarLine* bl);
     void barlineRight(const Measure* const m, const track_idx_t strack, const track_idx_t etrack);
@@ -1697,11 +1700,20 @@ static void unpitch2xml(const Note* note, String& s, int& octave)
     Fraction tick        = note->chord()->tick();
     Staff* st       = note->staff();
     ClefType ct     = st->clef(tick);
+
+    int noteLine = note->line();
+    if (noteLine == INVALID_LINE) {
+        // Invisible staves are skipped by ModifyDom::cmdUpdateNotes(), so a percussion note on
+        // one may never have had its display line computed; resolve it from the drumset instead
+        const Drumset* drumset = st->part()->instrument(tick)->drumset();
+        noteLine = (drumset && drumset->isValid(note->pitch())) ? drumset->line(note->pitch()) : 0;
+    }
+
     // offset in lines between staff with current clef and with G clef
     int clefOffset  = ClefInfo::pitchOffset(ct) - ClefInfo::pitchOffset(ClefType::G);
     // line note would be on on a five line staff with G clef
     // note top line is line 0, bottom line is line 8
-    int line5g      = note->line() - clefOffset;
+    int line5g      = noteLine - clefOffset;
     // in MusicXML with percussion clef, step and octave are determined as if G clef is used
     // when stafflines is not equal to five, in MusicXML the bottom line is still E4.
     // in MuseScore assumes line 0 is F5
@@ -2193,7 +2205,8 @@ void ExportMusicXml::timesig(const TimeSig* tsig, staff_idx_t staff)
         attrs.push_back({ "number", staff });
     }
 
-    if (!tsig->visible() || !tsig->showOnThisStaff()) {
+    if (!tsig->visible() || !tsig->showOnThisStaff()
+        || (tsig->staff() && !tsig->staff()->staffType(tsig->tick())->genTimesig())) {
         attrs.emplace_back(std::make_pair("print-object", "no"));
     }
 
@@ -2421,7 +2434,7 @@ static double accSymId2alter(SymId id)
 //   keysig
 //---------------------------------------------------------
 
-void ExportMusicXml::keysig(const KeySig* ks, ClefType ct, staff_idx_t staff, bool visible)
+void ExportMusicXml::keysig(const KeySig* ks, ClefType ct, staff_idx_t staff)
 {
     static char16_t table2[]  = u"CDEFGAB";
     int po = ClefInfo::pitchOffset(ct);   // actually 7 * oct + step for topmost staff line
@@ -2432,7 +2445,7 @@ void ExportMusicXml::keysig(const KeySig* ks, ClefType ct, staff_idx_t staff, bo
     if (staff) {
         attrs.emplace_back(std::make_pair("number", staff));
     }
-    if (!visible) {
+    if (!ks->visible() || (ks->staff() && ks->staff()->isTabStaff(Fraction(0, 1)))) {
         attrs.emplace_back(std::make_pair("print-object", "no"));
     }
     addColorAttr(ks, attrs);
@@ -3339,7 +3352,6 @@ static String symIdToTechn(const SymId sid)
 static void writeChordLines(const Chord* const chord, XmlWriter& xml, Notations& notations)
 {
     for (EngravingItem* e : chord->el()) {
-        LOGD("writeChordLines: el %p type %d (%s)", e, int(e->type()), e->typeName());
         if (e->isChordLine()) {
             const ChordLine* cl = toChordLine(e);
             String subtype;
@@ -4562,7 +4574,9 @@ void ExportMusicXml::rest(Rest* rest, staff_idx_t staff, const std::vector<Lyric
     String noteTag = u"note";
     noteTag += color2xml(rest);
     noteTag += elementPosition(this, rest);
-    if (!rest->visible()) {
+    if (!rest->visible()
+        || (rest->staff() && rest->staff()->staffType(rest->tick())->isTabStaff()
+            && !rest->staff()->staffType(rest->tick())->showRests())) {
         noteTag += u" print-object=\"no\"";
     }
     m_xml.startElementRaw(noteTag);
@@ -5097,7 +5111,7 @@ void ExportMusicXml::words(TextBase const* const text, staff_idx_t staff)
            muPrintable(text->plainText()));
     */
 
-    if (text->plainText() == "") {
+    if (text->plainText() == u"") {
         // sometimes empty Texts are present, exporting would result
         // in invalid MusicXML (as an empty direction-type would be created)
         return;
@@ -5105,6 +5119,107 @@ void ExportMusicXml::words(TextBase const* const text, staff_idx_t staff)
 
     directionTag(m_xml, m_attr, text);
     wordsMetronome(m_xml, m_score->style(), text, offset);
+
+    directionETag(m_xml, staff);
+}
+
+//---------------------------------------------------------
+//   getImageInfo
+//---------------------------------------------------------
+
+static void getImageInfo(const ImageStoreItem* isi, String& source, String& type)
+{
+    source = String::fromStdString(isi->hashName());
+    String suffix = String::fromStdString(isi->type()).toLower();
+
+    if (suffix == u"svg" || suffix == u"svgz") {
+        type = u"image/svg+xml";
+    } else if (suffix == u"png") {
+        type = u"image/png";
+    } else if (suffix == u"jpg" || suffix == u"jpeg") {
+        type = u"image/jpeg";
+    } else if (suffix == u"gif") {
+        type = u"image/gif";
+    } else if (suffix == u"bmp") {
+        type = u"image/bmp";
+    } else if (suffix == u"tif" || suffix == u"tiff") {
+        type = u"image/tiff";
+    }
+
+    if (type.isEmpty()) {
+        const ByteArray& ba = isi->buffer();
+        if (ba.size() >= 4) {
+            if (ba.at(0) == 0x89 && ba.at(1) == 0x50 && ba.at(2) == 0x4E && ba.at(3) == 0x47) {
+                type = u"image/png";
+                if (suffix.isEmpty()) {
+                    source += u".png";
+                }
+            } else if (ba.at(0) == 0xFF && ba.at(1) == 0xD8 && ba.at(2) == 0xFF) {
+                type = u"image/jpeg";
+                if (suffix.isEmpty()) {
+                    source += u".jpg";
+                }
+            } else if (ba.at(0) == 0x47 && ba.at(1) == 0x49 && ba.at(2) == 0x46 && ba.at(3) == 0x38) {
+                type = u"image/gif";
+                if (suffix.isEmpty()) {
+                    source += u".gif";
+                }
+            } else if (ba.at(0) == 0x42 && ba.at(1) == 0x4D) {
+                type = u"image/bmp";
+                if (suffix.isEmpty()) {
+                    source += u".bmp";
+                }
+            } else if (ba.at(0) == 0x3C && (ba.at(1) == 0x3F || ba.at(1) == 0x73)) {
+                type = u"image/svg+xml";
+                if (suffix.isEmpty()) {
+                    source += u".svg";
+                }
+            }
+        }
+    }
+
+    if (type.isEmpty()) {
+        type = u"application/octet-stream";
+    }
+}
+
+//---------------------------------------------------------
+//   image
+//---------------------------------------------------------
+
+void ExportMusicXml::image(const Image* const img, staff_idx_t staff)
+{
+    ImageStoreItem* isi = img->storeItem();
+    if (!isi) {
+        return;
+    }
+
+    directionTag(m_xml, m_attr, img);
+    m_xml.startElement("direction-type");
+
+    String source;
+    String type;
+    getImageInfo(isi, source, type);
+
+    String imgTag = u"image source=\"" + XmlWriter::xmlString(source) + u"\"";
+    imgTag += u" type=\"" + XmlWriter::xmlString(type) + u"\"";
+
+    double width = img->imageWidth();
+    double height = img->imageHeight();
+    if (!img->sizeIsSpatium()) {
+        double sp = img->spatium();
+        if (sp > 0.0) {
+            width /= sp;
+            height /= sp;
+        }
+    }
+
+    imgTag += u" height=\"" + String::number(height * 10.0, 2) + u"\"";
+    imgTag += u" width=\"" + String::number(width * 10.0, 2) + u"\"";
+    imgTag += positioningAttributes(img);
+
+    m_xml.tagRaw(imgTag);
+    m_xml.endElement(); // direction-type
 
     directionETag(m_xml, staff);
 }
@@ -6505,6 +6620,8 @@ static bool commonAnnotations(ExportMusicXml* exp, const EngravingItem* e, staff
         exp->harpPedals(toHarpPedalDiagram(e), sstaff);
     } else if (e->isRehearsalMark()) {
         exp->rehearsal(toRehearsalMark(e), sstaff);
+    } else if (e->isImage()) {
+        exp->image(toImage(e), sstaff);
     } else if (e->isSystemText()) {
         exp->systemText(toStaffTextBase(e), sstaff);
     }
@@ -7016,11 +7133,11 @@ void ExportMusicXml::keysigTimesig(const Measure* m, const Part* p)
         //LOGD(" singleKey %d", singleKey);
         if (singleKey) {
             // keysig applies to all staves
-            keysig(keysigs.at(0), p->staff(0)->clef(m->tick()), 0, keysigs.at(0)->visible());
+            keysig(keysigs.at(0), p->staff(0)->clef(m->tick()), 0);
         } else {
             // staff-specific keysigs
             for (const auto& [st, ks] : keysigs) {
-                keysig(ks, p->staff(st)->clef(m->tick()), st + 1, ks->visible());
+                keysig(ks, p->staff(st)->clef(m->tick()), st + 1);
             }
         }
     } else {
@@ -7029,6 +7146,9 @@ void ExportMusicXml::keysigTimesig(const Measure* m, const Part* p)
             //KeySigEvent kse;
             //kse.setKey(Key::C);
             KeySig* ks = Factory::createKeySig(m_score->dummy()->segment());
+            if (p->staff(0)->isTabStaff(Fraction(0, 1))) {
+                ks->setVisible(false);
+            }
             ks->setKey(Key::C);
             keysig(ks, p->staff(0)->clef(m->tick()));
             delete ks;
@@ -7558,7 +7678,8 @@ void ExportMusicXml::findAndExportClef(const Measure* const m, const int staves,
                     && ((seg->measure() != m) || ((seg->segmentType() == SegmentType::HeaderClef) && !cle->otherClef()))) {
                     clefDebug("exportxml: clef exported");
                     String clefAttr = color2xml(cle);
-                    if (!cle->visible()) {
+                    if (!cle->visible()
+                        || (cle->staff() && !cle->staff()->staffType(cle->tick())->genClef())) {
                         clefAttr += u" print-object=\"no\"";
                     }
                     clef(sstaff, cle->clefType(), clefAttr);
@@ -7821,7 +7942,8 @@ void ExportMusicXml::writeElement(EngravingItem* el, const Measure* m, staff_idx
         // these will be output at the start of the next measure
         const Clef* cle = toClef(el);
         const Fraction ti = cle->segment()->tick();
-        const String visible = (!cle->visible()) ? u" print-object=\"no\"" : String();
+        const String visible
+            = (!cle->visible() || (cle->staff() && !cle->staff()->staffType(cle->tick())->genClef())) ? u" print-object=\"no\"" : String();
         clefDebug("exportxml: clef in measure ti=%d ct=%d gen=%d", ti, int(cle->clefType()), el->generated());
         if (el->generated()) {
             clefDebug("exportxml: generated clef not exported");
@@ -8828,6 +8950,15 @@ static void writeMxlArchive(Score* score, muse::ZipWriter& zip, const String& fi
     em.write(&dbuf);
     dbuf.seek(0);
     zip.addFile(filename.toStdString(), dbuf.data());
+
+    for (const ImageStoreItem* isi : imageStore) {
+        if (isi->isUsed(score)) {
+            String source;
+            String type;
+            getImageInfo(isi, source, type);
+            zip.addFile(source.toStdString(), isi->buffer());
+        }
+    }
 }
 
 bool saveMxl(Score* score, IODevice* device)
@@ -8929,7 +9060,7 @@ static void writeMusicXml(const FretDiagram* item, XmlWriter& xml)
         for (int j : bStarts) {
             xml.startElement("frame-note");
             xml.tag("string", mxmlString);
-            xml.tag("fret", j);
+            xml.tag("fret", j + item->fretOffset());
             xml.tag("barre", { { "type", "start" } });
             xml.endElement();
         }
@@ -8937,7 +9068,7 @@ static void writeMusicXml(const FretDiagram* item, XmlWriter& xml)
         for (int j : bEnds) {
             xml.startElement("frame-note");
             xml.tag("string", mxmlString);
-            xml.tag("fret", j);
+            xml.tag("fret", j + item->fretOffset());
             xml.tag("barre", { { "type", "stop" } });
             xml.endElement();
         }
