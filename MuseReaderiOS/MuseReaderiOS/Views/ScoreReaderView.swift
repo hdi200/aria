@@ -796,21 +796,17 @@ struct ScoreReaderView: View {
             }
         }
         .onChangeCompatible(of: readerState.editingState.noteInputEnabled) { noteInputEnabled in
-            if noteInputEnabled {
-                selectedToolCategory = .notes
-            } else if selectedToolCategory == .notes && readerState.editingState.selection?.kind != .measure {
-                selectedToolCategory = .select
-            }
+            selectedToolCategory = ScoreReaderToolModePolicy.category(
+                afterSettingNoteInputEnabled: noteInputEnabled,
+                currentCategory: selectedToolCategory
+            )
         }
         .onChangeCompatible(of: readerState.editingState.selection?.kind) { selectionKind in
             if selectionKind == nil {
                 clearSelectionCommandMenu()
             }
 
-            if selectionKind == .measure && selectedToolCategory == .select {
-                readerState.setNoteInputEnabled(false)
-                selectedToolCategory = .notes
-            } else if selectedToolCategory == .repeats && selectionKind == nil {
+            if selectedToolCategory == .repeats && selectionKind == nil {
                 selectedToolCategory = .select
             }
         }
@@ -1928,7 +1924,7 @@ struct ScoreReaderView: View {
             viewModeSaveErrorMessage = nil
             isChromeVisible = true
             selectedToolCategory = .select
-            pencilAutoNoteEntryAllowed = false
+            pencilAutoNoteEntryAllowed = ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .enterEditMode)
             readerState.enterEditMode()
         case .edit:
             finishEditingAndEnterViewMode()
@@ -2680,14 +2676,14 @@ struct ScoreReaderView: View {
     }
 
     private func selectModeFromToolbar() {
-        pencilAutoNoteEntryAllowed = false
+        pencilAutoNoteEntryAllowed = ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .chooseSelect)
         readerState.noteInputWasActivatedByPencil = false
         readerState.setNoteInputEnabled(false)
         exitTextEntryFocusIfNeeded()
     }
 
     private func noteInputModeFromToolbar() {
-        pencilAutoNoteEntryAllowed = true
+        pencilAutoNoteEntryAllowed = ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .chooseNoteInput)
         readerState.noteInputWasActivatedByPencil = false
         readerState.setNoteInputEnabled(true)
         exitTextEntryFocusIfNeeded()

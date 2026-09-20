@@ -46,6 +46,7 @@
 
 #include "draw/drawmodule.h"
 #include "draw/painter.h"
+#include "engraving/compat/engravingcompat.h"
 #include "engraving/compat/mscxcompat.h"
 #include "engraving/compat/scoreaccess.h"
 #include "engraving/editing/editsystemlocks.h"

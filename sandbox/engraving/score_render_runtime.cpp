@@ -211,7 +211,15 @@ muse::Ret loadScoreForRenderCore(mu::engraving::MasterScore* score, const muse::
     const std::string suffix = normalizedSuffix(path);
 
     if (mu::engraving::mscIoModeBySuffix(suffix) != mu::engraving::MscIoMode::Unknown) {
-        return mu::engraving::compat::loadMsczOrMscx(score, path, false);
+        muse::Ret result = mu::engraving::compat::loadMsczOrMscx(score, path, false);
+        if (result) {
+            // The low-level loader does not run NotationProject::doLoad's
+            // pre-layout migrations (including legacy staff-text alignment).
+            // Apply them once on native-file import, never on later relayouts
+            // or MusicXML imports. The engine gates them by source version.
+            mu::engraving::compat::EngravingCompat::doPreLayoutCompatIfNeeded(score);
+        }
+        return result;
     }
 
     if (!isMusicXmlFile(suffix)) {

@@ -310,7 +310,7 @@ extension ScoreReaderState {
                         normalizedPoint: normalizedPoint,
                         hitRadiusScale: selectionHitRadiusScale
                     )
-                    if selectedState.selection?.kind == .note || selectedState.selection?.kind == .rest {
+                    if ScoreReaderToolModePolicy.selectionLeavesNoteInput(selectedState.selection?.kind) {
                         newState = try await liveRenderSession.setNoteInputEnabled(false)
                     } else {
                         newState = selectedState
@@ -492,13 +492,19 @@ extension ScoreReaderState {
             }
 
             do {
-                let newState = try await liveRenderSession.selectMeasureRange(
+                var newState = try await liveRenderSession.selectMeasureRange(
                     pageIndex: pageIndex,
                     startPoint: startNormalizedPoint,
                     endPoint: endNormalizedPoint
                 )
+                if newState.noteInputEnabled {
+                    newState = try await liveRenderSession.setNoteInputEnabled(false)
+                }
                 self?.hasContinuousNoteInputCursor = false
+                self?.noteInputWasActivatedByPencil = false
                 self?.lastKeyboardInputCanReceiveAccidental = false
+                self?.stackedChordInputEnabled = false
+                self?.updateNoteEntryPreview(pageIndex: pageIndex, normalizedPoint: nil)
                 self?.applyEditingState(newState)
                 self?.clearMeasureRangePreview()
             } catch {

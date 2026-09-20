@@ -641,6 +641,67 @@ void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& r
            "Measure-level replacement saved the wrong instrument");
 }
 
+std::vector<double> staffTextOffsets(const std::string& xml)
+{
+    std::vector<double> offsets;
+    size_t start = 0;
+    while ((start = xml.find("<StaffText>", start)) != std::string::npos) {
+        const size_t end = xml.find("</StaffText>", start);
+        const size_t offset = xml.find("<offset x=\"", start);
+        expect(end != std::string::npos && offset < end, "Staff text has no explicit offset");
+        offsets.push_back(std::stod(xml.substr(offset + std::string("<offset x=\"").size())));
+        start = end;
+    }
+    expect(offsets.size() == 3, "Expected left-, center-, and right-aligned staff text");
+    return offsets;
+}
+
+void testLegacyStaffTextCompatibility(const std::filesystem::path& root, const std::string& version)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 0);
+    xml.replace(xml.find("4.70"), 4, version);
+    std::string texts;
+    for (const std::string alignment : { "left", "center", "right" }) {
+        texts += "<StaffText><autoplace>0</autoplace><align>" + alignment
+            + ",top</align><offset x=\"0.7\" y=\"-0.65\"/>";
+        if (version == "4.70") {
+            texts += "<position>" + alignment + "</position>";
+        }
+        texts += "<text>" + alignment + "</text></StaffText>";
+    }
+    xml.insert(xml.find("<Chord>"), texts);
+    const std::string name = "staff-text-compat-" + version;
+    auto session = openSession(root, name, xml);
+    const std::string saved = saveSnapshot(*session, root, name + "-saved");
+    const auto offsets = staffTextOffsets(saved);
+    constexpr double tolerance = 0.00001;
+    expect(std::abs(offsets[0] - 0.7) < tolerance, "Left-aligned staff text moved");
+    if (version == "4.70") {
+        expect(std::abs(offsets[1] - 0.7) < tolerance && std::abs(offsets[2] - 0.7) < tolerance,
+               "Current-format staff text must not receive legacy adjustments");
+    } else {
+        const double halfNotehead = 0.7 - offsets[1];
+        expect(halfNotehead > 0.4 && halfNotehead < 0.9,
+               "Legacy centered text did not receive the half-notehead adjustment");
+        expect(std::abs((0.7 - offsets[2]) - 2.0 * halfNotehead) < tolerance,
+               "Legacy right-aligned text did not receive the full-notehead adjustment");
+    }
+
+    // Rendering and saving must not reapply this non-idempotent import migration.
+    msr::render::RenderedPage page;
+    std::string error;
+    expect(session->renderPage(0, 144, page, error), "Could not render compatibility fixture: " + error);
+    const auto renderedOffsets = staffTextOffsets(saveSnapshot(*session, root, name + "-rendered"));
+    auto reopened = openSession(root, name + "-reopened", saved);
+    const auto reopenedOffsets = staffTextOffsets(saveSnapshot(*reopened, root, name + "-resaved"));
+    for (size_t index = 0; index < offsets.size(); ++index) {
+        expect(std::abs(renderedOffsets[index] - offsets[index]) < tolerance,
+               "Rendering reapplied the compatibility adjustment");
+        expect(std::abs(reopenedOffsets[index] - offsets[index]) < tolerance,
+               "Save/reopen reapplied the compatibility adjustment");
+    }
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -660,6 +721,10 @@ int main()
 {
     TestDirectory testDirectory;
     bool passed = true;
+    for (const std::string version : { "3.02", "4.60", "4.70" }) {
+        passed &= runTest("staff-text import compatibility " + version,
+                          [&] { testLegacyStaffTextCompatibility(testDirectory.path, version); });
+    }
     passed &= runTest("selected accidentals across key signatures", [&] { testSelectedAccidentals(testDirectory.path); });
     passed &= runTest("point-entry accidentals are one-shot", [&] { testPointEntryAccidentalsAreOneShot(testDirectory.path); });
     passed &= runTest("point-entry key-signature accidentals", [&] { testPointEntryKeySignatures(testDirectory.path); });

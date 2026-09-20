@@ -360,6 +360,45 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func noteInputModePolicyReturnsToSelectWhenDisabled() {
+        #expect(
+            ScoreReaderToolModePolicy.category(
+                afterSettingNoteInputEnabled: true,
+                currentCategory: .select
+            ) == .notes
+        )
+        #expect(
+            ScoreReaderToolModePolicy.category(
+                afterSettingNoteInputEnabled: false,
+                currentCategory: .notes
+            ) == .select
+        )
+        #expect(
+            ScoreReaderToolModePolicy.category(
+                afterSettingNoteInputEnabled: false,
+                currentCategory: .expression
+            ) == .expression
+        )
+        #expect(ScoreReaderToolModePolicy.selectionLeavesNoteInput(.note))
+        #expect(ScoreReaderToolModePolicy.selectionLeavesNoteInput(.bar))
+        #expect(ScoreReaderToolModePolicy.selectionLeavesNoteInput(.measure))
+        #expect(!ScoreReaderToolModePolicy.selectionLeavesNoteInput(nil))
+    }
+
+    @Test
+    func pencilApproachCanActivateNoteEntryImmediatelyAfterEnteringEditMode() {
+        #expect(
+            ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .enterEditMode)
+        )
+        #expect(
+            !ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .chooseSelect)
+        )
+        #expect(
+            ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .chooseNoteInput)
+        )
+    }
+
+    @Test
     func setlistDisplaySortingAndSearchProduceStableVisibleSequence() {
         let older = testRecentDocument(
             id: "older",

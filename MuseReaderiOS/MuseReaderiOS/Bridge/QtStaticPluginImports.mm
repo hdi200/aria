@@ -5,3 +5,4 @@
 #include <QtCore/qplugin.h>
 
 Q_IMPORT_PLUGIN(QIOSIntegrationPlugin)
+Q_IMPORT_PLUGIN(QJpegPlugin)
