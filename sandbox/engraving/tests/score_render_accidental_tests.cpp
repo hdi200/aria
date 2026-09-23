@@ -907,6 +907,45 @@ void testBlankPartDynamicsRequireApproval(const std::filesystem::path& testRoot)
            "The full-score dynamic was not saved after repair");
 }
 
+// Aria's engine before 4.7.5 left a few MuseScore 5-only style tags in every save;
+// repairs for that engine's bugs are only offered for files carrying them.
+void markSavedByOldAria(const std::filesystem::path& root, const std::string& name)
+{
+    static const std::string oldEngineTag = "<groupBracketOffset x=\"0\" y=\"0\"/>";
+    const std::filesystem::path stylePath = root / "score_style.mss";
+    const std::filesystem::path scorePath = root / (name + ".mscx");
+    const std::filesystem::path path = std::filesystem::exists(stylePath) ? stylePath : scorePath;
+    std::string xml = readFile(path);
+    const size_t style = xml.find("<Style>");
+    expect(style != std::string::npos, "Saved score has no style to mark as old Aria: " + path.string());
+    xml.insert(style + std::string("<Style>").size(), oldEngineTag);
+    writeFile(path, xml);
+}
+
+std::vector<msr::render::ScoreLegacyRepairIssue> reopenAndScan(const std::filesystem::path& root, const std::string& name,
+                                                               std::unique_ptr<msr::render::ScoreRenderSession>* keep = nullptr)
+{
+    std::string error;
+    auto reopened = msr::render::ScoreRenderSession::open((root / (name + ".mscx")).string(), error);
+    expect(reopened != nullptr, "Could not reopen " + name + ": " + error);
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    expect(reopened->legacyRepairIssues(issues, error), "Could not scan " + name + ": " + error);
+    if (keep) {
+        *keep = std::move(reopened);
+    }
+    return issues;
+}
+
+size_t countIssues(const std::vector<msr::render::ScoreLegacyRepairIssue>& issues, const std::string& kind)
+{
+    return static_cast<size_t>(std::count_if(issues.begin(), issues.end(), [&](const auto& issue) { return issue.kind == kind; }));
+}
+
+std::string removeBlocks(std::string xml, const std::string& tag)
+{
+    return std::regex_replace(xml, std::regex("<" + tag + ">[\\s\\S]*?</" + tag + ">"), "");
+}
+
 void testOldPartTempoRequiresApproval(const std::filesystem::path& testRoot)
 {
     const std::filesystem::path root = testRoot / "old-part-tempo";
@@ -929,6 +968,13 @@ void testOldPartTempoRequiresApproval(const std::filesystem::path& testRoot)
     part = std::regex_replace(part, std::regex("<tempo>[^<]+</tempo>"), "<tempo>2</tempo>");
     writeFile(partPath, part);
 
+    // A part tempo that differs from the full score can be deliberate in a file saved
+    // by anything other than the pre-4.7.5 Aria engine.
+    expect(countIssues(reopenAndScan(root, "old-part-tempo-saved"), "tempo") == 0,
+           "A differing part tempo was offered as a repair in a file not saved by old Aria");
+    markSavedByOldAria(root, "old-part-tempo-saved");
+    part = readFile(partPath);
+
     auto reopened = msr::render::ScoreRenderSession::open((root / "old-part-tempo-saved.mscx").string(), error);
     expect(reopened != nullptr, "Could not reopen the old tempo score: " + error);
     std::vector<msr::render::ScoreLegacyRepairIssue> issues;
@@ -944,6 +990,130 @@ void testOldPartTempoRequiresApproval(const std::filesystem::path& testRoot)
     saveSnapshot(*reopened, root, "old-part-tempo-repaired");
     expect(savedExcerptXml(root).find("<followText>1</followText>") != std::string::npos,
            "The repaired part tempo did not save its followText property");
+}
+
+void testOldAriaMissingRepeatsRequireApproval(const std::filesystem::path& testRoot)
+{
+    const std::filesystem::path root = testRoot / "old-missing-repeats";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "old-missing-repeats", scoreXml(0, { { 60, 14 } }, 1));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+    const LocatedItem note = noteWithPitch(scanScore(*session, { 60 }, 0), 60);
+    msr::render::ScoreEditState state;
+    selectAt(*session, note);
+    expect(session->addRepeatJump("segno", state, error), "Could not add a segno: " + error);
+    selectAt(*session, note);
+    expect(session->addRepeatJump("dsalcoda", state, error), "Could not add D.S. al Coda: " + error);
+    saveSnapshot(*session, root, "old-missing-repeats-saved");
+    session.reset();
+
+    // Older Aria added jumps and markers to the full score only.
+    const std::filesystem::path partPath = savedExcerptPath(root);
+    writeFile(partPath, removeBlocks(removeBlocks(readFile(partPath), "Jump"), "Marker"));
+    expect(countIssues(reopenAndScan(root, "old-missing-repeats-saved"), "missingRepeat") == 0,
+           "A part without repeat signs was offered as a repair in a file not saved by old Aria");
+
+    markSavedByOldAria(root, "old-missing-repeats-saved");
+    const std::string partBefore = readFile(partPath);
+    std::unique_ptr<msr::render::ScoreRenderSession> reopened;
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues = reopenAndScan(root, "old-missing-repeats-saved", &reopened);
+    expect(countIssues(issues, "missingRepeat") == 2, "The segno and D.S. al Coda missing from the part were not offered");
+    expect(readFile(partPath) == partBefore, "Opening silently changed the part");
+
+    std::vector<int> indexes;
+    for (const auto& issue : issues) {
+        indexes.push_back(issue.index);
+    }
+    expect(reopened->applyLegacyRepairs(indexes, state, error), "Could not repair the missing repeat signs: " + error);
+    expect(reopened->legacyRepairIssues(issues, error) && countIssues(issues, "missingRepeat") == 0,
+           "The repeat-sign repair did not clear the issues");
+    const std::string score = saveSnapshot(*reopened, root, "old-missing-repeats-repaired");
+    const std::string part = savedExcerptXml(root);
+    expect(countOccurrences(part, "<Marker>") == 1 && countOccurrences(part, "<Jump>") == 1,
+           "The repaired part did not receive exactly one segno and one D.S. al Coda");
+    expect(countOccurrences(score, "<Marker>") == 1 && countOccurrences(score, "<Jump>") == 1,
+           "The repair duplicated repeat signs in the full score");
+    expect(reopened->undo(state, error), "Could not undo the repeat-sign repair: " + error);
+    saveSnapshot(*reopened, root, "old-missing-repeats-undone");
+    expect(countOccurrences(savedExcerptXml(root), "<Jump>") == 0, "Undo did not remove the restored D.S. al Coda from the part");
+}
+
+void testOldAriaPartOnlyTempoRequiresApproval(const std::filesystem::path& testRoot)
+{
+    const std::filesystem::path root = testRoot / "old-part-only-tempo";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "old-part-only-tempo", scoreXml(0, { { 60, 14 } }, 0));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+    msr::render::ScoreEditState state;
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->addTempo("quarter", 90, state, error), "Could not add a tempo: " + error);
+    saveSnapshot(*session, root, "old-part-only-tempo-saved");
+    session.reset();
+
+    // Older Aria kept a tempo added while viewing a part in that part only.
+    const std::filesystem::path scorePath = root / "old-part-only-tempo-saved.mscx";
+    writeFile(scorePath, removeBlocks(readFile(scorePath), "Tempo"));
+    expect(countIssues(reopenAndScan(root, "old-part-only-tempo-saved"), "missingTempo") == 0,
+           "A part-only tempo was offered as a repair in a file not saved by old Aria");
+
+    markSavedByOldAria(root, "old-part-only-tempo-saved");
+    std::unique_ptr<msr::render::ScoreRenderSession> reopened;
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues = reopenAndScan(root, "old-part-only-tempo-saved", &reopened);
+    expect(countIssues(issues, "missingTempo") == 1, "The tempo found only in the part was not offered");
+    const auto tempoIssue = std::find_if(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "missingTempo"; });
+    expect(tempoIssue->location == "Part 1", "The part-only tempo was reported in the wrong place: " + tempoIssue->location);
+
+    expect(reopened->applyLegacyRepairs({ tempoIssue->index }, state, error), "Could not repair the part-only tempo: " + error);
+    expect(reopened->legacyRepairIssues(issues, error) && countIssues(issues, "missingTempo") == 0,
+           "The part-only tempo repair did not clear the issue");
+    const std::string score = saveSnapshot(*reopened, root, "old-part-only-tempo-repaired");
+    const std::string part = savedExcerptXml(root);
+    expect(countOccurrences(score, "<Tempo>") == 1 && score.find("<tempo>1.5</tempo>") != std::string::npos,
+           "The full score did not receive the part's 90 BPM tempo: " + score);
+    expect(countOccurrences(part, "<Tempo>") == 1, "The repair duplicated the tempo in the part");
+}
+
+void testOldAriaPartNamesRequireApproval(const std::filesystem::path& testRoot)
+{
+    const std::filesystem::path root = testRoot / "old-part-names";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "old-part-names", scoreXml(0, { { 60, 14 } }, 0));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+    saveSnapshot(*session, root, "old-part-names-saved");
+    session.reset();
+
+    // Older Aria escaped "&" twice, so "Keys & Synth" read back as "Keys &amp; Synth".
+    const std::regex trackName("<trackName>[^<]*</trackName>");
+    const std::string doubled = "<trackName>Keys &amp;amp; Synth</trackName>";
+    const std::filesystem::path scorePath = root / "old-part-names-saved.mscx";
+    const std::filesystem::path partPath = savedExcerptPath(root);
+    writeFile(scorePath, std::regex_replace(readFile(scorePath), trackName, doubled));
+    writeFile(partPath, std::regex_replace(readFile(partPath), trackName, doubled));
+    expect(countIssues(reopenAndScan(root, "old-part-names-saved"), "partName") == 0,
+           "A part name was offered as a repair in a file not saved by old Aria");
+
+    markSavedByOldAria(root, "old-part-names-saved");
+    std::unique_ptr<msr::render::ScoreRenderSession> reopened;
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues = reopenAndScan(root, "old-part-names-saved", &reopened);
+    expect(countIssues(issues, "partName") == 1, "The double-escaped part name was not offered as one repair");
+    const auto nameIssue = std::find_if(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "partName"; });
+    msr::render::ScoreEditState state;
+    expect(reopened->applyLegacyRepairs({ nameIssue->index }, state, error), "Could not repair the part name: " + error);
+    expect(reopened->legacyRepairIssues(issues, error) && countIssues(issues, "partName") == 0,
+           "The part-name repair did not clear the issue");
+    const std::string score = saveSnapshot(*reopened, root, "old-part-names-repaired");
+    const std::string part = savedExcerptXml(root);
+    expect(savedPartTrackName(score) == "Keys &amp; Synth", "The full score kept the double-escaped name: " + savedPartTrackName(score));
+    expect(savedPartTrackName(part) == "Keys &amp; Synth", "The part kept the double-escaped name: " + savedPartTrackName(part));
 }
 
 template<typename Function>
@@ -980,5 +1150,9 @@ int main()
     passed &= runTest("blank part dynamics require approval", [&] { testBlankPartDynamicsRequireApproval(testDirectory.path); });
     passed &= runTest("old part tempo requires approval", [&] { testOldPartTempoRequiresApproval(testDirectory.path); });
     passed &= runTest("jumps and markers reach linked parts", [&] { testJumpsAndMarkersReachLinkedParts(testDirectory.path); });
+    passed &= runTest("old Aria repeat signs missing from parts require approval",
+                      [&] { testOldAriaMissingRepeatsRequireApproval(testDirectory.path); });
+    passed &= runTest("old Aria part-only tempo requires approval", [&] { testOldAriaPartOnlyTempoRequiresApproval(testDirectory.path); });
+    passed &= runTest("old Aria double-escaped part names require approval", [&] { testOldAriaPartNamesRequireApproval(testDirectory.path); });
     return passed ? 0 : 1;
 }

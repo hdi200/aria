@@ -24,6 +24,7 @@ public:
         masterScore->setFileInfoProvider(std::make_shared<mu::engraving::LocalFileInfoProvider>(path));
 
         const int sourceHarmonyCount = sourceHarmonyCountInScoreFile(path);
+        const bool savedByOldAriaEngine = scoreFileSavedByOldAriaEngine(path);
 
         muse::Ret loadResult = loadScoreForRenderCore(masterScore.get(), path);
         if (!loadResult) {
@@ -64,6 +65,7 @@ public:
                      scorePath,
                      totalPageCount,
                      sourceHarmonyCount,
+                     savedByOldAriaEngine,
                      std::move(persistedLayoutModes))
         );
     }
@@ -73,12 +75,14 @@ public:
          const std::string& scorePath,
          const int totalPageCount,
          const int sourceHarmonyCount,
+         const bool savedByOldAriaEngine,
          std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> persistedLayoutModes)
         : m_sessionContext(std::move(sessionContext)),
           m_masterScore(std::move(masterScore)),
           m_scorePath(scorePath),
           m_totalPageCount(totalPageCount),
-          m_persistedLayoutModes(std::move(persistedLayoutModes))
+          m_persistedLayoutModes(std::move(persistedLayoutModes)),
+          m_savedByOldAriaEngine(savedByOldAriaEngine)
     {
         if (m_masterScore) {
             m_activeScore = m_masterScore.get();

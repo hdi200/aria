@@ -717,8 +717,18 @@ struct ScoreLegacyRepairIssue: Identifiable, Sendable, Equatable {
 
     var id: Int { index }
     var title: String {
-        let category = kind == "tempo" ? "Tempo" : "Dynamic"
-        return "\(category) · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
+        switch kind {
+        case "partName":
+            return "Part Name · \(location)"
+        case "missingRepeat":
+            return "Repeat Sign · \(location) · Measure \(measureNumber)"
+        case "missingTempo":
+            return "Tempo · \(location) · Measure \(measureNumber)"
+        case "tempo":
+            return "Tempo · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
+        default:
+            return "Dynamic · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
+        }
     }
 }
 

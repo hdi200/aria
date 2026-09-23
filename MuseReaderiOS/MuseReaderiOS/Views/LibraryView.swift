@@ -277,6 +277,18 @@ struct LibraryView: View {
         .task {
             await model.refreshVisibleLibrary()
             model.presentEarlySupporterMessageIfNeeded()
+            await model.checkForUpdateNotice()
+        }
+        .onChangeCompatible(of: model.libraryAccessSheet?.id) { _ in
+            // Launch messages share this sheet; whichever waited shows once the other closes.
+            guard model.libraryAccessSheet == nil else {
+                return
+            }
+            model.presentEarlySupporterMessageIfNeeded()
+            model.presentUpdateNoticeIfNeeded()
+        }
+        .onChangeCompatible(of: model.currentSession?.id) { _ in
+            model.presentUpdateNoticeIfNeeded()
         }
         .onChangeCompatible(of: accessController.status) { _ in
             model.presentEarlySupporterMessageIfNeeded()
@@ -452,6 +464,8 @@ struct LibraryView: View {
                 ScoreImportReviewSheet(model: model, review: review)
             case .earlySupporter:
                 EarlySupporterAccessView()
+            case .updateNotice:
+                UpdateNoticeSheet()
             }
         }
         .sheet(item: $folderPendingScoreAdd) { request in

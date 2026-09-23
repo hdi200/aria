@@ -23,7 +23,7 @@ struct ScoreLegacyRepairSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Aria found \(issues.count) older score issue\(issues.count == 1 ? "" : "s") that can be fixed from matching markings in the full score or linked parts. Review each one below.")
+                Text("Aria found \(issues.count) issue\(issues.count == 1 ? "" : "s") in this score, left by an earlier version of Aria, that it can fix. Review each one below. Nothing changes unless you fix it.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)

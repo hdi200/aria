@@ -6,6 +6,9 @@
 //
 //   score_render_resave <input> <output>
 //   score_render_resave --manifest <file.tsv>   (one "input<TAB>output" per line)
+//   score_render_resave --scan <input>...        (list the older-score repairs Aria
+//                                                 would offer; changes nothing)
+//   score_render_resave --repair <input> <output> (apply every offered repair, save)
 //
 // For every job it prints one line to stdout: "OK\t<input>" or
 // "FAIL\t<input>\t<error>", flushed immediately so a driver can resume after a crash.
@@ -45,8 +48,62 @@ std::string singleLine(std::string text)
 
 } // namespace
 
+int scan(int argc, char* argv[])
+{
+    int failures = 0;
+    for (int i = 2; i < argc; ++i) {
+        std::string errorMessage;
+        std::unique_ptr<msr::render::ScoreRenderSession> session = msr::render::ScoreRenderSession::open(argv[i], errorMessage);
+        std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+        if (!session || !session->legacyRepairIssues(issues, errorMessage)) {
+            ++failures;
+            std::cout << "FAIL\t" << argv[i] << "\t" << singleLine(errorMessage) << std::endl;
+            continue;
+        }
+        std::cout << "SCAN\t" << argv[i] << "\t" << issues.size() << " repair(s)" << std::endl;
+        for (const auto& issue : issues) {
+            std::cout << "  " << issue.kind << " | " << issue.location << " | measure " << issue.measureNumber
+                      << " | " << issue.message << std::endl;
+        }
+    }
+    return failures == 0 ? 0 : 1;
+}
+
+int repair(const std::string& inputPath, const std::string& outputPath)
+{
+    std::string errorMessage;
+    std::unique_ptr<msr::render::ScoreRenderSession> session = msr::render::ScoreRenderSession::open(inputPath, errorMessage);
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    if (!session || !session->legacyRepairIssues(issues, errorMessage)) {
+        std::cout << "FAIL\t" << inputPath << "\t" << singleLine(errorMessage) << std::endl;
+        return 1;
+    }
+    std::vector<int> indexes;
+    for (const auto& issue : issues) {
+        indexes.push_back(issue.index);
+    }
+    msr::render::ScoreEditState state;
+    if (!indexes.empty() && !session->applyLegacyRepairs(indexes, state, errorMessage)) {
+        std::cout << "FAIL\t" << inputPath << "\t" << singleLine(errorMessage) << std::endl;
+        return 1;
+    }
+    if (!session->saveToPath(outputPath, errorMessage)) {
+        std::cout << "FAIL\t" << inputPath << "\t" << singleLine(errorMessage) << std::endl;
+        return 1;
+    }
+    std::cout << "REPAIRED\t" << inputPath << "\t" << indexes.size() << " repair(s)" << std::endl;
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
+    if (argc >= 3 && std::string(argv[1]) == "--scan") {
+        return scan(argc, argv);
+    }
+    if (argc == 4 && std::string(argv[1]) == "--repair") {
+        return repair(argv[2], argv[3]);
+    }
+
     std::vector<std::pair<std::string, std::string> > jobs;
 
     if (argc == 3 && std::string(argv[1]) == "--manifest") {

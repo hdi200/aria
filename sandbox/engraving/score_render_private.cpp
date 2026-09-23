@@ -142,6 +142,8 @@ private:
     int m_totalPageCount = 0;
     int m_maxObservedMasterHarmonyCount = 0;
     std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> m_persistedLayoutModes;
+    // The opened file was last saved by the pre-4.7.5 engine; see scoreFileSavedByOldAriaEngine.
+    bool m_savedByOldAriaEngine = false;
     mutable std::unique_ptr<FluidSynthPlaybackStream> m_playbackStream;
     int m_playbackStreamRevision = 0;
     // 4.7.5 declares the renderer per-context; the render core registers it globally.

@@ -32,6 +32,27 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func updateNoticeUsesOriginalInstallDate() {
+        let beforeRelease = UpdateNoticeStore.releaseDate.addingTimeInterval(-1)
+        let atRelease = UpdateNoticeStore.releaseDate
+        let afterRelease = UpdateNoticeStore.releaseDate.addingTimeInterval(1)
+
+        #expect(UpdateNoticeStore.isExistingInstall(originalPurchaseDate: beforeRelease))
+        #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: atRelease))
+        #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: afterRelease))
+        // September 24, 2026, 12:00 PM Eastern (EDT, UTC-4).
+        #expect(UpdateNoticeStore.releaseDate == ISO8601DateFormatter().date(from: "2026-09-24T16:00:00Z"))
+    }
+
+    @Test
+    func updateNoticeIsShownOnce() {
+        let defaults = UserDefaults(suiteName: "UpdateNoticeTests.\(UUID().uuidString)")!
+        let store = UpdateNoticeStore(userDefaults: defaults)
+        store.markNoticeSeen()
+        #expect(defaults.integer(forKey: "UpdateNotice.seenVersion") == UpdateNoticeStore.currentVersion)
+    }
+
+    @Test
     func featureTourUsesApprovedMixerCopy() {
         #expect(
             ScoreReaderFeatureTour.defaultSteps.first?.message

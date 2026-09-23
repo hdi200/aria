@@ -5,7 +5,7 @@
             return false;
         }
         output.clear();
-        for (const LegacyRepairCandidate& candidate : scanLegacyRepairCandidates(m_masterScore.get())) {
+        for (const LegacyRepairCandidate& candidate : scanLegacyRepairCandidates(m_masterScore.get(), m_savedByOldAriaEngine)) {
             output.push_back(candidate.issue);
         }
         return true;
@@ -19,7 +19,7 @@
             errorMessage = "No score repairs were selected.";
             return false;
         }
-        const std::vector<LegacyRepairCandidate> candidates = scanLegacyRepairCandidates(m_masterScore.get());
+        const std::vector<LegacyRepairCandidate> candidates = scanLegacyRepairCandidates(m_masterScore.get(), m_savedByOldAriaEngine);
         std::unordered_set<int> uniqueIndexes;
         for (int index : issueIndexes) {
             if (index < 0 || index >= static_cast<int>(candidates.size()) || !uniqueIndexes.insert(index).second) {
@@ -41,6 +41,32 @@
                 target->setFollowText(source->followText());
                 target->score()->setTempo(target->segment(), target->tempo());
             }
+        }
+
+        // Structural repairs go through the undo system, which is what copies system
+        // markings into every part and part renames into the file.
+        bool startedCommand = false;
+        for (int index : issueIndexes) {
+            const LegacyRepairCandidate& candidate = candidates.at(static_cast<size_t>(index));
+            if (candidate.issue.kind != "missingRepeat" && candidate.issue.kind != "missingTempo"
+                && candidate.issue.kind != "partName") {
+                continue;
+            }
+            if (!startedCommand) {
+                m_masterScore->startCmd(muse::TranslatableString::untranslatable("Aria repair older score"));
+                startedCommand = true;
+            }
+            if (candidate.issue.kind == "partName") {
+                for (mu::engraving::Part* part : candidate.parts) {
+                    part->score()->undo(new mu::engraving::ChangePart(part, new mu::engraving::Instrument(*part->instrument()),
+                                                                      candidate.newPartName));
+                }
+                continue;
+            }
+            repairMissingSystemMarking(m_masterScore.get(), candidate.source);
+        }
+        if (startedCommand) {
+            m_masterScore->endCmd();
         }
         relayoutAllScores();
         refreshAfterEdit();

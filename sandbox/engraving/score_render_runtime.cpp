@@ -71,9 +71,244 @@ struct LegacyRepairCandidate {
     msr::render::ScoreLegacyRepairIssue issue;
     mu::engraving::EngravingItem* target = nullptr;
     mu::engraving::EngravingItem* source = nullptr;
+    // partName repairs
+    std::vector<mu::engraving::Part*> parts;
+    muse::String newPartName;
 };
 
-std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::MasterScore* masterScore)
+bool isLinkedSystemMarking(const mu::engraving::EngravingItem* item)
+{
+    return item && (item->isJump() || item->isMarker() || item->isTempoText());
+}
+
+muse::String systemMarkingName(const mu::engraving::EngravingItem* item)
+{
+    using mu::engraving::MarkerType;
+    if (item->isTempoText()) {
+        return u"tempo marking";
+    }
+    if (item->isJump()) {
+        const muse::String text = mu::engraving::toJump(item)->plainText().simplified();
+        return text.empty() ? muse::String(u"jump") : text;
+    }
+    switch (mu::engraving::toMarker(item)->markerType()) {
+    case MarkerType::SEGNO:
+    case MarkerType::VARSEGNO:
+        return u"Segno";
+    case MarkerType::CODA:
+    case MarkerType::VARCODA:
+    case MarkerType::CODETTA:
+        return u"Coda";
+    case MarkerType::FINE:
+        return u"Fine";
+    case MarkerType::TOCODA:
+    case MarkerType::TOCODASYM:
+        return u"To Coda";
+    default:
+        return u"repeat marker";
+    }
+}
+
+// An unlinked marking of the same kind at the same place, e.g. one the user re-added
+// by hand. Adding another copy there would duplicate it.
+bool scoreHasSameMarkingAt(mu::engraving::Score* score, const mu::engraving::EngravingItem* item)
+{
+    mu::engraving::Measure* measure = score->tick2measure(item->tick());
+    if (!measure) {
+        return false;
+    }
+    if (item->isTempoText()) {
+        for (mu::engraving::Segment* segment = measure->first(); segment && segment->measure() == measure; segment = segment->next()) {
+            if (segment->tick() != item->tick()) {
+                continue;
+            }
+            for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
+                if (annotation && annotation->isTempoText()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    for (mu::engraving::EngravingItem* element : measure->el()) {
+        if (!element || element->type() != item->type()) {
+            continue;
+        }
+        if (item->isJump() && mu::engraving::toJump(element)->jumpType() == mu::engraving::toJump(item)->jumpType()) {
+            return true;
+        }
+        if (item->isMarker() && mu::engraving::toMarker(element)->markerType() == mu::engraving::toMarker(item)->markerType()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+muse::String scoreDisplayName(mu::engraving::Score* score)
+{
+    if (score->isMaster()) {
+        return u"the full score";
+    }
+    const mu::engraving::Excerpt* excerpt = score->excerpt();
+    return excerpt && !excerpt->name().empty() ? excerpt->name() : muse::String(u"a part");
+}
+
+// Older Aria added jumps and markers to the full score only, and tempo markings made
+// while viewing a part to that part only. Such a marking is missing from scores that
+// MuseScore always gives every system marking to.
+void scanMissingSystemMarkings(mu::engraving::MasterScore* masterScore, std::vector<LegacyRepairCandidate>& candidates)
+{
+    const auto scoreList = masterScore->scoreList();
+    const std::vector<mu::engraving::Score*> scores(scoreList.begin(), scoreList.end());
+    if (scores.size() < 2) {
+        return;
+    }
+
+    std::unordered_set<const void*> seenLinkSets;
+    for (size_t scoreIndex = 0; scoreIndex < scores.size(); ++scoreIndex) {
+        mu::engraving::Score* score = scores.at(scoreIndex);
+        for (mu::engraving::Measure* measure = score->firstMeasure(); measure; measure = measure->nextMeasure()) {
+            std::vector<mu::engraving::EngravingItem*> markings;
+            for (mu::engraving::EngravingItem* element : measure->el()) {
+                if (element && (element->isJump() || element->isMarker())) {
+                    markings.push_back(element);
+                }
+            }
+            for (mu::engraving::Segment* segment = measure->first(); segment && segment->measure() == measure; segment = segment->next()) {
+                for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
+                    if (annotation && annotation->isTempoText()) {
+                        markings.push_back(annotation);
+                    }
+                }
+            }
+
+            for (mu::engraving::EngravingItem* marking : markings) {
+                const void* linkSet = marking->links() ? static_cast<const void*>(marking->links()) : marking;
+                if (!seenLinkSets.insert(linkSet).second) {
+                    continue;
+                }
+
+                std::unordered_set<const mu::engraving::Score*> covered;
+                mu::engraving::EngravingItem* masterCopy = nullptr;
+                for (mu::engraving::EngravingObject* linked : marking->linkList()) {
+                    covered.insert(linked->score());
+                    if (linked->score() == masterScore && linked->isEngravingItem()) {
+                        auto* item = mu::engraving::toEngravingItem(linked);
+                        if (!masterCopy || item->track() < masterCopy->track()) {
+                            masterCopy = item;
+                        }
+                    }
+                }
+
+                std::vector<mu::engraving::Score*> missing;
+                bool conflicting = false;
+                for (mu::engraving::Score* candidateScore : scores) {
+                    if (covered.count(candidateScore)) {
+                        continue;
+                    }
+                    missing.push_back(candidateScore);
+                    conflicting |= scoreHasSameMarkingAt(candidateScore, marking);
+                }
+                if (missing.empty() || conflicting) {
+                    continue;
+                }
+
+                muse::String missingNames;
+                for (mu::engraving::Score* missingScore : missing) {
+                    missingNames += (missingNames.empty() ? u"" : u", ") + scoreDisplayName(missingScore);
+                }
+                const muse::String name = systemMarkingName(marking);
+
+                msr::render::ScoreLegacyRepairIssue issue;
+                issue.index = static_cast<int>(candidates.size());
+                issue.measureNumber = measure->no() + 1;
+                issue.staffIndex = 0;
+                issue.kind = marking->isTempoText() ? "missingTempo" : "missingRepeat";
+                if (masterCopy) {
+                    issue.location = "Full score";
+                    issue.message = (u"Add this " + name + u" to " + missingNames + u", where it is missing.").toStdString();
+                } else {
+                    issue.location = scoreIndex == 0 ? "Full score" : "Part " + std::to_string(scoreIndex);
+                    issue.message = (u"This " + name + u" is only in " + scoreDisplayName(score) + u". Add it to "
+                                     + missingNames + u"."
+                                     + (marking->isTempoText() ? u" Playback follows it from this bar." : u"")).toStdString();
+                }
+                candidates.push_back({ issue, nullptr, masterCopy ? masterCopy : marking, {}, {} });
+            }
+        }
+    }
+}
+
+// Older Aria escaped "&" in part names twice, so "Horn in F 1 & 2" came back as
+// "Horn in F 1 &amp; 2". Nobody names a part with a literal "&amp;".
+void scanDoubleEscapedPartNames(mu::engraving::MasterScore* masterScore, std::vector<LegacyRepairCandidate>& candidates)
+{
+    static const muse::String escapedAmpersand(u"&amp;");
+    std::vector<muse::String> names;
+    std::vector<std::vector<mu::engraving::Part*> > partsByName;
+    for (mu::engraving::Score* score : masterScore->scoreList()) {
+        for (mu::engraving::Part* part : score->parts()) {
+            const muse::String name = part->partName();
+            if (!name.contains(escapedAmpersand)) {
+                continue;
+            }
+            auto it = std::find(names.begin(), names.end(), name);
+            if (it == names.end()) {
+                names.push_back(name);
+                partsByName.push_back({ part });
+            } else {
+                partsByName.at(static_cast<size_t>(it - names.begin())).push_back(part);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < names.size(); ++i) {
+        muse::String fixed = names.at(i);
+        while (fixed.contains(escapedAmpersand)) {
+            fixed.replace(escapedAmpersand, u"&");
+        }
+        msr::render::ScoreLegacyRepairIssue issue;
+        issue.index = static_cast<int>(candidates.size());
+        issue.measureNumber = 0;
+        issue.staffIndex = 0;
+        issue.kind = "partName";
+        issue.location = "Full score and parts";
+        issue.message = (u"Rename \u201C" + names.at(i) + u"\u201D to \u201C" + fixed + u"\u201D.").toStdString();
+        candidates.push_back({ issue, nullptr, nullptr, partsByName.at(i), fixed });
+    }
+}
+
+// Rebuild a system marking as a complete linked set: remove the incomplete set, then
+// add a copy to the full score's top staff. undoAddElement copies system markings into
+// every part (and the full score's system-object staves), as when a user adds one.
+// Must run inside an undo command.
+void repairMissingSystemMarking(mu::engraving::MasterScore* masterScore, mu::engraving::EngravingItem* source)
+{
+    const mu::engraving::Fraction tick = source->isTempoText() ? source->tick() : source->findMeasure()->tick();
+    mu::engraving::EngravingItem* copy = source->clone();
+    copy->setScore(masterScore);
+    copy->setSelected(false);
+    copy->setTrack(0);
+
+    source->score()->undoRemoveElement(source);
+
+    mu::engraving::Measure* measure = masterScore->tick2measure(tick);
+    if (copy->isTempoText()) {
+        copy->setParent(measure->undoGetSegment(mu::engraving::SegmentType::ChordRest, tick));
+    } else {
+        copy->setParent(measure);
+    }
+    masterScore->undoAddElement(copy);
+
+    if (copy->isTempoText()) {
+        auto* tempo = mu::engraving::toTempoText(copy);
+        tempo->updateTempo();
+        masterScore->setTempo(tempo->segment(), tempo->tempo());
+    }
+}
+
+std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::MasterScore* masterScore,
+                                                              const bool savedByOldAriaEngine)
 {
     static const muse::String blankDynamicText(u"other-dynamics");
     std::vector<LegacyRepairCandidate> candidates;
@@ -110,7 +345,7 @@ std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::Mas
                         }
                         kind = "dynamic";
                         message = "Restore a blank dynamic from its matching linked marking.";
-                    } else if (annotation->isTempoText()) {
+                    } else if (annotation->isTempoText() && savedByOldAriaEngine) {
                         auto* target = mu::engraving::toTempoText(annotation);
                         // Loading can normalize the in-memory BPM from the linked
                         // master even when this part serialized 120 BPM. The
@@ -138,11 +373,18 @@ std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::Mas
                     issue.kind = kind;
                     issue.location = scoreIndex == 0 ? "Full score" : "Part " + std::to_string(scoreIndex);
                     issue.message = message;
-                    candidates.push_back({ issue, annotation, source });
+                    candidates.push_back({ issue, annotation, source, {}, {} });
                 }
             }
         }
         ++scoreIndex;
+    }
+
+    // The checks below undo bugs of the pre-4.7.5 engine. A file last saved by any
+    // other version may have the same shapes on purpose, so leave those alone.
+    if (savedByOldAriaEngine) {
+        scanMissingSystemMarkings(masterScore, candidates);
+        scanDoubleEscapedPartNames(masterScore, candidates);
     }
     return candidates;
 }
@@ -290,6 +532,41 @@ int sourceHarmonyCountInScoreFile(const muse::io::path_t& path)
     }
 
     return count;
+}
+
+// Aria's engine before 4.7.5 was a MuseScore 5.0 development snapshot. It stamped its
+// saves as 4.70 / 4.7.2 (69af3e1), the same stamp desktop 4.7.2 writes, but it also
+// wrote a few 5.0-only style tags (<groupBracket...>). Desktop 4.7.x and this engine
+// drop those tags on save, so they mark a file last saved by that older Aria. Repairs
+// for its bugs are only offered for such files, never for later deliberate edits.
+bool scoreFileSavedByOldAriaEngine(const muse::io::path_t& path)
+{
+    const auto ioMode = mu::engraving::mscIoModeBySuffix(normalizedSuffix(path));
+    if (ioMode == mu::engraving::MscIoMode::Unknown) {
+        return false;
+    }
+
+    mu::engraving::MscReader::Params params;
+    params.filePath = path;
+    params.mode = ioMode;
+
+    mu::engraving::MscReader reader(params);
+    if (!reader.open()) {
+        return false;
+    }
+
+    const muse::ByteArray scoreData = reader.readScoreFile();
+    const std::string xml(scoreData.constChar(), scoreData.size());
+    if (xml.substr(0, 512).find("<museScore version=\"4.70\"") == std::string::npos) {
+        return false;
+    }
+    if (xml.find("<groupBracket") != std::string::npos) {
+        return true; // single-file .mscx embeds its style
+    }
+
+    const muse::ByteArray styleData = reader.readStyleFile();
+    const std::string style(styleData.constChar(), styleData.size());
+    return style.find("<groupBracket") != std::string::npos;
 }
 
 // Mirrors EngravingProject::setupMasterScore, which desktop runs after every load and
