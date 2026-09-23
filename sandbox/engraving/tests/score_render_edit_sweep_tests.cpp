@@ -162,12 +162,46 @@ std::string twoInstrumentScoreXml()
 )MSCX";
 }
 
+std::string singleInstrumentScoreXml()
+{
+    return R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <trackName>Violin</trackName>
+      <Instrument id="violin">
+        <longName>Violin</longName>
+        <trackName>Violin</trackName>
+        <instrumentId>strings.violin</instrumentId>
+        <Channel><program value="40"/></Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <KeySig><concertKey>0</concertKey></KeySig>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Clef><concertClefType>G</concertClefType></Clef>
+          <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+          <Rest><durationType>half</durationType></Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+}
+
 std::unique_ptr<msr::render::ScoreRenderSession> openSession(const std::filesystem::path& root,
-                                                             const std::string& name)
+                                                             const std::string& name,
+                                                             const std::string& scoreXml = twoInstrumentScoreXml())
 {
     std::filesystem::create_directories(root);
     const std::filesystem::path path = root / (name + ".mscx");
-    writeFile(path, twoInstrumentScoreXml());
+    writeFile(path, scoreXml);
     std::string error;
     auto session = msr::render::ScoreRenderSession::open(path.string(), error);
     expect(session != nullptr, "Could not open " + name + ": " + error);
@@ -1204,6 +1238,46 @@ void testChainedPartViewEditsStayLinked(const std::filesystem::path& root)
     expectPartcheckClean(baseline, redone, "chained part-view edits redo");
 }
 
+void testSingleInstrumentPartViewRoundTrip(const std::filesystem::path& root)
+{
+    const std::filesystem::path testRoot = root / "single-instrument-part-view";
+    auto session = openSession(testRoot, "solo-violin", singleInstrumentScoreXml());
+    expect(session->partInfoList().size() == 1, "Expected exactly one instrument in the full score");
+
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not activate the only part: " + error);
+    const SavedState baseline = saveState(*session, testRoot, root / "roundtrip-artifacts", "single-part-baseline");
+    expect(baseline.excerpts.size() == 1, "Expected exactly one saved linked part");
+
+    msr::render::ScoreEditState state;
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->addTempo("quarter", 108, state, error), "Could not add tempo from the only part: " + error);
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input in the only part: " + error);
+    expect(session->insertMIDIChordAtCursor({ 72, 76, 79 }, false, state, error),
+           "Could not enter a chord in the only part: " + error);
+    expect(session->setNoteInputEnabled(false, state, error), "Could not leave note input in the only part: " + error);
+
+    // Save without switching away from the part: the master and the only
+    // excerpt must both contain the edit when the package is opened again.
+    const SavedState changed = saveState(*session, testRoot, root / "roundtrip-artifacts", "single-part-changed");
+    expect(changed.excerpts.size() == 1, "The save lost or duplicated the only linked part");
+    for (const std::string* xml : { &changed.master, &changed.excerpts.front() }) {
+        expect(xml->find("<tempo>1.8</tempo>") != std::string::npos, "Tempo is missing from a saved score view");
+        expect(xml->find("<pitch>72</pitch>") != std::string::npos, "New chord is missing from a saved score view");
+    }
+    expectPartcheckClean(baseline, changed, "single-instrument part-view edits");
+
+    auto reopened = msr::render::ScoreRenderSession::open(changed.artifactPath.string(), error);
+    expect(reopened != nullptr, "Could not reopen single-instrument score: " + error);
+    expect(reopened->partInfoList().size() == 1, "Reopened score changed its instrument count");
+    expect(reopened->setActivePartIndex(0, pageCount, error), "Could not reopen the only part: " + error);
+    noteWithPitch(scanScore(*reopened, { 72 }, 0), 72);
+    expect(reopened->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+    noteWithPitch(scanScore(*reopened, { 72 }, 0), 72);
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -1231,6 +1305,8 @@ int main()
                       [&] { testReplaceInstrumentsFromPartUpdatesFullScore(directory.path); });
     passed &= runTest("chained edits made and saved from a part stay linked",
                       [&] { testChainedPartViewEditsStayLinked(directory.path); });
+    passed &= runTest("single-instrument part edits survive save and reopen in both views",
+                      [&] { testSingleInstrumentPartViewRoundTrip(directory.path); });
     passed &= runTest("core notation mutations stay linked and undo from full score and part",
                       [&] { testCoreNotationMutationSweep(directory.path); });
     passed &= runTest("prepared text, lyrics, melisma, and layout edits undo cleanly",

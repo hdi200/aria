@@ -212,6 +212,30 @@ else()
         score_render_core
     )
 
+    add_executable(score_render_playback_export
+        compat/playback_export_main.cpp
+    )
+
+    target_include_directories(score_render_playback_export PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+    )
+
+    target_link_libraries(score_render_playback_export PRIVATE
+        score_render_core
+    )
+
+    add_executable(score_render_musicxml_export
+        compat/musicxml_export_main.cpp
+    )
+
+    target_include_directories(score_render_musicxml_export PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+    )
+
+    target_link_libraries(score_render_musicxml_export PRIVATE
+        score_render_core
+    )
+
     if(SCORE_RENDER_BUILD_TESTS)
         enable_testing()
 

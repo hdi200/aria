@@ -7824,6 +7824,15 @@ static void partList(XmlWriter& xml, Score* score, MusicXmlInstrumentMap& instrM
                 hiddenInstrName = true;
             }
         }
+        // A 4.7 score can have a saved <trackName> even when its instrument
+        // has no long name. Keep that name in MusicXML instead of exporting an
+        // empty part-name, which loses the part label on desktop import.
+        if (partName.empty()) {
+            partName = part->trackNameForSave();
+            if (!partName.empty()) {
+                hiddenInstrName = true;
+            }
+        }
         if (hiddenInstrName) {
             longInstrumentAttributes.push_back({ "print-object", "no" });
             shortInstrumentAttributes.push_back({ "print-object", "no" });
