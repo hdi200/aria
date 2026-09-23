@@ -3301,6 +3301,9 @@ void TRead::read(Part* p, XmlReader& e, ReadContext& ctx)
         }
     }
 
+    // <trackName> precedes <Instrument>, so bind it once the whole part is read.
+    p->bindLoadedTrackNameToInstrument();
+
     read(p, staffHideModes, ctx.style().styleB(Sid::hideEmptyStaves));
 }
 
@@ -3401,6 +3404,8 @@ bool TRead::readProperties(Part* p, XmlReader& e, ReadContext& ctx, StaffHideMod
         p->setShow(e.readInt());
     } else if (tag == "soloist") {
         p->setSoloist(e.readInt());
+    } else if (tag == "trackName") {
+        p->setLoadedTrackName(e.readText());
     } else if (tag == "preferSharpFlat") {
         String val = e.readText();
         if (val == "sharps") {

@@ -2591,7 +2591,7 @@ void TWrite::write(const Part* item, XmlWriter& xml, WriteContext& ctx)
         xml.tag("soloist", item->soloist());
     }
 
-    xml.tag("trackName", item->partName());
+    xml.tag("trackName", item->trackNameForSave());
 
     if (item->color() != Part::DEFAULT_COLOR) {
         xml.tag("color", item->color());

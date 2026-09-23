@@ -39,6 +39,7 @@
 #include "staff.h"
 #include "system.h"
 #include "stringtunings.h"
+#include "textbase.h"
 
 #include "log.h"
 
@@ -868,6 +869,25 @@ String Part::partName() const
     }
 
     return fullName;
+}
+
+String Part::trackNameForSave() const
+{
+    if (!m_loadedTrackName.empty() && m_loadedTrackNameInstrumentId == instrumentId()) {
+        return m_loadedTrackName;
+    }
+
+    // Part views created in this session take their name from the full score's part.
+    const Part* master = masterPart();
+    if (master && master != this) {
+        return master->trackNameForSave();
+    }
+
+    // New or re-instrumented parts: MuseScore 4.7 names these after the instrument
+    // template's plain-text track name. partName() is instrument-name XML, so it must
+    // not be written as-is.
+    const String& instrumentTrackName = instrument()->trackName();
+    return instrumentTrackName.empty() ? TextBase::unEscape(partName()) : instrumentTrackName;
 }
 
 bool Part::isVisible() const

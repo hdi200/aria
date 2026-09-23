@@ -161,6 +161,14 @@ public:
 
     String partName() const;
 
+    //! MuseScore 4.7 files store a part name of their own (<trackName>, shown in its
+    //! Instruments panel and mixer), while this engine derives partName() from the
+    //! instrument. Keep the loaded name so saves write it back unchanged, for as long
+    //! as the part still has the instrument it was loaded with.
+    void setLoadedTrackName(const String& name) { m_loadedTrackName = name; }
+    void bindLoadedTrackNameToInstrument() { m_loadedTrackNameInstrumentId = instrumentId(); }
+    String trackNameForSave() const;
+
     int color() const { return m_color; }
     void setColor(int value) { m_color = value; }
 
@@ -217,6 +225,9 @@ private:
     bool m_hideStavesWhenIndividuallyEmpty = false;
 
     PreferSharpFlat m_preferSharpFlat = PreferSharpFlat::AUTO;
+
+    String m_loadedTrackName;
+    String m_loadedTrackNameInstrumentId;
 
     std::map<int, StringTunings*> m_stringTunings;
 };

@@ -387,7 +387,8 @@
         }
 
         if (!defaultText.empty()) {
-            text->setPlainText(defaultText);
+            // Through the undo stack, so the copies addText() made in linked parts get it too.
+            text->undoChangeProperty(mu::engraving::Pid::TEXT, mu::engraving::TextBase::plainToXmlText(defaultText));
         }
 
         commandScore->endCmd();
@@ -930,7 +931,8 @@
             marker->resetProperty(mu::engraving::Pid::LABEL);
             marker->setTrack(0);
             marker->setParent(measure);
-            score->doUndoAddElement(marker);
+            // undoAddElement (not doUndoAddElement) also places the marker in every part.
+            score->undoAddElement(marker);
             addedItem = marker;
         } else {
             mu::engraving::JumpType jumpType = mu::engraving::JumpType::USER;
@@ -952,7 +954,8 @@
             jump->setJumpType(jumpType);
             jump->setTrack(0);
             jump->setParent(measure);
-            score->doUndoAddElement(jump);
+            // undoAddElement (not doUndoAddElement) also places the jump in every part.
+            score->undoAddElement(jump);
             addedItem = jump;
         }
 
@@ -1029,7 +1032,9 @@
                 return false;
             }
 
-            dynamic->setDynamicType(muse::String::fromUtf8(dynamicType->second));
+            // Through the undo stack, so the copies addText() made in linked parts get the
+            // type too; setting it directly left them as blank "other-dynamics".
+            dynamic->undoChangeProperty(mu::engraving::Pid::DYNAMIC_TYPE, muse::String::fromUtf8(dynamicType->second));
             addedItem = dynamic;
         } else if (key == "crescendo" || key == "decrescendo") {
             const mu::engraving::HairpinType hairpinType = key == "crescendo"

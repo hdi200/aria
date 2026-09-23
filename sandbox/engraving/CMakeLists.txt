@@ -198,6 +198,20 @@ else()
         score_render_core
     )
 
+    # Re-saves scores through Aria's save path for the MuseScore 4.7.5
+    # round-trip check (compat/roundtrip_475.py).
+    add_executable(score_render_resave
+        compat/resave_main.cpp
+    )
+
+    target_include_directories(score_render_resave PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+    )
+
+    target_link_libraries(score_render_resave PRIVATE
+        score_render_core
+    )
+
     if(SCORE_RENDER_BUILD_TESTS)
         enable_testing()
 

@@ -182,6 +182,35 @@ std::string horizontalFrameScoreXml()
 )MSCX";
 }
 
+std::string customPartNameScoreXml()
+{
+    return R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <trackName>Keys &amp; Synth</trackName>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <trackName>Piano</trackName>
+        <instrumentId>keyboard.piano</instrumentId>
+        <Channel><program value="0"/></Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+}
+
 std::unique_ptr<msr::render::ScoreRenderSession> openSession(const std::filesystem::path& root,
                                                              const std::string& name,
                                                              const std::string& xml)
@@ -702,6 +731,156 @@ void testLegacyStaffTextCompatibility(const std::filesystem::path& root, const s
     }
 }
 
+std::string savedPartTrackName(const std::string& xml)
+{
+    // The part's own <trackName> precedes <Instrument>; the instrument's is inside it.
+    const size_t part = xml.find("<Part");
+    const size_t instrument = xml.find("<Instrument", part);
+    const size_t open = xml.find("<trackName>", part);
+    expect(part != std::string::npos && open < instrument, "Saved part has no <trackName> of its own");
+    const size_t start = open + std::string("<trackName>").size();
+    return xml.substr(start, xml.find("</trackName>", start) - start);
+}
+
+void testPartNamesSurviveSave(const std::filesystem::path& testRoot)
+{
+    // Folder-style .mscx saves replace their whole directory, so use one of our own.
+    const std::filesystem::path root = testRoot / "part-names";
+    std::filesystem::create_directories(root);
+    // MuseScore 4.7 keeps a part name separate from the instrument name. Aria must
+    // write it back unchanged (escaped once), follow an instrument replacement the
+    // way MuseScore does, and restore it on undo.
+    auto session = openSession(root, "part-names", customPartNameScoreXml());
+    std::string saved = savedPartTrackName(saveSnapshot(*session, root, "part-names-saved"));
+    expect(saved == "Keys &amp; Synth", "Custom part name was not preserved: " + saved);
+
+    const std::vector<msr::render::ScorePartInfo> parts = session->partInfoList();
+    expect(parts.size() == 1, "Expected one part");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->replacePartInstrument(parts.front().partId, "flute", state, error), "Could not replace instrument: " + error);
+    saved = savedPartTrackName(saveSnapshot(*session, root, "part-names-replaced"));
+    expect(saved == "Flute", "Replaced instrument kept a stale part name: " + saved);
+
+    expect(session->undo(state, error), "Could not undo instrument replacement: " + error);
+    saved = savedPartTrackName(saveSnapshot(*session, root, "part-names-undone"));
+    expect(saved == "Keys &amp; Synth", "Undo did not restore the custom part name: " + saved);
+}
+
+std::string savedExcerptXml(const std::filesystem::path& root)
+{
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Excerpts")) {
+        if (entry.path().extension() == ".mscx") {
+            return readFile(entry.path());
+        }
+    }
+    fail("Saved score has no part (excerpt) file");
+}
+
+void testNewDynamicsAndTextReachLinkedParts(const std::filesystem::path& testRoot)
+{
+    // Folder-style .mscx saves replace their whole directory, so use one of our own.
+    const std::filesystem::path root = testRoot / "linked-parts";
+    std::filesystem::create_directories(root);
+    // Items added in the full score are copied into linked parts as they are added;
+    // their type and default text must reach those copies too.
+    auto session = openSession(root, "linked-parts", scoreXml(0, { { 60, 14 } }, 0));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+
+    const LocatedItem note = noteWithPitch(scanScore(*session, { 60 }, 0), 60);
+    msr::render::ScoreEditState state;
+    selectAt(*session, note);
+    expect(session->addExpression("mf", state, error), "Could not add a dynamic: " + error);
+    selectAt(*session, note);
+    expect(session->addText("staff", state, error), "Could not add staff text: " + error);
+
+    const std::string score = saveSnapshot(*session, root, "linked-parts-saved");
+    const std::string part = savedExcerptXml(root);
+    expect(countOccurrences(score, "<subtype>mf</subtype>") == 1, "Full score is missing the new mf dynamic");
+    expect(countOccurrences(part, "<subtype>mf</subtype>") == 1, "Linked part did not receive the new mf dynamic");
+    expect(countOccurrences(part, "other-dynamics") == 0, "Linked part received a blank dynamic");
+    expect(countOccurrences(part, "Staff Text") == 1, "Linked part did not receive the new staff text");
+
+    expect(session->undo(state, error) && session->undo(state, error), "Could not undo the additions: " + error);
+    const std::string undoneScore = saveSnapshot(*session, root, "linked-parts-undone");
+    const std::string undonePart = savedExcerptXml(root);
+    expect(countOccurrences(undoneScore + undonePart, "<Dynamic>") == 0, "Undo left a dynamic behind");
+    expect(countOccurrences(undoneScore + undonePart, "Staff Text") == 0, "Undo left staff text behind");
+}
+
+void testJumpsAndMarkersReachLinkedParts(const std::filesystem::path& testRoot)
+{
+    // Folder-style .mscx saves replace their whole directory, so use one of our own.
+    const std::filesystem::path root = testRoot / "linked-jumps";
+    std::filesystem::create_directories(root);
+
+    // Jumps and markers are system items: MuseScore shows them in every part.
+    auto session = openSession(root, "linked-jumps", scoreXml(0, { { 60, 14 } }, 1));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+
+    const LocatedItem note = noteWithPitch(scanScore(*session, { 60 }, 0), 60);
+    msr::render::ScoreEditState state;
+    selectAt(*session, note);
+    expect(session->addRepeatJump("segno", state, error), "Could not add a segno: " + error);
+    selectAt(*session, note);
+    expect(session->addRepeatJump("dsalcoda", state, error), "Could not add D.S. al Coda: " + error);
+
+    saveSnapshot(*session, root, "linked-jumps-saved");
+    const std::string part = savedExcerptXml(root);
+    expect(countOccurrences(part, "<Marker>") == 1, "Linked part did not receive the segno");
+    expect(countOccurrences(part, "<Jump>") == 1, "Linked part did not receive the D.S. al Coda");
+}
+
+std::filesystem::path savedExcerptPath(const std::filesystem::path& root)
+{
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Excerpts")) {
+        if (entry.path().extension() == ".mscx") {
+            return entry.path();
+        }
+    }
+    fail("Saved score has no part (excerpt) file");
+}
+
+void testBlankPartDynamicsAreRepairedOnOpen(const std::filesystem::path& testRoot)
+{
+    // Folder-style .mscx saves replace their whole directory, so use one of our own.
+    const std::filesystem::path root = testRoot / "blank-dynamics";
+    std::filesystem::create_directories(root);
+    // Scores saved before the addExpression fix carry blank "other-dynamics" copies in
+    // their parts. Recreate one and check that opening it in Aria restores the marking.
+    auto session = openSession(root, "blank-dynamics", scoreXml(0, { { 60, 14 } }, 0));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+    msr::render::ScoreEditState state;
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->addExpression("mf", state, error), "Could not add a dynamic: " + error);
+    saveSnapshot(*session, root, "blank-dynamics-saved");
+    session.reset();
+
+    const std::filesystem::path partPath = savedExcerptPath(root);
+    std::string part = readFile(partPath);
+    const size_t mf = part.find("<subtype>mf</subtype>");
+    expect(mf != std::string::npos, "Linked part did not receive the new mf dynamic");
+    part.replace(mf, std::string("<subtype>mf</subtype>").size(), "<subtype>other-dynamics</subtype>");
+    writeFile(partPath, part);
+
+    std::unique_ptr<msr::render::ScoreRenderSession> reopened
+        = msr::render::ScoreRenderSession::open((root / "blank-dynamics-saved.mscx").string(), error);
+    expect(reopened != nullptr, "Could not reopen the damaged score: " + error);
+    saveSnapshot(*reopened, root, "blank-dynamics-repaired");
+    const std::string repaired = savedExcerptXml(root);
+    expect(countOccurrences(repaired, "other-dynamics") == 0, "Blank part dynamic was not repaired");
+    expect(countOccurrences(repaired, "<subtype>mf</subtype>") == 1, "Repaired part dynamic is not mf");
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -731,5 +910,9 @@ int main()
     passed &= runTest("linear scores render pages and preserve their desktop view", [&] { testLinearScoresOpenInPageMode(testDirectory.path); });
     passed &= runTest("horizontal frames can be selected and deleted", [&] { testHorizontalFrameCanBeSelectedAndDeleted(testDirectory.path); });
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
+    passed &= runTest("part names survive save and follow instrument replacement", [&] { testPartNamesSurviveSave(testDirectory.path); });
+    passed &= runTest("new dynamics and text reach linked parts", [&] { testNewDynamicsAndTextReachLinkedParts(testDirectory.path); });
+    passed &= runTest("blank part dynamics are repaired on open", [&] { testBlankPartDynamicsAreRepairedOnOpen(testDirectory.path); });
+    passed &= runTest("jumps and markers reach linked parts", [&] { testJumpsAndMarkersReachLinkedParts(testDirectory.path); });
     return passed ? 0 : 1;
 }

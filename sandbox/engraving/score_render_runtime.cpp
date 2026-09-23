@@ -53,12 +53,62 @@ int harmonyCountInScore(const mu::engraving::Score* score)
             for (const mu::engraving::EngravingItem* annotation : segment->annotations()) {
                 if (annotation && annotation->isHarmony()) {
                     ++count;
+                } else if (annotation && annotation->isFretDiagram() && mu::engraving::toFretDiagram(annotation)->harmony()) {
+                    // A chord symbol attached to a fret diagram is the diagram's child, not
+                    // a segment annotation, but the source-file count includes it.
+                    ++count;
                 }
             }
         }
     }
 
     return count;
+}
+
+// Before addExpression set dynamic types through the undo stack, a dynamic added in one
+// view reached its linked copies (full score or parts) as a blank "other-dynamics". On
+// reading, MuseScore turns that into the literal text "other-dynamics" and prints it.
+// Restore such copies from a linked copy that has the real marking.
+int repairBlankLinkedDynamics(mu::engraving::MasterScore* masterScore)
+{
+    static const muse::String blankDynamicText(u"other-dynamics");
+    int repaired = 0;
+    for (mu::engraving::Score* score : masterScore->scoreList()) {
+        for (mu::engraving::Measure* measure = score->firstMeasure(); measure; measure = measure->nextMeasure()) {
+            for (mu::engraving::Segment* segment = measure->first(); segment && segment->measure() == measure; segment = segment->next()) {
+                for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
+                    if (!annotation || !annotation->isDynamic()) {
+                        continue;
+                    }
+
+                    mu::engraving::Dynamic* dynamic = mu::engraving::toDynamic(annotation);
+                    const muse::String& text = dynamic->xmlText();
+                    if (dynamic->dynamicType() != mu::engraving::DynamicType::OTHER
+                        || !(text.empty() || text == blankDynamicText)) {
+                        continue;
+                    }
+
+                    for (mu::engraving::EngravingObject* linked : dynamic->linkList()) {
+                        if (linked == dynamic || !linked->isDynamic()) {
+                            continue;
+                        }
+
+                        const mu::engraving::Dynamic* source = mu::engraving::toDynamic(linked);
+                        if (source->dynamicType() == mu::engraving::DynamicType::OTHER) {
+                            continue;
+                        }
+
+                        dynamic->setDynamicType(source->dynamicType());
+                        dynamic->setXmlText(source->xmlText());
+                        ++repaired;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return repaired;
 }
 
 bool validatePartHarmonyLinksBeforeSave(mu::engraving::MasterScore* masterScore,

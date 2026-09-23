@@ -28,6 +28,10 @@ public:
             return nullptr;
         }
 
+        if (const int repairedDynamics = repairBlankLinkedDynamics(masterScore.get())) {
+            std::cout << "Aria repair: restored blank linked dynamics count=" << repairedDynamics << std::endl;
+        }
+
         std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> persistedLayoutModes;
 
         // MuseReader presents and exports physical pages. A MuseScore file can
