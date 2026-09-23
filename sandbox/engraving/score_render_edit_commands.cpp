@@ -1356,6 +1356,21 @@
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader fill with slashes"));
         score->cmdSlashFill();
+        if (!score->isMaster()) {
+            // cmdSlashFill() updates linked chords as a group. In an excerpt,
+            // NO_STEM can arrive through that propagation before the active
+            // chord records its own property command. The first result looks
+            // right, but redo restores the slash head with a visible stem.
+            // Force an explicit active-view command into the same transaction.
+            for (mu::engraving::Note* note : score->selection().uniqueNotes()) {
+                mu::engraving::Chord* chord = note ? note->chord() : nullptr;
+                if (!chord || !chord->noStem()) {
+                    continue;
+                }
+                chord->setNoStem(false);
+                chord->undoChangeProperty(mu::engraving::Pid::NO_STEM, true);
+            }
+        }
         score->endCmd();
         refreshAfterEdit();
         output = makeEditState(score);

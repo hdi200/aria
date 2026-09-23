@@ -1126,6 +1126,84 @@ void testReplaceInstrumentsFromPartUpdatesFullScore(const std::filesystem::path&
            "Undo did not restore the original number of parts");
 }
 
+void testChainedPartViewEditsStayLinked(const std::filesystem::path& root)
+{
+    const std::filesystem::path testRoot = root / "chained-part-view";
+    auto session = openSession(testRoot, "chained-part-source");
+    createLinkedParts(*session);
+    const auto parts = session->partInfoList();
+    expect(parts.size() == 2, "Expected two parts for the chained part-view test");
+
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not activate violin part: " + error);
+    const SavedState baseline = saveState(
+        *session,
+        testRoot,
+        root / "roundtrip-artifacts",
+        "chained-part-baseline"
+    );
+
+    msr::render::ScoreEditState state;
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->addTempo("quarter", 90, state, error), "Could not add tempo from the active part: " + error);
+
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->updateKeySignature(1, false, state, error), "Could not change key from the active part: " + error);
+
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input in the active part: " + error);
+    expect(session->insertMIDIChordAtCursor({ 72, 76, 79 }, false, state, error),
+           "Could not enter a MIDI chord in the active part: " + error);
+    expect(session->removeMIDIPitchFromCurrentChord(76, state, error),
+           "Could not remove a MIDI pitch in the active part: " + error);
+    expect(session->setNoteInputEnabled(false, state, error), "Could not leave note input in the active part: " + error);
+
+    expect(selectFirstTwoMeasureRange(*session, state, error),
+           "Could not select measures for slash fill in the active part: " + error);
+    expect(session->fillSelectionWithSlashes(state, error), "Could not fill measures with slashes from the active part: " + error);
+
+    expect(session->setInstrumentFromTick(parts.front().partId, 1920, "flute", state, error),
+           "Could not add an instrument change from the active part: " + error);
+
+    // Remain in the part while saving. This catches commands that appear right
+    // in the active excerpt but never update the master score or sibling part.
+    const SavedState changed = saveState(
+        *session,
+        testRoot,
+        root / "roundtrip-artifacts",
+        "chained-part-changed"
+    );
+    expectAllScoresContain(changed, "<Tempo>", "chained part-view tempo");
+    expectAllScoresContain(changed, "<tempo>1.5</tempo>", "chained part-view tempo playback value");
+    expectPartcheckClean(baseline, changed, "chained part-view edits");
+
+    constexpr int mutationCount = 6;
+    for (int index = 0; index < mutationCount; ++index) {
+        expect(session->undo(state, error), "Could not undo chained part-view edit " + std::to_string(index + 1) + ": " + error);
+    }
+    const SavedState undone = saveState(
+        *session,
+        testRoot,
+        root / "roundtrip-artifacts",
+        "chained-part-undone"
+    );
+    expectUndoMatches(baseline, undone, "chained part-view edits");
+    expectPartcheckClean(baseline, undone, "chained part-view edits undo");
+
+    for (int index = 0; index < mutationCount; ++index) {
+        expect(session->redo(state, error), "Could not redo chained part-view edit " + std::to_string(index + 1) + ": " + error);
+    }
+    const SavedState redone = saveState(
+        *session,
+        testRoot,
+        root / "roundtrip-artifacts",
+        "chained-part-redone"
+    );
+    expectUndoMatches(changed, redone, "chained part-view edits redo");
+    expectPartcheckClean(baseline, redone, "chained part-view edits redo");
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -1151,6 +1229,8 @@ int main()
     passed &= runTest("MIDI chord is one undo", [&] { testMIDIChordIsOneUndo(directory.path); });
     passed &= runTest("replace instruments from a part updates full score",
                       [&] { testReplaceInstrumentsFromPartUpdatesFullScore(directory.path); });
+    passed &= runTest("chained edits made and saved from a part stay linked",
+                      [&] { testChainedPartViewEditsStayLinked(directory.path); });
     passed &= runTest("core notation mutations stay linked and undo from full score and part",
                       [&] { testCoreNotationMutationSweep(directory.path); });
     passed &= runTest("prepared text, lyrics, melisma, and layout edits undo cleanly",
