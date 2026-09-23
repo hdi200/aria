@@ -540,6 +540,23 @@ public:
         std::cout << "Aria corruption guard: save begin"
                   << " path=\"" << resolvedTargetPath << "\""
                   << std::endl;
+
+        // Editing an item in one linked score invalidates layout in the other
+        // scores, but MuseScore does not necessarily lay those views out until
+        // they are displayed. Their generated notation (courtesy accidentals,
+        // multi-measure rests, articulation placement, tuplet numbers, etc.) is
+        // serialized, so saving a stale excerpt makes desktop MuseScore add or
+        // replace that notation on first open. Materialize every linked view at
+        // the save boundary to keep the package stable in MuseScore 4.7.5.
+        for (mu::engraving::Score* score : m_masterScore->scoreList()) {
+            if (!score) {
+                continue;
+            }
+            score->setLayoutAll();
+            score->doLayout();
+        }
+        m_totalPageCount = activePageCount();
+
         if (blockDelayedSubsystemIfCorrupted(m_masterScore.get(), "saving/autosave", errorMessage)) {
             std::cout << "Aria corruption guard: save blocked"
                       << " elapsed=" << elapsedSecondsSince(started)

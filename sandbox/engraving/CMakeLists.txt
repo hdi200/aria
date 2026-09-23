@@ -219,11 +219,23 @@ else()
             tests/score_render_accidental_tests.cpp
         )
 
+        add_executable(score_render_edit_sweep_tests
+            tests/score_render_edit_sweep_tests.cpp
+        )
+
         target_include_directories(score_render_accidental_tests PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}
         )
 
+        target_include_directories(score_render_edit_sweep_tests PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}
+        )
+
         target_link_libraries(score_render_accidental_tests PRIVATE
+            score_render_core
+        )
+
+        target_link_libraries(score_render_edit_sweep_tests PRIVATE
             score_render_core
         )
 
@@ -232,6 +244,14 @@ else()
             COMMAND score_render_accidental_tests
         )
         set_tests_properties(score_render_accidental_tests PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        )
+
+        add_test(
+            NAME score_render_edit_sweep_tests
+            COMMAND score_render_edit_sweep_tests
+        )
+        set_tests_properties(score_render_edit_sweep_tests PROPERTIES
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
         )
     endif()

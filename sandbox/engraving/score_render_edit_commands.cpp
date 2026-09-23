@@ -1375,8 +1375,26 @@
             return false;
         }
 
+        const auto selectedNotes = score->selection().uniqueNotes();
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader replace with rhythmic slashes"));
         score->cmdSlashRhythm();
+        if (score->isMaster()) {
+            // Chord::setSlash() changes Note::PLAY, a property MuseScore does
+            // not normally propagate between linked scores. Aria plays the
+            // active part directly, so a slash made in the full score must also
+            // be silent there. Keep part-originated appearance edits local, as
+            // MuseScore desktop does.
+            for (mu::engraving::Note* note : selectedNotes) {
+                if (!note) {
+                    continue;
+                }
+                for (mu::engraving::EngravingObject* linked : note->linkList()) {
+                    if (linked && linked != note && linked->isNote()) {
+                        mu::engraving::toNote(linked)->undoChangeProperty(mu::engraving::Pid::PLAY, note->play());
+                    }
+                }
+            }
+        }
         score->endCmd();
         refreshAfterEdit();
         output = makeEditState(score);
@@ -1672,17 +1690,27 @@
             }
         }
 
+        const mu::engraving::BeatsPerSecond requestedTempo
+            = mu::engraving::BeatsPerSecond::fromBPM(mu::engraving::BeatsPerMinute(static_cast<double>(bpm)));
         score->startCmd(muse::TranslatableString::untranslatable(tempo ? "MuseReader edit tempo" : "MuseReader add tempo"));
         if (!tempo) {
             tempo = mu::engraving::Factory::createTempoText(segment);
             tempo->setParent(segment);
             tempo->setTrack(0);
+            // Set every serialized property before undoAddElement() makes the
+            // linked system-item copies. Changing these directly afterwards
+            // leaves the parts at TempoText's default 120 BPM/followText=false.
+            tempo->setXmlText(tempoText);
+            tempo->setTempo(requestedTempo);
+            tempo->setFollowText(true);
             score->undoAddElement(tempo);
+        } else {
+            mu::engraving::EngravingItem* tempoItem = tempo;
+            tempoItem->undoChangeProperty(mu::engraving::Pid::TEXT, tempoText);
+            tempoItem->undoChangeProperty(mu::engraving::Pid::TEMPO, requestedTempo);
+            tempoItem->undoChangeProperty(mu::engraving::Pid::TEMPO_FOLLOW_TEXT, true);
         }
 
-        static_cast<mu::engraving::EngravingItem*>(tempo)->undoChangeProperty(mu::engraving::Pid::TEXT, tempoText);
-        tempo->setTempo(mu::engraving::BeatsPerSecond::fromBPM(mu::engraving::BeatsPerMinute(static_cast<double>(bpm))));
-        tempo->setFollowText(true);
         tempo->updateTempo();
         score->setTempo(segment, tempo->tempo());
         score->endCmd();
@@ -2139,6 +2167,9 @@
             return false;
         }
 
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::UndoStack* undoStack = score ? score->undoStack() : nullptr;
+        const size_t firstCommandIndex = undoStack ? undoStack->currentIndex() : 0;
         msr::render::ScoreEditState intermediateState;
         for (size_t index = 0; index < midiPitches.size(); ++index) {
             const int midiPitch = midiPitches.at(index);
@@ -2148,11 +2179,24 @@
             }
 
             if (!insertMIDIPitchAtCursor(midiPitch, preferFlats, index > 0, true, intermediateState, errorMessage)) {
+                // Do not leave a partial chord when a later pitch fails.
+                while (undoStack && undoStack->currentIndex() > firstCommandIndex) {
+                    score->undoRedo(true, nullptr);
+                }
+                if (undoStack) {
+                    undoStack->cleanRedoStack();
+                }
                 return false;
             }
         }
 
-        mu::engraving::Score* score = activeScore();
+        // Each pitch uses MuseScore's normal note-entry command. Coalesce those
+        // macros so the public "insert chord" operation is one user-visible undo.
+        if (undoStack && undoStack->currentIndex() > firstCommandIndex) {
+            undoStack->mergeCommands(firstCommandIndex);
+        }
+
+        score = activeScore();
         mu::engraving::Chord* chord = nullptr;
         if (mu::engraving::Note* selectedNote = currentSelectedNote(score)) {
             chord = selectedNote->chord();
@@ -2187,16 +2231,11 @@
 
         mu::engraving::Score* score = activeScore();
         mu::engraving::Note* anchorNote = currentSelectedNote(score);
-        if (score->inputState().noteEntryMode()) {
-            if (mu::engraving::Note* inputNote = lastInputNote(score, false)) {
-                const mu::engraving::Segment* lastSegment = score->inputState().lastSegment();
-                const mu::engraving::Segment* selectedSegment = anchorNote && anchorNote->chord()
-                    ? anchorNote->chord()->segment()
-                    : nullptr;
-                if (!anchorNote || selectedSegment != lastSegment) {
-                    anchorNote = inputNote;
-                }
-            }
+        // insertMIDIChordAtCursor() advances InputState after leaving the new
+        // chord selected. A MIDI note-off/removal must act on that explicit
+        // selection, not on the next cursor position.
+        if (!anchorNote && score->inputState().noteEntryMode()) {
+            anchorNote = lastInputNote(score, false);
         }
 
         mu::engraving::Chord* chord = anchorNote ? anchorNote->chord() : nullptr;
@@ -3597,6 +3636,17 @@
         }
 
         score->undoRedo(true, nullptr);
+        // The shared undo stack restores linked notation in every score, but
+        // undoRedo() lays out only the score it is invoked on. Re-layout the
+        // excerpts too so derived notation (for example generated accidentals
+        // after a key-signature change) cannot remain stale and be serialized.
+        for (mu::engraving::Score* linkedScore : m_masterScore->scoreList()) {
+            if (!linkedScore || linkedScore == score) {
+                continue;
+            }
+            linkedScore->setLayoutAll();
+            linkedScore->doLayout();
+        }
         refreshAfterEdit();
         output = makeEditState(score);
         return true;
@@ -3616,6 +3666,13 @@
         }
 
         score->undoRedo(false, nullptr);
+        for (mu::engraving::Score* linkedScore : m_masterScore->scoreList()) {
+            if (!linkedScore || linkedScore == score) {
+                continue;
+            }
+            linkedScore->setLayoutAll();
+            linkedScore->doLayout();
+        }
         refreshAfterEdit();
         output = makeEditState(score);
         return true;
@@ -3735,7 +3792,14 @@
             }
 
             mu::engraving::InstrumentChange* instrumentChange = mu::engraving::toInstrumentChange(text);
-            instrumentChange->setInit(true);
+            // addText() has already created linked copies. The init flag is not
+            // a Pid, so set it on every copy before setupInstrument() writes the
+            // linked instruments and label text.
+            for (mu::engraving::EngravingObject* linked : instrumentChange->linkList()) {
+                if (linked && linked->isInstrumentChange()) {
+                    mu::engraving::toInstrumentChange(linked)->setInit(true);
+                }
+            }
             instrumentChange->setupInstrument(&replacement);
         }
         m_masterScore->endCmd();
@@ -3773,7 +3837,10 @@
             templates.push_back(instrumentTemplate);
         }
 
-        mu::engraving::Score* score = activeScore();
+        // Instrument-list edits are structural. Always perform them on the
+        // master score; applying this to an active excerpt only rewrites that
+        // view and leaves the saved full score unchanged.
+        mu::engraving::Score* score = m_masterScore.get();
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader replace score instruments"));
 
         std::vector<mu::engraving::Part*> existingParts = score->parts();
@@ -3787,6 +3854,8 @@
 
         score->setBracketsAndBarlines();
         score->endCmd();
+        m_activeScore = m_masterScore.get();
+        m_activePartIndex.reset();
         refreshAfterEdit();
         output = makeEditState(score);
         return true;
