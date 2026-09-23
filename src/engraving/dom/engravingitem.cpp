@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -192,19 +192,14 @@ EngravingItemList EngravingItem::childrenItems(bool all) const
     return list;
 }
 
-const std::shared_ptr<IEngravingConfiguration>& EngravingItem::configuration() const
-{
-    return score()->configuration.get();
-}
-
 const muse::modularity::ContextPtr& EngravingItem::iocContext() const
 {
     return score()->iocContext();
 }
 
-const std::shared_ptr<IEngravingContextConfiguration>& EngravingItem::contextConfiguration() const
+const std::shared_ptr<IEngravingConfiguration>& EngravingItem::configuration() const
 {
-    return score()->contextConfiguration.get();
+    return score()->configuration.get();
 }
 
 const std::shared_ptr<rendering::IScoreRenderer>& EngravingItem::renderer() const
@@ -367,12 +362,6 @@ bool EngravingItem::collectForDrawing() const
 {
     if (!visible() && !score()->isShowInvisible()) {
         return false;
-    }
-
-    bool isAnnotation = parent() && parent()->isSegment() && toSegment(parent())->element(track()) != this;
-    if (isAnnotation) {
-        Segment* segment = toSegment(parent());
-        return systemFlag() || (segment->measure() && segment->measure()->visible(staffIdx()));
     }
 
     return true;
@@ -864,7 +853,7 @@ PointF EngravingItem::canvasPos() const
             Page* page = system ? system->page() : nullptr;
             p.ry() += measureStaffY(measure, idx) + systemStaffY(system, idx) + pageY(page);
         } else if (parent->isMeasure()) {
-            Measure* measure = toMeasure(parent);
+            Measure* measure = toMeasure(parent)->coveringMMRestOrThis();
             System* system = measure->system();
             Page* page = system->page();
             p.ry() += measureStaffY(measure, idx) + systemStaffY(system, idx) + pageY(page);
@@ -991,7 +980,8 @@ void EngravingItem::dump() const
 
 muse::ByteArray EngravingItem::mimeData(const PointF& dragOffset) const
 {
-    auto buffer = Buffer::opened(IODevice::WriteOnly);
+    Buffer buffer;
+    buffer.open(IODevice::WriteOnly);
     XmlWriter xml(&buffer);
 
     xml.startElement("EngravingItem");
@@ -1002,7 +992,7 @@ muse::ByteArray EngravingItem::mimeData(const PointF& dragOffset) const
         xml.tagPoint("dragOffset", dragOffset);
     }
 
-    rw::RWRegister::writer()->writeItem(this, xml);
+    rw::RWRegister::writer(iocContext())->writeItem(this, xml);
 
     xml.endElement();
     xml.flush();
@@ -2088,8 +2078,8 @@ bool EngravingItem::isUserModified() const
         PropertyValue val = getProperty(pid);
         PropertyValue defaultValue = propertyDefault(pid);
 
-        if (propertyType(pid) == P_TYPE::ABSOLUTE) {
-            if (std::abs(val.value<double>() - defaultValue.value<double>()) > 0.0001) {         // we don’t care spatium diffs that small
+        if (propertyType(pid) == P_TYPE::MILLIMETRE) {
+            if (std::abs(val.value<Millimetre>() - defaultValue.value<Millimetre>()) > 0.0001) {         // we don’t care spatium diffs that small
                 return true;
             }
         } else {
@@ -2419,7 +2409,7 @@ void EngravingItem::endEdit(EditData&)
 
 double EngravingItem::styleP(Sid idx) const
 {
-    return style().styleAbsolute(idx);
+    return style().styleMM(idx);
 }
 
 void EngravingItem::setParenthesesMode(const ParenthesesMode& v, bool addToLinked, bool generated)
@@ -2526,11 +2516,11 @@ EngravingItem::BarBeat EngravingItem::barbeat() const
         ticksB = ticks_beat(timeSigMap->timesig(segment->tick().ticks()).timesig().denominator());
         measure = segment->findMeasure();
         if (measure) {
-            displayedBar = measure->measureNumber();
+            displayedBar = measure->no();
         }
     } else if (parent->isMeasure()) {
         measure = toMeasure(parent);
-        bar = measure->measureNumber();
+        bar = measure->no();
         displayedBar = bar;
         beat = -1;
         ticks = 0;
@@ -2603,7 +2593,7 @@ void EngravingItem::setVisible(bool f)
 #ifndef ENGRAVING_NO_ACCESSIBILITY
 void EngravingItem::initAccessibleIfNeed()
 {
-    if (!contextConfiguration() || !contextConfiguration()->isAccessibleEnabled()) {
+    if (!configuration()->isAccessibleEnabled()) {
         return;
     }
 

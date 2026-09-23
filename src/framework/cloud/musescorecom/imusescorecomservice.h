@@ -31,13 +31,15 @@
 #include "cloud/cloudtypes.h"
 #include "cloud/iauthorizationservice.h"
 
+#include "imusescorecomconvertservice.h"
+
 class QIODevice;
 class QString;
 
 using DevicePtr = std::shared_ptr<QIODevice>;
 
 namespace muse::cloud {
-class IMuseScoreComService : MODULE_GLOBAL_INTERFACE
+class IMuseScoreComService : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(IMuseScoreComService)
 
@@ -45,6 +47,8 @@ public:
     virtual ~IMuseScoreComService() = default;
 
     virtual IAuthorizationServicePtr authorization() = 0;
+
+    virtual IMuseScoreComConvertServicePtr convert() = 0;
 
     virtual QUrl scoreManagerUrl() const = 0;
 

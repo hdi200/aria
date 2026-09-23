@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -27,11 +27,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Piano, untitled</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano, untitled</longName>
-          <shortName>Pno.</shortName>
-          </InstrumentLabel>
+        <longName>Piano, untitled</longName>
+        <shortName>Pno.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

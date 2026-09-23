@@ -42,12 +42,11 @@ class NavigationSection : public AbstractNavigation, public INavigationSection
     QML_ELEMENT
 
 public:
-    GlobalInject<IApplication> application;
+    ContextInject<IApplication> application = { this };
     ContextInject<INavigationController> navigationController = { this };
 
 public:
     explicit NavigationSection(QObject* parent = nullptr);
-    explicit NavigationSection(const muse::modularity::ContextPtr& iocCtx, QObject* parent = nullptr);
     ~NavigationSection() override;
 
     //! NOTE Please sync with INavigationSection::Type

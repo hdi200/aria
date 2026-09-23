@@ -25,12 +25,12 @@
 #include "internal/multiwindowsuiactions.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 #include "ui/iuiactionsregister.h"
 
 #include "muse_framework_config.h"
 
-#ifdef MUSE_MODULE_MULTIWINDOWS_SINGLEPROC_MODE
+#ifdef MUSE_MULTICONTEXT_WIP
 #include "internal/singleprocess/singleprocessprovider.h"
 #else
 #include "internal/multiprocess/multiprocessprovider.h"
@@ -39,74 +39,41 @@
 using namespace muse::mi;
 using namespace muse::modularity;
 
-static const std::string mname("multiwindows");
-
-std::string MultiWindowsModule::moduleName() const
+std::string MultiInstancesModule::moduleName() const
 {
-    return mname;
+    return "multiwindows";
 }
 
-void MultiWindowsModule::registerExports()
+void MultiInstancesModule::registerExports()
 {
-#ifdef MUSE_MODULE_MULTIWINDOWS_SINGLEPROC_MODE
+#ifdef MUSE_MULTICONTEXT_WIP
     m_windowsProvider = std::make_shared<SingleProcessProvider>();
 #else
-    m_windowsProvider = std::make_shared<MultiProcessProvider>();
-    globalIoc()->registerExport<IMultiProcessProvider>(mname, m_windowsProvider);
+    m_windowsProvider = std::make_shared<MultiProcessProvider>(iocContext());
+    ioc()->registerExport<IMultiProcessProvider>(moduleName(), m_windowsProvider);
 #endif
 
-    globalIoc()->registerExport<IMultiWindowsProvider>(mname, m_windowsProvider);
+    ioc()->registerExport<IMultiWindowsProvider>(moduleName(), m_windowsProvider);
 }
 
-void MultiWindowsModule::resolveImports()
+void MultiInstancesModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<muse::interactive::IInteractiveUriRegister>(mname);
+    auto ir = ioc()->resolve<muse::ui::IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerQmlUri(Uri("muse://devtools/multiwindows/info"), "Muse.MultiWindows", "MultiInstancesDevDialog");
     }
-}
 
-void MultiWindowsModule::onPreInit(const IApplication::RunMode& mode)
-{
-    if (mode != IApplication::RunMode::GuiApp) {
-        return;
-    }
-
-    m_windowsProvider->initOnGlobal();
-}
-
-IContextSetup* MultiWindowsModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new MultiWindowsContext(ctx);
-}
-
-void MultiWindowsContext::resolveImports()
-{
-    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(mname);
+    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(moduleName());
     if (ar) {
         ar->reg(std::make_shared<MultiInstancesUiActions>());
     }
 }
 
-void MultiWindowsContext::onInit(const IApplication::RunMode& mode)
+void MultiInstancesModule::onPreInit(const IApplication::RunMode& mode)
 {
     if (mode != IApplication::RunMode::GuiApp) {
         return;
     }
 
-#ifndef MUSE_MODULE_MULTIWINDOWS_SINGLEPROC_MODE
-    //! NOTE The MultiProcessProvider itself must be global.
-    //! But it formally uses contextual services
-    //! But in this case we always have one context
-    //! We need to think about how to do this better.
-    auto windowsProvider = modularity::globalIoc()->resolve<IMultiWindowsProvider>(mname);
-    if (windowsProvider) {
-        auto impl = std::dynamic_pointer_cast<MultiProcessProvider>(windowsProvider);
-        if (impl) {
-            DO_ASSERT(impl->iocContext() == nullptr); // should be just one context
-            impl->setContext(iocContext());
-            impl->initOnContext();
-        }
-    }
-#endif
+    m_windowsProvider->init();
 }

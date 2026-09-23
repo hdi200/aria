@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -34,7 +34,6 @@
 #include "notation/inotationconfiguration.h"
 #include "playback/iplaybackconfiguration.h"
 #include "languages/ilanguagesconfiguration.h"
-#include "update/iupdateconfiguration.h"
 
 #include "iappshellconfiguration.h"
 
@@ -49,8 +48,7 @@ class AppShellConfiguration : public IAppShellConfiguration, public muse::Contex
     muse::GlobalInject<notation::INotationConfiguration> notationConfiguration;
     muse::GlobalInject<playback::IPlaybackConfiguration> playbackConfiguration;
     muse::GlobalInject<muse::languages::ILanguagesConfiguration> languagesConfiguration;
-    muse::GlobalInject<muse::IApplication> application;
-    muse::GlobalInject<muse::update::IUpdateConfiguration> updateConfiguration;
+    muse::ContextInject<muse::IApplication> application = { this };
 
 public:
     AppShellConfiguration(const muse::modularity::ContextPtr& iocCtx)
@@ -91,6 +89,10 @@ public:
 
     std::string museScoreVersion() const override;
     std::string museScoreRevision() const override;
+
+    bool isNotationNavigatorVisible() const override;
+    void setIsNotationNavigatorVisible(bool visible) const override;
+    muse::async::Notification isNotationNavigatorVisibleChanged() const override;
 
     bool needShowSplashScreen() const override;
     void setNeedShowSplashScreen(bool show) override;

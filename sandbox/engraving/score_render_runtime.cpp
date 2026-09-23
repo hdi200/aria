@@ -133,7 +133,7 @@ std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::Mas
                     if (!source || conflicting) { continue; }
                     msr::render::ScoreLegacyRepairIssue issue;
                     issue.index = static_cast<int>(candidates.size());
-                    issue.measureNumber = measure->measureNumber() + 1;
+                    issue.measureNumber = measure->no() + 1;
                     issue.staffIndex = static_cast<int>(annotation->staffIdx());
                     issue.kind = kind;
                     issue.location = scoreIndex == 0 ? "Full score" : "Part " + std::to_string(scoreIndex);
@@ -292,18 +292,53 @@ int sourceHarmonyCountInScoreFile(const muse::io::path_t& path)
     return count;
 }
 
+// Mirrors EngravingProject::setupMasterScore, which desktop runs after every load and
+// import. Loading replaces the score's style in place, so the padding table (horizontal
+// spacing) must be rebuilt from the file's style, and ties and MIDI mapping connected.
+// Updates stay locked: Aria lays the score out itself right after opening it.
+void setupLoadedMasterScore(mu::engraving::MasterScore* score)
+{
+    score->createPaddingTable();
+    score->connectTies();
+    score->undoRemoveStaleTieJumpPoints(false);
+
+    for (mu::engraving::Part* part : score->parts()) {
+        part->updateHarmonyChannels(false);
+    }
+
+    score->rebuildMidiMapping();
+
+    for (mu::engraving::Score* s : score->scoreList()) {
+        s->setPlaylistDirty();
+        s->setLayoutAll();
+        s->createPaddingTable();
+    }
+
+    score->updateChannel();
+}
+
 muse::Ret loadScoreForRenderCore(mu::engraving::MasterScore* score, const muse::io::path_t& path)
 {
     const std::string suffix = normalizedSuffix(path);
 
     if (mu::engraving::mscIoModeBySuffix(suffix) != mu::engraving::MscIoMode::Unknown) {
         muse::Ret result = mu::engraving::compat::loadMsczOrMscx(score, path, false);
+        if (!result && result.code() == static_cast<int>(mu::engraving::Err::FileTooNew)) {
+            // Files from MuseScore 5 (format 5.00+). Open them anyway, like desktop
+            // 4.7.5's "Open anyway"; saving writes them back as 4.70.
+            std::cout << "Aria load: newer-format file, opening anyway path=\"" << path.toStdString() << "\"" << std::endl;
+            result = mu::engraving::compat::loadMsczOrMscx(score, path, true);
+        }
         if (result) {
-            // The low-level loader does not run NotationProject::doLoad's
-            // pre-layout migrations (including legacy staff-text alignment).
-            // Apply them once on native-file import, never on later relayouts
-            // or MusicXML imports. The engine gates them by source version.
+            // Same order as NotationProject::doLoad: set up the master score, then the
+            // pre-layout migrations (including legacy staff-text alignment), then capo.
+            // Apply them once on native-file import, never on later relayouts or
+            // MusicXML imports. The engine gates the migrations by source version.
+            score->lockUpdates(true);
+            setupLoadedMasterScore(score);
             mu::engraving::compat::EngravingCompat::doPreLayoutCompatIfNeeded(score);
+            score->updateCapo(/* ignoreNotationUpdate */ true);
+            score->lockUpdates(false);
         }
         return result;
     }
@@ -324,6 +359,10 @@ muse::Ret loadScoreForRenderCore(mu::engraving::MasterScore* score, const muse::
     if (err != mu::engraving::Err::NoError) {
         return mu::engraving::make_ret(err, path);
     }
+
+    score->lockUpdates(true);
+    setupLoadedMasterScore(score);
+    score->lockUpdates(false);
 
     score->setMetaTag(u"originalFormat", QString::fromStdString(suffix));
     return muse::make_ok();
@@ -3577,7 +3616,7 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
                 selectionState.pickupNominalNumerator = nominal.numerator();
                 selectionState.pickupNominalDenominator = nominal.denominator();
                 selectionState.isPickupMeasure = selectionState.isFirstMeasure
-                    && (rangeStart->excludeFromNumbering() || actual < nominal);
+                    && (rangeStart->irregular() || actual < nominal);
             }
         }
         selectionState.canFillWithSlashes = !selectedMeasureRangeHasVoiceOneContent(score, rangeStart, rangeEnd);
@@ -3708,7 +3747,7 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         selectionState.currentTimeSignatureNumerator = nominal.numerator();
         selectionState.currentTimeSignatureDenominator = nominal.denominator();
         selectionState.isPickupMeasure = selectionState.isFirstMeasure
-            && (measure->excludeFromNumbering() || actual < nominal);
+            && (measure->irregular() || actual < nominal);
     }
     if (instrumentNameSelection || instrumentChangeSelection) {
         const mu::engraving::Part* part = selectedItem->part();
@@ -3980,7 +4019,7 @@ void appendMeasureIfInputCursorReachedEnd(mu::engraving::Score* score)
     }
 
     mu::engraving::InputState& inputState = score->inputState();
-    if (!inputState.noteEntryMode() || !inputState.beyondScore()) {
+    if (!inputState.noteEntryMode() || !inputState.endOfScore()) {
         return;
     }
 
@@ -4085,7 +4124,7 @@ bool applyDiatonicPitchClassToNote(mu::engraving::Score* score,
         return false;
     }
 
-    mu::engraving::EditNote::undoChangePitch(score, note, noteValue.pitch, noteValue.tpc1, noteValue.tpc2);
+    score->undoChangePitch(note, noteValue.pitch, noteValue.tpc1, noteValue.tpc2);
     return true;
 }
 
@@ -5877,13 +5916,14 @@ bool writeScoreToBufferSequentially(mu::engraving::Score* score,
                                     std::string& errorMessage)
 {
     outputData.clear();
-    auto scoreBuffer = muse::io::Buffer::opened(muse::io::IODevice::ReadWrite, &outputData);
+    muse::io::Buffer scoreBuffer(&outputData);
+    scoreBuffer.open(muse::io::IODevice::ReadWrite);
     const auto startedAt = SteadyClock::now();
     std::cout << "Aria save debug: sequential writeScore begin"
               << " label=\"" << label << "\""
               << " score=\"" << corruptionScoreLabel(score) << "\""
               << std::endl;
-    if (!mu::engraving::rw::RWRegister::writer()->writeScore(score, &scoreBuffer, &writeData)) {
+    if (!mu::engraving::rw::RWRegister::writer(score->iocContext())->writeScore(score, &scoreBuffer, &writeData)) {
         errorMessage = std::string("The MuseScore writer could not serialize ") + label + ".";
         std::cout << "Aria save debug: sequential writeScore failed"
                   << " label=\"" << label << "\""
@@ -5970,7 +6010,8 @@ bool writeMsczSequentially(mu::engraving::MasterScore* score,
     {
         const auto styleStartedAt = SteadyClock::now();
         muse::ByteArray styleData;
-        auto styleBuffer = muse::io::Buffer::opened(muse::io::IODevice::WriteOnly, &styleData);
+        muse::io::Buffer styleBuffer(&styleData);
+        styleBuffer.open(muse::io::IODevice::WriteOnly);
         score->style().write(&styleBuffer);
         writer.writeStyleFile(styleData);
         std::cout << "Aria save debug: sequential master style bytes=" << styleData.size()
@@ -6011,7 +6052,8 @@ bool writeMsczSequentially(mu::engraving::MasterScore* score,
 
         const auto styleStartedAt = SteadyClock::now();
         muse::ByteArray styleData;
-        auto styleBuffer = muse::io::Buffer::opened(muse::io::IODevice::WriteOnly, &styleData);
+        muse::io::Buffer styleBuffer(&styleData);
+        styleBuffer.open(muse::io::IODevice::WriteOnly);
         partScore->style().write(&styleBuffer);
         const double styleElapsed = elapsedSecondsSince(styleStartedAt);
 
@@ -6037,7 +6079,8 @@ bool writeMsczSequentially(mu::engraving::MasterScore* score,
         if (chordList->customChordList() && !chordList->empty()) {
             const auto chordListStartedAt = SteadyClock::now();
             muse::ByteArray chordListData;
-            auto chordListBuffer = muse::io::Buffer::opened(muse::io::IODevice::WriteOnly, &chordListData);
+            muse::io::Buffer chordListBuffer(&chordListData);
+            chordListBuffer.open(muse::io::IODevice::WriteOnly);
             chordList->write(&chordListBuffer);
             writer.writeChordListFile(chordListData);
             std::cout << "Aria save debug: sequential chord list bytes=" << chordListData.size()
@@ -6549,7 +6592,7 @@ private:
             }
         }
 
-        muse::modularity::globalIoc()->registerExport<IApplication>("score_render_core", new muse::ApplicationStub());
+        muse::modularity::globalIoc()->registerExport<IApplication>("score_render_core", new msr::render::RenderApplicationStub());
         muse::modularity::globalIoc()->registerExport<muse::mpe::IArticulationProfilesRepository>(
             "score_render_core",
             new RenderCoreArticulationProfilesRepository()

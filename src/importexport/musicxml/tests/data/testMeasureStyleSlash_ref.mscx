@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -15,6 +15,7 @@
       <pageOddBottomMargin>0.590551</pageOddBottomMargin>
       <lyricsOddFontSize>11</lyricsOddFontSize>
       <lyricsEvenFontSize>11</lyricsEvenFontSize>
+      <romanNumeralFontFace>Edwin</romanNumeralFontFace>
       <nashvilleNumberFontSize>10</nashvilleNumberFontSize>
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
       <tupletFontSize>10</tupletFontSize>
@@ -60,11 +61,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano</longName>
-          <shortName>Pno.</shortName>
-          </InstrumentLabel>
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,7 +20,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import QtQuick
-import QtQuick.Layouts
 
 import Muse.Ui
 import Muse.UiComponents
@@ -43,18 +42,6 @@ Column {
     function focusOnFirst() {
         cueSize.navigation.requestActive()
     }
-
-    TextSection {
-        titleText: qsTrc("inspector", "Staff label")
-        propertyItem: root.model ? root.model.staffLongName : null
-    }
-
-    TextSection {
-        titleText: qsTrc("inspector", "Abbreviated staff label")
-        propertyItem: root.model ? root.model.staffShortName : null
-    }
-
-    SeparatorLine { anchors.margins: -12 }
 
     PropertyCheckBox {
         id: cueSize
@@ -108,6 +95,8 @@ Column {
             navigationRowStart: sizeOffset.navigationRowEnd + 1
         }
     }
+
+    SeparatorLine { anchors.margins: -12 }
 
     Item {
         height: childrenRect.height
@@ -201,7 +190,9 @@ Column {
             { text: qsTrc("inspector", "Auto"), value: NoteHead.SCHEME_AUTO },
             { text: qsTrc("inspector", "Normal"), value: NoteHead.SCHEME_NORMAL },
             { text: qsTrc("inspector", "Pitch names"), value: NoteHead.SCHEME_PITCHNAME },
+            { text: qsTrc("inspector", "Pitch names, no accidentals"), value: NoteHead.SCHEME_PITCHNAME_NO_ACCIDENTALS },
             { text: qsTrc("inspector", "German pitch names"), value: NoteHead.SCHEME_PITCHNAME_GERMAN },
+            { text: qsTrc("inspector", "German pitch names, no accidentals"), value: NoteHead.SCHEME_PITCHNAME_GERMAN_NO_ACCIDENTALS },
             { text: qsTrc("inspector", "Solfege movable Do"), value: NoteHead.SCHEME_SOLFEGE },
             { text: qsTrc("inspector", "Solfege fixed Do"), value: NoteHead.SCHEME_SOLFEGE_FIXED },
             { text: qsTrc("inspector", "4-shape (Walker)"), value: NoteHead.SCHEME_SHAPE_NOTE_4 },

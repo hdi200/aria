@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -730,7 +730,7 @@ void TextSettingsModel::updateIsPositionAvailable()
 {
     bool available = false;
     for (EngravingItem* item : m_elementList) {
-        if (item->isTextLineBase()) {
+        if (item->isTextLineBase() || item->isMeasureNumber()) {
             available = false;
             break;
         } else if (!item->hasVoiceAssignmentProperties()) {

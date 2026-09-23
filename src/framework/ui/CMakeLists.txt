@@ -24,8 +24,9 @@ target_sources(muse_ui PRIVATE
     uimodule.cpp
     uimodule.h
     iuiengine.h
+    iinteractiveprovider.h
+    iinteractiveuriregister.h
     iuiconfiguration.h
-    iuicontextconfiguration.h
     uierrors.h
     uitypes.h
     uiaction.h
@@ -48,18 +49,14 @@ target_sources(muse_ui PRIVATE
     api/keyboardapi.cpp
     api/keyboardapi.h
 
-    internal/guiapplication.cpp
-    internal/guiapplication.h
-    internal/uistate.cpp
-    internal/uistate.h
+    internal/interactiveuriregister.cpp
+    internal/interactiveuriregister.h
     internal/uiengine.cpp
     internal/uiengine.h
     internal/mainwindow.cpp
     internal/mainwindow.h
     internal/uiconfiguration.cpp
     internal/uiconfiguration.h
-    internal/uicontextconfiguration.cpp
-    internal/uicontextconfiguration.h
     internal/themeconverter.cpp
     internal/themeconverter.h
     internal/iplatformtheme.h
@@ -79,6 +76,8 @@ target_sources(muse_ui PRIVATE
     internal/qmlnetworkaccessmanagerfactory.h
 
     view/iconcodes.h
+    view/interactiveprovider.cpp
+    view/interactiveprovider.h
     view/mainwindowbridge.cpp
     view/mainwindowbridge.h
     view/musicalsymbolcodes.h
@@ -97,7 +96,13 @@ target_sources(muse_ui PRIVATE
     view/widgetstatestore.cpp
     view/widgetstatestore.h
     view/widgetutils.h
-    view/widgetdialog.h
+
+    view/internal/widgetdialogadapter.cpp
+    view/internal/widgetdialogadapter.h
+
+    dev/testdialog.cpp
+    dev/testdialog.h
+    dev/testdialog.ui
 )
 
 if (OS_IS_MAC)

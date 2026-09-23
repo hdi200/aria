@@ -120,7 +120,7 @@ bool DockFrameModel::isHorizontalPanel() const
 
 void DockFrameModel::setFrame(QQuickItem* frame)
 {
-    if (frame == m_frame.data()) {
+    if (frame == m_frame) {
         return;
     }
 

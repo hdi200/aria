@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,8 +35,6 @@
 #include "engraving/dom/system.h"
 #include "engraving/dom/tuplet.h"
 #include "engraving/dom/utils.h"
-
-#include "engraving/editing/editnote.h"
 
 #include "log.h"
 
@@ -641,7 +639,7 @@ void NotationNoteInput::setAccidental(AccidentalType accidentalType)
 {
     TRACEFUNC;
 
-    mu::engraving::EditNote::toggleAccidental(score(), accidentalType);
+    score()->toggleAccidental(accidentalType);
 
     notifyAboutStateChanged();
 
@@ -786,7 +784,7 @@ muse::RectF NotationNoteInput::cursorRect() const
     const RectF segmentContentRect = ::segmentContentRect(segment, track);
     double x = segmentContentRect.x() + segment->pagePos().x();
 
-    const double barNoteDist = score()->style().styleAbsolute(mu::engraving::Sid::barNoteDistance);
+    const mu::engraving::Millimetre barNoteDist = score()->style().styleMM(mu::engraving::Sid::barNoteDistance);
     if (segment->x() < barNoteDist) {
         x += barNoteDist - segment->x();
     }
@@ -794,12 +792,6 @@ muse::RectF NotationNoteInput::cursorRect() const
     double y = system->staffCanvasYpage(staffIdx);
     double w = segmentContentRect.width() > 0 ? segmentContentRect.width() : defaultWidth;
     double h = 0.0;
-
-    if (inputState.beyondScore()) {
-        const Measure* lastMeasure = score()->lastMeasure();
-        x = lastMeasure->pageBoundingRect().right() + globalSpatium;
-        w = defaultWidth;
-    }
 
     double sideMargin = 0.0;
 
@@ -833,7 +825,7 @@ muse::RectF NotationNoteInput::cursorRect() const
 
     if (isTabStaff && inputStateStringsCount >= 0 && inputStateStringsCount <= instrumentStringsCount) {
         h = lineDist;
-        y += staffType->physStringToYOffset(inputStateStringsCount).toAbsolute(localSpatium);
+        y += staffType->physStringToYOffset(inputStateStringsCount) * localSpatium;
         y -= (staffType->onLines() ? lineDist * 0.5 : lineDist);
     } else {
         const double skylineMargin = 0.75 * localSpatium;

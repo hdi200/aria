@@ -80,7 +80,6 @@ static constexpr samples_t MINIMUM_BUFFER_SIZE = 128;
 #endif
 
 static constexpr samples_t MAXIMUM_BUFFER_SIZE = 4096;
-static constexpr samples_t DEFAULT_BUFFER_SIZE = 1024;
 
 struct OutputSpec {
     sample_rate_t sampleRate = 0;
@@ -104,7 +103,8 @@ enum class SoundTrackType {
     MP3,
     OGG,
     FLAC,
-    WAV
+    WAV,
+    AAC
 };
 
 enum class AudioSampleFormat {
@@ -119,13 +119,17 @@ struct SoundTrackFormat {
     OutputSpec outputSpec;
     AudioSampleFormat sampleFormat = AudioSampleFormat::Undefined;
     int bitRate = 0;
+    msecs_t leadingSilenceDuration = 0;
+    msecs_t trailingSilenceDuration = 0;
 
     bool operator==(const SoundTrackFormat& other) const
     {
         return type == other.type
                && outputSpec == other.outputSpec
                && sampleFormat == other.sampleFormat
-               && bitRate == other.bitRate;
+               && bitRate == other.bitRate
+               && leadingSilenceDuration == other.leadingSilenceDuration
+               && trailingSilenceDuration == other.trailingSilenceDuration;
     }
 
     bool isValid() const
@@ -142,6 +146,7 @@ struct SoundTrackFormat {
 
         case SoundTrackType::MP3:
         case SoundTrackType::OGG:
+        case SoundTrackType::AAC:
             // For lossy, bitrate must be positive
             return bitRate > 0;
 
@@ -154,6 +159,7 @@ struct SoundTrackFormat {
 struct AudioEngineConfig {
     bool autoProcessOnlineSoundsInBackground = false;
     bool isLazyProcessingOfOnlineSoundsEnabled = false;
+    bool useSoundFontLowPassFilter = false;
 };
 
 using AudioSourceName = std::string;
@@ -170,11 +176,10 @@ enum class AudioResourceType {
     Undefined = -1,
     FluidSoundfont,
     VstPlugin,
-    NativeEffect,
+    MusePlugin,
     MuseSamplerSoundPack,
     Lv2Plugin,
     AudioUnit,
-    NyquistPlugin,
 };
 
 static const std::map<AudioResourceType, QString> RESOURCE_TYPE_MAP = {
@@ -182,10 +187,7 @@ static const std::map<AudioResourceType, QString> RESOURCE_TYPE_MAP = {
     { AudioResourceType::MuseSamplerSoundPack, "muse_sampler_sound_pack" },
     { AudioResourceType::FluidSoundfont, "fluid_soundfont" },
     { AudioResourceType::VstPlugin, "vst_plugin" },
-    { AudioResourceType::NativeEffect, "muse_plugin" },
-    { AudioResourceType::Lv2Plugin, "lv2_plugin" },
-    { AudioResourceType::AudioUnit, "audio_unit" },
-    { AudioResourceType::NyquistPlugin, "nyquist_plugin" },
+    { AudioResourceType::MusePlugin, "muse_plugin" },
 };
 
 struct AudioResourceMeta {
@@ -296,12 +298,11 @@ struct AudioFxParams {
     {
         switch (resourceMeta.type) {
         case AudioResourceType::VstPlugin: return AudioFxType::VstFx;
-        case AudioResourceType::NativeEffect: return AudioFxType::MuseFx;
+        case AudioResourceType::MusePlugin: return AudioFxType::MuseFx;
         case AudioResourceType::AudioUnit:
         case AudioResourceType::Lv2Plugin:
         case AudioResourceType::FluidSoundfont:
         case AudioResourceType::MuseSamplerSoundPack:
-        case AudioResourceType::NyquistPlugin:
         case AudioResourceType::Undefined: break;
         }
 
@@ -384,8 +385,7 @@ inline AudioSourceType sourceTypeFromResourceType(AudioResourceType type)
     case AudioResourceType::MuseSamplerSoundPack: return AudioSourceType::MuseSampler;
     case AudioResourceType::AudioUnit:
     case AudioResourceType::Lv2Plugin:
-    case AudioResourceType::NativeEffect:
-    case AudioResourceType::NyquistPlugin:
+    case AudioResourceType::MusePlugin:
     case AudioResourceType::Undefined: break;
     }
 
@@ -554,4 +554,35 @@ enum SaveSoundTrackStage {
 };
 
 using SaveSoundTrackProgress = async::Channel<int64_t /*current*/, int64_t /*total*/, SaveSoundTrackStage>;
+
+struct TransportEvent {
+    enum class Type : unsigned char {
+        Unknown = 0,
+        Play,
+        Pause,
+        Stop,
+        Seek,
+    };
+
+    struct SeekData {
+        secs_t position = 0.;
+    };
+
+    static TransportEvent play() { return { Type::Play, {} }; }
+    static TransportEvent pause() { return { Type::Pause, {} }; }
+    static TransportEvent stop() { return { Type::Stop, {} }; }
+    static TransportEvent seek(secs_t pos) { return { Type::Seek, SeekData { pos } }; }
+
+    Type type = Type::Unknown;
+    std::variant<std::monostate, SeekData> data;
+};
+using TransportEvents = std::vector<TransportEvent>;
+}
+
+inline muse::logger::Stream& operator<<(muse::logger::Stream& s, const muse::audio::OutputSpec& spec)
+{
+    s << "sampleRate: " << spec.sampleRate
+      << ", channels: " << spec.audioChannelCount
+      << ", samplesPerChannel: " << spec.samplesPerChannel;
+    return s;
 }

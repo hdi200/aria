@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -1904,7 +1904,22 @@ class MeasureBase : public EngravingItem
     API_PROPERTY_T(bool, repeatStart,     REPEAT_START)
     /// Whether this measureBase contaions a jump.
     API_PROPERTY_T(bool, repeatJump,      REPEAT_JUMP)
+    /// The measure number offset of this measureBase.
+    API_PROPERTY_T(int, noOffset,         NO_OFFSET)
+    /// Whether this measureBase is included in the measure count.
+    API_PROPERTY_T(bool, irregular,       IRREGULAR)
 
+    /// \brief Measure number, counting from 1.
+    /// Number of this measure in the score counting from 1, i.e.
+    /// for the first measure its \p no value will be equal to 1.
+    /// User-visible measure number can be calculated as
+    /// \code
+    /// measure.no + measure.noOffset
+    /// \endcode
+    /// where \p measure is the relevant \ref Measure object.
+    /// \since MuseScore 4.6
+    /// \see ScoreElement::noOffset
+    Q_PROPERTY(int no READ no)
     /// \brief Current tick for this measure
     /// \returns Tick of this measure, i.e. number of ticks from the beginning
     /// of the score to this measure, as a fraction.
@@ -1960,6 +1975,8 @@ public:
 
     mu::engraving::MeasureBase* measureBase() { return toMeasureBase(e); }
     const mu::engraving::MeasureBase* measureBase() const { return toMeasureBase(e); }
+
+    int no() { return measureBase()->no(); }
 
     Fraction* tick() const;
     Fraction* ticks() const;
@@ -2031,35 +2048,6 @@ class Measure : public MeasureBase
     /// The actual time signature / duration of this measure.
     API_PROPERTY(timesigActual,           TIMESIG_ACTUAL)
 
-    /// \brief Measure number, counting from 1.
-    /// Number of this measure in the score counting from 1, i.e.
-    /// for the first measure its \p measureNumber value will be equal to 1.
-    /// User-visible measure number can be calculated as
-    /// \code
-    /// measure.measureNumber + measure.measureNumberOffset
-    /// \endcode
-    /// where \p measure is the relevant \ref Measure object.
-    /// \since MuseScore 5.0
-    /// \see Measure::measureNumberOffset
-    Q_PROPERTY(int measureNumber READ measureNumber)
-    /// \brief Compatibility alias for \ref measureNumber. Do not use in new code.
-    /// \since MuseScore 4.6
-    Q_PROPERTY(int no READ measureNumber)
-
-    /// \brief The measure number offset of this measure.
-    /// \since MuseScore 5.0
-    API_PROPERTY_T(int, measureNumberOffset, MEASURE_NUMBER_OFFSET)
-    /// \brief Compatibility alias for \ref measureNumberOffset. Do not use in new code.
-    /// \since MuseScore 4.6
-    API_PROPERTY_T(int, noOffset, MEASURE_NUMBER_OFFSET)
-
-    /// \brief Whether this measure is excluded from measure numbering.
-    /// \since MuseScore 5.0
-    API_PROPERTY_T(bool, excludeFromNumbering, EXCLUDE_FROM_NUMBERING)
-    /// \brief Compatibility alias for \ref measureNumberOffset. Do not use in new code.
-    /// \since MuseScore 4.6
-    API_PROPERTY_T(bool, irregular, EXCLUDE_FROM_NUMBERING)
-
     /// Controls whether this measure displays a measure number,
     /// one of PluginAPI::PluginAPI::MeasureNumberMode values.
     /// \since MuseScore 4.6
@@ -2097,8 +2085,6 @@ public:
 
     mu::engraving::Measure* measure() { return toMeasure(e); }
     const mu::engraving::Measure* measure() const { return toMeasure(e); }
-
-    int measureNumber() { return measure()->measureNumber(); }
 
     bool showsMeasureNumberInAutoMode() { return measure()->showMeasureNumberInAutoMode(); }
 
@@ -2557,7 +2543,7 @@ class Spanner : public EngravingItem
     Q_OBJECT
     /// The tick this spanner starts at.
     API_PROPERTY(spannerTick,             SPANNER_TICK)
-    /// The duration of this spanner.
+    /// The tick this spanner end at.
     API_PROPERTY(spannerTicks,            SPANNER_TICKS)
     /// The track this spanner end at.
     API_PROPERTY_T(int, spannerTrack2,    SPANNER_TRACK2)

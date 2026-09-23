@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -51,7 +51,6 @@ StringData::StringData(int numFrets, int numStrings, int strings[], bool useFlat
 
     for (int i = 0; i < numStrings; i++) {
         strg.pitch = strings[i];
-        strg.useFlat = useFlats;
         m_stringTable.push_back(strg);
     }
     m_useFlats = useFlats;
@@ -512,36 +511,63 @@ int StringData::fret(int pitch, int string, int pitchOffset) const
 void StringData::sortChordNotesUseSameString(const Chord* chord, int pitchOffset) const
 {
     int capoFret = chord->staff()->capo(chord->tick()).fretPosition;
+    std::unordered_map<size_t, Note*> usedStrings;
+    std::unordered_map<int, std::vector<int> > fretTable;
 
-    bool anyReset = false;
+    for (size_t i = 0; i < m_stringTable.size(); ++i) {
+        usedStrings[i] = nullptr;
+    }
+
+    for (auto note: chord->notes()) {
+        usedStrings[note->string()] = note;
+    }
+
+    for (const auto& [string, note] : usedStrings) {
+        if (!note) {
+            continue;
+        }
+        int pitch = note->pitch() - capoFret;
+        if (fretTable.find(pitch) != fretTable.end()) {
+            continue;
+        }
+        fretTable.insert_or_assign(pitch, std::vector<int>());
+        for (size_t i = 0; i < m_stringTable.size(); ++i) {
+            fretTable[pitch].push_back(fret(pitch, (int)i, pitchOffset));
+        }
+    }
+
+    auto fixFretting = [&](const std::vector<Note*>& notes) {
+        size_t notesCount = notes.size();
+        for (int i = static_cast<int>(notesCount) - 1; i >= 0; --i) {
+            if (notes.at(i)->fret() < 0) {
+                for (size_t indx = usedStrings.size() - 1; indx > 0; --indx) {
+                    if (usedStrings[indx - 1] && !usedStrings[indx]) {
+                        usedStrings[indx] = usedStrings[indx - 1];
+                        usedStrings[indx - 1] = nullptr;
+                        Note* n = usedStrings[indx];
+                        int pitch = n->pitch() - capoFret;
+                        int newString = n->string() + 1;
+                        if (fretTable[pitch].size() <= static_cast<size_t>(newString)) {
+                            return;
+                        }
+
+                        n->setFret(fretTable[pitch].at(newString));
+                        n->setString(newString);
+                    }
+                }
+            }
+        }
+    };
+
     for (Note* note : chord->notes()) {
         if (note->displayFret() != Note::DisplayFretOption::NoHarmonic) {
             continue;
         }
-        if (note->string() < 0 || note->fret() < 0) {
-            anyReset = true;
-            continue;
-        }
         int pitch = getPitch(note->string(), note->fret() + capoFret, pitchOffset);
         int newFret = note->fret() + note->pitch() - pitch;
-        if (newFret < 0) {
-            anyReset = true;
-        } else {
-            note->setFret(newFret);
-        }
+        note->setFret(newFret);
     }
-
-    // If any note in the chord couldn't keep its string, reset ALL notes
-    // so fretChords/convertPitch assigns the entire chord optimally.
-    if (anyReset) {
-        for (Note* note : chord->notes()) {
-            if (note->displayFret() != Note::DisplayFretOption::NoHarmonic) {
-                continue;
-            }
-            note->setString(INVALID_STRING_INDEX);
-            note->setFret(INVALID_FRET_INDEX);
-        }
-    }
+    fixFretting(chord->notes());
 }
 
 //---------------------------------------------------------
@@ -563,6 +589,7 @@ void StringData::sortChordNotes(std::map<int, Note*>& sortedNotes, const Chord* 
 
     if (useSameString) {
         sortChordNotesUseSameString(chord, pitchOffset);
+        return;
     }
 
     for (Note* note : chord->notes()) {

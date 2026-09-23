@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,13 +21,11 @@
  */
 
 #include <gtest/gtest.h>
-
-#include "global/log.h"
-#include "global/io/buffer.h"
-#include "global/types/bytearray.h"
-
 #include "engraving/rw/xmlreader.h"
 #include "engraving/rw/xmlwriter.h"
+#include "thirdparty/kors_logger/src/log_base.h"
+#include "types/bytearray.h"
+#include "io/buffer.h"
 
 using namespace mu;
 using namespace mu::engraving;
@@ -41,12 +39,13 @@ class Engraving_XMLTests : public ::testing::Test
 TEST_F(Engraving_XMLTests, readHTML)
 {
     ByteArray data;
+    Buffer buf(&data);
     static const String XML_TEXT_REF = u"<tag1><br/></tag1>";
     static const String XML_TEXT_VERBOSE = u"<tag1><br></br></tag1>";
 
     // Write
     {
-        auto buf = Buffer::opened(IODevice::WriteOnly, &data);
+        buf.open(IODevice::WriteOnly);
         XmlWriter xml(&buf);
         xml.startDocument();
         xml.startElement("parent");
@@ -65,7 +64,7 @@ TEST_F(Engraving_XMLTests, readHTML)
 
     // Read
     {
-        auto buf = Buffer::opened(IODevice::ReadOnly, &data);
+        buf.open(IODevice::ReadOnly);
         XmlReader xml(&buf);
 
         EXPECT_TRUE(xml.readNextStartElement());

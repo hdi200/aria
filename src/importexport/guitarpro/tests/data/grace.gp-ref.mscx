@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -24,11 +24,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>E. Guitar 2</trackName>
       <Instrument id="grand-piano">
-        <InstrumentLabel>
-          <longName>E. Guitar 2</longName>
-          <shortName>pno.</shortName>
-          </InstrumentLabel>
+        <longName>E. Guitar 2</longName>
+        <shortName>pno.</shortName>
         <trackName></trackName>
         <instrumentId>keyboard.piano.grand</instrumentId>
         <singleNoteDynamics>0</singleNoteDynamics>

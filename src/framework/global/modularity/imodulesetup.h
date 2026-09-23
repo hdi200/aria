@@ -39,7 +39,7 @@ public:
     virtual ~IContextSetup() = default;
 
     const modularity::ContextPtr iocContext() const { return m_ctx; }
-    ModulesContextIoC* ioc() const { return modularity::ioc(iocContext()); }
+    ModulesIoC* ioc() const { return modularity::ioc(iocContext()); }
 
     virtual void registerExports() {}
     virtual void resolveImports() {}
@@ -60,7 +60,7 @@ public:
 
     virtual std::string moduleName() const = 0;
 
-    ModulesGlobalIoC* globalIoc() const { return muse::modularity::globalIoc(); }
+    ModulesIoC* globalIoc() const { return muse::modularity::globalIoc(); }
 
     virtual void registerExports() {}
     virtual void resolveImports() {}
@@ -80,6 +80,20 @@ public:
 
     // Context
     virtual IContextSetup* newContext(const muse::modularity::ContextPtr& ctx) const { (void)ctx; return nullptr; }
+
+    // to remove
+    void setApplication(std::shared_ptr<IApplication> app)
+    {
+        m_application = app;
+    }
+
+    std::shared_ptr<IApplication> application() const { return m_application; }
+
+    const modularity::ContextPtr iocContext() const { return m_application ? m_application->iocContext() : muse::modularity::globalCtx(); }
+    ModulesIoC* ioc() const { return m_application ? m_application->ioc() : muse::modularity::globalIoc(); }
+
+protected:
+    std::shared_ptr<IApplication> m_application;
 };
 }
 

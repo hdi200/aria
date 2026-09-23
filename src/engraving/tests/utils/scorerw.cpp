@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,8 +22,10 @@
 
 #include "scorerw.h"
 
+#include "global/io/ifilesystem.h"
 #include "global/io/buffer.h"
 #include "global/io/file.h"
+#include "global/modularity/ioc.h"
 
 #include "engraving/compat/scoreaccess.h"
 #include "engraving/compat/mscxcompat.h"
@@ -40,10 +42,9 @@ using namespace mu;
 using namespace muse::io;
 using namespace mu::engraving;
 
-String ScoreRW::m_rootPath;
+static const muse::GlobalInject<IFileSystem> FILE_SYSTEM;
 
-//! NOTE Temporary for testing
-static const muse::modularity::ContextPtr utestCtx = std::make_shared<muse::modularity::Context>(1);
+String ScoreRW::m_rootPath;
 
 void ScoreRW::setRootPath(const String& path)
 {
@@ -55,13 +56,10 @@ String ScoreRW::rootPath()
     return m_rootPath;
 }
 
-MasterScore* ScoreRW::readScore(const String& name, bool isAbsolutePath, ImportFunc importFunc,
-                                const muse::modularity::ContextPtr& iocCtx_)
+MasterScore* ScoreRW::readScore(const String& name, bool isAbsolutePath, ImportFunc importFunc)
 {
-    const muse::modularity::ContextPtr iocCtx = iocCtx_ ? iocCtx_ : utestCtx;
-
     muse::io::path_t path = isAbsolutePath ? name : (rootPath() + u"/" + name);
-    MasterScore* score = compat::ScoreAccess::createMasterScoreWithBaseStyle(iocCtx);
+    MasterScore* score = compat::ScoreAccess::createMasterScoreWithBaseStyle(nullptr);
     score->setFileInfoProvider(std::make_shared<LocalFileInfoProvider>(path));
     std::string suffix = muse::io::suffix(path);
 
@@ -99,20 +97,24 @@ MasterScore* ScoreRW::readScore(const String& name, bool isAbsolutePath, ImportF
 
 bool ScoreRW::saveScore(Score* score, const String& name)
 {
-    File::remove(name);
+    FILE_SYSTEM()->remove(name);
 
-    auto output = Buffer::opened(IODevice::WriteOnly);
-    if (!rw::RWRegister::writer()->writeScore(score, &output)) {
+    Buffer output;
+    if (!output.open(Buffer::WriteOnly)) {
+        return false;
+    }
+
+    if (!rw::RWRegister::writer(score->iocContext())->writeScore(score, &output)) {
         return false;
     }
     output.close();
 
-    return File::writeFile(name, output.data());
+    return FILE_SYSTEM()->writeFile(name, output.data());
 }
 
 bool ScoreRW::saveScore(Score* score, const String& name, ExportFunc exportFunc)
 {
-    File::remove(name);
+    FILE_SYSTEM()->remove(name);
 
     muse::io::path_t path =  name;
     Err rv = exportFunc(score, path);
@@ -130,10 +132,11 @@ EngravingItem* ScoreRW::writeReadElement(EngravingItem* element)
     //
     // write element
     //
-    auto buffer = Buffer::opened(IODevice::WriteOnly);
+    Buffer buffer;
+    buffer.open(IODevice::WriteOnly);
     XmlWriter xml(&buffer);
     xml.startDocument();
-    rw::RWRegister::writer()->writeItem(element, xml);
+    rw::RWRegister::writer(element->iocContext())->writeItem(element, xml);
     xml.flush();
     buffer.close();
 
@@ -150,5 +153,11 @@ EngravingItem* ScoreRW::writeReadElement(EngravingItem* element)
 
 bool ScoreRW::saveMimeData(muse::ByteArray mimeData, const String& saveName)
 {
-    return File::writeFile(saveName, mimeData);
+    File f(saveName);
+    if (!f.open(IODevice::WriteOnly)) {
+        return false;
+    }
+
+    size_t size = f.write(mimeData);
+    return size == mimeData.size();
 }

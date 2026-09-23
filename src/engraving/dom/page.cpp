@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -253,4 +253,15 @@ RectF Page::tbbox() const
 Fraction Page::endTick() const
 {
     return m_systems.empty() ? Fraction(-1, 1) : m_systems.back()->measures().back()->endTick();
+}
+
+Measure* Page::firstMeasure() const
+{
+    for (System* s : m_systems) {
+        if (Measure* m = s->firstMeasure()) {
+            return m;
+        }
+    }
+
+    return nullptr;
 }

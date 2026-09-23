@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -90,7 +90,7 @@ static void drawInputStringMarks(const StaffType& staffType, muse::draw::Painter
     static constexpr double LEDGER_LINE_RIGHTX = 0.75; // in % of cursor rectangle width
 
     const double spatium = staffType.spatium();
-    const double lineDist = staffType.lineDistance().toAbsolute(spatium);
+    const double lineDist = staffType.lineDistance().toMM(spatium);
 
     bool hasFret = false;
     const String text = staffType.tabBassStringPrefix(string, &hasFret);

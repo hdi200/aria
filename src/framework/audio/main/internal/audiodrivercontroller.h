@@ -74,18 +74,20 @@ private:
     IAudioDriverPtr createDriver(const std::string& name) const;
     void setNewDriver(IAudioDriverPtr newDriver);
 
-    IAudioDriver::Spec defaultSpec() const;
-
-    void checkOutputDevice();
+    void handleOutputDeviceChange();
+    bool switchToDefaultAudioDriver(IAudioDriver::Spec* activeSpec = nullptr);
     void updateOutputSpec();
 
     IAudioDriver::Callback m_callback;
     IAudioDriverPtr m_audioDriver;
+    IAudioDriver::Spec m_lastValidSpec;
     async::Notification m_currentAudioApiChanged;
     async::Notification m_availableOutputDevicesChanged;
     async::Channel<IAudioDriver::Spec> m_activeSpecChanged;
     async::Notification m_outputDeviceChanged;
     async::Notification m_outputDeviceBufferSizeChanged;
     async::Notification m_outputDeviceSampleRateChanged;
+
+    bool m_retryOpenDevice = false;
 };
 }

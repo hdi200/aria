@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -38,7 +38,11 @@ class AbstractAudioWriter : public project::INotationWriter, public muse::Contex
 {
 public:
     muse::GlobalInject<IAudioExportConfiguration> configuration;
-    muse::GlobalInject<muse::IApplication> application;
+    muse::ContextInject<muse::audio::IPlayback> playback = { this };
+    muse::ContextInject<context::IGlobalContext> globalContext = { this };
+    muse::ContextInject<muse::audio::IStartAudioController> startAudioController = { this };
+    muse::ContextInject<playback::IPlaybackController> playbackController  = { this };
+    muse::ContextInject<muse::IApplication> application  = { this };
 
 public:
     AbstractAudioWriter(const muse::modularity::ContextPtr& iocCtx)
@@ -55,14 +59,14 @@ public:
     void abort() override;
 
 protected:
-    muse::Ret doWriteAndWait(notation::INotationPtr notation, muse::io::IODevice& dstDevice, const muse::audio::SoundTrackFormat& format);
+    muse::Ret doWriteAndWait(notation::INotationPtr notation, muse::io::IODevice& dstDevice, const muse::audio::SoundTrackFormat& format,
+                             const Options& options = Options());
 
 private:
-    void doWrite(muse::io::IODevice& dstDevice, const muse::audio::SoundTrackFormat& format);
+    void doWrite(const QString& path, const muse::audio::SoundTrackFormat& format);
 
     UnitType unitTypeFromOptions(const Options& options) const;
 
-    muse::modularity::ContextPtr m_iocContext;
     muse::Progress m_progress;
     bool m_isCompleted = false;
     muse::Ret m_writeRet;

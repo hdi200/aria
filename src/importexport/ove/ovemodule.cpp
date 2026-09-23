@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -42,12 +42,12 @@ void OveModule::registerExports()
 {
     m_configuration = std::make_shared<OveConfiguration>();
 
-    globalIoc()->registerExport<IOveConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IOveConfiguration>(moduleName(), m_configuration);
 }
 
 void OveModule::resolveImports()
 {
-    auto readers = globalIoc()->resolve<INotationReadersRegister>(moduleName());
+    auto readers = ioc()->resolve<INotationReadersRegister>(moduleName());
     if (readers) {
         readers->reg({ "ove", "scw" }, std::make_shared<OveReader>());
     }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -43,7 +43,6 @@ static const ActionCode SHOW_SOUND_FLAGS("show-soundflags");
 static const ActionCode SHOW_IRREGULAR_CODE("show-irregular");
 
 static const ActionCode TOGGLE_CONCERT_PITCH_CODE("concert-pitch");
-static const ActionCode TOGGLE_AUTOMATION_CODE("toggle-automation");
 
 // avoid translation duplication
 
@@ -569,8 +568,8 @@ const UiActionList NotationUiActions::s_actions = {
     UiAction("staff-properties",
              mu::context::UiCtxProjectOpened,
              mu::context::CTX_NOTATION_OPENED,
-             TranslatableString("action", "Instrument / Staff properties…"),
-             TranslatableString("action", "Instrument / Staff properties")
+             TranslatableString("action", "Staff/Part properties…"),
+             TranslatableString("action", "Staff/Part properties")
              ),
     UiAction("staff-text-properties",
              mu::context::UiCtxProjectOpened,
@@ -892,12 +891,6 @@ const UiActionList NotationUiActions::s_actions = {
              TranslatableString("action", "Feathered beam, accelerate"),
              TranslatableString("action", "Add feathered beam: accelerate"),
              IconCode::Code::BEAM_FEATHERED_ACCELERATE
-             ),
-    UiAction("beam-selected-range",
-             mu::context::UiCtxProjectOpened,
-             mu::context::CTX_NOTATION_OPENED,
-             TranslatableString("action", "Beam selected range"),
-             TranslatableString("action", "Beam selected range")
              ),
     UiAction("add-brackets",
              mu::context::UiCtxProjectOpened,
@@ -2614,15 +2607,7 @@ const UiActionList NotationUiActions::s_actions = {
              mu::context::CTX_NOTATION_OPENED,
              TranslatableString("action", "Hammer-on/pull-off"),
              TranslatableString("action", "Add hammer-on/pull-off")
-             ),
-    UiAction(TOGGLE_AUTOMATION_CODE,
-             mu::context::UiCtxProjectOpened,
-             mu::context::CTX_NOTATION_OPENED,
-             TranslatableString("action", "Automation"),
-             TranslatableString("action", "Toggle automation"),
-             IconCode::Code::AUTOMATION,
-             Checkable::Yes
-             ),
+             )
 };
 
 const UiActionList NotationUiActions::s_scoreConfigActions = {
@@ -2793,6 +2778,7 @@ void NotationUiActions::init()
         }
         m_actionCheckedChanged.send(actions);
 
+        m_actionEnabledMap.reserve(actionsList().size());
         updateActionsEnabled(actionsList());
 
         const INotationInteractionPtr interaction = m_controller->currentNotationInteraction();
@@ -2838,20 +2824,6 @@ void NotationUiActions::init()
         }, Asyncable::Mode::SetReplace);
     });
 
-    m_controller->currentMasterNotationChanged().onNotify(this, [this]() {
-        m_actionCheckedChanged.send({ TOGGLE_AUTOMATION_CODE });
-
-        if (const IMasterNotationPtr masterNotation = m_controller->currentMasterNotation()) {
-            masterNotation->automation()->automationModeEnabledChanged().onNotify(this, [this]() {
-                m_actionCheckedChanged.send({ TOGGLE_AUTOMATION_CODE });
-            }, Asyncable::Mode::SetReplace);
-        }
-    });
-
-    playbackController()->isPlayingChanged().onNotify(this, [this]() {
-        updateActionsEnabled(actionsList());
-    });
-
     engravingConfiguration()->debuggingOptionsChanged().onNotify(this, [this]() {
         ActionCodeList actions;
         actions.reserve(s_engravingDebuggingActions.size());
@@ -2860,8 +2832,6 @@ void NotationUiActions::init()
         }
         m_actionCheckedChanged.send(actions);
     });
-
-    m_actionEnabledMap.reserve(actionsList().size());
 }
 
 const UiActionList& NotationUiActions::actionsList() const
@@ -2956,11 +2926,6 @@ bool NotationUiActions::actionChecked(const UiAction& act) const
         if (style) {
             return style->styleValue(StyleId::concertPitch).toBool();
         }
-    }
-
-    if (act.code == TOGGLE_AUTOMATION_CODE) {
-        const IMasterNotationPtr masterNotation = m_controller->currentMasterNotation();
-        return masterNotation ? masterNotation->automation()->isAutomationModeEnabled() : false;
     }
 
     if (isScoreConfigAction(act.code)) {

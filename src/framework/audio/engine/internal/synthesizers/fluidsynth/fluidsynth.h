@@ -39,7 +39,7 @@ namespace muse::audio::synth {
 struct Fluid;
 class FluidSynth : public AbstractSynthesizer
 {
-    GlobalInject<midi::IMidiOutPort> midiOutPort;
+    ContextInject<midi::IMidiOutPort> midiOutPort = { this };
 
 public:
     FluidSynth(const audio::AudioSourceParams& params, const modularity::ContextPtr& iocCtx);

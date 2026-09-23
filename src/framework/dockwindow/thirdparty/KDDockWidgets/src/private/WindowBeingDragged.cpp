@@ -26,7 +26,7 @@
 
 using namespace KDDockWidgets;
 
-static Draggable *bestDraggable(int ctx, Draggable *draggable)
+static Draggable *bestDraggable(Draggable *draggable)
 {
     if (!draggable)
         return nullptr;
@@ -46,7 +46,7 @@ static Draggable *bestDraggable(int ctx, Draggable *draggable)
             // Defensive, doesn't happen
             return draggable;
         } else {
-            if (KDDockWidgets::usesNativeTitleBar(ctx))
+            if (KDDockWidgets::usesNativeTitleBar())
                 return fw;
             return fw->titleBar();
         }
@@ -55,25 +55,23 @@ static Draggable *bestDraggable(int ctx, Draggable *draggable)
     }
 }
 
-WindowBeingDragged::WindowBeingDragged(int ctx, FloatingWindow *fw, Draggable *draggable)
-    : m_ctx(ctx)
-    , m_floatingWindow(fw)
-    , m_draggable(bestDraggable(ctx, draggable))
+WindowBeingDragged::WindowBeingDragged(FloatingWindow *fw, Draggable *draggable)
+    : m_floatingWindow(fw)
+    , m_draggable(bestDraggable(draggable))
     , m_draggableWidget(m_draggable ? m_draggable->asWidget() : nullptr)
 {
     init();
 
     if (!isWayland()) { // Wayland doesn't support setting opacity
         // Set opacity while dragging, if needed
-        const qreal opacity = Config::self(m_ctx).draggedWindowOpacity();
+        const qreal opacity = Config::self().draggedWindowOpacity();
         if (!qIsNaN(opacity) && !qFuzzyCompare(1.0, opacity))
             fw->setWindowOpacity(opacity);
     }
 }
 
-WindowBeingDragged::WindowBeingDragged(int ctx, Draggable *draggable)
-    : m_ctx(ctx)
-    , m_draggable(draggable)
+WindowBeingDragged::WindowBeingDragged(Draggable *draggable)
+    : m_draggable(draggable)
     , m_draggableWidget(m_draggable->asWidget())
 {
     if (!isWayland()) {
@@ -100,7 +98,7 @@ WindowBeingDragged::~WindowBeingDragged()
 
     if (!isWayland()) { // Wayland doesn't support setting opacity
         // Restore opacity to fully opaque if needed
-        const qreal opacity = Config::self(m_ctx).draggedWindowOpacity();
+        const qreal opacity = Config::self().draggedWindowOpacity();
         if (!qIsNaN(opacity) && !qFuzzyCompare(1.0, opacity))
             m_floatingWindow->setWindowOpacity(1);
     }
@@ -120,9 +118,9 @@ void WindowBeingDragged::grabMouse(bool grab)
 
     qCDebug(hovering) << "WindowBeingDragged: grab " << m_floatingWindow << grab << m_draggableWidget;
     if (grab)
-        DragController::instance(m_ctx)->grabMouseFor(m_draggableWidget);
+        DragController::instance()->grabMouseFor(m_draggableWidget);
     else
-        DragController::instance(m_ctx)->releaseMouse(m_draggableWidget);
+        DragController::instance()->releaseMouse(m_draggableWidget);
 }
 
 QStringList WindowBeingDragged::affinities() const
@@ -184,8 +182,8 @@ Draggable *WindowBeingDragged::draggable() const
     return m_draggable;
 }
 
-WindowBeingDraggedWayland::WindowBeingDraggedWayland(int ctx, Draggable *draggable)
-    : WindowBeingDragged(ctx, draggable)
+WindowBeingDraggedWayland::WindowBeingDraggedWayland(Draggable *draggable)
+    : WindowBeingDragged(draggable)
 {
     if (!isWayland()) {
         // Doesn't happen

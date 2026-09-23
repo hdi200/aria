@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -68,7 +68,7 @@ void TieJumpPoint::undoSetActive(bool v)
 TranslatableString TieJumpPoint::menuTitle() const
 {
     const Measure* measure = m_note->findMeasure();
-    const int measureNo = measure ? measure->measureNumber() + 1 : 0;
+    const int measureNo = measure ? measure->no() + 1 : 0;
 
     //: %1 represents the preceding jump item eg. coda. %2 represents the measure number
     return TranslatableString("engraving", "Tie to %1 (m. %2)").arg(precedingJumpItemName(), String::number(measureNo));

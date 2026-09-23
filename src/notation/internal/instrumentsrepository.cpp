@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -145,7 +145,6 @@ void InstrumentsRepository::load()
 
     m_instrumentTemplateList.clear();
     m_instrumentTemplateMap.clear();
-
     mu::engraving::clearInstrumentTemplates();
 
     const path_t instrumentsXmlPath = configuration()->instrumentsXmlPath();
@@ -168,7 +167,7 @@ void InstrumentsRepository::load()
 
     for (const InstrumentGroup* group : mu::engraving::instrumentGroups) {
         for (const InstrumentTemplate* templ : group->instrumentTemplates) {
-            if (templ->trackName.isEmpty() || templ->instrumentName.longName().empty()) {
+            if (templ->trackName.isEmpty() || templ->longNames.empty()) {
                 continue;
             }
 
@@ -288,8 +287,8 @@ void InstrumentsRepository::loadMuseInstruments(const InstrumentTemplateMap& sta
         templ->soundId = instrument.soundId;
         templ->musicXmlId = instrument.musicXmlId;
         templ->trackName = instrument.name;
-        templ->instrumentName.setLongName(instrument.name);
-        templ->instrumentName.setShortName(instrument.abbreviation);
+        templ->longNames.emplace_back(StaffName(instrument.name));
+        templ->shortNames.emplace_back(StaffName(instrument.abbreviation));
         templ->staffCount = staffCount(instrument.staffType);
         mu::engraving::ClefType clefType = museSamplerClefTypeToEngravingClefType(instrument.clefType);
         templ->clefTypes[0].concertClef = clefType;

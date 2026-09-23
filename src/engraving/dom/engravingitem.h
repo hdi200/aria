@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,7 +27,6 @@
 
 #include "modularity/ioc.h"
 #include "../iengravingconfiguration.h"
-#include "../iengravingcontextconfiguration.h"
 #include "../rendering/iscorerenderer.h"
 #include "../rendering/paintoptions.h"
 
@@ -108,7 +107,7 @@ enum class ElementFlag {
     REPEAT_END             = 0x00001000,
     REPEAT_START           = 0x00002000,
     REPEAT_JUMP            = 0x00004000,
-    EXCLUDE_FROM_NUMBERING = 0x00008000,
+    IRREGULAR              = 0x00008000,
     LINE_BREAK             = 0x00010000,
     PAGE_BREAK             = 0x00020000,
     SECTION_BREAK          = 0x00040000,
@@ -170,9 +169,8 @@ public:
     EngravingItem* parentItem(bool explicitParent = true) const;
     EngravingItemList childrenItems(bool all = false) const;
 
-    const std::shared_ptr<IEngravingConfiguration>& configuration() const;
     const muse::modularity::ContextPtr& iocContext() const;
-    const std::shared_ptr<IEngravingContextConfiguration>& contextConfiguration() const;
+    const std::shared_ptr<IEngravingConfiguration>& configuration() const;
     const std::shared_ptr<rendering::IScoreRenderer>& renderer() const;
 
     EngravingItem* findAncestor(ElementType t);
@@ -218,7 +216,7 @@ public:
     bool visible() const { return !flag(ElementFlag::INVISIBLE); }
     virtual void setVisible(bool f);
 
-    virtual bool isInteractionAvailable() const;
+    bool isInteractionAvailable() const;
 
     bool sizeIsSpatiumDependent() const override { return !flag(ElementFlag::SIZE_SPATIUM_DEPENDENT); }
     void setSizeIsSpatiumDependent(bool v) { setFlag(ElementFlag::SIZE_SPATIUM_DEPENDENT, !v); }
@@ -328,7 +326,7 @@ public:
 
     staff_idx_t staffIdx() const;
     void setStaffIdx(staff_idx_t val);
-    virtual staff_idx_t effectiveStaffIdx() const; // for system objects migrating
+    staff_idx_t effectiveStaffIdx() const; // for system objects migrating
     bool isTopSystemObject() const;
     virtual staff_idx_t vStaffIdx() const;
     voice_idx_t voice() const;

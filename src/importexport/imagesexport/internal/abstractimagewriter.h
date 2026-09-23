@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,15 +19,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MU_IMPORTEXPORT_ABSTRACTIMAGEWRITER_H
+#define MU_IMPORTEXPORT_ABSTRACTIMAGEWRITER_H
 
 #include "project/inotationwriter.h"
 
 namespace mu::iex::imagesexport {
-class AbstractImageWriter : public project::INotationWriter
+class AbstractImageWriter : public project::INotationWriter, public muse::Contextable
 {
 public:
+    AbstractImageWriter(const muse::modularity::ContextPtr& iocCtx)
+        : muse::Contextable(iocCtx) {}
+
     std::vector<UnitType> supportedUnitTypes() const override;
     bool supportsUnitType(UnitType unitType) const override;
 
@@ -39,3 +42,5 @@ protected:
     UnitType unitTypeFromOptions(const Options& options) const;
 };
 }
+
+#endif // MU_IMPORTEXPORT_ABSTRACTIMAGEWRITER_H

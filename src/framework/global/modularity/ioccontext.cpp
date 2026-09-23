@@ -39,7 +39,7 @@ muse::Contextable::GetContext muse::iocCtxForQmlObject(const QObject* o)
             ctx = qmlContext(p);
         }
 
-        IF_ASSERT_FAILED(ctx) {
+        if (!ctx) {
             LOGW() << "QQmlContext is not set for QML Object: " << o->metaObject()->className();
             return modularity::ContextPtr();
         }
@@ -50,42 +50,23 @@ muse::Contextable::GetContext muse::iocCtxForQmlObject(const QObject* o)
 
 muse::modularity::ContextPtr muse::iocCtxForQmlContext(const QQmlContext* ctx)
 {
-    TRACEFUNC;
+    QmlIoCContext* qmlIoc = ctx->contextProperty("ioc_context").value<QmlIoCContext*>();
+    // IF_ASSERT_FAILED(qmlIoc) {
+    //     return modularity::ContextPtr();
+    // }
 
-    //! NOTE: Currently, each IoC context (window)
-    // has its own instance of the Qml Engine,
-    // and thus its own root Qml Context. We can use it directly.
-    const QQmlContext* rootContext = ctx->engine()->rootContext();
-
-    QmlIoCContext* qmlIoc = rootContext->contextProperty("ioc_context").value<QmlIoCContext*>();
-    IF_ASSERT_FAILED(qmlIoc) {
-        LOGW() << "QmlIoCContext is not set for QML Context: " << rootContext->objectName();
+    //! NOTE At the moment, it can be null, need add ioc context to extension qml engine
+    if (!qmlIoc) {
         return modularity::ContextPtr();
     }
 
     return qmlIoc->ctx;
 }
 
-muse::Contextable::GetContext muse::iocCtxForQWidget(const QWidget* w)
+muse::modularity::ContextPtr muse::iocCtxForQWidget(const QWidget*)
 {
-    return [w]() {
-        IF_ASSERT_FAILED(w) {
-            return modularity::ContextPtr();
-        }
-
-        const QObject* obj = w;
-        while (obj) {
-            bool ok = false;
-            int ctxId = obj->property("ioc_context").toInt(&ok);
-            if (ok) {
-                return std::make_shared<modularity::Context>(ctxId);
-            }
-            obj = obj->parent();
-        }
-
-        UNREACHABLE;
-        return modularity::ContextPtr();
-    };
+    //! TODO
+    return modularity::ContextPtr();
 }
 
 #endif

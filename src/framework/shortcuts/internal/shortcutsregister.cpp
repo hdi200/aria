@@ -388,7 +388,11 @@ bool ShortcutsRegister::writeToFile(const ShortcutList& shortcuts, const io::pat
     TRACEFUNC;
 
     ByteArray data;
-    auto buf = io::Buffer::opened(io::IODevice::WriteOnly, &data);
+    io::Buffer buf(&data);
+    if (!buf.open(io::IODevice::WriteOnly)) {
+        LOGE() << buf.errorString();
+        return false;
+    }
 
     XmlStreamWriter writer(&buf);
     writer.startDocument();

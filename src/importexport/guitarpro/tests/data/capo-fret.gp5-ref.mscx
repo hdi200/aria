@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -25,21 +25,20 @@
           </StaffType>
         <defaultClef>G8vb</defaultClef>
         </Staff>
+      <trackName>Track 1</trackName>
       <Instrument id="cavaquinho">
-        <InstrumentLabel>
-          <longName>Track 1</longName>
-          </InstrumentLabel>
+        <longName>Track 1</longName>
         <trackName></trackName>
         <instrumentId>pluck.guitar</instrumentId>
         <singleNoteDynamics>0</singleNoteDynamics>
         <StringData>
           <frets>24</frets>
-          <string>40</string>
-          <string>45</string>
+          <string>36</string>
+          <string>43</string>
           <string>50</string>
           <string>55</string>
           <string>59</string>
-          <string>64</string>
+          <string>62</string>
           </StringData>
         <Channel>
           <program value="25"/>
@@ -84,36 +83,21 @@
             <eid>K_K</eid>
             <text><sym>metNoteQuarterUp</sym> = 70</text>
             </Tempo>
-          <StringTunings>
-            <visibleStrings></visibleStrings>
-            <StringData>
-              <frets>24</frets>
-              <string>36</string>
-              <string>43</string>
-              <string>50</string>
-              <string>55</string>
-              <string>59</string>
-              <string>62</string>
-              </StringData>
-            <eid>L_L</eid>
-            <style>string_tunings</style>
-            <text/>
-            </StringTunings>
           <Chord>
-            <eid>M_M</eid>
+            <eid>L_L</eid>
             <durationType>half</durationType>
             <Note>
-              <eid>N_N</eid>
+              <eid>M_M</eid>
               <pitch>53</pitch>
               <tpc>13</tpc>
               <fret>2</fret>
               <string>3</string>
               </Note>
             <Note>
-              <eid>O_O</eid>
+              <eid>N_N</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
-                <eid>P_P</eid>
+                <eid>O_O</eid>
                 </Accidental>
               <pitch>56</pitch>
               <tpc>22</tpc>
@@ -121,7 +105,7 @@
               <string>2</string>
               </Note>
             <Note>
-              <eid>Q_Q</eid>
+              <eid>P_P</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <fret>0</fret>
@@ -129,13 +113,13 @@
               </Note>
             </Chord>
           <Chord>
-            <eid>R_R</eid>
+            <eid>Q_Q</eid>
             <durationType>half</durationType>
             <Note>
-              <eid>S_S</eid>
+              <eid>R_R</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
-                <eid>T_T</eid>
+                <eid>S_S</eid>
                 </Accidental>
               <pitch>54</pitch>
               <tpc>20</tpc>
@@ -143,10 +127,10 @@
               <string>3</string>
               </Note>
             <Note>
-              <eid>U_U</eid>
+              <eid>T_T</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
-                <eid>V_V</eid>
+                <eid>U_U</eid>
                 </Accidental>
               <pitch>58</pitch>
               <tpc>24</tpc>
@@ -154,10 +138,10 @@
               <string>2</string>
               </Note>
             <Note>
-              <eid>W_W</eid>
+              <eid>V_V</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
-                <eid>X_X</eid>
+                <eid>W_W</eid>
                 </Accidental>
               <pitch>61</pitch>
               <tpc>21</tpc>
@@ -168,10 +152,10 @@
           </voice>
         </Measure>
       <Measure>
-        <eid>Y_Y</eid>
+        <eid>X_X</eid>
         <voice>
           <Rest>
-            <eid>Z_Z</eid>
+            <eid>Y_Y</eid>
             <durationType>measure</durationType>
             <duration>4/4</duration>
             </Rest>

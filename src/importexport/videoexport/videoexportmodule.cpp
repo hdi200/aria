@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,12 +21,16 @@
  */
 #include "videoexportmodule.h"
 
+#include <QFontDatabase>
+
 #include "modularity/ioc.h"
 
 #include "internal/videoexportconfiguration.h"
 #include "internal/videowriter.h"
 
-#include "project/iprojectrwregister.h"
+#include "project/inotationwritersregister.h"
+
+#include "log.h"
 
 using namespace mu::iex::videoexport;
 using namespace mu::project;
@@ -41,13 +45,20 @@ std::string VideoExportModule::moduleName() const
 
 void VideoExportModule::registerExports()
 {
-    globalIoc()->registerExport<VideoExportConfiguration>(moduleName(), s_configuration);
+    ioc()->registerExport<VideoExportConfiguration>(moduleName(), s_configuration);
 }
 
 void VideoExportModule::resolveImports()
 {
-    auto projectRWreg = globalIoc()->resolve<IProjectRWRegister>(moduleName());
-    if (projectRWreg) {
-        projectRWreg->regWriter({ "mp4" }, std::make_shared<VideoWriter>());
+    auto writers = ioc()->resolve<INotationWritersRegister>(moduleName());
+    if (writers) {
+        writers->reg({ "mp4" }, std::make_shared<VideoWriter>(iocContext()));
+    }
+}
+
+void VideoExportModule::onInit(const muse::IApplication::RunMode&)
+{
+    if (QFontDatabase::addApplicationFont(":/videoexport/internal/resources/MuseSans-Medium.ttf") == -1) {
+        LOGE() << "Unable load MuseSans font: `:/videoexport/internal/resources/MuseSans-Medium.ttf`";
     }
 }

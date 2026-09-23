@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,7 +27,6 @@
 #include "inotation.h"
 #include "iexcerptnotation.h"
 #include "inotationplayback.h"
-#include "inotationautomation.h"
 
 namespace mu::project {
 class INotationProject;
@@ -44,7 +43,7 @@ public:
     virtual muse::Ret setupNewScore(engraving::MasterScore* score, const ScoreCreateOptions& options) = 0;
     virtual void applyOptions(engraving::MasterScore* score, const ScoreCreateOptions& options, bool createdFromTemplate = false) = 0;
     virtual engraving::MasterScore* masterScore() const = 0;
-    virtual void setMasterScore(engraving::MasterScore* masterScore, bool disablePlayback = false) = 0;
+    virtual void setMasterScore(engraving::MasterScore* masterScore) = 0;
 
     virtual INotationPtr notation() = 0;
 
@@ -69,8 +68,6 @@ public:
 
     virtual INotationPlaybackPtr playback() const = 0;
     virtual void initNotationSoloMuteState(const INotationPtr notation) = 0;
-
-    virtual INotationAutomationPtr automation() const = 0;
 };
 
 using IMasterNotationPtr = std::shared_ptr<IMasterNotation>;

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,9 +21,6 @@
  */
 
 #include <QDir>
-#include <QTimer>
-#include <QVBoxLayout>
-#include <limits>
 
 #include "timedialog.h"
 
@@ -40,10 +37,13 @@
 using namespace mu::palette;
 using namespace mu::engraving;
 
-TimeEditor::TimeEditor(QWidget* parent)
-    : QWidget(parent), muse::Contextable(muse::iocCtxForQWidget(this))
+TimeDialog::TimeDialog(QWidget* parent)
+    : QWidget(parent, Qt::WindowFlags(Qt::Dialog | Qt::Window)), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setupUi(this);
+    setWindowTitle(muse::qtrc("palette", "Time signatures"));
+
+    setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     QLayout* l = new QVBoxLayout();
     l->setContentsMargins(0, 0, 0, 0);
@@ -54,17 +54,13 @@ TimeEditor::TimeEditor(QWidget* parent)
     sp->setReadOnly(false);
     sp->setSelectable(true);
 
-    ElementPtr el = sp->elementForCellAt(2);
-
-    engravingRender()->layoutItem(el.get());
-
-    connect(zNominal, &QSpinBox::editingFinished, this, &TimeEditor::zChanged);
-    connect(nNominal, &QComboBox::currentIndexChanged, this, &TimeEditor::nChanged);
-    connect(sp, &PaletteWidget::boxClicked, this, &TimeEditor::paletteChanged);
-    connect(sp, &PaletteWidget::changed, this, &TimeEditor::setDirty);
-    connect(addButton, &QPushButton::clicked, this, &TimeEditor::addClicked);
-    connect(zText, &QLineEdit::textChanged, this, &TimeEditor::textChanged);
-    connect(nText, &QLineEdit::textChanged, this, &TimeEditor::textChanged);
+    connect(zNominal, &QSpinBox::editingFinished, this, &TimeDialog::zChanged);
+    connect(nNominal, &QComboBox::currentIndexChanged, this, &TimeDialog::nChanged);
+    connect(sp, &PaletteWidget::boxClicked, this, &TimeDialog::paletteChanged);
+    connect(sp, &PaletteWidget::changed, this, &TimeDialog::setDirty);
+    connect(addButton, &QPushButton::clicked, this, &TimeDialog::addClicked);
+    connect(zText, &QLineEdit::textChanged, this, &TimeDialog::textChanged);
+    connect(nText, &QLineEdit::textChanged, this, &TimeDialog::textChanged);
 
     _timePalette = new PaletteScrollArea(sp);
     QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -83,6 +79,10 @@ TimeEditor::TimeEditor(QWidget* parent)
         sp->setCellReadOnly(i, false);
     }
 
+    ElementPtr el = sp->elementForCellAt(2);
+
+    engravingRender()->layoutItem(el.get());
+
     sp->setSelected(2);
     paletteChanged(2);
 
@@ -90,12 +90,12 @@ TimeEditor::TimeEditor(QWidget* parent)
     setFocus();
 }
 
-bool TimeEditor::dirty() const
+bool TimeDialog::dirty() const
 {
     return _dirty;
 }
 
-bool TimeEditor::showTimePalette() const
+bool TimeDialog::showTimePalette() const
 {
     return _timePalette->isVisible();
 }
@@ -104,9 +104,9 @@ bool TimeEditor::showTimePalette() const
 //   addClicked
 //---------------------------------------------------------
 
-void TimeEditor::addClicked()
+void TimeDialog::addClicked()
 {
-    auto ts = mu::engraving::Factory::makeTimeSig(paletteScoreProvider()->paletteScore()->dummy()->segment());
+    auto ts = mu::engraving::Factory::makeTimeSig(gpaletteScore->dummy()->segment());
     ts->setSig(Fraction(zNominal->value(), denominator()));
     ts->setGroups(groups->groups());
 
@@ -128,7 +128,7 @@ void TimeEditor::addClicked()
 //   showTimePalette
 //---------------------------------------------------------
 
-void TimeEditor::setShowTimePalette(bool val)
+void TimeDialog::setShowTimePalette(bool val)
 {
     _timePalette->setVisible(val);
 }
@@ -137,7 +137,7 @@ void TimeEditor::setShowTimePalette(bool val)
 //   save
 //---------------------------------------------------------
 
-void TimeEditor::save()
+void TimeDialog::save()
 {
     QDir dir;
     dir.mkpath(configuration()->timeSignaturesDirPath().toQString());
@@ -148,7 +148,7 @@ void TimeEditor::save()
 //   zChanged
 //---------------------------------------------------------
 
-void TimeEditor::zChanged()
+void TimeDialog::zChanged()
 {
     int numerator = zNominal->value();
     int denominator = this->denominator();
@@ -163,7 +163,7 @@ void TimeEditor::zChanged()
 //   nChanged
 //---------------------------------------------------------
 
-void TimeEditor::nChanged(int val)
+void TimeDialog::nChanged(int val)
 {
     Q_UNUSED(val);
     Fraction sig(zNominal->value(), denominator());
@@ -174,7 +174,7 @@ void TimeEditor::nChanged(int val)
 //   denominator2Idx
 //---------------------------------------------------------
 
-int TimeEditor::denominator2Idx(int denominator) const
+int TimeDialog::denominator2Idx(int denominator) const
 {
     int val = 4;
     switch (denominator) {
@@ -202,7 +202,7 @@ int TimeEditor::denominator2Idx(int denominator) const
 //   denominator
 //---------------------------------------------------------
 
-int TimeEditor::denominator() const
+int TimeDialog::denominator() const
 {
     int val = 4;
     switch (nNominal->currentIndex()) {
@@ -230,7 +230,7 @@ int TimeEditor::denominator() const
 //   paletteChanged
 //---------------------------------------------------------
 
-void TimeEditor::paletteChanged(int idx)
+void TimeDialog::paletteChanged(int idx)
 {
     ElementPtr element = sp->elementForCellAt(idx);
     const std::shared_ptr<TimeSig> timeSig = std::dynamic_pointer_cast<TimeSig>(element);
@@ -269,39 +269,13 @@ void TimeEditor::paletteChanged(int idx)
 //   textChanged
 //---------------------------------------------------------
 
-void TimeEditor::textChanged()
+void TimeDialog::textChanged()
 {
     Fraction sig(zNominal->value(), denominator());
     groups->setSig(sig, Groups::endings(sig), zText->text(), nText->text());
 }
 
-void TimeEditor::setDirty()
+void TimeDialog::setDirty()
 {
     _dirty = true;
-}
-
-TimeEditorDialog::TimeEditorDialog(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
-{
-    setWindowTitle(muse::qtrc("palette", "Time signatures"));
-    setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
-}
-
-void TimeEditorDialog::classBegin()
-{
-    m_timeEditor = new TimeEditor(this);
-    QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSizeConstraint(QLayout::SetFixedSize);
-    layout->addWidget(m_timeEditor);
-}
-
-bool TimeEditorDialog::showTimePalette() const
-{
-    return m_timeEditor->showTimePalette();
-}
-
-void TimeEditorDialog::setShowTimePalette(bool showTimePalette)
-{
-    m_timeEditor->setShowTimePalette(showTimePalette);
 }

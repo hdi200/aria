@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2025 MuseScore Limited
+# Copyright (C) 2025 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -24,5 +24,5 @@ install(FILES
     20mm_MSN.mss
     22mm_MSN.mss
     25mm_MSN.mss
-    DESTINATION "${MUSE_APP_INSTALL_RESOURCES_LOCATION}/styles/Modified Stave Notation"
+    DESTINATION "${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}styles/Modified Stave Notation"
 )

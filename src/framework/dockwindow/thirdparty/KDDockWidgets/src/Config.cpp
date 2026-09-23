@@ -33,16 +33,13 @@
 #include <QQmlContext>
 #endif
 
-#include "ContextData.h"
-
 namespace KDDockWidgets {
 
 class Config::Private
 {
 public:
-    Private(int ctx)
-        : m_ctx(ctx)
-        , m_frameworkWidgetFactory(new DefaultWidgetFactory(ctx))
+    Private()
+        : m_frameworkWidgetFactory(new DefaultWidgetFactory())
     {
     }
 
@@ -53,7 +50,6 @@ public:
 
     void fixFlags();
 
-    const int m_ctx = 0;
     QQmlEngine *m_qmlEngine = nullptr;
     DockWidgetFactoryFunc m_dockWidgetFactoryFunc = nullptr;
     MainWindowFactoryFunc m_mainWindowFactoryFunc = nullptr;
@@ -70,22 +66,23 @@ public:
 #endif
 };
 
-Config::Config(int ctx)
-    : d(new Private(ctx))
+Config::Config()
+    : d(new Private())
 {
     d->fixFlags();
 
     // stuff in multisplitter/ can't include the framework widget factory, so set it here
-    auto separatorCreator = [ctx](Layouting::Widget *parent) {
-        return Config::self(ctx).frameworkWidgetFactory()->createSeparator(parent);
+    auto separatorCreator = [](Layouting::Widget *parent) {
+        return Config::self().frameworkWidgetFactory()->createSeparator(parent);
     };
 
     Layouting::Config::self().setSeparatorFactoryFunc(separatorCreator);
 }
 
-Config &Config::self(int ctx)
+Config &Config::self()
 {
-    return *ContextData::context(ctx)->config;
+    static Config config;
+    return config;
 }
 
 Config::~Config()
@@ -100,7 +97,7 @@ Config::Flags Config::flags() const
 
 void Config::setFlags(Flags f)
 {
-    auto dr = DockRegistry::self(d->m_ctx);
+    auto dr = DockRegistry::self();
     if (!dr->isEmpty(/*excludeBeingDeleted=*/true)) {
         qWarning() << Q_FUNC_INFO << "Only use this function at startup before creating any DockWidget or MainWindow"
                    << "; These are already created: " << dr->mainWindowsNames()
@@ -155,7 +152,7 @@ int Config::separatorThickness() const
 
 void Config::setSeparatorThickness(int value)
 {
-    if (!DockRegistry::self(d->m_ctx)->isEmpty(/*excludeBeingDeleted=*/true)) {
+    if (!DockRegistry::self()->isEmpty(/*excludeBeingDeleted=*/true)) {
         qWarning() << Q_FUNC_INFO << "Only use this function at startup before creating any DockWidget or MainWindow";
         return;
     }
@@ -185,7 +182,7 @@ TabbingAllowedFunc Config::tabbingAllowedFunc() const
 
 void Config::setAbsoluteWidgetMinSize(QSize size)
 {
-    if (!DockRegistry::self(d->m_ctx)->isEmpty(/*excludeBeingDeleted=*/false)) {
+    if (!DockRegistry::self()->isEmpty(/*excludeBeingDeleted=*/false)) {
         qWarning() << Q_FUNC_INFO << "Only use this function at startup before creating any DockWidget or MainWindow";
         return;
     }
@@ -200,7 +197,7 @@ QSize Config::absoluteWidgetMinSize() const
 
 void Config::setAbsoluteWidgetMaxSize(QSize size)
 {
-    if (!DockRegistry::self(d->m_ctx)->isEmpty(/*excludeBeingDeleted=*/false)) {
+    if (!DockRegistry::self()->isEmpty(/*excludeBeingDeleted=*/false)) {
         qWarning() << Q_FUNC_INFO << "Only use this function at startup before creating any DockWidget or MainWindow";
         return;
     }
@@ -236,13 +233,11 @@ void Config::setQmlEngine(QQmlEngine *qmlEngine)
         return;
     }
 
-    auto dr = DockRegistry::self(d->m_ctx); // make sure our QML types are registered
-    //! FIXME A different context or a different engine is needed.
+    auto dr = DockRegistry::self(); // make sure our QML types are registered
     QQmlContext *context = qmlEngine->rootContext();
-    context->setContextProperty(QStringLiteral("_kddw_context"), d->m_ctx);
     context->setContextProperty(QStringLiteral("_kddwHelpers"), &d->m_qquickHelpers);
     context->setContextProperty(QStringLiteral("_kddwDockRegistry"), dr);
-    context->setContextProperty(QStringLiteral("_kddwDragController"), DragController::instance(d->m_ctx));
+    context->setContextProperty(QStringLiteral("_kddwDragController"), DragController::instance());
     context->setContextProperty(QStringLiteral("_kddw_widgetFactory"), d->m_frameworkWidgetFactory);
 
     d->m_qmlEngine = qmlEngine;
@@ -340,7 +335,7 @@ void Config::setDropIndicatorsInhibited(bool inhibit) const
 {
     if (d->m_dropIndicatorsInhibited != inhibit) {
         d->m_dropIndicatorsInhibited = inhibit;
-        Q_EMIT DockRegistry::self(d->m_ctx)->dropIndicatorsInhibitedChanged(inhibit);
+        Q_EMIT DockRegistry::self()->dropIndicatorsInhibitedChanged(inhibit);
     }
 }
 

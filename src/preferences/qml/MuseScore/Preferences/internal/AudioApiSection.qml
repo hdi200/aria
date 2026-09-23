@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -39,7 +39,7 @@ BaseSection {
         ComboBoxWithTitle {
             id: apiComboBox
 
-            title: qsTrc("preferences", "Audio API")
+            title: qsTrc("preferences", "Audio driver")
             columnWidth: root.columnWidth
 
             visible: root.audioApiList.length > 1
@@ -47,9 +47,9 @@ BaseSection {
             currentIndex: root.currentAudioApiIndex
             model: root.audioApiList
 
-            navigationName: "AudioApiBox"
-            navigationPanel: root.navigation
-            navigationRow: 1
+            navigation.name: "AudioApiBox"
+            navigation.panel: root.navigation
+            navigation.row: 1
 
             onValueEdited: function(newIndex, newValue) {
                 root.currentAudioApiIndexChangeRequested(newIndex)

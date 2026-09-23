@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,9 +22,8 @@
 
 #include <cmath>
 
-#include "global/io/buffer.h"
-#include "global/io/file.h"
-#include "global/io/fileinfo.h"
+#include "io/file.h"
+#include "io/fileinfo.h"
 
 #include "draw/painter.h"
 
@@ -142,18 +141,15 @@ bool Score::saveStyle(const String& name)
     if (info.suffix().isEmpty()) {
         info = FileInfo(info.filePath() + ext);
     }
-
-    auto outBuf = Buffer::opened(IODevice::WriteOnly);
-    bool ok = style().write(&outBuf);
-    if (!ok) {
-        LOGE() << "Failed write style file: " << info.filePath();
+    File f(info.filePath());
+    if (!f.open(IODevice::WriteOnly)) {
+        LOGE() << "Failed open style file: " << info.filePath();
         return false;
     }
-    outBuf.close();
 
-    const muse::Ret ret = File::writeFile(info.filePath(), outBuf.data());
-    if (!ret) {
-        LOGE() << "Failed to write style file: " << ret.toString();
+    bool ok = style().write(&f);
+    if (!ok) {
+        LOGE() << "Failed write style file: " << info.filePath();
         return false;
     }
 

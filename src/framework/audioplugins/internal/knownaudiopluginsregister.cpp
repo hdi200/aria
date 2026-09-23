@@ -38,8 +38,6 @@ static const std::map<audio::AudioResourceType, std::string> RESOURCE_TYPE_TO_ST
     { audio::AudioResourceType::VstPlugin, "VstPlugin" },
     { audio::AudioResourceType::Lv2Plugin, "Lv2Plugin" },
     { audio::AudioResourceType::AudioUnit, "AudioUnit" },
-    { audio::AudioResourceType::NyquistPlugin, "NyquistPlugin" },
-    { audio::AudioResourceType::NativeEffect, "NativeEffect" },
 };
 
 static JsonObject attributesToJson(const AudioResourceAttributes& attributes)
@@ -153,6 +151,17 @@ Ret KnownAudioPluginsRegister::load()
     return muse::make_ok();
 }
 
+Ret KnownAudioPluginsRegister::clear()
+{
+    m_pluginInfoMap.clear();
+    m_pluginPaths.clear();
+
+    Ret ret = writePluginsInfo();
+    m_pluginInfoListChanged.notify();
+
+    return ret;
+}
+
 AudioPluginInfoList KnownAudioPluginsRegister::pluginInfoList(PluginInfoAccepted accepted) const
 {
     if (!accepted) {
@@ -207,20 +216,27 @@ Ret KnownAudioPluginsRegister::registerPlugins(const AudioPluginInfoList& list)
         return make_ok();
     }
 
+    bool changed = false;
+
     for (const AudioPluginInfo& info : list) {
         auto it = m_pluginInfoMap.find(info.meta.id);
         if (it != m_pluginInfoMap.end()) {
-            IF_ASSERT_FAILED(it->second.path != info.path) {
-                return false;
+            if (it->second.path == info.path) {
+                LOGW() << "Plugin is already registered: " << info.path << ", ID: " << info.meta.id;
+                continue;
             }
         }
 
         m_pluginInfoMap.emplace(info.meta.id, info);
         m_pluginPaths.insert(info.path);
+        changed = true;
     }
 
-    Ret ret = writePluginsInfo();
-    return ret;
+    if (changed) {
+        return writePluginsInfo();
+    }
+
+    return make_ok();
 }
 
 Ret KnownAudioPluginsRegister::unregisterPlugins(const AudioResourceIdList& resourceIds)
@@ -232,6 +248,8 @@ Ret KnownAudioPluginsRegister::unregisterPlugins(const AudioResourceIdList& reso
     if (resourceIds.empty()) {
         return make_ok();
     }
+
+    bool changed = false;
 
     for (const AudioResourceId& resourceId : resourceIds) {
         if (!exists(resourceId)) {
@@ -245,10 +263,14 @@ Ret KnownAudioPluginsRegister::unregisterPlugins(const AudioResourceIdList& reso
         }
 
         m_pluginInfoMap.erase(resourceId);
+        changed = true;
     }
 
-    Ret ret = writePluginsInfo();
-    return ret;
+    if (changed) {
+        return writePluginsInfo();
+    }
+
+    return make_ok();
 }
 
 Ret KnownAudioPluginsRegister::writePluginsInfo()

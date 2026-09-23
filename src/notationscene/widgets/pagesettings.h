@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,8 +22,6 @@
 #ifndef MU_NOTATION_PAGESETTINGS_H
 #define MU_NOTATION_PAGESETTINGS_H
 
-#include "ui/view/widgetdialog.h"
-
 #include "ui_pagesettings.h"
 #include "modularity/ioc.h"
 #include "context/iglobalcontext.h"
@@ -34,7 +32,7 @@ class Score;
 }
 
 namespace mu::notation {
-class PageSettings : public muse::ui::WidgetDialog, private Ui::PageSettingsBase
+class PageSettings : public QDialog, private Ui::PageSettingsBase, public muse::Contextable
 {
     Q_OBJECT
 
@@ -44,16 +42,14 @@ class PageSettings : public muse::ui::WidgetDialog, private Ui::PageSettingsBase
 public:
     explicit PageSettings(QWidget* parent = 0);
 
-    void componentComplete() override;
-
 public slots:
-    void accept() override;
-    void reject() override;
+    void accept();
+    void reject();
 
 private:
-    void showEvent(QShowEvent*) override;
-    void hideEvent(QHideEvent*) override;
-    void keyPressEvent(QKeyEvent* event) override;
+    void showEvent(QShowEvent*);
+    void hideEvent(QHideEvent*);
+    void keyPressEvent(QKeyEvent* event);
 
     void updateValues();
     void blockSignals(bool);

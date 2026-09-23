@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -54,8 +54,6 @@ class INotation
 {
 public:
     virtual ~INotation() = default;
-
-    virtual const muse::modularity::ContextPtr& iocContext() const = 0;
 
     virtual project::INotationProject* project() const = 0;
     virtual IMasterNotationPtr masterNotation() const = 0;
@@ -114,6 +112,6 @@ public:
     virtual INotationPartsPtr parts() const = 0;
 
     // notify
-    virtual muse::async::Channel<muse::RectF> notationChanged() const = 0;
+    virtual muse::async::Notification notationChanged() const = 0;
 };
 }

@@ -60,8 +60,6 @@ class AbstractToolBarModel : public QAbstractListModel, public Contextable, publ
     Q_PROPERTY(int length READ rowCount NOTIFY itemsChanged)
     Q_PROPERTY(QVariantList items READ itemsProperty NOTIFY itemsChanged)
 
-    Q_PROPERTY(bool isCompactMode READ isCompactMode WRITE setIsCompactMode NOTIFY isCompactModeChanged)
-
 public:
     ContextInject<ui::IUiActionsRegister> uiActionsRegister = { this };
     ContextInject<actions::IActionsDispatcher> dispatcher = { this };
@@ -83,14 +81,9 @@ public:
 
     Q_INVOKABLE QVariantMap get(int index);
 
-    bool isCompactMode() const;
-    void setIsCompactMode(bool isCompactMode);
-
 signals:
     void itemsChanged();
-    void itemChanged(muse::uicomponents::ToolBarItem* item);
-
-    void isCompactModeChanged();
+    void itemChanged(uicomponents::ToolBarItem* item);
 
 protected:
     enum Roles {
@@ -131,7 +124,5 @@ private:
     void updateShortcuts(MenuItem* menuItem);
 
     ToolBarItemList m_items;
-
-    bool m_isCompactMode = false;
 };
 }

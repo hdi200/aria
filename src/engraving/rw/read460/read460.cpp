@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -86,6 +86,10 @@ muse::Ret Read460::readScoreFile(Score* score, XmlReader& e, rw::ReadInOutData* 
             if (score->isMaster()) {
                 score->setMscoreRevision(rev);
             }
+        } else if (tag == "Revision") {
+            e.skipCurrentElement();
+        } else if (tag == "LastEID") {
+            e.skipCurrentElement();
         } else if (tag == "Score") {
             if (!readScoreTag(score, e, ctx)) {
                 if (e.error() == muse::XmlStreamReader::CustomError) {
@@ -96,7 +100,7 @@ muse::Ret Read460::readScoreFile(Score* score, XmlReader& e, rw::ReadInOutData* 
         } else if (tag == "museScore") {
             // pass
         } else {
-            e.unknown();
+            e.skipCurrentElement();
         }
     }
 
@@ -124,11 +128,21 @@ bool Read460::readScoreTag(Score* score, XmlReader& e, ReadContext& ctx)
             TRead::readItemEID(score, e);
         } else if (tag == "Staff") {
             StaffRead::readStaff(score, e, ctx);
+        } else if (tag == "Omr") {
+            e.skipCurrentElement();
         } else if (tag == "Audio") {
             score->m_audio = new Audio;
             TRead::read(score->m_audio, e, ctx);
+        } else if (tag == "showOmr") {
+            e.skipCurrentElement();
         } else if (tag == "playMode") {
             score->m_playMode = PlayMode(e.readInt());
+        } else if (tag == "LayerTag") {
+            e.skipCurrentElement();
+        } else if (tag == "Layer") {
+            e.skipCurrentElement();
+        } else if (tag == "currentLayer") {
+            e.skipCurrentElement();
         } else if (tag == "Synthesizer") {
             score->m_synthesizerState.read(e);
         } else if (tag == "page-offset") {
@@ -778,6 +792,7 @@ bool Read460::pasteStaff(XmlReader& e, Segment* dst, staff_idx_t dstStaff, Fract
 
     for (Score* s : score->scoreList()) {     // for all parts
         s->connectTies();
+        s->undoRemoveStaleTieJumpPoints(false);
 
         for (Spanner* sp : score->unmanagedSpanners()) {
             if (sp->isLyricsLine() && toLyricsLine(sp)->isDash()) {

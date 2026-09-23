@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -57,12 +57,17 @@ static const QChar GO_DOWN_ICON = iconCodeToChar(IconCode::Code::ARROW_DOWN);
 static const QChar EDIT_ICON = iconCodeToChar(IconCode::Code::EDIT);
 
 EditStaff::EditStaff(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
+    : QDialog(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setObjectName("EditStaff");
     setupUi(this);
     setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
     setModal(true);
+
+    initStaff();
+
+    editStaffTypeDialog = new EditStaffType(this);
+    editStaffTypeDialog->setWindowModality(Qt::WindowModal);
 
     connect(buttonBox,        &QDialogButtonBox::clicked, this, &EditStaff::bboxClicked);
     connect(changeInstrument, &QPushButton::clicked, this, &EditStaff::showReplaceInstrumentDialog);
@@ -80,27 +85,6 @@ EditStaff::EditStaff(QWidget* parent)
     connect(showBarlines,     &QCheckBox::clicked, this, &EditStaff::showBarlinesChanged);
     connect(invisible,        &QCheckBox::clicked, this, &EditStaff::invisibleChanged);
 
-    connect(useDefaultName, &QRadioButton::clicked, this, [&]() {
-        useCustomNameChanged(!useDefaultName->isChecked());
-    });
-    connect(useCustomName, &QRadioButton::clicked, this, [&]() {
-        useCustomNameChanged(useCustomName->isChecked());
-    });
-
-    connect(useDefaultGroupName, &QRadioButton::clicked, this, [&]() {
-        useCustomGroupNameChanged(!useDefaultGroupName->isChecked());
-    });
-    connect(useCustomGroupName, &QRadioButton::clicked, this, [&]() {
-        useCustomGroupNameChanged(useCustomGroupName->isChecked());
-    });
-
-    connect(useDefaultIndividualName, &QRadioButton::clicked, this, [&]() {
-        useCustomIndividualNameChanged(!useDefaultIndividualName->isChecked());
-    });
-    connect(useCustomIndividualName, &QRadioButton::clicked, this, [&]() {
-        useCustomIndividualNameChanged(useCustomIndividualName->isChecked());
-    });
-
     connect(color, &Awl::ColorLabel::colorChanged, this, &EditStaff::colorChanged);
 
     connect(mag, &QDoubleSpinBox::valueChanged, this, &EditStaff::magChanged);
@@ -109,9 +93,6 @@ EditStaff::EditStaff(QWidget* parent)
 
     connect(lines, &QSpinBox::valueChanged, this, &EditStaff::numOfLinesChanged);
     connect(lineDistance, &QDoubleSpinBox::valueChanged, this, &EditStaff::lineDistanceChanged);
-
-    connect(longStaffName, &QTextEdit::textChanged, this, &EditStaff::longNameChanged);
-    connect(shortStaffName, &QTextEdit::textChanged, this, &EditStaff::shortNameChanged);
 
     WidgetUtils::setWidgetIcon(nextButton, IconCode::Code::ARROW_DOWN);
     WidgetUtils::setWidgetIcon(previousButton, IconCode::Code::ARROW_UP);
@@ -122,14 +103,6 @@ EditStaff::EditStaff(QWidget* parent)
 
     //! NOTE: It is necessary for the correct start of navigation in the dialog
     setFocus();
-}
-
-void EditStaff::componentComplete()
-{
-    editStaffTypeDialog = new EditStaffType(iocContext(), this);
-    editStaffTypeDialog->setWindowModality(Qt::WindowModal);
-
-    initStaff();
 }
 
 void EditStaff::setStaff(Staff* s, const Fraction& tick)
@@ -159,9 +132,7 @@ void EditStaff::setStaff(Staff* s, const Fraction& tick)
     m_instrumentKey.tick = Fraction::fromTicks(it->first);
 
     m_staff = engraving::Factory::createStaff(part);
-    mu::engraving::StaffType* orgStaffType = m_orgStaff->staffType(tick);
-    m_tick = Fraction::fromTicks(m_orgStaff->staffTypeRange(tick).first);
-    mu::engraving::StaffType* stt = m_staff->setStaffType(m_tick, *orgStaffType);
+    mu::engraving::StaffType* stt = m_staff->setStaffType(Fraction(0, 1), *m_orgStaff->staffType(Fraction(0, 1)));
 
     m_staff->setPart(part);
     m_staff->setDefaultClefType(m_orgStaff->defaultClefType());
@@ -172,6 +143,20 @@ void EditStaff::setStaff(Staff* s, const Fraction& tick)
     m_staff->setHideSystemBarLine(m_orgStaff->hideSystemBarLine());
     m_staff->setMergeMatchingRests(m_orgStaff->mergeMatchingRests());
     m_staff->setReflectTranspositionInLinkedTab(m_orgStaff->reflectTranspositionInLinkedTab());
+
+    // get tick range for instrument
+    auto i = part->instruments().upper_bound(tick.ticks());
+    if (i == part->instruments().end()) {
+        m_tickEnd = Fraction(-1, 1);
+    } else {
+        m_tickEnd = Fraction::fromTicks(i->first);
+    }
+    --i;
+    if (i == part->instruments().begin()) {
+        m_tickStart = Fraction(-1, 1);
+    } else {
+        m_tickStart = Fraction::fromTicks(i->first);
+    }
 
     // set dlg controls
     spinExtraDistance->setValue(s->userDist().val());
@@ -209,9 +194,6 @@ void EditStaff::updateStaffType(const mu::engraving::StaffType& staffType)
     showBarlines->setChecked(staffType.showBarlines());
     invisible->setChecked(staffType.invisible());
     staffGroupName->setText(staffType.translatedGroupName());
-
-    longStaffName->setPlainText(TextBase::unEscape(staffType.longName()));
-    shortStaffName->setPlainText(TextBase::unEscape(staffType.shortName()));
 }
 
 void EditStaff::updateInstrument()
@@ -220,34 +202,6 @@ void EditStaff::updateInstrument()
 
     longName->setPlainText(m_instrument.nameAsPlainText());
     shortName->setPlainText(m_instrument.abbreviatureAsPlainText());
-    instrumentNumber->setValue(m_instrument.number());
-
-    const InstrumentLabel& instrLabel = m_instrument.instrumentLabel();
-    showNumberLong->setChecked(instrLabel.showNumberLong());
-    showNumberShort->setChecked(instrLabel.showNumberShort());
-    showTranspositionLong->setChecked(instrLabel.showTranspositionLong());
-    showTranspositionShort->setChecked(instrLabel.showTranspositionShort());
-    transpositionLabel->setText(TextBase::unEscape(instrLabel.transposition()));
-
-    useDefaultName->setChecked(!instrLabel.useCustomName());
-    useCustomName->setChecked(instrLabel.useCustomName());
-    customNameGroupbox->setEnabled(instrLabel.useCustomName());
-    customLongName->setText(TextBase::unEscape(instrLabel.customNameLong()));
-    customShortName->setText(TextBase::unEscape(instrLabel.customNameShort()));
-
-    allowGroupName->setChecked(instrLabel.allowGroupName());
-    useDefaultGroupName->setChecked(!instrLabel.useCustomGroupName());
-    useCustomGroupName->setChecked(instrLabel.useCustomGroupName());
-    customGroupNameGroupbox->setEnabled(instrLabel.useCustomGroupName());
-    customLongNameGroup->setPlainText(TextBase::unEscape(instrLabel.customNameLongGroup()));
-    customShortNameGroup->setPlainText(TextBase::unEscape(instrLabel.customNameShortGroup()));
-
-    useDefaultIndividualName->setChecked(!instrLabel.useCustomIndividualName());
-    useCustomIndividualName->setChecked(instrLabel.useCustomIndividualName());
-    customIndividualNameGroupbox->setEnabled(instrLabel.useCustomIndividualName());
-    customLongNameIndividual->setPlainText(TextBase::unEscape(instrLabel.customNameLongIndividual()));
-    customShortNameIndividual->setPlainText(TextBase::unEscape(instrLabel.customNameShortIndividual()));
-
     const InstrumentTemplate* templ = mu::engraving::searchTemplate(m_instrument.id());
     if (templ) {
         instrumentName->setText(formatInstrumentTitle(templ->trackName, templ->trait));
@@ -320,7 +274,7 @@ void EditStaff::gotoNextStaff()
     Staff* nextStaff = m_orgStaff->score()->staff(nextStaffIndex);
 
     if (nextStaff) {
-        setStaff(nextStaff, m_tick);
+        setStaff(nextStaff, m_tickStart);
     }
 }
 
@@ -331,7 +285,7 @@ void EditStaff::gotoPreviousStaff()
     Staff* prevStaff = m_orgStaff->score()->staff(previousStaffIndex);
 
     if (prevStaff) {
-        setStaff(prevStaff, m_tick);
+        setStaff(prevStaff, m_tickStart);
     }
 }
 
@@ -413,42 +367,42 @@ void EditStaff::maxPitchPClicked()
 
 void EditStaff::lineDistanceChanged()
 {
-    m_staff->staffType(m_tick)->setLineDistance(mu::engraving::Spatium(lineDistance->value()));
+    m_staff->staffType(Fraction(0, 1))->setLineDistance(mu::engraving::Spatium(lineDistance->value()));
 }
 
 void EditStaff::numOfLinesChanged()
 {
-    m_staff->staffType(m_tick)->setLines(lines->value());
+    m_staff->staffType(Fraction(0, 1))->setLines(lines->value());
 }
 
 void EditStaff::showClefChanged()
 {
-    m_staff->staffType(m_tick)->setGenClef(showClef->isChecked());
+    m_staff->staffType(Fraction(0, 1))->setGenClef(showClef->isChecked());
 }
 
 void EditStaff::showTimeSigChanged()
 {
-    m_staff->staffType(m_tick)->setGenTimesig(showTimesig->isChecked());
+    m_staff->staffType(Fraction(0, 1))->setGenTimesig(showTimesig->isChecked());
 }
 
 void EditStaff::showBarlinesChanged()
 {
-    m_staff->staffType(m_tick)->setShowBarlines(showBarlines->isChecked());
+    m_staff->staffType(Fraction(0, 1))->setShowBarlines(showBarlines->isChecked());
 }
 
 void EditStaff::invisibleChanged()
 {
-    m_staff->staffType(m_tick)->setInvisible(invisible->isChecked());
+    m_staff->staffType(Fraction(0, 1))->setInvisible(invisible->isChecked());
 }
 
 void EditStaff::colorChanged()
 {
-    m_staff->staffType(m_tick)->setColor(color->color());
+    m_staff->staffType(Fraction(0, 1))->setColor(color->color());
 }
 
 void EditStaff::magChanged(double newValue)
 {
-    m_staff->staffType(m_tick)->setUserMag(newValue / 100.0);
+    m_staff->staffType(Fraction(0, 1))->setUserMag(newValue / 100.0);
 }
 
 void EditStaff::transpositionChanged()
@@ -460,37 +414,6 @@ void EditStaff::transpositionChanged()
     } else {
         transp_PreferSharpFlat->setVisible(true);
     }
-}
-
-void EditStaff::longNameChanged()
-{
-    m_staff->staffType(m_tick)->setLongName(longStaffName->toPlainText());
-}
-
-void EditStaff::shortNameChanged()
-{
-    m_staff->staffType(m_tick)->setShortName(shortStaffName->toPlainText());
-}
-
-void EditStaff::useCustomNameChanged(bool useCustom)
-{
-    useDefaultName->setChecked(!useCustom);
-    useCustomName->setChecked(useCustom);
-    customNameGroupbox->setEnabled(useCustom);
-}
-
-void EditStaff::useCustomGroupNameChanged(bool useCustomGroup)
-{
-    useDefaultGroupName->setChecked(!useCustomGroup);
-    useCustomGroupName->setChecked(useCustomGroup);
-    customGroupNameGroupbox->setEnabled(useCustomGroup);
-}
-
-void EditStaff::useCustomIndividualNameChanged(bool useCustomIndividual)
-{
-    useDefaultIndividualName->setChecked(!useCustomIndividual);
-    useCustomIndividualName->setChecked(useCustomIndividual);
-    customIndividualNameGroupbox->setEnabled(useCustomIndividual);
 }
 
 INotationPtr EditStaff::notation() const
@@ -569,49 +492,6 @@ Instrument EditStaff::instrument() const
     return part ? *part->instrument(m_instrumentKey.tick) : Instrument();
 }
 
-std::vector<InstrumentKey> EditStaff::otherInstrumentsInSameGroup() const
-{
-    Part* part = m_orgStaff->part();
-    Score* score = m_orgStaff->score();
-
-    Measure* measure = score->tick2measure(m_tick);
-    IF_ASSERT_FAILED(measure) {
-        return {};
-    }
-
-    System* system = measure->system();
-    IF_ASSERT_FAILED(system) {
-        return {};
-    }
-
-    const std::unordered_map<Part*, InstrumentName*>& partsWithGroupName = system->ldata()->partsWithGroupName();
-    if (!muse::contains(partsWithGroupName, part)) {
-        return {};
-    }
-
-    InstrumentName* groupName = partsWithGroupName.at(part);
-
-    std::vector<InstrumentKey> result;
-    for (const auto& pair : partsWithGroupName) {
-        Part* p = pair.first;
-        if (p == part) {
-            continue;
-        }
-
-        InstrumentName* n = pair.second;
-        if (n == groupName) {
-            Instrument* instrument = p->instrument(m_tick);
-            InstrumentKey key;
-            key.instrumentId = instrument->id();
-            key.partId = p->id();
-            key.tick = Fraction::fromTicks(muse::findLessOrEqual(p->instruments(), m_tick.ticks())->first);
-            result.push_back(key);
-        }
-    }
-
-    return result;
-}
-
 void EditStaff::applyStaffProperties()
 {
     StaffConfig config;
@@ -621,10 +501,10 @@ void EditStaff::applyStaffProperties()
     config.hideSystemBarline = hideSystemBarLine->isChecked();
     config.mergeMatchingRests = static_cast<AutoOnOff>(mergeMatchingRests->currentIndex());
     config.clefTypeList = m_staff->defaultClefType();
-    config.staffType = *m_staff->staffType(m_tick);
+    config.staffType = *m_staff->staffType(mu::engraving::Fraction(0, 1));
     config.reflectTranspositionInLinkedTab = !noReflectTranspositionInLinkedTab->isChecked();
 
-    notationParts()->setStaffConfig(m_orgStaff->id(), config, m_tick);
+    notationParts()->setStaffConfig(m_orgStaff->id(), config);
 }
 
 void EditStaff::applyPartProperties()
@@ -633,23 +513,15 @@ void EditStaff::applyPartProperties()
 
     String _sn = shortName->toPlainText();
     String _ln = longName->toPlainText();
-    String _ssn = shortStaffName->toPlainText();
-    String _lsn = longStaffName->toPlainText();
-    if (!mu::engraving::Text::validateText(_sn) || !mu::engraving::Text::validateText(_ln)
-        || !mu::engraving::Text::validateText(_ssn) || !mu::engraving::Text::validateText(_lsn)) {
+    if (!mu::engraving::Text::validateText(_sn) || !mu::engraving::Text::validateText(_ln)) {
         interactive()->warning(muse::trc("notation/staffpartproperties", "Invalid instrument name"),
                                muse::trc("notation/staffpartproperties", "The instrument name is invalid."));
         return;
     }
-
     QString sn = _sn;
     QString ln = _ln;
-    QString ssn = _ssn;
-    QString lsn = _lsn;
     shortName->setPlainText(sn);    // show the fixed text
     longName->setPlainText(ln);
-    shortStaffName->setPlainText(ssn);
-    longStaffName->setPlainText(lsn);
 
     int intervalIdx = iList->currentIndex();
     bool upFlag     = up->isChecked();
@@ -662,55 +534,27 @@ void EditStaff::applyPartProperties()
         interval.flip();
     }
 
-    Instrument prevInstrument = m_instrument;
-
     m_instrument.setTranspose(interval);
     m_instrument.setMinPitchA(m_minPitchA);
     m_instrument.setMaxPitchA(m_maxPitchA);
     m_instrument.setMinPitchP(m_minPitchP);
     m_instrument.setMaxPitchP(m_maxPitchP);
 
-    m_instrument.setShortName(String::fromQString(sn));
-    m_instrument.setLongName(String::fromQString(ln));
-    m_instrument.setNumber(instrumentNumber->value());
-
-    InstrumentLabel& name = m_instrument.instrumentLabel();
-    name.setShowNumberLong(showNumberLong->isChecked());
-    name.setShowNumberShort(showNumberShort->isChecked());
-    name.setShowTranspositionLong(showTranspositionLong->isChecked());
-    name.setShowTranspositionShort(showTranspositionShort->isChecked());
-    name.setTransposition(transpositionLabel->text());
-    name.setUseCustomName(useCustomName->isChecked());
-    name.setCustomNameLong(customLongName->toPlainText());
-    name.setCustomNameShort(customShortName->toPlainText());
-    name.setAllowGroupName(allowGroupName->isChecked());
-    name.setUseCustomGroupName(useCustomGroupName->isChecked());
-    name.setCustomNameLongGroup(customLongNameGroup->toPlainText());
-    name.setCustomNameShortGroup(customShortNameGroup->toPlainText());
-    name.setUseCustomIndividualName(useCustomIndividualName->isChecked());
-    name.setCustomNameLongIndividual(customLongNameIndividual->toPlainText());
-    name.setCustomNameShortIndividual(customShortNameIndividual->toPlainText());
-
-    if (name.useCustomGroupName() && (name.customNameLongGroup().empty() || name.customNameShortGroup().empty())) {
-        interactive()->warning(muse::trc("notation/staffpartproperties", "Invalid group name"),
-                               muse::trc("notation/staffpartproperties", "Custom group names cannot be empty."));
-        return;
+    StaffNameList shortNames;
+    if (sn.length() > 0) {
+        shortNames.push_back(mu::engraving::StaffName(sn, 0));
     }
+    m_instrument.setShortNames(shortNames);
 
-    size_t staffIdxInPart = muse::indexOf(part->staves(), m_orgStaff);
-    DO_ASSERT(staffIdxInPart != muse::nidx);
+    StaffNameList longNames;
+    if (ln.length() > 0) {
+        longNames.push_back(mu::engraving::StaffName(ln, 0));
+    }
+    m_instrument.setLongNames(longNames);
 
-    if (m_instrument.id() != prevInstrument.id()) {
+    if (m_instrument.id() != m_orgInstrument.id()) {
         masterNotationParts()->replaceInstrument(m_instrumentKey, m_instrument);
-    } else if (m_instrument != prevInstrument) {
-        bool groupNameChanged = name.useCustomGroupName() != prevInstrument.instrumentLabel().useCustomGroupName()
-                                || name.customNameLongGroup() != prevInstrument.instrumentLabel().customNameLongGroup()
-                                || name.customNameShortGroup() != prevInstrument.instrumentLabel().customNameShortGroup();
-        if (groupNameChanged) {
-            notationParts()->setInstrumentGroupNameOptions(otherInstrumentsInSameGroup(),
-                                                           name.useCustomGroupName(), name.customNameLongGroup(),
-                                                           name.customNameShortGroup());
-        }
+    } else if (m_instrument != m_orgInstrument) {
         notationParts()->replaceInstrument(m_instrumentKey, m_instrument);
     }
 
@@ -735,7 +579,7 @@ void EditStaff::showReplaceInstrumentDialog()
         }
 
         m_instrument = Instrument::fromTemplate(&val);
-        m_staff->setStaffType(m_tick, *staffType);
+        m_staff->setStaffType(Fraction(0, 1), *staffType);
         m_staff->setDefaultClefType(m_instrument.clefType(0));
 
         updateInstrument();
@@ -811,11 +655,11 @@ QString EditStaff::midiCodeToStr(int midiCode)
 
 void EditStaff::showStaffTypeDialog()
 {
-    editStaffTypeDialog->setStaffType(m_staff->staffType(m_tick));
+    editStaffTypeDialog->setStaffType(m_staff->staffType(mu::engraving::Fraction(0, 1)));
     editStaffTypeDialog->setInstrument(m_instrument);
 
     if (editStaffTypeDialog->exec()) {
-        m_staff->setStaffType(m_tick, editStaffTypeDialog->getStaffType());
+        m_staff->setStaffType(Fraction(0, 1), editStaffTypeDialog->getStaffType());
         updateStaffType(editStaffTypeDialog->getStaffType());
     }
 }

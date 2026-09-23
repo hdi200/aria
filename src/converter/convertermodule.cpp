@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -30,29 +30,22 @@
 using namespace muse::modularity;
 using namespace mu::converter;
 
-static const std::string mname("converter");
-
 std::string ConverterModule::moduleName() const
 {
-    return mname;
+    return "converter";
+}
+
+void ConverterModule::registerExports()
+{
+    ioc()->registerExport<IConverterController>(moduleName(), new ConverterController(iocContext()));
 }
 
 void ConverterModule::registerApi()
 {
     using namespace muse::api;
 
-    auto api = globalIoc()->resolve<IApiRegister>(mname);
+    auto api = ioc()->resolve<IApiRegister>(moduleName());
     if (api) {
-        api->regApiCreator(mname, "MuseApi.Converter", new ApiCreator<api::ConverterApi>());
+        api->regApiCreator(moduleName(), "MuseApi.Converter", new ApiCreator<api::ConverterApi>());
     }
-}
-
-muse::modularity::IContextSetup* ConverterModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new ConverterModuleContext(ctx);
-}
-
-void ConverterModuleContext::registerExports()
-{
-    ioc()->registerExport<IConverterController>(mname, new ConverterController(iocContext()));
 }

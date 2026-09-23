@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,7 +21,6 @@
  */
 #include "mscwriter.h"
 
-#include <string>
 #include <vector>
 
 #include "containers.h"
@@ -39,155 +38,6 @@ using namespace mu;
 using namespace muse;
 using namespace muse::io;
 using namespace mu::engraving;
-
-namespace {
-constexpr const char* MSC_COMPAT_VERSION = "4.70";
-constexpr const char* MSC_COMPAT_PROGRAM_VERSION = "4.7.2";
-constexpr const char* MSC_COMPAT_PROGRAM_REVISION = "69af3e1";
-
-const std::vector<std::string> MSC_COMPAT_UNSUPPORTED_STYLE_TAGS = {
-    "groupBracketAlign",
-    "groupBracketColor",
-    "groupBracketDistanceToGroupBracket",
-    "groupBracketDistanceToNames",
-    "groupBracketFontFace",
-    "groupBracketFontSize",
-    "groupBracketFontSpatiumDependent",
-    "groupBracketFontStyle",
-    "groupBracketFrameBgColor",
-    "groupBracketFrameFgColor",
-    "groupBracketFramePadding",
-    "groupBracketFrameRound",
-    "groupBracketFrameType",
-    "groupBracketFrameWidth",
-    "groupBracketHangTextIntoMargin",
-    "groupBracketHookLen",
-    "groupBracketLineSpacing",
-    "groupBracketLineWidth",
-    "groupBracketMusicalSymbolSize",
-    "groupBracketOffset",
-    "groupBracketPosition",
-    "groupBracketTextAlign",
-    "groupBracketTextOrientation",
-    "instrumentNamesAlignIncludeGroupBrackets",
-    "instrumentNamesAlignLong",
-    "instrumentNamesAlignShort",
-    "instrumentNamesCustomFormatLong",
-    "instrumentNamesCustomFormatShort",
-    "instrumentNamesFormatLong",
-    "instrumentNamesFormatShort",
-    "instrumentNamesShowTranspositionLong",
-    "instrumentNamesShowTranspositionShort",
-    "instrumentNamesStackVertically",
-    "othersNameByGroup",
-    "stringsNameByGroup",
-    "vocalsNameByGroup",
-    "windsNameByGroup"
-};
-
-bool hasTag(const std::string& xml, const std::string& tag)
-{
-    return xml.find(tag) != std::string::npos;
-}
-
-void replaceTag(std::string& xml, const std::string& open, const std::string& close, const std::string& replacement)
-{
-    const size_t start = xml.find(open);
-    if (start == std::string::npos) {
-        return;
-    }
-
-    const size_t end = xml.find(close, start);
-    if (end == std::string::npos) {
-        return;
-    }
-
-    xml.replace(start, end + close.size() - start, replacement);
-}
-
-void replaceMuseScoreHeader(std::string& xml)
-{
-    const size_t versionStart = xml.find("<museScore version=\"");
-    if (versionStart == std::string::npos) {
-        return;
-    }
-
-    const size_t versionEnd = xml.find("\">", versionStart);
-    if (versionEnd != std::string::npos) {
-        xml.replace(versionStart, versionEnd + 2 - versionStart,
-                    std::string("<museScore version=\"") + MSC_COMPAT_VERSION + "\">");
-    }
-}
-
-void removeTag(std::string& xml, const std::string& tag)
-{
-    const std::string open = "<" + tag + ">";
-    const std::string close = "</" + tag + ">";
-    size_t start = xml.find(open);
-    while (start != std::string::npos) {
-        size_t eraseStart = start;
-        if (eraseStart > 0 && xml[eraseStart - 1] == '\n') {
-            while (eraseStart > 0 && (xml[eraseStart - 1] == ' ' || xml[eraseStart - 1] == '\t')) {
-                --eraseStart;
-            }
-        }
-
-        const size_t end = xml.find(close, start);
-        if (end == std::string::npos) {
-            return;
-        }
-
-        size_t eraseEnd = end + close.size();
-        if (eraseEnd < xml.size() && xml[eraseEnd] == '\n') {
-            ++eraseEnd;
-        }
-
-        xml.erase(eraseStart, eraseEnd - eraseStart);
-        start = xml.find(open, eraseStart);
-    }
-}
-
-ByteArray dataWithMuseScore47CompatibilityVersion(const ByteArray& data, bool filterStyleTags)
-{
-    if (data.empty()) {
-        return data;
-    }
-
-    std::string xml(data.constChar(), data.size());
-    if (xml.find("<museScore version=\"") == std::string::npos) {
-        return data;
-    }
-
-    replaceMuseScoreHeader(xml);
-
-    replaceTag(xml, "<programVersion>", "</programVersion>",
-               std::string("<programVersion>") + MSC_COMPAT_PROGRAM_VERSION + "</programVersion>");
-    replaceTag(xml, "<programRevision>", "</programRevision>",
-               std::string("<programRevision>") + MSC_COMPAT_PROGRAM_REVISION + "</programRevision>");
-
-    if (filterStyleTags) {
-        for (const std::string& tag : MSC_COMPAT_UNSUPPORTED_STYLE_TAGS) {
-            removeTag(xml, tag);
-        }
-    }
-
-    if (hasTag(xml, "<harmonyInfo>") && !hasTag(xml, std::string("<museScore version=\"") + MSC_COMPAT_VERSION + "\">")) {
-        LOGE() << "score data with harmonyInfo was not saved with the MuseScore 4.7 compatibility header";
-    }
-
-    return ByteArray(xml.data(), xml.size());
-}
-
-ByteArray scoreDataWithMuseScore47CompatibilityVersion(const ByteArray& data)
-{
-    return dataWithMuseScore47CompatibilityVersion(data, false);
-}
-
-ByteArray styleDataWithMuseScore47CompatibilityVersion(const ByteArray& data)
-{
-    return dataWithMuseScore47CompatibilityVersion(data, true);
-}
-}
 
 MscWriter::MscWriter(const Params& params)
     : m_params(params)
@@ -284,7 +134,7 @@ bool MscWriter::addFileData(const String& fileName, const ByteArray& data)
 
 void MscWriter::writeStyleFile(const ByteArray& data)
 {
-    addFileData(u"score_style.mss", styleDataWithMuseScore47CompatibilityVersion(data));
+    addFileData(u"score_style.mss", data);
 }
 
 String MscWriter::mainFileName() const
@@ -308,19 +158,19 @@ String MscWriter::mainFileName() const
 
 void MscWriter::writeScoreFile(const ByteArray& data)
 {
-    addFileData(mainFileName(), scoreDataWithMuseScore47CompatibilityVersion(data));
+    addFileData(mainFileName(), data);
 }
 
 void MscWriter::addExcerptStyleFile(const String& excerptFileName, const ByteArray& data)
 {
     String fileName = excerptFileName + u".mss";
-    addFileData(u"Excerpts/" + excerptFileName + u"/" + fileName, styleDataWithMuseScore47CompatibilityVersion(data));
+    addFileData(u"Excerpts/" + excerptFileName + u"/" + fileName, data);
 }
 
 void MscWriter::addExcerptFile(const String& excerptFileName, const ByteArray& data)
 {
     String fileName = excerptFileName + u".mscx";
-    addFileData(u"Excerpts/" + excerptFileName + u"/" + fileName, scoreDataWithMuseScore47CompatibilityVersion(data));
+    addFileData(u"Excerpts/" + excerptFileName + u"/" + fileName, data);
 }
 
 void MscWriter::writeChordListFile(const ByteArray& data)
@@ -372,7 +222,8 @@ void MscWriter::writeMeta()
 void MscWriter::writeContainer(const std::vector<String>& paths)
 {
     ByteArray data;
-    auto buf = Buffer::opened(IODevice::WriteOnly, &data);
+    Buffer buf(&data);
+    buf.open(IODevice::WriteOnly);
     XmlStreamWriter xml(&buf);
     xml.startDocument();
     xml.startElement("container");
@@ -529,9 +380,15 @@ bool MscWriter::DirWriter::addFileData(const String& fileName, const ByteArray& 
         }
     }
 
-    const Ret ret = File::writeFile(filePath, data);
-    if (!ret) {
-        LOGE() << "failed to write file: " << filePath;
+    File file(filePath);
+    if (!file.open(IODevice::WriteOnly)) {
+        LOGE() << "failed open file: " << filePath;
+        m_hasError = true;
+        return false;
+    }
+
+    if (file.write(data) != data.size()) {
+        LOGE() << "failed write file: " << filePath;
         m_hasError = true;
         return false;
     }

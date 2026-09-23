@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -286,12 +286,7 @@ bool PlaybackUiActions::actionEnabled(const UiAction& act) const
     if (act.code == PLAY_FROM_SELECTION_CODE) {
         const INotationPtr currNotation = globalContext()->currentNotation();
         const INotationInteractionPtr interaction = currNotation ? currNotation->interaction() : nullptr;
-        const INotationSelectionPtr selection = interaction ? interaction->selection() : nullptr;
-        if (!selection) {
-            return false;
-        }
-        const bool selectionValid = !selection->isNone() || selection->lastElementHit();
-        return selectionValid && !interaction->isEditingElement();
+        return interaction && !interaction->isEditingElement();
     }
 
     return true;

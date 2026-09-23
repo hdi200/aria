@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -78,7 +78,6 @@ public:
     bool readProperties(XmlReader&);
 
     size_t nstaves() const;
-    size_t visibleStavesCount() const;
     const std::vector<Staff*>& staves() const;
     std::set<staff_idx_t> staveIdxList() const;
     void appendStaff(Staff* staff);
@@ -98,16 +97,16 @@ public:
     String instrumentName(const Fraction& tick = { -1, 1 }) const;
     String instrumentId(const Fraction& tick = { -1, 1 }) const;
 
-    void setLongName(const String& s, const Fraction& tick = { -1, 1 });
-    void setShortName(const String& s, const Fraction& tick = { -1, 1 });
+    const StaffNameList& longNames(const Fraction& tick = { -1, 1 }) const { return instrument(tick)->longNames(); }
+    const StaffNameList& shortNames(const Fraction& tick = { -1, 1 }) const { return instrument(tick)->shortNames(); }
+
+    void setLongNames(const StaffNameList& s,  const Fraction& tick = { -1, 1 });
+    void setShortNames(const StaffNameList& s, const Fraction& tick = { -1, 1 });
+
+    void setLongName(const String& s);
+    void setShortName(const String& s);
     void setLongNameAll(const String& s);  // For all instruments in _instruments
     void setShortNameAll(const String& s); // For all instruments in _instruments
-
-    int number(const Fraction& tick = { -1, 1 }) const;
-    void setNumber(int v, const Fraction& tick = { -1, 1 });
-
-    String transposition(const Fraction& tick = { -1, 1 }) const;
-    void setTransposition(const String& s, const Fraction& tick = { -1, 1 });
 
     void setPlainLongName(const String& s);
     void setPlainShortName(const String& s);
@@ -159,16 +158,8 @@ public:
     HarpPedalDiagram* prevHarpDiagram(const Fraction&) const;
     Fraction currentHarpDiagramTick(const Fraction&) const;
 
-    String partName() const;
-
-    //! MuseScore 4.7 files store a part name of their own (<trackName>, shown in its
-    //! Instruments panel and mixer), while this engine derives partName() from the
-    //! instrument. Keep the loaded name so saves write it back unchanged, for as long
-    //! as the part still has the instrument it was loaded with.
-    void setLoadedTrackName(const String& name) { m_loadedTrackName = name; }
-    void bindLoadedTrackNameToInstrument() { m_loadedTrackNameInstrumentId = instrumentId(); }
-    String trackNameForSave() const;
-
+    String partName() const { return m_partName; }
+    void setPartName(const String& s) { m_partName = s; }
     int color() const { return m_color; }
     void setColor(int value) { m_color = value; }
 
@@ -210,6 +201,7 @@ public:
 private:
     friend class read206::Read206;
 
+    String m_partName;                ///< used in tracklist (mixer)
     InstrumentList m_instruments;
     std::vector<Staff*> m_staves;
     muse::ID m_id = INVALID_ID;       ///< used for MusicXML import
@@ -225,9 +217,6 @@ private:
     bool m_hideStavesWhenIndividuallyEmpty = false;
 
     PreferSharpFlat m_preferSharpFlat = PreferSharpFlat::AUTO;
-
-    String m_loadedTrackName;
-    String m_loadedTrackNameInstrumentId;
 
     std::map<int, StringTunings*> m_stringTunings;
 };

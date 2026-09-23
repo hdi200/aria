@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -20,6 +20,8 @@
       <stemWidth>0.125</stemWidth>
       <staffLineWidth>0.09375</staffLineWidth>
       <ledgerLineWidth>0.15625</ledgerLineWidth>
+      <romanNumeralFontFace>Edwin</romanNumeralFontFace>
+      <fretFrets>5</fretFrets>
       <smallNoteMag>0.75</smallNoteMag>
       <graceNoteMag>0.6</graceNoteMag>
       <concertPitch>1</concertPitch>
@@ -50,10 +52,9 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>[Unnamed (treble staff)]</trackName>
       <Instrument id="grand-piano">
-        <InstrumentLabel>
-          <longName>[Unnamed (treble staff)]</longName>
-          </InstrumentLabel>
+        <longName>[Unnamed (treble staff)]</longName>
         <trackName></trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

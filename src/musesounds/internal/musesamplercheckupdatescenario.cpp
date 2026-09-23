@@ -33,7 +33,7 @@ bool MuseSamplerCheckUpdateScenario::alreadyChecked() const
 
 void MuseSamplerCheckUpdateScenario::checkAndShowUpdateIfNeed()
 {
-    if (!service()->canCheckForUpdate() || !multiwindowsProvider()->isFirstWindow()) {
+    if (!service()->canCheckForUpdate() || multiwindowsProvider()->windowCount() != 1) {
         return;
     }
 
@@ -129,13 +129,13 @@ void MuseSamplerCheckUpdateScenario::openMuseHubAndQuit()
     const muse::UriQuery MUSEHUB_URI("musehub://requestUpdateCheck?from=musescore-studio");
 
 #ifdef Q_OS_MACOS
-    if (!platformInteractive()->canOpenApp(MUSEHUB_URI)) {
+    if (!interactive()->canOpenApp(MUSEHUB_URI)) {
         openMuseHubWebsiteAndQuit();
         return;
     }
 #endif
 
-    auto promise = platformInteractive()->openApp(MUSEHUB_URI);
+    auto promise = interactive()->openApp(MUSEHUB_URI);
 
     promise.onResolve(this, [this](const muse::Ret& ret) {
         if (ret) {
@@ -154,9 +154,9 @@ void MuseSamplerCheckUpdateScenario::openMuseHubAndQuit()
 void MuseSamplerCheckUpdateScenario::openMuseHubWebsiteAndQuit()
 {
 #ifdef Q_OS_LINUX
-    platformInteractive()->openUrl(updateConfiguration()->appWebSiteUrl());
+    interactive()->openUrl(globalConfiguration()->museScoreUrl());
 #else
-    platformInteractive()->openUrl(globalConfiguration()->museHubWebUrl());
+    interactive()->openUrl(globalConfiguration()->museHubWebUrl());
 #endif
     dispatcher()->dispatch("quit");
 }

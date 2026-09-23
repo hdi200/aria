@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -12,6 +12,7 @@
       <pageEvenBottomMargin>0.590551</pageEvenBottomMargin>
       <pageOddTopMargin>0.590551</pageOddTopMargin>
       <pageOddBottomMargin>0.590551</pageOddBottomMargin>
+      <romanNumeralFontFace>Edwin</romanNumeralFontFace>
       <nashvilleNumberFontSize>10</nashvilleNumberFontSize>
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
       <tupletFontSize>10</tupletFontSize>
@@ -60,11 +61,10 @@ Words &amp; Music by also Henry Ives (and ampersands)
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano</longName>
-          <shortName>Pno.</shortName>
-          </InstrumentLabel>
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -120,7 +120,7 @@ Words &amp; Music by also Henry Ives (and ampersands)
       </Part>
     <Staff id="1">
       <VBox>
-        <height>11.0385</height>
+        <height>10.3705</height>
         <eid>D_D</eid>
         <Text>
           <eid>E_E</eid>

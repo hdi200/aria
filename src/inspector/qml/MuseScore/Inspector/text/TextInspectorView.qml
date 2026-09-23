@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -55,17 +55,13 @@ InspectorSectionView {
             titleText: qsTrc("inspector", "Font")
             propertyItem: root.model ? root.model.fontFamily : null
 
-            dropdownComp: Component {
-                FontDropdown { }
-            }
-
-            dropdownTextRole: "text"
-            dropdownValueRole: "text"
+            dropdown.textRole: "text"
+            dropdown.valueRole: "text"
 
             model: {
                 var resultList = []
 
-                var fontFamilies = ui.allTextFonts()
+                var fontFamilies = Qt.fontFamilies()
 
                 for (var i = 0; i < fontFamilies.length; ++i) {
                     resultList.push({"text" : fontFamilies[i]})

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -28,11 +28,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Flute</trackName>
       <Instrument id="flute">
-        <InstrumentLabel>
-          <longName>Flute</longName>
-          <shortName>Fl.</shortName>
-          </InstrumentLabel>
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
         <trackName>Flute</trackName>
         <minPitchP>59</minPitchP>
         <maxPitchP>98</maxPitchP>
@@ -69,11 +68,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Oboe</trackName>
       <Instrument id="oboe">
-        <InstrumentLabel>
-          <longName>Oboe</longName>
-          <shortName>Ob.</shortName>
-          </InstrumentLabel>
+        <longName>Oboe</longName>
+        <shortName>Ob.</shortName>
         <trackName>Oboe</trackName>
         <minPitchP>58</minPitchP>
         <maxPitchP>93</maxPitchP>
@@ -154,10 +152,8 @@
         <voice>
           <InstrumentChange>
             <Instrument id="flute">
-              <InstrumentLabel>
-                <longName>Flute</longName>
-                <shortName>Fl.</shortName>
-                </InstrumentLabel>
+              <longName>Flute</longName>
+              <shortName>Fl.</shortName>
               <trackName>Flute</trackName>
               <minPitchP>59</minPitchP>
               <maxPitchP>98</maxPitchP>

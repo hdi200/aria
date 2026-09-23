@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -28,82 +28,40 @@ import MuseScore.Inspector
 InspectorPropertyView {
     id: root
 
-    required property var model
-
-    property Component dropdownComp: null
-    property string dropdownTextRole: ""
-    property string dropdownValueRole: ""
+    property alias dropdown: dropdownItem
+    property alias model: dropdownItem.model
 
     navigationName: "DropdownPropertyView"
-    navigationRowEnd: dropdownLoader.item.navigation.row
+    navigationRowEnd: dropdownItem.navigation.row
 
     function focusOnFirst() {
-        dropdownLoader.item.navigation.requestActive()
+        dropdownItem.navigation.requestActive()
     }
 
     InspectorPopupControllerModel {
         id: popupController
     }
 
-    Loader {
-        id: dropdownLoader
+    StyledDropdown {
+        id: dropdownItem
 
         width: parent.width
 
-        sourceComponent: root.dropdownComp ?? defaultDropdownComp
+        navigation.name: root.navigationName + " Dropdown"
+        navigation.panel: root.navigationPanel
+        navigation.row: root.navigationRowStart + 1
+        navigation.accessible.name: root.accessibleName + " " + currentText
 
-        onLoaded: {
-            let dropdownComp = dropdownLoader.item
-            if (!dropdownComp) {
-                return
-            }
+        currentIndex: root.propertyItem && !root.propertyItem.isUndefined
+                      ? dropdownItem.indexOfValue(root.propertyItem.value)
+                      : -1
 
-            dropdownComp.width = Qt.binding(function() { return dropdownLoader.width })
-
-            dropdownComp.navigation.name = Qt.binding(function() {
-                return root.navigationName + " Dropdown"
-            })
-
-            dropdownComp.navigation.panel = Qt.binding(function() { return root.navigationPanel })
-
-            dropdownComp.navigation.row = Qt.binding(function() { return root.navigationRowStart + 1 })
-
-            dropdownComp.navigation.accessible.name = Qt.binding(function() {
-                return root.accessibleName + " " + dropdownComp.currentText
-            })
-
-            dropdownComp.model = Qt.binding(function() { return root.model })
-
-            dropdownComp.textRole = Qt.binding(function() {
-                return root.dropdownTextRole ? root.dropdownTextRole : dropdownComp.textRole
-            })
-            dropdownComp.valueRole = Qt.binding(function() {
-                return root.dropdownValueRole ? root.dropdownValueRole : dropdownComp.valueRole
-            })
-
-            dropdownComp.currentIndex = Qt.binding(function() {
-                return root.propertyItem && !root.propertyItem.isUndefined
-                    ? dropdownComp.indexOfValue(root.propertyItem.value)
-                    : -1
-            })
+        onActivated: function(index, value) {
+            root.propertyItem.value = value
         }
 
-        Connections {
-            target: dropdownLoader.item
-
-            function onActivated(index, value) {
-                root.propertyItem.value = value
-            }
-
-            function onIsOpenedChanged() {
-                popupController.setDropdown(dropdownLoader.item.dropdown)
-            }
+        onIsOpenedChanged: {
+            popupController.setDropdown(dropdownItem.dropdown)
         }
-    }
-
-    Component {
-        id: defaultDropdownComp
-
-        StyledDropdown { }
     }
 }

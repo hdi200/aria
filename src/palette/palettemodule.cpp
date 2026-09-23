@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -24,7 +24,7 @@
 #include <qqml.h>
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 #include "ui/iuiactionsregister.h"
 #include "accessibility/iqaccessibleinterfaceregister.h"
 
@@ -45,37 +45,47 @@
 using namespace mu::palette;
 using namespace muse;
 using namespace muse::modularity;
-
-static const std::string mname("palette");
+using namespace muse::ui;
+using namespace muse::accessibility;
 
 std::string PaletteModule::moduleName() const
 {
-    return mname;
+    return "palette";
 }
 
 void PaletteModule::registerExports()
 {
-    m_configuration = std::make_shared<PaletteConfiguration>(globalCtx());
+    m_paletteProvider = std::make_shared<PaletteProvider>(iocContext());
+    m_actionsController = std::make_shared<PaletteActionsController>(iocContext());
+    m_paletteUiActions = std::make_shared<PaletteUiActions>(m_actionsController, iocContext());
+    m_configuration = std::make_shared<PaletteConfiguration>(iocContext());
+    m_paletteWorkspaceSetup = std::make_shared<PaletteWorkspaceSetup>(iocContext());
 
-    globalIoc()->registerExport<IPaletteConfiguration>(mname, m_configuration);
+    ioc()->registerExport<IPaletteProvider>(moduleName(), m_paletteProvider);
+    ioc()->registerExport<IPaletteConfiguration>(moduleName(), m_configuration);
 }
 
 void PaletteModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<muse::interactive::IInteractiveUriRegister>(mname);
+    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(moduleName());
+    if (ar) {
+        ar->reg(m_paletteUiActions);
+    }
+
+    auto ir = ioc()->resolve<IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerWidgetUri<MasterPalette>(Uri("musescore://palette/masterpalette"));
         ir->registerWidgetUri<SpecialCharactersDialog>(Uri("musescore://palette/specialcharacters"));
         ir->registerWidgetUri<TimeSignaturePropertiesDialog>(Uri("musescore://palette/timesignatureproperties"));
         ir->registerWidgetUri<CustomizeKitDialog>(Uri("musescore://palette/customizekit"));
-        ir->registerWidgetUri<KeyEditorDialog>(Uri("musescore://notation/keysignatures"));
-        ir->registerWidgetUri<TimeEditorDialog>(Uri("musescore://notation/timesignatures"));
+        ir->registerWidgetUri<KeyEditor>(Uri("musescore://notation/keysignatures"));
+        ir->registerWidgetUri<TimeDialog>(Uri("musescore://notation/timesignatures"));
 
         ir->registerQmlUri(Uri("musescore://palette/properties"), "MuseScore.Palette", "PalettePropertiesDialog");
         ir->registerQmlUri(Uri("musescore://palette/cellproperties"), "MuseScore.Palette", "PaletteCellPropertiesDialog");
     }
 
-    auto accr = globalIoc()->resolve<muse::accessibility::IQAccessibleInterfaceRegister>(mname);
+    auto accr = ioc()->resolve<IQAccessibleInterfaceRegister>(moduleName());
     if (accr) {
         accr->registerInterfaceGetter("mu::palette::PaletteWidget", PaletteWidget::accessibleInterface);
         accr->registerInterfaceGetter("mu::palette::PaletteCell", PaletteCell::accessibleInterface);
@@ -85,50 +95,24 @@ void PaletteModule::resolveImports()
 void PaletteModule::onInit(const IApplication::RunMode&)
 {
     m_configuration->init();
-}
-
-IContextSetup* PaletteModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new PaletteContext(ctx);
-}
-
-void PaletteContext::registerExports()
-{
-    m_paletteProvider = std::make_shared<PaletteProvider>(iocContext());
-    m_actionsController = std::make_shared<PaletteActionsController>(iocContext());
-    m_paletteUiActions = std::make_shared<PaletteUiActions>(m_actionsController, iocContext());
-    m_paletteWorkspaceSetup = std::make_shared<PaletteWorkspaceSetup>(iocContext());
-
-    ioc()->registerExport<IPaletteProvider>(mname, m_paletteProvider);
-}
-
-void PaletteContext::resolveImports()
-{
-    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(mname);
-    if (ar) {
-        ar->reg(m_paletteUiActions);
-    }
-}
-
-void PaletteContext::onInit(const IApplication::RunMode&)
-{
     m_actionsController->init();
     m_paletteUiActions->init();
     m_paletteProvider->init();
 }
 
-void PaletteContext::onAllInited(const IApplication::RunMode&)
+void PaletteModule::onAllInited(const IApplication::RunMode&)
 {
     //! NOTE We need to be sure that the workspaces are initialized.
     //! So, we loads these settings on onAllInited
     m_paletteWorkspaceSetup->setup();
 }
 
-void PaletteContext::onDeinit()
+void PaletteModule::onDeinit()
 {
     m_paletteWorkspaceSetup.reset();
+    m_configuration.reset();
     m_paletteUiActions.reset();
 
-    ioc()->unregisterIfRegistered<IPaletteProvider>(mname, m_paletteProvider);
+    ioc()->unregisterIfRegistered<IPaletteProvider>(moduleName(), m_paletteProvider);
     m_paletteProvider.reset();
 }

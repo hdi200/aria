@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -45,9 +45,9 @@ class BackendJsonWriter;
 class BackendApi
 {
     inline static muse::GlobalInject<muse::io::IFileSystem> fileSystem;
-    inline static muse::GlobalInject<muse::IApplication> application;
     inline static muse::GlobalInject<project::IProjectCreator> notationCreator;
-    inline static muse::GlobalInject<project::INotationWritersRegister> writers;
+    inline static muse::ContextInject<muse::IApplication> application = { nullptr }; // FIXME
+    inline static muse::ContextInject<project::INotationWritersRegister> writers = { nullptr }; // FIXME
 
 public:
     static muse::Ret exportScoreMedia(const muse::io::path_t& in, const muse::io::path_t& out, const muse::io::path_t& highlightConfigPath,

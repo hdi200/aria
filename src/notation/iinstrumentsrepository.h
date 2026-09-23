@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,15 +19,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MU_NOTATION_IINSTRUMENTSREPOSITORY_H
+#define MU_NOTATION_IINSTRUMENTSREPOSITORY_H
 
 #include "modularity/imoduleinterface.h"
 
 #include "notationtypes.h"
 
 namespace mu::notation {
-class IInstrumentsRepository : MODULE_GLOBAL_INTERFACE
+class IInstrumentsRepository : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(IInstrumentsRepository)
 
@@ -46,3 +46,5 @@ public:
     virtual const InstrumentStringTuningsMap& stringTuningsPresets() const = 0;
 };
 }
+
+#endif // MU_NOTATION_IINSTRUMENTSREPOSITORY_H

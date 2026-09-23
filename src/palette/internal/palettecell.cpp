@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -221,8 +221,8 @@ bool PaletteCell::read(XmlReader& e, bool pasteMode)
             visible = e.readBool();
         } else if (s == "Tremolo") {
             compat::TremoloCompat tc;
-            tc.parent = paletteScoreProvider()->paletteScore()->dummy()->chord();
-            rw::RWRegister::reader(paletteScoreProvider()->paletteScore()->mscVersion())->readTremoloCompat(&tc, e);
+            tc.parent = gpaletteScore->dummy()->chord();
+            rw::RWRegister::reader(gpaletteScore->mscVersion())->readTremoloCompat(&tc, e);
             if (tc.single) {
                 element.reset(tc.single);
             } else if (tc.two) {
@@ -235,11 +235,11 @@ bool PaletteCell::read(XmlReader& e, bool pasteMode)
                 element->styleChanged();
             }
         } else {
-            element.reset(Factory::createItemByName(s, paletteScoreProvider()->paletteScore()->dummy()));
+            element.reset(Factory::createItemByName(s, gpaletteScore->dummy()));
             if (!element) {
                 e.unknown();
             } else {
-                rw::RWRegister::reader(paletteScoreProvider()->paletteScore()->mscVersion())->readItem(element.get(), e);
+                rw::RWRegister::reader(gpaletteScore->mscVersion())->readItem(element.get(), e);
             }
         }
     }
@@ -247,7 +247,7 @@ bool PaletteCell::read(XmlReader& e, bool pasteMode)
     setElementTranslated(translateElement);
 
     if (element) {
-        PaletteCompat::migrateOldPaletteCellIfNeeded(this, paletteScoreProvider()->paletteScore());
+        PaletteCompat::migrateOldPaletteCellIfNeeded(this, gpaletteScore);
         element->styleChanged();
 
         if (element->isActionIcon()) {
@@ -309,9 +309,9 @@ void PaletteCell::write(XmlWriter& xml, bool pasteMode) const
     }
 
     if (untranslatedElement) {
-        rw::RWRegister::writer()->writeItem(untranslatedElement.get(), xml);
+        rw::RWRegister::writer(untranslatedElement->iocContext())->writeItem(untranslatedElement.get(), xml);
     } else {
-        rw::RWRegister::writer()->writeItem(element.get(), xml);
+        rw::RWRegister::writer(element->iocContext())->writeItem(element.get(), xml);
     }
     xml.endElement();
 }
@@ -325,10 +325,7 @@ PaletteCellPtr PaletteCell::fromElementMimeData(const QByteArray& data, const mu
 {
     PointF dragOffset;
     Fraction duration(1, 4);
-    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { iocCtx };
-    ElementPtr element(EngravingItem::readMimeData(paletteScoreProvider()->paletteScore(),
-                                                   muse::ByteArray::fromQByteArrayNoCopy(data),
-                                                   &dragOffset, &duration));
+    ElementPtr element(EngravingItem::readMimeData(gpaletteScore, ByteArray::fromQByteArrayNoCopy(data), &dragOffset, &duration));
 
     if (!element) {
         return nullptr;
@@ -339,7 +336,7 @@ PaletteCellPtr PaletteCell::fromElementMimeData(const QByteArray& data, const mu
     }
 
     if (element->isActionIcon()) {
-        muse::ContextInject<muse::ui::IUiActionsRegister> aregister = { iocCtx };
+        muse::Inject<muse::ui::IUiActionsRegister> aregister = { iocCtx };
         ActionIcon* icon = toActionIcon(element.get());
         const muse::ui::UiAction& action = aregister()->action(icon->actionCode());
         if (action.isValid()) {

@@ -21,7 +21,7 @@
  */
 #include "uiactionsregister.h"
 
-#include "global/async/async.h"
+#include <QTimer>
 
 #include "muse_framework_config.h"
 
@@ -30,6 +30,9 @@
 using namespace muse;
 using namespace muse::ui;
 using namespace muse::actions;
+
+//! NOTE Prevents repeated updates when it is requested multiple times in a row
+constexpr int REQUEST_UPDATE_TIMEOUT = 16; // msec
 
 void UiActionsRegister::init()
 {
@@ -48,12 +51,20 @@ void UiActionsRegister::init()
 void UiActionsRegister::reg(const IUiActionsModulePtr& module)
 {
     const UiActionList& alist = module->actionsList();
+    ActionCodeList newActionCodeList;
     for (const UiAction& action : alist) {
         Info info;
         info.module = module;
         info.action = action;
         m_actions[action.code] = std::move(info);
+
+        newActionCodeList.push_back(action.code);
     }
+
+#ifdef MUSE_MULTICONTEXT_WIP
+    updateEnabled(newActionCodeList);
+    updateChecked(newActionCodeList);
+#endif
 
     module->actionsChanged().onReceive(this, [this](const UiActionList& actions) {
         updateActions(actions);
@@ -229,7 +240,7 @@ void UiActionsRegister::requestUpdateEnabledAll()
     }
 
     m_isUpdateEnabledAllRequested = true;
-    muse::async::Async::call(this, [this]() {
+    QTimer::singleShot(REQUEST_UPDATE_TIMEOUT, [this]() {
         updateEnabledAll();
         m_isUpdateEnabledAllRequested = false;
     });

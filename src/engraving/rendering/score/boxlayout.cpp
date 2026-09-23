@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -228,7 +228,7 @@ void BoxLayout::layoutFBox(const FBox* item, FBox::LayoutData* ldata, const Layo
 
         TLayout::layoutItem(fretDiagram, const_cast<LayoutContext&>(ctx));
 
-        //! reset the skip which was added above
+        //! reset the skip wich was added above
         fretDiagram->mutldata()->setIsSkipDraw(false);
         harmony->mutldata()->setIsSkipDraw(false);
 

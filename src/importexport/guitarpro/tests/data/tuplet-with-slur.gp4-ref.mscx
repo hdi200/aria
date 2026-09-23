@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -25,10 +25,9 @@
           </StaffType>
         <defaultClef>G8vb</defaultClef>
         </Staff>
+      <trackName>Gtr 2</trackName>
       <Instrument id="electric-guitar">
-        <InstrumentLabel>
-          <longName>Gtr 2</longName>
-          </InstrumentLabel>
+        <longName>Gtr 2</longName>
         <trackName></trackName>
         <instrumentId>pluck.guitar.electric</instrumentId>
         <singleNoteDynamics>0</singleNoteDynamics>

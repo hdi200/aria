@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,21 +20,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MU_ENGRAVING_ENGRAVINGFONTSPROVIDER_H
+#define MU_ENGRAVING_ENGRAVINGFONTSPROVIDER_H
 
 #include <vector>
 
 #include "iengravingfontsprovider.h"
+#include "modularity/ioc.h"
 
 #include "engravingfont.h"
 
 namespace mu::engraving {
 class EngravingFont;
-class EngravingFontsProvider : public IEngravingFontsProvider
+class EngravingFontsProvider : public IEngravingFontsProvider, public muse::Contextable
 {
 public:
 
-    void deinit();
+    EngravingFontsProvider(const muse::modularity::ContextPtr& iocCtx);
 
     void addInternalFont(const std::string& name, const std::string& family, const muse::io::path_t& filePath) override;
     void addExternalFont(const std::string& name, const std::string& family, const muse::io::path_t& filePath,
@@ -51,6 +53,7 @@ public:
     void loadAllFonts() override;
 
 private:
+
     std::shared_ptr<EngravingFont> doFontByName(const std::string& name) const;
     std::shared_ptr<EngravingFont> doFallbackFont() const;
 
@@ -64,3 +67,5 @@ private:
     std::unordered_map<std::string, std::shared_ptr<EngravingFont> > m_externalSymbolFonts;
 };
 }
+
+#endif // MU_ENGRAVING_ENGRAVINGFONTSPROVIDER_H

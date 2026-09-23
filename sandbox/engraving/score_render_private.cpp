@@ -144,5 +144,6 @@ private:
     std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> m_persistedLayoutModes;
     mutable std::unique_ptr<FluidSynthPlaybackStream> m_playbackStream;
     int m_playbackStreamRevision = 0;
-    muse::GlobalInject<mu::engraving::rendering::IScoreRenderer> m_scoreRenderer;
+    // 4.7.5 declares the renderer per-context; the render core registers it globally.
+    muse::ContextInject<mu::engraving::rendering::IScoreRenderer> m_scoreRenderer { muse::modularity::globalCtx() };
 };

@@ -208,18 +208,9 @@ Ret FileSystem::writeFile(const io::path_t& filePath, const ByteArray& data)
         return ret;
     }
 
-    const auto numBytesToWrite = static_cast<qint64>(data.size());
-    const qint64 numBytesWritten = file.write(data.constChar(), numBytesToWrite);
-    if (numBytesWritten == -1) {
+    if (file.write(reinterpret_cast<const char*>(data.constData()), static_cast<qint64>(data.size())) == -1) {
         ret = make_ret(Err::FSWriteError);
         ret.setText(file.errorString().toStdString());
-        return ret;
-    }
-
-    if (numBytesWritten != numBytesToWrite) {
-        ret = make_ret(Err::FSWriteError);
-        ret.setText("Failed to write entire file");
-        return ret;
     }
 
     file.close();
@@ -294,6 +285,9 @@ RetVal<io::paths_t> FileSystem::scanFiles(const io::path_t& rootDir, const std::
     case ScanMode::FilesInCurrentDir:
         filters |= QDir::Files;
         break;
+    case ScanMode::FoldersInCurrentDir:
+        filters |= QDir::Dirs;
+        break;
     case ScanMode::FilesAndFoldersInCurrentDir:
         filters |= QDir::Files | QDir::Dirs;
         break;
@@ -323,13 +317,14 @@ Ret FileSystem::removeFile(const io::path_t& path)
     QFile file(path.toQString());
     if (!file.remove()) {
         // Read-only files prevent directory deletion on Windows, retry with Write permission.
-        LOGW() << "Failed to delete file. Setting write permission and trying again...";
+        LOGW() << "Failed to delete file: " << file.errorString()
+               << "\nSetting write permission and trying again...";
         if (!file.setPermissions(file.permissions() | QFile::WriteUser)) {
-            LOGE() << "Failed to set write permission for file";
+            LOGE() << "Failed to set write permission for file: " << file.errorString();
             return make_ret(Err::FSRemoveError);
         }
         if (!file.remove()) {
-            LOGE() << "Second delete attempt failed";
+            LOGE() << "Second delete attempt failed: " << file.errorString();
             return make_ret(Err::FSRemoveError);
         }
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -822,7 +822,7 @@ bool Braille::write(QIODevice& device)
         // we write the measure number
         if (currentLineLength == 0) {
             TextToUEBBraille textToBraille;
-            QString measureNumber = textToBraille.braille(QString::number(m->measureNumber() + 1)).remove(0, 1) + " ";
+            QString measureNumber = textToBraille.braille(QString::number(m->no() + 1)).remove(0, 1) + " ";
             int measureNumberLen = measureNumber.size();
             line[0] += measureNumber;
             for (size_t i = 1; i < nrStaves; i++) {
@@ -836,7 +836,7 @@ bool Braille::write(QIODevice& device)
         }
 
         for (size_t i = 0; i < nrStaves; ++i) {
-            BRAILLE_TRACE() << "Measure " << m->measureNumber() + 1 << " Staff " << i;
+            BRAILLE_TRACE() << "Measure " << mb->no() + 1 << " Staff " << i;
 
             measureBraille[i] = brailleMeasure(m, static_cast<int>(i)).toUtf8();
 
@@ -1375,10 +1375,10 @@ void Braille::brailleMeasureItems(BrailleEngravingItemList* beiz, Measure* measu
             m_score->select(measure, SelectType::RANGE, staffCount);
             m_score->update();
             m_score->startCmd();
-            ExchangeVoices::exchangeVoicesInSelection(m_score, 0, static_cast<int>(i));
+            m_score->cmdExchangeVoice(0, static_cast<int>(i));
             m_score->endCmd();
             m_score->startCmd();
-            ExchangeVoices::exchangeVoicesInSelection(m_score, 0, static_cast<int>(i));
+            m_score->cmdExchangeVoice(0, static_cast<int>(i));
             m_score->endCmd();
 */
             resetOctave(staffCount);
@@ -2374,10 +2374,10 @@ QString Braille::brailleMeasure(Measure* measure, int staffCount)
             m_score->select(measure, SelectType::RANGE, staffCount);
             m_score->update();
             m_score->startCmd();
-            ExchangeVoices::exchangeVoicesInSelection(m_score, 0, static_cast<int>(i));
+            m_score->cmdExchangeVoice(0, static_cast<int>(i));
             m_score->endCmd();
             m_score->startCmd();
-            ExchangeVoices::exchangeVoicesInSelection(m_score, 0, static_cast<int>(i));
+            m_score->cmdExchangeVoice(0, static_cast<int>(i));
             m_score->endCmd();
 */
 
@@ -2835,6 +2835,11 @@ QString Braille::brailleTuplet(Tuplet* tuplet, DurationElement* el)
 {
     if (tuplet == nullptr || *tuplet->elements().begin() != el) {
         return QString();
+    }
+
+    if (tuplet->ratio().numerator() == 3) {
+        // Special handling for triplets.
+        return QString("2"); // '⠆' (dots 2-3)
     }
 
     return QString("_") + QString::number(tuplet->ratio().numerator()) + QString("'");

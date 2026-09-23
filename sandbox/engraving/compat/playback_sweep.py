@@ -19,7 +19,7 @@ from roundtrip_475 import (DEFAULT_CORPUS, DEFAULT_MSCORE, REPO,
                            aria_resave_all, collect_inputs, display_path,
                            job_id, mscore_convert_all)
 
-DEFAULT_ARIA = REPO / "build-aria-compat-host" / "score_render_playback_export"
+DEFAULT_ARIA = REPO / "build-aria-475-host" / "score_render_playback_export"
 
 
 def write_report(out: Path, rows: list[dict], elapsed: float, direct: bool) -> None:

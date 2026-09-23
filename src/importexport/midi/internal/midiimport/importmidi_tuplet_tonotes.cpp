@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -49,7 +49,7 @@ void addElementToTuplet(int voice,
 
 #ifdef QT_DEBUG
     if (foundTuplets.size() > 1) {
-        LOGD() << "Measure number (from 1):" << el->measure()->measureNumber() + 1
+        LOGD() << "Measure number (from 1):" << el->measure()->no() + 1
                << ", staff index (from 0):" << el->staff()->idx();
 
         Q_ASSERT_X(false, "MidiTuplet::addElementToTuplet",
@@ -120,7 +120,7 @@ bool haveTupletsEnoughElements(const Staff* staff)
                 const Tuplet* tuplet = cr->tuplet();
                 if (tuplet) {
                     if (tuplet->elements().size() <= 1) {
-                        printInvalidTupletLocation(seg->measure()->measureNumber(), staff->idx());
+                        printInvalidTupletLocation(seg->measure()->no(), staff->idx());
                         return false;
                     }
                     int chordCount = 0;
@@ -131,7 +131,7 @@ bool haveTupletsEnoughElements(const Staff* staff)
                         }
                     }
                     if (chordCount == 0) {
-                        printInvalidTupletLocation(seg->measure()->measureNumber(), staff->idx());
+                        printInvalidTupletLocation(seg->measure()->no(), staff->idx());
                         return false;
                     }
                 }

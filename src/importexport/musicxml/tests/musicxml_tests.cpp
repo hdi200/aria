@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -396,14 +396,20 @@ TEST_F(MusicXml_Tests, articulationCombination) {
 TEST_F(MusicXml_Tests, backupRoundingError) {
     musicXmlImportTestRef("testBackupRoundingError");
 }
+TEST_F(MusicXml_Tests, barlineFermatas) {
+    musicXmlIoTest("testBarlineFermatas");
+}
 TEST_F(MusicXml_Tests, barlineLoc) {
     musicXmlImportTestRef("testBarlineLoc");
+}
+TEST_F(MusicXml_Tests, noteflightStartRepeatBarline) {
+    musicXmlImportTestRef("testNoteflightStartRepeatBarline");
 }
 TEST_F(MusicXml_Tests, barlineSpan) {
     musicXmlIoTest("testBarlineSpan");
 }
-TEST_F(MusicXml_Tests, barlineFermatas) {
-    musicXmlIoTest("testBarlineFermatas");
+TEST_F(MusicXml_Tests, barlineTips) {
+    musicXmlIoTest("testBarlineTips");
 }
 TEST_F(MusicXml_Tests, barStyles) {
     musicXmlIoTest("testBarStyles");
@@ -1047,6 +1053,9 @@ TEST_F(MusicXml_Tests, numberedLyrics) {
 TEST_F(MusicXml_Tests, numerals) {
     musicXmlIoTest("testNumerals");
 }
+TEST_F(MusicXml_Tests, octaveShift) {
+    musicXmlIoTest("testOctaveShift");
+}
 TEST_F(MusicXml_Tests, ornaments) {
     musicXmlIoTest("testOrnaments");
 }
@@ -1218,6 +1227,9 @@ TEST_F(MusicXml_Tests, tablature4) {
 TEST_F(MusicXml_Tests, tablature5) {
     musicXmlIoTestRef("testTablature5");
 }
+TEST_F(MusicXml_Tests, tablature6) {
+    musicXmlMscxExportTestRef("testTabs");
+}
 TEST_F(MusicXml_Tests, tapping) {
     musicXmlIoTest("testTapping");
 }
@@ -1250,6 +1262,9 @@ TEST_F(MusicXml_Tests, tempo3) {
 }
 TEST_F(MusicXml_Tests, tempo4) {
     musicXmlIoTestRef("testTempo4");
+}
+TEST_F(MusicXml_Tests, metronome) {
+    musicXmlIoTest("testMetronome");
 }
 TEST_F(MusicXml_Tests, tempo5) {
     musicXmlIoTest("testTempo5");

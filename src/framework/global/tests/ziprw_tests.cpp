@@ -21,7 +21,8 @@
  */
 #include <gtest/gtest.h>
 
-#include "global/io/buffer.h"
+#include "io/file.h"
+
 #include "global/serialization/zipwriter.h"
 #include "global/serialization/zipreader.h"
 
@@ -35,8 +36,8 @@ public:
 TEST_F(Zip_RW_Tests, Write_And_Read)
 {
     //! [GIVEN] A zip file
-    io::Buffer buf;
-    ZipWriter writer(&buf);
+    io::IODevice* device = new io::File("test.zip");
+    ZipWriter writer(device);
 
     //! [WHEN] Writing data to the zip file
     writer.addFile("file1.txt", "Hello World!");
@@ -45,7 +46,7 @@ TEST_F(Zip_RW_Tests, Write_And_Read)
     writer.close();
 
     //! [THEN] The data can be read back
-    ZipReader reader(&buf);
+    ZipReader reader(device);
     auto data = reader.fileData("file1.txt");
     EXPECT_EQ(data, "Hello World!");
 

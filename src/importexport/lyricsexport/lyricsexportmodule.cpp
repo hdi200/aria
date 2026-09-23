@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -41,14 +41,14 @@ std::string LyricsExportModule::moduleName() const
 void LyricsExportModule::registerExports()
 {
     m_configuration = std::make_shared<LyricsExportConfiguration>();
-    globalIoc()->registerExport<ILyricsExportConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<ILyricsExportConfiguration>(moduleName(), m_configuration);
 }
 
 void LyricsExportModule::resolveImports()
 {
-    auto writers = globalIoc()->resolve<INotationWritersRegister>(moduleName());
+    auto writers = ioc()->resolve<INotationWritersRegister>(moduleName());
     if (writers) {
-        writers->reg({ "lrc" }, std::make_shared<LRCWriter>(muse::modularity::globalCtx()));
+        writers->reg({ "lrc" }, std::make_shared<LRCWriter>(iocContext()));
     }
 }
 

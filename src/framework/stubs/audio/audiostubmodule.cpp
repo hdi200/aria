@@ -32,27 +32,18 @@
 using namespace muse::modularity;
 using namespace muse::audio;
 
-static const std::string mname("audio_stub");
-
 std::string AudioModule::moduleName() const
 {
-    return mname;
+    return "audio_stub";
 }
 
 void AudioModule::registerExports()
 {
-    globalIoc()->registerExport<IAudioConfiguration>(mname, new AudioConfigurationStub());
-    globalIoc()->registerExport<synth::ISynthResolver>(mname, new synth::SynthResolverStub());
-    globalIoc()->registerExport<fx::IFxResolver>(mname, new fx::FxResolverStub());
-}
+    ioc()->registerExport<IAudioConfiguration>(moduleName(), new AudioConfigurationStub());
+    ioc()->registerExport<IAudioDriverController>(moduleName(), new AudioDriverControllerStub());
 
-IContextSetup* AudioModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new AudioContext(ctx);
-}
+    ioc()->registerExport<synth::ISynthResolver>(moduleName(), new synth::SynthResolverStub());
+    ioc()->registerExport<fx::IFxResolver>(moduleName(), new fx::FxResolverStub());
 
-void AudioContext::registerExports()
-{
-    ioc()->registerExport<IAudioDriverController>(mname, new AudioDriverControllerStub());
-    ioc()->registerExport<ISoundFontController>(mname, new SoundFontControllerStub());
+    ioc()->registerExport<ISoundFontController>(moduleName(), new SoundFontControllerStub());
 }

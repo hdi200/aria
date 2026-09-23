@@ -66,10 +66,6 @@ Item {
 
     navigation.name: Boolean(root.objectName) ? root.objectName : "IncrementalControl"
 
-    function forceActiveFocus() {
-        textInputField.forceActiveFocus()
-    }
-
     function increment() {
         var newValue
         if (Boolean(onIncrement)) {

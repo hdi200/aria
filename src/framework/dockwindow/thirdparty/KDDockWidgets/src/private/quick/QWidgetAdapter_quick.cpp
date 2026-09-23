@@ -120,9 +120,8 @@ static QQuickItem *actualParentItem(QQuickItem *candidateParentItem, Qt::WindowF
                                         : candidateParentItem;
 }
 
-QWidgetAdapter::QWidgetAdapter(int ctx, QQuickItem *parent, Qt::WindowFlags flags)
+QWidgetAdapter::QWidgetAdapter(QQuickItem *parent, Qt::WindowFlags flags)
     : QQuickItem(actualParentItem(parent, flags))
-    , m_ctx(ctx)
     , m_windowFlags(flags)
 {
     if (parent && flagsAreTopLevelFlags(flags)) {
@@ -535,7 +534,7 @@ QWidgetAdapter *QWidgetAdapter::parentWidget(bool includeTransient) const
     if (includeTransient) {
         if (QQuickView *w = quickView()) {
             // Here we're mimicking QWidget::parentWidget(), which can return the transient parent of the QWindow.
-            MainWindowBase *mw = DockRegistry::self(m_ctx)->mainWindowForHandle(w->transientParent());
+            MainWindowBase *mw = DockRegistry::self()->mainWindowForHandle(w->transientParent());
             if (mw)
                 return mw;
         }
@@ -627,22 +626,21 @@ void QWidgetAdapter::move(int x, int y)
 
 void QWidgetAdapter::setSize(QSize size)
 {
+    QSize newSize = size;
 #ifdef Q_OS_MACOS
     FloatingWindow *floatingWindow = this->floatingWindow();
-    if (!floatingWindow) {
-        return;
-    }
+    if (floatingWindow) {
+        newSize = size.expandedTo(minimumSize());
 
-    const auto newSize = size.expandedTo(minimumSize());
-
-    QWindow* window = floatingWindow->windowHandle();
-    if (window && window->size() != newSize) {
-        QRect windowGeo = window->geometry();
-        windowGeo.setSize(newSize);
-        window->setGeometry(windowGeo);
+        QWindow* window = floatingWindow->windowHandle();
+        if (window && window->size() != newSize) {
+            QRect windowGeo = window->geometry();
+            windowGeo.setSize(newSize);
+            window->setGeometry(windowGeo);
+        }
     }
 #endif
-    QQuickItem::setSize(QSizeF(size));
+    QQuickItem::setSize(QSizeF(newSize));
 }
 
 void QWidgetAdapter::setParent(QQuickItem *p)

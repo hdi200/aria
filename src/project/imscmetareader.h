@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,15 +19,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef MU_PROJECT_IMSCMETAREADER_H
+#define MU_PROJECT_IMSCMETAREADER_H
 
-#pragma once
+#include <QString>
 
-#include "global/modularity/imoduleinterface.h"
-
-#include <QPixmap>
-
-#include "global/io/path.h"
-#include "global/types/retval.h"
+#include "modularity/imoduleinterface.h"
+#include "io/path.h"
+#include "types/retval.h"
 
 #include "types/projectmeta.h"
 #include "types/projecttypes.h"
@@ -40,8 +39,9 @@ class IMscMetaReader : MODULE_GLOBAL_INTERFACE
 public:
     virtual ~IMscMetaReader() = default;
 
-    virtual muse::RetVal<QPixmap> readThumbnail(const muse::io::path_t& filePath) const = 0;
     virtual muse::RetVal<ProjectMeta> readMeta(const muse::io::path_t& filePath) const = 0;
     virtual muse::RetVal<CloudProjectInfo> readCloudProjectInfo(const muse::io::path_t& filePath) const = 0;
 };
 }
+
+#endif // MU_PROJECT_IMSCMETAREADER_H

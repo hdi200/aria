@@ -37,9 +37,6 @@
 
 GTEST_API_ int main(int argc, char** argv)
 {
-    QCoreApplication::setOrganizationName("MuseScore");
-    QCoreApplication::setOrganizationDomain("musescore.org");
-
     QGuiApplication app(argc, argv);
 
     qputenv("QML_DISABLE_DISK_CACHE", "true");

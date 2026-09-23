@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,13 +27,11 @@
 
 #include "modularity/ioc.h"
 #include "ipaletteconfiguration.h"
-#include "engraving/ipalettescoreprovider.h"
 
 namespace mu::palette {
 class PaletteCreator : public muse::Contextable
 {
     muse::GlobalInject<IPaletteConfiguration> configuration;
-    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { this };
 
 public:
 
@@ -74,9 +72,6 @@ public:
 
     PaletteTreePtr newMasterPaletteTree();
     PaletteTreePtr newDefaultPaletteTree();
-
-private:
-    engraving::MasterScore* paletteScore() const;
 };
 }
 

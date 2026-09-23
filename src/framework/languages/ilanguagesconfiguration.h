@@ -22,8 +22,6 @@
 #ifndef MUSE_LANGUAGES_ILANGUAGESCONFIGURATION_H
 #define MUSE_LANGUAGES_ILANGUAGESCONFIGURATION_H
 
-#include <QStringList>
-
 #include "modularity/imoduleinterface.h"
 #include "types/retval.h"
 #include "io/path.h"
@@ -48,8 +46,6 @@ public:
     virtual io::path_t builtinLanguagesJsonPath() const = 0;
     virtual io::path_t builtinLanguageFilePath(const QString& resourceName, const QString& languageCode) const = 0;
     virtual io::path_t userLanguageFilePath(const QString& resourceName, const QString& languageCode) const = 0;
-
-    virtual QStringList languageResourceNames() const = 0;
 };
 }
 

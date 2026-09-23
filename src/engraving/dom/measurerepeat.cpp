@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -110,7 +110,7 @@ PointF MeasureRepeat::numberPosition(const RectF& numberBbox) const
     if (staffType() && staffType()->lines() == 1) {
         staffTop -= 2.0 * spatium();
     }
-    double y = std::min(staffTop, -symBbox(ldata()->symId).height() / 2) + absoluteFromSpatium(m_numberPos) - 0.5 * numberBbox.height();
+    double y = std::min(staffTop, -symBbox(ldata()->symId).height() / 2) + m_numberPos.toMM(spatium()) - 0.5 * numberBbox.height();
 
     return PointF(x, y);
 }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -248,9 +248,9 @@ TEST_F(Engraving_TextBaseTests, lineBreakTest)
     // Read
     {
         MasterScore* score = ScoreRW::readScore(u"lineBreak.mscx", true);
-        ASSERT_TRUE(score);
+        EXPECT_TRUE(score);
         Segment* seg = score->firstSegment(SegmentType::ChordRest);
-        ASSERT_TRUE(seg);
+        EXPECT_TRUE(seg);
 
         StaffText* staffText = toStaffText(seg->findAnnotation(ElementType::STAFF_TEXT, 0, 0));
         EXPECT_TRUE(staffText);

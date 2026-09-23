@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -70,7 +70,7 @@ public:
     int hooks() const;
     bool hasStem() const;
     TDuration shift(int nSteps) const { TDuration d(type()); d.shiftType(nSteps); return d; }                                // dots are not retained
-    TDuration shiftRetainDots(int nSteps, bool stepDotted = false) const
+    TDuration shiftRetainDots(int nSteps, bool stepDotted = false)
     {
         TDuration d(type());
         d.setDots(m_dots);

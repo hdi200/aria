@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -24,7 +24,6 @@
 
 #include "layoutcontext.h"
 #include "dom/textbase.h"
-#include "draw/types/font.h"
 
 namespace mu::engraving::rendering::score {
 class TextLayout
@@ -37,9 +36,6 @@ public:
 
     static void computeTextHighResShape(const TextBase* item, TextBase::LayoutData* ldata);
     static void layoutTextBlock(TextBlock* item, const TextBase* t);
-
-    static void substituteMusicFont(muse::draw::Font& font, double size);
-
 private:
     static void textHorizontalLayout(const TextBase* item, Shape& shape, double maxBlockWidth, TextBase::LayoutData* ldata);
     static void justifyLine(const TextBase* item, TextBlock* textBlock, double maxBlockWidth);

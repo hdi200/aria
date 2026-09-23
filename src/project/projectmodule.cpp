@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -34,6 +34,8 @@
 #include "internal/templatesrepository.h"
 #include "internal/projectmigrator.h"
 #include "internal/projectautosaver.h"
+#include "internal/convertfiletoscorescenario.h"
+#include "internal/convertfiletoscoreservice.h"
 
 #include "internal/notationreadersregister.h"
 #include "internal/notationwritersregister.h"
@@ -48,7 +50,7 @@
 #endif
 
 #include "ui/iuiactionsregister.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 #include "extensions/iextensionsexecpointsregister.h"
 #include "projectextensionpoints.h"
 
@@ -56,30 +58,57 @@ using namespace mu::project;
 using namespace muse;
 using namespace muse::modularity;
 
-static const std::string mname("project");
-
 std::string ProjectModule::moduleName() const
 {
-    return mname;
+    return "project";
 }
 
 void ProjectModule::registerExports()
 {
-    m_configuration = std::make_shared<ProjectConfiguration>(globalCtx());
+    m_configuration = std::make_shared<ProjectConfiguration>(iocContext());
+    m_actionsController = std::make_shared<ProjectActionsController>(iocContext());
+    m_projectAutoSaver = std::make_shared<ProjectAutoSaver>(iocContext());
+    m_engravingPluginAPIHelper = std::make_shared<EngravingPluginAPIHelper>(iocContext());
+    m_convertFileToScoreService = std::make_shared<ConvertFileToScoreService>(iocContext());
+    m_convertFileToScoreScenario = std::make_shared<ConvertFileToScoreScenario>(iocContext());
 
-    globalIoc()->registerExport<IProjectConfiguration>(mname, m_configuration);
-    globalIoc()->registerExport<IProjectCreator>(mname, new ProjectCreator());
-    globalIoc()->registerExport<IMscMetaReader>(mname, new MscMetaReader());
+#ifdef Q_OS_MAC
+    m_recentFilesController = std::make_shared<MacOSRecentFilesController>();
+#elif defined(Q_OS_WIN)
+    m_recentFilesController = std::make_shared<WindowsRecentFilesController>();
+#else
+    m_recentFilesController = std::make_shared<RecentFilesController>();
+#endif
+
+    ioc()->registerExport<IProjectConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IProjectCreator>(moduleName(), new ProjectCreator());
+    ioc()->registerExport<IProjectFilesController>(moduleName(), m_actionsController);
+    ioc()->registerExport<mi::IProjectProvider>(moduleName(), m_actionsController);
+    ioc()->registerExport<IOpenSaveProjectScenario>(moduleName(), new OpenSaveProjectScenario(iocContext()));
+    ioc()->registerExport<IExportProjectScenario>(moduleName(), new ExportProjectScenario(iocContext()));
+    ioc()->registerExport<IRecentFilesController>(moduleName(), m_recentFilesController);
+    ioc()->registerExport<IMscMetaReader>(moduleName(), new MscMetaReader());
+    ioc()->registerExport<ITemplatesRepository>(moduleName(), new TemplatesRepository());
+    ioc()->registerExport<IProjectMigrator>(moduleName(), new ProjectMigrator(iocContext()));
+    ioc()->registerExport<IProjectAutoSaver>(moduleName(), m_projectAutoSaver);
+    ioc()->registerExport<mu::engraving::IEngravingPluginAPIHelper>(moduleName(), m_engravingPluginAPIHelper);
+    ioc()->registerExport<IConvertFileToScoreService>(moduleName(), m_convertFileToScoreService);
+    ioc()->registerExport<IConvertFileToScoreScenario>(moduleName(), m_convertFileToScoreScenario);
 
     //! TODO Should be replace INotationReaders/WritersRegister with IProjectRWRegister
-    globalIoc()->registerExport<INotationReadersRegister>(mname, new NotationReadersRegister());
-    globalIoc()->registerExport<INotationWritersRegister>(mname, new NotationWritersRegister());
-    globalIoc()->registerExport<IProjectRWRegister>(mname, new ProjectRWRegister());
+    ioc()->registerExport<INotationReadersRegister>(moduleName(), new NotationReadersRegister());
+    ioc()->registerExport<INotationWritersRegister>(moduleName(), new NotationWritersRegister());
+    ioc()->registerExport<IProjectRWRegister>(moduleName(), new ProjectRWRegister());
 }
 
 void ProjectModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<muse::interactive::IInteractiveUriRegister>(mname);
+    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(moduleName());
+    if (ar) {
+        ar->reg(std::make_shared<ProjectUiActions>(m_actionsController, iocContext()));
+    }
+
+    auto ir = ioc()->resolve<muse::ui::IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerQmlUri(Uri("musescore://project/newscore"), "MuseScore.Project", "NewScoreDialog");
         ir->registerQmlUri(Uri("musescore://project/asksavelocationtype"), "MuseScore.Project", "AskSaveLocationTypeDialog");
@@ -88,21 +117,22 @@ void ProjectModule::resolveImports()
         ir->registerQmlUri(Uri("musescore://project/export"), "MuseScore.Project", "ExportDialog");
         ir->registerQmlUri(Uri("musescore://project/migration"), "MuseScore.Project", "MigrationDialog");
         ir->registerQmlUri(Uri("musescore://project/properties"), "MuseScore.Project", "ProjectPropertiesDialog");
+        ir->registerQmlUri(Uri("musescore://project/convert/selectfiles"), "MuseScore.Project", "ConvertFileToScoreDialog");
         ir->registerQmlUri(Uri("musescore://project/upload/progress"), "MuseScore.Project", "UploadProgressDialog");
         ir->registerQmlUri(Uri("musescore://project/upload/success"), "MuseScore.Project", "ProjectUploadedDialog");
         ir->registerQmlUri(Uri("musescore://project/audiogenerationsettings"), "MuseScore.Project", "AudioGenerationSettingsDialog");
     }
 
-    auto er = globalIoc()->resolve<muse::extensions::IExtensionsExecPointsRegister>(mname);
+    auto er = ioc()->resolve<muse::extensions::IExtensionsExecPointsRegister>(moduleName());
     if (er) {
-        er->reg(mname, { EXEC_ONPOST_PROJECT_CREATED,
-                         TranslatableString::untranslatable("On post project created") });
-        er->reg(mname, { EXEC_ONPOST_PROJECT_OPENED,
-                         TranslatableString::untranslatable("On post project opened") });
-        er->reg(mname, { EXEC_ONPRE_PROJECT_SAVE,
-                         TranslatableString::untranslatable("On pre project save") });
-        er->reg(mname, { EXEC_ONPOST_PROJECT_SAVED,
-                         TranslatableString::untranslatable("On post project saved") });
+        er->reg(moduleName(), { EXEC_ONPOST_PROJECT_CREATED,
+                                TranslatableString::untranslatable("On post project created") });
+        er->reg(moduleName(), { EXEC_ONPOST_PROJECT_OPENED,
+                                TranslatableString::untranslatable("On post project opened") });
+        er->reg(moduleName(), { EXEC_ONPRE_PROJECT_SAVE,
+                                TranslatableString::untranslatable("On pre project save") });
+        er->reg(moduleName(), { EXEC_ONPOST_PROJECT_SAVED,
+                                TranslatableString::untranslatable("On post project saved") });
     }
 }
 
@@ -113,53 +143,17 @@ void ProjectModule::onInit(const IApplication::RunMode& mode)
     }
 
     m_configuration->init();
-}
-
-IContextSetup* ProjectModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new ProjectContext(ctx);
-}
-
-void ProjectContext::registerExports()
-{
-    m_actionsController = std::make_shared<ProjectActionsController>(iocContext());
-    m_projectAutoSaver = std::make_shared<ProjectAutoSaver>(iocContext());
-    m_engravingPluginAPIHelper = std::make_shared<EngravingPluginAPIHelper>(iocContext());
-
-#ifdef Q_OS_MAC
-    m_recentFilesController = std::make_shared<MacOSRecentFilesController>();
-#elif defined(Q_OS_WIN)
-    m_recentFilesController = std::make_shared<WindowsRecentFilesController>();
-#else
-    m_recentFilesController = std::make_shared<RecentFilesController>();
-#endif
-
-    ioc()->registerExport<IProjectFilesController>(mname, m_actionsController);
-    ioc()->registerExport<mi::IProjectProvider>(mname, m_actionsController);
-    ioc()->registerExport<IOpenSaveProjectScenario>(mname, new OpenSaveProjectScenario(iocContext()));
-    ioc()->registerExport<IExportProjectScenario>(mname, new ExportProjectScenario(iocContext()));
-    ioc()->registerExport<IRecentFilesController>(mname, m_recentFilesController);
-    ioc()->registerExport<ITemplatesRepository>(mname, new TemplatesRepository());
-    ioc()->registerExport<IProjectMigrator>(mname, new ProjectMigrator(iocContext()));
-    ioc()->registerExport<IProjectAutoSaver>(mname, m_projectAutoSaver);
-    ioc()->registerExport<mu::engraving::IEngravingPluginAPIHelper>(mname, m_engravingPluginAPIHelper);
-}
-
-void ProjectContext::resolveImports()
-{
-    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(mname);
-    if (ar) {
-        ar->reg(std::make_shared<ProjectUiActions>(m_actionsController, iocContext()));
-    }
-}
-
-void ProjectContext::onInit(const IApplication::RunMode& mode)
-{
-    if (IApplication::RunMode::GuiApp != mode) {
-        return;
-    }
-
     m_actionsController->init();
     m_recentFilesController->init();
     m_projectAutoSaver->init();
+
+    m_convertFileToScoreService->init();
+    m_convertFileToScoreScenario->init();
+}
+
+void ProjectModule::onDelayedInit()
+{
+    //! NOTE: resuming polling can show dialogs (errors, review prompts), so it must wait
+    //! until the main window is up rather than running during onInit()
+    // m_convertFileToScoreService->resumeConvert();
 }

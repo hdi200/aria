@@ -64,7 +64,25 @@ void AccessibilityConfiguration::init()
     m_inited = true;
 }
 
-bool AccessibilityConfiguration::isAccessibleActive() const
+bool AccessibilityConfiguration::enabled() const
+{
+    if (!m_inited) {
+        return false;
+    }
+
+    if (!navigationController()) {
+        return false;
+    }
+
+    if (!active()) {
+        return false;
+    }
+
+    //! NOTE Accessibility available if navigation is used
+    return navigationController()->activeSection() != nullptr;
+}
+
+bool AccessibilityConfiguration::active() const
 {
     if (!m_inited) {
         return false;

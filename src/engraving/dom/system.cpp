@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -70,9 +70,7 @@ namespace mu::engraving {
 
 SysStaff::~SysStaff()
 {
-    delete groupName;
-    delete instrumentName;
-    delete individualStaffName;
+    muse::DeleteAll(instrumentNames);
 }
 
 //---------------------------------------------------------
@@ -307,6 +305,34 @@ void System::deleteLockIndicators()
     m_lockIndicators.clear();
 }
 
+void System::setBracketsXPosition(const double xPosition)
+{
+    for (Bracket* b1 : m_brackets) {
+        BracketType bracketType = b1->bracketType();
+        // For brackets that are drawn, we must correct for half line width
+        double lineWidthCorrection = 0.0;
+        if (bracketType == BracketType::NORMAL || bracketType == BracketType::LINE) {
+            lineWidthCorrection = style().styleMM(Sid::bracketWidth) / 2;
+        }
+        // Compute offset cause by other stacked brackets
+        double xOffset = 0;
+        for (const Bracket* b2 : m_brackets) {
+            if (!b2->bracketItem()->visible()) {
+                continue;
+            }
+            bool b1FirstStaffInB2 = (b1->firstStaff() >= b2->firstStaff() && b1->firstStaff() <= b2->lastStaff());
+            bool b1LastStaffInB2 = (b1->lastStaff() >= b2->firstStaff() && b1->lastStaff() <= b2->lastStaff());
+            if (b1->column() > b2->column()
+                && (b1FirstStaffInB2 || b1LastStaffInB2)) {
+                xOffset += b2->ldata()->bracketWidth();
+            }
+        }
+        // Set position
+        double x = xPosition - xOffset - b1->ldata()->bracketWidth() + lineWidthCorrection;
+        b1->mutldata()->setPosX(x);
+    }
+}
+
 //---------------------------------------------------------
 //   nextVisibleStaff
 //---------------------------------------------------------
@@ -449,19 +475,11 @@ void System::add(EngravingItem* el)
 
     switch (el->type()) {
     case ElementType::INSTRUMENT_NAME:
-    {
-        InstrumentName* n = toInstrumentName(el);
-        SysStaff* sysStaff = m_staves[n->staffIdx()];
-        if (n->instrumentNameRole() == InstrumentNameRole::GROUP) {
-            sysStaff->groupName = n;
-        } else if (n->instrumentNameRole() == InstrumentNameRole::PART) {
-            sysStaff->instrumentName = n;
-        } else {
-            sysStaff->individualStaffName = n;
-        }
-        n->setSysStaff(sysStaff);
+// LOGD("  staffIdx %d, staves %d", el->staffIdx(), _staves.size());
+        m_staves[el->staffIdx()]->instrumentNames.push_back(toInstrumentName(el));
+        toInstrumentName(el)->setSysStaff(m_staves[el->staffIdx()]);
         break;
-    }
+
     case ElementType::BEAM:
         score()->addElement(el);
         break;
@@ -543,20 +561,9 @@ void System::remove(EngravingItem* el)
 {
     switch (el->type()) {
     case ElementType::INSTRUMENT_NAME:
-    {
-        // TODO: I'm pretty sure that this gets leadked. Needs fixing.
-        InstrumentName* n = toInstrumentName(el);
-        SysStaff* sysStaff = m_staves[n->staffIdx()];
-        if (n->instrumentNameRole() == InstrumentNameRole::GROUP) {
-            sysStaff->groupName = nullptr;
-        } else if (n->instrumentNameRole() == InstrumentNameRole::PART) {
-            sysStaff->instrumentName = nullptr;
-        } else {
-            sysStaff->individualStaffName = nullptr;
-        }
-        n->setSysStaff(nullptr);
+        muse::remove(m_staves[el->staffIdx()]->instrumentNames, toInstrumentName(el));
+        toInstrumentName(el)->setSysStaff(0);
         break;
-    }
     case ElementType::BEAM:
         score()->removeElement(el);
         break;
@@ -699,7 +706,7 @@ void System::scanElements(std::function<void(EngravingItem*)> func)
         return;
     }
     for (Bracket* b : m_brackets) {
-        b->scanElements(func);
+        func(b);
     }
 
     if (m_systemDividerLeft) {
@@ -719,25 +726,11 @@ void System::scanElements(std::function<void(EngravingItem*)> func)
 
     for (const SysStaff* st : m_staves) {
         if (st->show()) {
-            if (InstrumentName* n = st->groupName) {
-                func(n);
-            }
-            if (InstrumentName* t = st->instrumentName) {
+            for (InstrumentName* t : st->instrumentNames) {
                 func(t);
-            }
-            if (InstrumentName* n = st->individualStaffName) {
-                func(n);
-            }
-        } else {
-            if (InstrumentName* n = st->groupName; n && n->effectiveStaffIdx() != muse::nidx) {
-                func(n);
-            }
-            if (InstrumentName* n = st->instrumentName; n && n->effectiveStaffIdx() != muse::nidx) {
-                func(n);
             }
         }
     }
-
     for (SpannerSegment* ss : m_spannerSegments) {
         staff_idx_t staffIdx = ss->spanner()->staffIdx();
         if (staffIdx == muse::nidx) {
@@ -1041,7 +1034,7 @@ Spacer* System::downSpacer(staff_idx_t staffIdx) const
 
 double System::firstNoteRestSegmentX(bool leading) const
 {
-    double margin = style().styleAbsolute(Sid::headerToLineStartDistance);
+    double margin = style().styleMM(Sid::headerToLineStartDistance);
     for (const MeasureBase* mb : measures()) {
         if (mb->isMeasure()) {
             const Measure* measure = toMeasure(mb);
@@ -1061,7 +1054,7 @@ double System::firstNoteRestSegmentX(bool leading) const
 
 double System::endingXForOpenEndedLines() const
 {
-    double margin = style().styleAbsolute(Sid::lineEndToBarlineDistance);
+    double margin = style().styleMM(Sid::lineEndToBarlineDistance);
     double systemEndX = ldata()->bbox().width();
 
     Measure* lastMeas = lastMeasure();
@@ -1160,22 +1153,6 @@ staff_idx_t System::firstVisibleSysStaffOfPart(const Part* part) const
     return muse::nidx; // No visible staves on this part.
 }
 
-staff_idx_t System::firstVisibleSysStaffWithInstrument(const String& instrumentId, staff_idx_t startFrom)
-{
-    Fraction tick = first()->tick();
-    for (staff_idx_t idx = startFrom; idx < m_staves.size(); ++idx) {
-        Part* part = score()->staff(idx)->part();
-        if (part->instrument(tick)->id() == instrumentId) {
-            staff_idx_t firstVisOfPart = firstVisibleSysStaffOfPart(part);
-            if (firstVisOfPart != muse::nidx) {
-                return firstVisOfPart;
-            }
-        }
-    }
-
-    return muse::nidx;
-}
-
 //---------------------------------------------------------
 //   lastSysStaffOfPart
 //---------------------------------------------------------
@@ -1205,36 +1182,5 @@ staff_idx_t System::lastVisibleSysStaffOfPart(const Part* part) const
         }
     }
     return muse::nidx;    // No visible staves on this part.
-}
-
-std::vector<staff_idx_t> System::visibleStavesOfPart(const Part* part) const
-{
-    std::vector<staff_idx_t> result;
-    result.reserve(part->nstaves());
-
-    staff_idx_t startIdx = firstSysStaffOfPart(part);
-    staff_idx_t endIdx = startIdx + part->nstaves();
-    for (staff_idx_t staffIdx = startIdx; staffIdx < endIdx; ++staffIdx) {
-        if (staff(staffIdx)->show()) {
-            result.push_back(staffIdx);
-        }
-    }
-
-    return result;
-}
-
-std::vector<Part*> System::visiblePartsOfGroup(staff_idx_t start, staff_idx_t end) const
-{
-    std::vector<Part*> result;
-
-    for (staff_idx_t idx = start; idx < end;) {
-        Part* part = score()->staff(idx)->part();
-        if (visibleStavesOfPart(part).size() > 0) {
-            result.push_back(part);
-        }
-        idx += part->nstaves();
-    }
-
-    return result;
 }
 }

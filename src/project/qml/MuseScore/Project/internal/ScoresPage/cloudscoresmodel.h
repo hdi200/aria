@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -45,7 +45,7 @@ class CloudScoresModel : public AbstractScoresModel, public muse::async::Asyncab
     QML_ELEMENT
 
     muse::GlobalInject<IProjectConfiguration> configuration;
-    muse::GlobalInject<muse::cloud::IMuseScoreComService> museScoreComService;
+    muse::ContextInject<muse::cloud::IMuseScoreComService> museScoreComService = { this };
 
 public:
     CloudScoresModel(QObject* parent = nullptr);

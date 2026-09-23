@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -345,7 +345,7 @@ void FretCanvas::mousePressEvent(QMouseEvent* ev)
     globalContext()->currentNotation()->undoStack()->commitChanges();
     update();
 
-    globalContext()->currentNotation()->notationChanged().send(muse::RectF());
+    globalContext()->currentNotation()->notationChanged().notify();
 }
 
 void FretCanvas::hoverMoveEvent(QHoverEvent* ev)
@@ -384,7 +384,7 @@ void FretCanvas::clear()
     globalContext()->currentNotation()->undoStack()->commitChanges();
     update();
 
-    globalContext()->currentNotation()->notationChanged().send(muse::RectF());
+    globalContext()->currentNotation()->notationChanged().notify();
 }
 
 void FretCanvas::paint(QPainter* painter)

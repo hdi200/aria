@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -236,7 +236,7 @@ void MeasureLayout::createMMRest(LayoutContext& ctx, Measure* firstMeasure, Meas
     mmrMeasure->setLineBreak(lastMeasure->lineBreak());
     mmrMeasure->setRepeatCount(lastMeasure->repeatCount());
     mmrMeasure->setMMRestCount(numMeasuresInMMRest);
-    mmrMeasure->setMeasureNumber(firstMeasure->measureNumber());
+    mmrMeasure->setNo(firstMeasure->no());
 
     ctx.mutDom().updateSystemLocksOnCreateMMRest(firstMeasure, lastMeasure);
 
@@ -579,7 +579,7 @@ void MeasureLayout::cloneAnnotationsToMMRest(Segment* underlyingSeg, Segment* mm
 
 static bool validMMRestMeasure(const LayoutContext& ctx, const Measure* m)
 {
-    if (m->excludeFromNumbering()) {
+    if (m->irregular()) {
         return false;
     }
 
@@ -852,15 +852,16 @@ void MeasureLayout::moveToNextMeasure(LayoutContext& ctx)
     }
 }
 
-void MeasureLayout::createMultiMeasureRestsIfNeed(Measure* firstMeasure, LayoutContext& ctx)
+void MeasureLayout::createMultiMeasureRestsIfNeed(MeasureBase* currentMB, LayoutContext& ctx)
 {
-    LAYOUT_CALL() << LAYOUT_ITEM_INFO(firstMeasure);
+    LAYOUT_CALL() << LAYOUT_ITEM_INFO(currentMB);
 
-    if (ctx.dom().nstaves() == 0) {
+    if (!currentMB->isMeasure() || ctx.dom().nstaves() == 0) {
         return;
     }
 
-    int mn = ctx.state().measureNumber();
+    int mno = ctx.state().measureNo();
+    Measure* firstMeasure = toMeasure(currentMB);
 
     if (ctx.conf().styleB(Sid::createMultiMeasureRests)) {
         Measure* measureToBeChecked = firstMeasure;
@@ -873,8 +874,8 @@ void MeasureLayout::createMultiMeasureRestsIfNeed(Measure* firstMeasure, LayoutC
                 break;
             }
             if (measureToBeChecked != firstMeasure) {
-                int measureNumber = adjustMeasureNumber(measureToBeChecked, ctx.state().measureNumber());
-                ctx.mutState().setMeasureNumber(measureNumber);
+                int measureNo = adjustMeasureNo(measureToBeChecked, ctx.state().measureNo());
+                ctx.mutState().setMeasureNo(measureNo);
             }
             ++n;
             len += measureToBeChecked->ticks();
@@ -896,15 +897,15 @@ void MeasureLayout::createMultiMeasureRestsIfNeed(Measure* firstMeasure, LayoutC
                 ctx.mutDom().undo(new ChangeMMRest(firstMeasure, 0));
             }
             firstMeasure->setMMRestCount(0);
-            ctx.mutState().setMeasureNumber(mn);
+            ctx.mutState().setMeasureNo(mno);
         }
     } else if (firstMeasure->mmRest()) {
         removeMMRestElements(firstMeasure->mmRest());
 
         if (firstMeasure->mmRestCount() > 0) {
-            LOGD("mmrest: measureNumber %d += %d", ctx.state().measureNumber(), firstMeasure->mmRestCount());
-            int measureNumber = ctx.state().measureNumber() + firstMeasure->mmRestCount() - 1;
-            ctx.mutState().setMeasureNumber(measureNumber);
+            LOGD("mmrest: no %d += %d", ctx.state().measureNo(), firstMeasure->mmRestCount());
+            int measureNo = ctx.state().measureNo() + firstMeasure->mmRestCount() - 1;
+            ctx.mutState().setMeasureNo(measureNo);
         }
     }
 }
@@ -957,14 +958,17 @@ void MeasureLayout::layoutMeasure(MeasureBase* currentMB, LayoutContext& ctx)
         return;
     }
 
+    int measureNo = adjustMeasureNo(currentMB, ctx.state().measureNo());
+    LAYOUT_CALL() << LAYOUT_ITEM_INFO(currentMB) << " measureNo: " << measureNo;
+
+    ctx.mutState().setMeasureNo(measureNo);
+
+    createMultiMeasureRestsIfNeed(currentMB, ctx);
+
+    currentMB = ctx.mutState().curMeasure();
+
     if (!currentMB->isMeasure()) {
         assert(currentMB->tick() == ctx.state().tick());
-
-        const LayoutBreak* layoutBreak = currentMB->sectionBreakElement();
-        if (layoutBreak && layoutBreak->startWithMeasureOne()) {
-            ctx.mutState().setMeasureNumber(0);
-        }
-
         return;
     }
 
@@ -973,16 +977,6 @@ void MeasureLayout::layoutMeasure(MeasureBase* currentMB, LayoutContext& ctx)
     //-----------------------------------------
 
     Measure* measure = toMeasure(currentMB);
-
-    int measureNumber = adjustMeasureNumber(measure, ctx.state().measureNumber());
-    LAYOUT_CALL() << LAYOUT_ITEM_INFO(measure) << " measureNumber: " << measureNumber;
-
-    ctx.mutState().setMeasureNumber(measureNumber);
-
-    createMultiMeasureRestsIfNeed(measure, ctx);
-
-    currentMB = ctx.mutState().curMeasure();
-    measure = toMeasure(currentMB);
 
     measure->moveTicks(ctx.state().tick() - measure->tick());
     ctx.mutState().setTick(ctx.state().tick() + measure->ticks());
@@ -1189,23 +1183,23 @@ void MeasureLayout::getNextMeasure(LayoutContext& ctx)
 }
 
 //---------------------------------------------------------
-//   adjustMeasureNumber
+//   adjustMeasureNo
 //---------------------------------------------------------
 
-int MeasureLayout::adjustMeasureNumber(Measure* m, int measureNumber)
+int MeasureLayout::adjustMeasureNo(MeasureBase* m, int measureNo)
 {
-    measureNumber += m->measureNumberOffset();
-    m->setMeasureNumber(measureNumber);
-    if (!m->excludeFromNumbering()) {
-        ++measureNumber;
+    measureNo += m->noOffset();
+    m->setNo(measureNo);
+    if (!m->irregular()) {          // don’t count measure
+        ++measureNo;
     }
 
     const LayoutBreak* layoutBreak = m->sectionBreakElement();
     if (layoutBreak && layoutBreak->startWithMeasureOne()) {
-        measureNumber = 0;
+        measureNo = 0;
     }
 
-    return measureNumber;
+    return measureNo;
 }
 
 /****************************************************************
@@ -1267,8 +1261,7 @@ void MeasureLayout::layoutStaffLines(Measure* m, LayoutContext& ctx)
             Segment* clefSeg = m->findSegmentR(SegmentType::Clef, m->ticks());
             double staffMag = ctx.dom().staff(staffIdx)->staffMag(m->tick());
             double partialWidth = clefSeg
-                                  ? m->width() - clefSeg->x() + clefSeg->minLeft() + ctx.conf().styleAbsolute(Sid::clefLeftMargin)
-                                  * staffMag
+                                  ? m->width() - clefSeg->x() + clefSeg->minLeft() + ctx.conf().styleMM(Sid::clefLeftMargin) * staffMag
                                   : 0.0;
             layoutPartialWidth(ms->lines(), ctx, m->width(), partialWidth / (m->spatium() * staffMag), true);
         } else {
@@ -1331,7 +1324,7 @@ void MeasureLayout::layoutMeasureNumber(Measure* m, LayoutContext& ctx)
 {
     MeasureNumberPlacement placementMode = ctx.conf().styleV(Sid::measureNumberPlacementMode).value<MeasureNumberPlacement>();
 
-    String stringNum = String::number(m->measureNumber() + 1);
+    String stringNum = String::number(m->no() + 1);
 
     Score* score = m->score();
 
@@ -1377,11 +1370,11 @@ void MeasureLayout::layoutMMRestRange(Measure* m, LayoutContext& ctx)
     String s;
     if (m->mmRestCount() > 1) {
         // middle char is an en dash (not em)
-        s = String(u"%1–%2").arg(m->measureNumber() + 1).arg(m->measureNumber() + m->mmRestCount());
+        s = String(u"%1–%2").arg(m->no() + 1).arg(m->no() + m->mmRestCount());
     } else {
         // If the minimum range to create a mmrest is set to 1,
         // then simply show the measure number as there is no range
-        s = String::number(m->measureNumber() + 1);
+        s = String::number(m->no() + 1);
     }
 
     for (unsigned staffIdx = 0; staffIdx < m->mstaves().size(); ++staffIdx) {
@@ -1443,7 +1436,7 @@ MeasureLayout::MeasureStartEndPos MeasureLayout::getMeasureStartEndPos(const Mea
                            && needsHeaderException;
     if (headerException) { //needs this exception on header bar
         // Set x1 to the imaginary barline located the minimum barline->note distance to the left of the rest's segment
-        x1 = firstCrSeg->x() - ctx.conf().styleAbsolute(Sid::barNoteDistance);
+        x1 = firstCrSeg->x() - ctx.conf().styleMM(Sid::barNoteDistance);
     }
 
     return MeasureStartEndPos(x1, x2);
@@ -1491,7 +1484,7 @@ void MeasureLayout::layoutMeasureElements(Measure* m, LayoutContext& ctx)
                 if (e->isMMRest()) {
                     MMRest* mmrest = toMMRest(e);
                     // center multimeasure rest
-                    double d = ctx.conf().styleAbsolute(Sid::multiMeasureRestMargin);
+                    double d = ctx.conf().styleMM(Sid::multiMeasureRestMargin);
                     double w = x2 - x1 - 2 * d;
                     MMRest::LayoutData* mmrestLD = mmrest->mutldata();
                     mmrestLD->restWidth = w;
@@ -3003,7 +2996,7 @@ void MeasureLayout::stretchMeasureInPracticeMode(Measure* m, double targetWidth,
                     //
                     // center multi measure rest
                     //
-                    double d = ctx.conf().styleAbsolute(Sid::multiMeasureRestMargin);
+                    double d = ctx.conf().styleMM(Sid::multiMeasureRestMargin);
                     double w = x2 - x1 - 2 * d;
 
                     mmrest->mutldata()->restWidth = w;

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -26,8 +26,7 @@
 #include <QJsonArray>
 #include <QJsonParseError>
 
-#include "global/defer.h"
-#include "global/io/buffer.h"
+#include "defer.h"
 #include "global/io/file.h"
 #include "global/io/dir.h"
 
@@ -181,13 +180,17 @@ Ret ConverterController::convertFile(const muse::io::path_t& in, const muse::io:
     }
 
     if (!copyright.text.isEmpty()) {
-        engraving::MStyle& style = notationProject->masterNotation()->masterScore()->style();
+        auto masterScore = notationProject->masterNotation()->masterScore();
+
+        engraving::MStyle& style = masterScore->style();
         String footerOdd = style.value(engraving::Sid::oddFooterC).value<String>();
         String footerEven = style.value(engraving::Sid::evenFooterC).value<String>();
         footerOdd += copyright.text;
         footerEven += copyright.text;
         style.set(engraving::Sid::oddFooterC, footerOdd);
         style.set(engraving::Sid::evenFooterC, footerEven);
+
+        masterScore->doLayout();
     }
 
     globalContext()->setCurrentProject(notationProject);
@@ -413,21 +416,19 @@ Ret ConverterController::convertByExtension(INotationWriterPtr writer, INotation
         return ret;
     }
 
-    auto outBuf = Buffer::opened(IODevice::WriteOnly);
+    File file(out);
+    if (!file.open(File::WriteOnly)) {
+        return make_ret(Err::OutFileFailedOpen);
+    }
 
-    outBuf.setMeta("file_path", out.toStdString());
-    ret = writer->write(notation, outBuf);
+    file.setMeta("file_path", out.toStdString());
+    ret = writer->write(notation, file);
     if (!ret) {
         LOGE() << "failed write, err: " << ret.toString() << ", path: " << out;
         return make_ret(Err::OutFileFailedWrite);
     }
 
-    outBuf.close();
-    ret = File::writeFile(out, outBuf.data());
-    if (!ret) {
-        LOGE() << "failed to write file: " << ret.toString();
-        return make_ret(Err::OutFileFailedWrite);
-    }
+    file.close();
 
     return make_ret(Ret::Code::Ok);
 }
@@ -465,48 +466,47 @@ muse::Ret ConverterController::convertPage(INotationWriterPtr writer, INotationP
 {
     TRACEFUNC;
 
-    auto outBuf = Buffer::opened(IODevice::WriteOnly);
+    File file(filePath);
+    if (!file.open(File::WriteOnly)) {
+        return make_ret(Err::OutFileFailedOpen);
+    }
 
     const INotationWriter::Options options {
         { INotationWriter::OptionKey::PAGE_NUMBER, Val(static_cast<int>(pageNum)) },
     };
 
-    outBuf.setMeta("file_path", filePath.toStdString());
+    file.setMeta("file_path", filePath.toStdString());
+
     if (!dirPath.empty()) {
-        outBuf.setMeta("dir_path", dirPath.toStdString());
+        file.setMeta("dir_path", dirPath.toStdString());
     }
 
-    Ret ret = writer->write(notation, outBuf, options);
+    Ret ret = writer->write(notation, file, options);
     if (!ret) {
         return make_ret(Err::OutFileFailedWrite);
     }
 
-    outBuf.close();
-    ret = File::writeFile(filePath, outBuf.data());
-    if (!ret) {
-        return make_ret(Err::OutFileFailedWrite);
-    }
+    file.close();
 
     return make_ok();
 }
 
-Ret ConverterController::convertFullNotation(INotationWriterPtr writer, INotationPtr notation, const muse::io::path_t& out) const
+Ret ConverterController::convertFullNotation(INotationWriterPtr writer, INotationPtr notation, const muse::io::path_t& out,
+                                             const project::INotationWriter::Options& options) const
 {
-    auto outBuf = Buffer::opened(IODevice::WriteOnly);
+    File file(out);
+    if (!file.open(File::WriteOnly)) {
+        return make_ret(Err::OutFileFailedOpen);
+    }
 
-    outBuf.setMeta("file_path", out.toStdString());
-    Ret ret = writer->write(notation, outBuf);
+    file.setMeta("file_path", out.toStdString());
+    Ret ret = writer->write(notation, file, options);
     if (!ret) {
         LOGE() << "failed write, err: " << ret.toString() << ", path: " << out;
         return make_ret(Err::OutFileFailedWrite);
     }
 
-    outBuf.close();
-    ret = File::writeFile(out, outBuf.data());
-    if (!ret) {
-        LOGE() << "failed to write file: " << ret.toString();
-        return make_ret(Err::OutFileFailedWrite);
-    }
+    file.close();
 
     return make_ret(Ret::Code::Ok);
 }
@@ -525,19 +525,18 @@ Ret ConverterController::convertScorePartsToPdf(INotationWriterPtr writer, IMast
         QString baseName = QString::fromStdString(io::completeBasename(out).toStdString());
         muse::io::path_t partOut = io::dirpath(out) + "/" + baseName.replace("*", partName).toStdString() + ".pdf";
 
-        auto outBuf = Buffer::opened(IODevice::WriteOnly);
-        Ret ret = writer->write(e->notation(), outBuf, options);
+        File file(partOut);
+        if (!file.open(File::WriteOnly)) {
+            return make_ret(Err::OutFileFailedOpen);
+        }
+
+        Ret ret = writer->write(e->notation(), file, options);
         if (!ret) {
             LOGE() << "failed write, err: " << ret.toString() << ", path: " << partOut;
             return make_ret(Err::OutFileFailedWrite);
         }
 
-        outBuf.close();
-        ret = File::writeFile(partOut, outBuf.data());
-        if (!ret) {
-            LOGE() << "failed to write file: " << ret.toString();
-            return make_ret(Err::OutFileFailedWrite);
-        }
+        file.close();
     }
 
     return make_ret(Ret::Code::Ok);
@@ -575,21 +574,19 @@ Ret ConverterController::convertScorePartsToMp3(INotationWriterPtr writer, IMast
         QString baseName = QString::fromStdString(io::completeBasename(out).toStdString());
         muse::io::path_t partOut = io::dirpath(out) + "/" + baseName.replace("*", partName).toStdString() + ".mp3";
 
-        auto outBuf = Buffer::opened(IODevice::WriteOnly);
+        File file(partOut);
+        if (!file.open(File::WriteOnly)) {
+            return make_ret(Err::OutFileFailedOpen);
+        }
 
-        outBuf.setMeta("file_path", partOut.toStdString());
-        Ret ret = writer->write(e->notation(), outBuf, options);
+        file.setMeta("file_path", partOut.toStdString());
+        Ret ret = writer->write(e->notation(), file, options);
         if (!ret) {
             LOGE() << "failed write, err: " << ret.toString() << ", path: " << partOut;
             return make_ret(Err::OutFileFailedWrite);
         }
 
-        outBuf.close();
-        ret = File::writeFile(partOut, outBuf.data());
-        if (!ret) {
-            LOGE() << "failed to write file: " << ret.toString();
-            return make_ret(Err::OutFileFailedWrite);
-        }
+        file.close();
     }
 
     return make_ret(Ret::Code::Ok);
@@ -646,6 +643,11 @@ Ret ConverterController::writeTracksDiff(INotationProjectPtr project, const QJso
 {
     TRACEFUNC;
 
+    File file(path);
+    if (!file.open(File::WriteOnly)) {
+        return make_ret(Err::TracksDiffFileFailedOpen);
+    }
+
     QJsonObject root;
     root["oldTracks"] = oldTracks;
     root["newTracks"] = NotationMeta::tracksJsonArray(project->masterNotation()->notation());
@@ -654,7 +656,7 @@ Ret ConverterController::writeTracksDiff(INotationProjectPtr project, const QJso
     QByteArray qJson = document.toJson(QJsonDocument::Compact);
     ByteArray json = ByteArray::fromQByteArrayNoCopy(qJson);
 
-    return File::writeFile(path, json);
+    return file.write(json);
 }
 
 Ret ConverterController::exportScoreMedia(const muse::io::path_t& in, const muse::io::path_t& out,
@@ -703,7 +705,8 @@ Ret ConverterController::exportScoreElements(const muse::io::path_t& in, const m
     return BackendApi::exportScoreElements(in, out, openParams);
 }
 
-Ret ConverterController::exportScoreVideo(const muse::io::path_t& in, const muse::io::path_t& out, const OpenParams& openParams)
+Ret ConverterController::exportScoreVideo(const muse::io::path_t& in, const muse::io::path_t& out, const OpenParams& openParams,
+                                          bool withAudio)
 {
     TRACEFUNC;
 
@@ -713,7 +716,7 @@ Ret ConverterController::exportScoreVideo(const muse::io::path_t& in, const muse
     }
 
     std::string suffix = io::suffix(out);
-    auto writer = projectRW()->writer(suffix);
+    auto writer = writers()->writer(suffix);
     if (!writer) {
         return make_ret(Err::ConvertTypeUnknown);
     }
@@ -724,13 +727,17 @@ Ret ConverterController::exportScoreVideo(const muse::io::path_t& in, const muse
         return make_ret(Err::InFileFailedLoad);
     }
 
-    ret = writer->write(notationProject, out);
-    if (!ret) {
-        LOGE() << "failed write, err: " << ret.toString() << ", path: " << out;
-        return make_ret(Err::OutFileFailedWrite);
-    }
+    globalContext()->setCurrentProject(notationProject);
 
-    return make_ret(Ret::Code::Ok);
+    DEFER {
+        globalContext()->setCurrentProject(nullptr);
+    };
+
+    const INotationWriter::Options options {
+        { INotationWriter::OptionKey::WITH_AUDIO, Val(withAudio) },
+    };
+
+    return convertFullNotation(writer, notationProject->masterNotation()->notation(), out, options);
 }
 
 Ret ConverterController::updateSource(const muse::io::path_t& in, const std::string& newSource, bool forceMode)

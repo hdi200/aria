@@ -1107,12 +1107,12 @@
             }
 
             if (score->selection().isRange()) {
-                mu::engraving::EditChord::toggleArticulation(score, symId);
+                score->toggleArticulation(symId);
                 addedItem = rangeFirstChord;
             } else {
                 mu::engraving::Articulation* articulation = mu::engraving::Factory::createArticulation(score->dummy()->chord());
                 articulation->setSymId(symId);
-                if (!mu::engraving::EditChord::toggleArticulation(score, item, articulation)) {
+                if (!score->toggleArticulation(item, articulation)) {
                     delete articulation;
                 } else {
                     addedItem = item;
@@ -1867,9 +1867,13 @@
         biasDuplicatePointInputAwayFromExistingChord(score, page, staff, pagePoint, position);
 
         mu::engraving::Segment* segment = position.segment;
+        double segmentSkylineTopY = 0.0;
+        double segmentSkylineBottomY = 0.0;
         if (segment) {
             if (mu::engraving::Segment* actualSegment = segment->prev1enabled()) {
                 segment = actualSegment;
+                segmentSkylineTopY = actualSegment->elementsTopOffsetFromSkyline(position.staffIdx);
+                segmentSkylineBottomY = actualSegment->elementsBottomOffsetFromSkyline(position.staffIdx);
             }
         }
         if (!segment || !segment->measure()) {
@@ -1893,7 +1897,7 @@
             mu::engraving::Rest* previewRest = mu::engraving::Factory::createRest(score->dummy()->segment(), duration.type());
             previewRest->setTicks(duration.fraction());
             symNotehead = previewRest->getSymbol(duration.type(), 0, staff->lines(tick));
-            shadowNote.setState(symNotehead, duration, true, position.beyondScore);
+            shadowNote.setState(symNotehead, duration, true, segmentSkylineTopY, segmentSkylineBottomY);
             delete previewRest;
         } else {
             symNotehead = mu::engraving::Note::noteHead(0, mu::engraving::NoteHeadGroup::HEAD_NORMAL, duration.headType());
@@ -1904,7 +1908,8 @@
                 symNotehead,
                 duration,
                 false,
-                position.beyondScore,
+                segmentSkylineTopY,
+                segmentSkylineBottomY,
                 accidentalType.value_or(mu::engraving::AccidentalType::NONE),
                 inputState.articulationIds()
             );
@@ -1920,7 +1925,7 @@
         }
 
         const double relX = position.pos.x() - segment->measure()->pageBoundingRect().left();
-        position.pos.rx() -= std::min(relX - score->style().styleAbsolute(mu::engraving::Sid::barNoteDistance), 0.0);
+        position.pos.rx() -= std::min(relX - score->style().styleMM(mu::engraving::Sid::barNoteDistance), 0.0);
 
         score->renderer()->layoutItem(&shadowNote);
         shadowNote.setPos(position.pos);
@@ -2623,7 +2628,7 @@
         }
 
         mu::engraving::Measure* first = structuralScore->firstMeasure();
-        const bool hasPickup = first->excludeFromNumbering() || (first->ticks() < first->timesig());
+        const bool hasPickup = first->irregular() || (first->ticks() < first->timesig());
         const int desiredTotal = count + (hasPickup ? 1 : 0);
         int currentTotal = 0;
         for (mu::engraving::Measure* measure = structuralScore->firstMeasure(); measure; measure = measure->nextMeasure()) {
@@ -2692,7 +2697,7 @@
         output.nominalDenominator = nominal.denominator();
         output.actualNumerator = actual.numerator();
         output.actualDenominator = actual.denominator();
-        output.isPickup = measure->excludeFromNumbering() || (actual < nominal);
+        output.isPickup = measure->irregular() || (actual < nominal);
         return true;
     }
 
@@ -2739,7 +2744,7 @@
                  first->ticks().denominator(),
                  first->timesig().numerator(),
                  first->timesig().denominator(),
-                 first->excludeFromNumbering() ? 1 : 0,
+                 first->irregular() ? 1 : 0,
                  pickup.numerator(),
                  pickup.denominator());
 
@@ -2773,7 +2778,7 @@
 
         logFirstMeasureSpanners("before set");
         m_masterScore->startCmd(muse::TranslatableString::untranslatable("Aria set pickup measure"));
-        measure->undoChangeProperty(mu::engraving::Pid::EXCLUDE_FROM_NUMBERING, true);
+        measure->undoChangeProperty(mu::engraving::Pid::IRREGULAR, true);
         if (measure->ticks() != pickup) {
             measure->adjustToLen(pickup);
         }
@@ -2828,7 +2833,7 @@
             return false;
         }
 
-        insertedMeasure->undoChangeProperty(mu::engraving::Pid::EXCLUDE_FROM_NUMBERING, true);
+        insertedMeasure->undoChangeProperty(mu::engraving::Pid::IRREGULAR, true);
         if (insertedMeasure->ticks() != pickup) {
             insertedMeasure->adjustToLen(pickup);
         }
@@ -2872,7 +2877,7 @@
                  first->ticks().denominator(),
                  first->timesig().numerator(),
                  first->timesig().denominator(),
-                 first->excludeFromNumbering() ? 1 : 0,
+                 first->irregular() ? 1 : 0,
                  nominal.numerator(),
                  nominal.denominator());
 
@@ -2906,7 +2911,7 @@
 
         logFirstMeasureSpanners("before clear");
         m_masterScore->startCmd(muse::TranslatableString::untranslatable("Aria remove pickup measure"));
-        measure->undoChangeProperty(mu::engraving::Pid::EXCLUDE_FROM_NUMBERING, false);
+        measure->undoChangeProperty(mu::engraving::Pid::IRREGULAR, false);
         if (measure->ticks() != nominal) {
             measure->adjustToLen(nominal);
         }
@@ -3085,7 +3090,7 @@
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader toggle accidental"));
         score->select(targetNote, mu::engraving::SelectType::SINGLE, targetNote->staffIdx());
-        mu::engraving::EditNote::changeAccidental(score, targetNote, appliedAccidentalType);
+        score->changeAccidental(targetNote, appliedAccidentalType);
         continueNoteInputAfterChord(score, targetNote->chord());
         score->inputState().setAccidentalType(mu::engraving::AccidentalType::NONE);
         score->endCmd();
@@ -3317,7 +3322,7 @@
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader change selection pitch"));
         const bool movingUp = stepDelta > 0;
         for (int i = 0; i < std::abs(stepDelta); ++i) {
-            mu::engraving::EditNote::upDown(score, movingUp, mode);
+            score->upDown(movingUp, mode);
         }
         score->endCmd();
         refreshAfterEdit();
@@ -3373,7 +3378,7 @@
         score->select(targetNote, mu::engraving::SelectType::SINGLE, targetNote->staffIdx());
         const bool movingUp = semitoneDelta > 0;
         for (int i = 0; i < std::abs(semitoneDelta); ++i) {
-            mu::engraving::EditNote::upDown(score, movingUp, mu::engraving::UpDownMode::CHROMATIC);
+            score->upDown(movingUp, mu::engraving::UpDownMode::CHROMATIC);
         }
         continueNoteInputAfterChord(score, targetChord);
         score->endCmd();
@@ -3473,7 +3478,7 @@
                 errorMessage = "MuseReader could not resolve that MIDI pitch for the selected note.";
                 return false;
             }
-            mu::engraving::EditNote::undoChangePitch(score, selectedNote, noteValue.pitch, noteValue.tpc1, noteValue.tpc2);
+            score->undoChangePitch(selectedNote, noteValue.pitch, noteValue.tpc1, noteValue.tpc2);
         } else if (selectionState.isMeasure
                    && selectedSingleOrMMRestMeasureRange(score, nullptr, nullptr, nullptr, nullptr)) {
             mu::engraving::Measure* selectedStartMeasure = nullptr;
@@ -3574,7 +3579,7 @@
         }
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader drag note"));
-        mu::engraving::EditNote::undoChangePitch(score, selectedNote, noteValue.pitch, noteValue.tpc1, noteValue.tpc2);
+        score->undoChangePitch(selectedNote, noteValue.pitch, noteValue.tpc1, noteValue.tpc2);
         score->endCmd();
         refreshAfterEdit();
         output = makeEditState(score);

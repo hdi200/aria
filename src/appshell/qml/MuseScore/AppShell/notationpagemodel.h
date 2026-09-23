@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,7 +35,7 @@
 #include "notation/inotationconfiguration.h"
 #include "notationscene/inotationsceneconfiguration.h"
 #include "braille/ibrailleconfiguration.h"
-#include "iappshellstate.h"
+#include "iappshellconfiguration.h"
 
 namespace mu::appshell {
 class NotationPageModel : public QObject, public muse::Contextable, public muse::async::Asyncable, public muse::actions::Actionable
@@ -50,10 +50,10 @@ class NotationPageModel : public QObject, public muse::Contextable, public muse:
     muse::GlobalInject<notation::INotationConfiguration> notationConfiguration;
     muse::GlobalInject<notation::INotationSceneConfiguration> notationSceneConfiguration;
     muse::GlobalInject<braille::IBrailleConfiguration> brailleConfiguration;
-    muse::ContextInject<muse::extensions::IExtensionsProvider> extensionsProvider = { this };
-    muse::ContextInject<IAppShellState> appShellState = { this };
+    muse::GlobalInject<IAppShellConfiguration> configuration;
     muse::ContextInject<muse::actions::IActionsDispatcher> dispatcher = { this };
     muse::ContextInject<muse::dock::IDockWindowProvider> dockWindowProvider = { this };
+    muse::ContextInject<muse::extensions::IExtensionsProvider> extensionsProvider = { this };
     muse::ContextInject<context::IGlobalContext> globalContext = { this };
 
 public:

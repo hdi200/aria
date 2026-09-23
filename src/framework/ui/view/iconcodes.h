@@ -523,9 +523,6 @@ enum class Code : char16_t {
 
     EYE_OPEN_THICK = 0xF4AE,
 
-    TRIM_HANDLE_RIGHT = 0xF4B0,
-    TRIM_HANDLE_LEFT = 0xF4B1,
-
     GUITAR_DIVE_REGULAR = 0xF4B3,
     GUITAR_PRE_DIVE = 0xF4B4,
     GUITAR_DIP_DOWN = 0xF4B5,
@@ -538,6 +535,8 @@ enum class Code : char16_t {
     LINE_ARROW_RIGHT = 0xF4BD,
     FILLED_ARROW_LEFT = 0xF4BE,
     FILLED_ARROW_RIGHT = 0xF4BF,
+
+    VIDEO = 0xF4C2,
 
     NONE = 0xFFFF
 };

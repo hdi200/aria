@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -45,7 +45,6 @@ class ChordRest;
 class Chord;
 class Part;
 class Score;
-class TimeSigMap;
 }
 
 namespace mu::engraving::read400 {
@@ -66,8 +65,6 @@ public:
     bool pasteStaff(XmlReader& e, Segment* dst, staff_idx_t dstStaff, Fraction scale) override;
     void pasteSymbols(XmlReader& e, ChordRest* dst) override;
     void readTremoloCompat(compat::TremoloCompat* item, XmlReader& xml) override;
-
-    static void readTimeSigMap(TimeSigMap* map, XmlReader& xml, read400::ReadContext& ctx);
 
     static VoiceAssignment readDynamicRange(int);
     static EngravingItem* readArticulation(EngravingItem*, XmlReader&, read400::ReadContext& ctx);

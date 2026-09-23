@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -68,7 +68,7 @@ TEST_F(Engraving_DrawDataTests, DISABLED_Rw)
 {
     DrawDataPtr origin;
     {
-        DrawDataGenerator g;
+        DrawDataGenerator g(muse::modularity::globalCtx());
         origin = g.genDrawData(VTEST_SCORES + "/accidental-1.mscx");
         DrawDataRW::writeData("rw_data.origin.json", origin);
     }
@@ -165,14 +165,14 @@ TEST_F(Engraving_DrawDataTests, ScoreDraw)
 {
     Pixmap originImage;
     {
-        DrawDataGenerator g;
+        DrawDataGenerator g(muse::modularity::globalCtx());
         originImage = g.genImage(VTEST_SCORES + "/accidental-1.mscx");
         io::File::writeFile("2_accidental-1.origin.png", originImage.data());
     }
 
     {
         PainterItemMarker::enabled = false;
-        DrawDataGenerator g;
+        DrawDataGenerator g(muse::modularity::globalCtx());
         DrawDataPtr drawData = g.genDrawData(VTEST_SCORES + "/accidental-1.mscx");
         DrawDataRW::writeData("2_accidental-1_no_objects.json", drawData);
         PainterItemMarker::enabled = true;
@@ -180,7 +180,7 @@ TEST_F(Engraving_DrawDataTests, ScoreDraw)
 
     DrawDataPtr drawData;
     {
-        DrawDataGenerator g;
+        DrawDataGenerator g(muse::modularity::globalCtx());
         drawData = g.genDrawData(VTEST_SCORES + "/accidental-1.mscx");
         DrawDataRW::writeData("2_accidental-1.json", drawData);
     }
@@ -283,13 +283,13 @@ TEST_F(Engraving_DrawDataTests, ScoreDrawDiff)
 {
     DrawDataPtr data1;
     {
-        DrawDataGenerator g;
+        DrawDataGenerator g(muse::modularity::globalCtx());
         data1 = g.genDrawData(VTEST_SCORES + "/accidental-1.mscx");
     }
 
     DrawDataPtr data2;
     {
-        DrawDataGenerator g;
+        DrawDataGenerator g(muse::modularity::globalCtx());
         data2 = g.genDrawData(VTEST_SCORES + "/accidental-2.mscx");
     }
 

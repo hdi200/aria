@@ -5,8 +5,8 @@
 #include <string>
 
 #include "global/io/path.h"
+#include "global/iapplication.h"
 #include "global/logger.h"
-#include "global/internal/cmdoptions.h"
 
 namespace mu::app {
 enum class ConvertType {
@@ -31,7 +31,7 @@ enum class DiagnosticType {
     DrawDiffToPng
 };
 
-struct MuseScoreCmdOptions : public muse::CmdOptions {
+struct CmdOptions {
     enum class ParamKey {
         HighlightConfigPath,
         StylePath,
@@ -45,7 +45,14 @@ struct MuseScoreCmdOptions : public muse::CmdOptions {
         ExtensionUri,
         PageNumber,
         ScoreRegion,
+        NoAudio,
     };
+
+    muse::IApplication::RunMode runMode = muse::IApplication::RunMode::GuiApp;
+
+    struct {
+        std::optional<double> physicalDotsPerInch;
+    } ui;
 
     struct {
         std::optional<bool> templateModeEnabled;
@@ -88,6 +95,7 @@ struct MuseScoreCmdOptions : public muse::CmdOptions {
 
     struct {
         std::optional<bool> revertToFactorySettings;
+        std::optional<muse::logger::Level> loggerLevel;
     } app;
 
     struct {

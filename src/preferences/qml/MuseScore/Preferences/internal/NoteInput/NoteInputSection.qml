@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -49,9 +49,9 @@ BaseSection {
 
         currentIndex: defaultNoteInputMethodDropdown.indexOfValue(root.defaultNoteInputMethod)
 
-        navigationName: "DefaultNoteInputMethodDropdown"
-        navigationPanel: root.navigation
-        navigationRow: 0
+        navigation.name: "DefaultNoteInputMethodDropdown"
+        navigation.panel: root.navigation
+        navigation.row: 0
 
         onValueEdited: function(newIndex, newValue) {
             root.defaultNoteInputMethodChangeRequested(newValue)
@@ -61,9 +61,9 @@ BaseSection {
     ComboBoxWithTitle {
         title: qsTrc("preferences", "Apply accidentals, augmentation dots, and articulations")
 
-        navigationName: "AddAccidentalDotsArticulationsToNextNoteEnteredDropdown"
-        navigationPanel: root.navigation
-        navigationRow: 1
+        navigation.name: "AddAccidentalDotsArticulationsToNextNoteEnteredDropdown"
+        navigation.panel: root.navigation
+        navigation.row: 1
 
         model: [
             { text: qsTrc("preferences", "To next note entered"), value: 0 },
@@ -80,9 +80,9 @@ BaseSection {
     ComboBoxWithTitle {
         title: qsTrc("preferences", "Input by duration mode cursor")
 
-        navigationName: "InputByDurationModeCursorDropdown"
-        navigationPanel: root.navigation
-        navigationRow: 2
+        navigation.name: "InputByDurationModeCursorDropdown"
+        navigation.panel: root.navigation
+        navigation.row: 2
 
         model: [
             { text: qsTrc("preferences", "Above staff"), value: 0 },

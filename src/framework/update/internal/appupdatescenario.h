@@ -26,17 +26,15 @@
 #include "async/asyncable.h"
 #include "modularity/ioc.h"
 
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 #include "actions/iactionsdispatcher.h"
 #include "multiwindows/imultiwindowsprovider.h"
 #include "update/iupdateconfiguration.h"
 #include "update/iappupdateservice.h"
-#include "global/iapplication.h"
 
 namespace muse::update {
 class AppUpdateScenario : public IAppUpdateScenario, public Contextable, public async::Asyncable
 {
-    GlobalInject<IApplication> application;
     GlobalInject<mi::IMultiWindowsProvider> multiwindowsProvider;
     GlobalInject<IUpdateConfiguration> configuration;
     ContextInject<IInteractive> interactive = { this };

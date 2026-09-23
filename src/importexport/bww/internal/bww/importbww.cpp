@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -215,7 +215,7 @@ void MsScWriter::beginMeasure(const Bww::MeasureBeginFlags mbf)
     currentMeasure  = Factory::createMeasure(score->dummy()->system());
     currentMeasure->setTick(tick);
     currentMeasure->setTimesig(mu::engraving::Fraction(beats, beat));
-    currentMeasure->setMeasureNumber(measureNumber);
+    currentMeasure->setNo(measureNumber);
     score->measures()->append(currentMeasure);
 
     if (mbf.repeatBegin) {
@@ -223,7 +223,7 @@ void MsScWriter::beginMeasure(const Bww::MeasureBeginFlags mbf)
     }
 
     if (mbf.irregular) {
-        currentMeasure->setExcludeFromNumbering(true);
+        currentMeasure->setIrregular(true);
     }
 
     if (mbf.endingFirst || mbf.endingSecond) {
@@ -457,6 +457,7 @@ void MsScWriter::header(const QString title, const QString type,
 
     mu::engraving::Part* part = score->staff(0)->part();
     part->setPlainLongName(instrumentName());
+    part->setPartName(instrumentName());
     part->instrument()->setTrackName(instrumentName());
     part->setMidiProgram(midiProgram() - 1);
 }

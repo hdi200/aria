@@ -10,8 +10,11 @@ public:
         }
 
         muse::io::path_t path(scorePath);
+        // Same starting style as desktop (EngravingProject::create): the default style,
+        // whose page size follows the device region (Letter in the US, A4 elsewhere).
+        // It only shows for files that do not store their own page size.
         auto masterScore = std::unique_ptr<mu::engraving::MasterScore>(
-            mu::engraving::compat::ScoreAccess::createMasterScoreWithBaseStyle(sessionContext->context())
+            mu::engraving::compat::ScoreAccess::createMasterScoreWithDefaultStyle(sessionContext->context())
         );
         if (!masterScore) {
             errorMessage = "The MuseScore render core could not create a master score.";
@@ -42,6 +45,10 @@ public:
             score->setLayoutMode(mu::engraving::LayoutMode::PAGE);
             score->doLayout();
         }
+
+        // As desktop does after its first layout (lyric lines, cross-staff beams in
+        // older files); gated by the file's version.
+        mu::engraving::compat::EngravingCompat::doPostLayoutCompatIfNeeded(masterScore.get());
 
         masterScore->setPlaylistDirty();
 

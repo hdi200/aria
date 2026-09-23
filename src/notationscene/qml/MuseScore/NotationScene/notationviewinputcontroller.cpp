@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -480,12 +480,12 @@ void NotationViewInputController::setZoom(int zoomPercentage, const PointF& pos)
 
 qreal NotationViewInputController::scalingFromZoomPercentage(int zoomPercentage) const
 {
-    return contextConfiguration()->scalingFromZoomPercentage(zoomPercentage);
+    return configuration()->scalingFromZoomPercentage(zoomPercentage);
 }
 
 int NotationViewInputController::zoomPercentageFromScaling(qreal scaling) const
 {
-    return contextConfiguration()->zoomPercentageFromScaling(scaling);
+    return configuration()->zoomPercentageFromScaling(scaling);
 }
 
 void NotationViewInputController::setViewMode(const ViewMode& viewMode)
@@ -1330,7 +1330,7 @@ void NotationViewInputController::mouseDoubleClickEvent(QMouseEvent* event)
         return;
     }
 
-    if (viewInteraction()->textEditingAllowed(hitElement) && !playbackController()->isPlaying()) {
+    if (viewInteraction()->textEditingAllowed(hitElement)) {
         viewInteraction()->startEditText(hitElement, m_mouseDownInfo.logicalBeginPoint);
         return;
     }

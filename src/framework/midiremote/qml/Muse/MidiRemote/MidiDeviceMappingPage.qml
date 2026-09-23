@@ -90,9 +90,9 @@ Item {
             readOnly: true
 
             keyRoleName: "title"
-            keyTitle: qsTrc("global", "action")
+            keyTitle: qsTrc("shortcuts", "action")
             valueRoleName: "status"
-            valueTitle: qsTrc("global", "status")
+            valueTitle: qsTrc("shortcuts", "status")
             iconRoleName: "icon"
             valueEnabledRoleName: "enabled"
 

@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MUSE_VST_VSTIRESOLVER_H
+#define MUSE_VST_VSTIRESOLVER_H
 
 #include "modularity/ioc.h"
 #include "audio/engine/isynthresolver.h"
@@ -30,14 +31,17 @@
 #include "vstsynthesiser.h"
 
 namespace muse::vst {
-class VstiResolver : public audio::synth::ISynthResolver::IResolver
+class VstiResolver : public audio::synth::ISynthResolver::IResolver, public Contextable
 {
-    GlobalInject<IVstModulesRepository> pluginModulesRepo;
-    GlobalInject<IVstInstancesRegister> instancesRegister;
+    ContextInject<IVstModulesRepository> pluginModulesRepo = { this };
+    ContextInject<IVstInstancesRegister> instancesRegister = { this };
 public:
+
+    VstiResolver(const modularity::ContextPtr& iocCtx)
+        : Contextable(iocCtx) {}
+
     muse::audio::synth::ISynthesizerPtr resolveSynth(const audio::TrackId trackId, const audio::AudioInputParams& params,
-                                                     const audio::OutputSpec& outputSpec,
-                                                     const muse::modularity::ContextPtr& iocCtx) const override;
+                                                     const audio::OutputSpec& outputSpec) const override;
     bool hasCompatibleResources(const muse::audio::PlaybackSetupData& setup) const override;
     muse::audio::AudioResourceMetaList resolveResources() const override;
     muse::audio::SoundPresetList resolveSoundPresets(const muse::audio::AudioResourceMeta& resourceMeta) const override;
@@ -45,7 +49,8 @@ public:
     void clearSources() override;
 
 private:
-    VstSynthPtr createSynth(const audio::TrackId trackId, const audio::AudioInputParams& params, const audio::OutputSpec& outputSpec,
-                            const muse::modularity::ContextPtr& iocCtx) const;
+    VstSynthPtr createSynth(const audio::TrackId trackId, const audio::AudioInputParams& params, const audio::OutputSpec& outputSpec) const;
 };
 }
+
+#endif // MUSE_VST_VSTIRESOLVER_H

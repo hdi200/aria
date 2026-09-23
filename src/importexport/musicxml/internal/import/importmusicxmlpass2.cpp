@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -605,7 +605,7 @@ static InstrumentChange* createInstrumentChange(Score* score, const MusicXmlInst
 {
     const Instrument instr = createInstrument(mxmlInstr, interval);
 
-    if (curInstr->id() == instr.id() && instr.longName() == curInstr->longName() && instr.shortName() == curInstr->shortName()) {
+    if (curInstr->id() == instr.id() && instr.longNames() == curInstr->longNames() && instr.shortNames() == curInstr->shortNames()) {
         return nullptr;
     }
 
@@ -2236,6 +2236,7 @@ void MusicXmlParserPass2::part()
     String partName = mxmlPart.getName();
     setPartInstruments(m_logger, &m_e, part, id, m_score, m_pass1.getInstrList(id), m_pass1.getIntervals(id), instruments, partName);
     partName = replacePartNameAccidentals(partName);
+    part->setPartName(partName);
     const bool inconsistentVisibility = mxmlPart.getPrintName() != mxmlPart.getPrintAbbr();
     if (!isLikelyIncorrectPartName(partName)) {
         part->setLongNameAll(partName);
@@ -2251,7 +2252,12 @@ void MusicXmlParserPass2::part()
     } else {
         part->setPlainShortNameAll(u"");
     }
-
+    // set the parts first instrument
+    // try to prevent an empty track name
+    if (part->partName() == "") {
+        String instrId = m_pass1.getInstrList(id).instrument(Fraction(0, 1));
+        part->setPartName(muse::value(instruments, instrId).name);
+    }
     if (m_pass1.nparts() == 1 && mxmlPart.getPrintName() && mxmlPart.getPrintAbbr()) {
         m_score->style().set(Sid::hideInstrumentNameIfOneInstrument, false);
     }
@@ -2726,7 +2732,7 @@ void MusicXmlParserPass2::measure(const String& partId, const Fraction time)
 
     if (m_e.asciiAttribute("implicit") == "yes") {
         // Implicit measure: expect measure number to be unchanged.
-        measure->setExcludeFromNumbering(true);
+        measure->setIrregular(true);
     } else {
         // Normal measure: expect number to have increased by one.
         ++m_measureNumber;
@@ -2734,7 +2740,7 @@ void MusicXmlParserPass2::measure(const String& partId, const Fraction time)
 
     if (isNumericMeasureNumber) {
         // Actual measure number may differ from expected value.
-        measure->setMeasureNumberOffset(parsedMeasureNumber - m_measureNumber);
+        measure->setNoOffset(parsedMeasureNumber - m_measureNumber);
         m_measureNumber = parsedMeasureNumber;
     }
 
@@ -3546,15 +3552,13 @@ void MusicXmlParserDirection::direction(const String& partId,
             sticking->setPropertyFlags(Pid::OFFSET, PropertyFlags::UNSTYLED);
         }
 
-        if (hasTotalY()) {
-            // Add element to score later, after collecting all the others and sorting by default-y
-            // This allows default-y to be at least respected by the order of elements
-            MusicXmlDelayedDirectionElement* delayedDirection = new MusicXmlDelayedDirectionElement(
-                totalY(), sticking, m_track, placement(), measure, tick + m_offset);
-            delayedDirections.push_back(delayedDirection);
-        } else {
-            m_pass2.addElemOffset(sticking, m_track, placement(), measure, tick + m_offset);
-        }
+        // Add element to score later, after collecting all the others and sorting by default-y
+        // This allows default-y to be at least respected by the order of elements
+        // We also need to check whether the chord at the current tick has a grace note. Directions can appear
+        // before the note they apply to, so this may not have been read yet
+        MusicXmlDelayedDirectionElement* delayedDirection = new MusicXmlDelayedDirectionElement(
+            totalY(), sticking, m_track, placement(), measure, tick + m_offset);
+        delayedDirections.push_back(delayedDirection);
     } else if (isLikelyDynamicRange()) {
         isDynamicRange = true;
     } else if (!m_wordsText.empty() || !m_rehearsalText.empty() || !m_metroText.empty()) {
@@ -5118,16 +5122,17 @@ void MusicXmlParserDirection::bracket(const String& type, const int number,
             if (!endLength.empty()) {
                 double length = endLength.toDouble();
                 textLine->setBeginHookHeight(Spatium(lineEnd == "both" ? length / 20 : length / 10));
+                textLine->setPropertyFlags(Pid::BEGIN_HOOK_HEIGHT, PropertyFlags::UNSTYLED);
             }
             if (lineEnd == "up") {
                 textLine->setBeginHookType(HookType::HOOK_90);
-                textLine->setBeginHookHeight(-1 * textLine->beginHookHeight());
             } else if (lineEnd == "down") {
                 textLine->setBeginHookType(HookType::HOOK_90);
+                textLine->setBeginHookHeight(-1 * textLine->beginHookHeight());
             } else if (lineEnd == "both") {
                 textLine->setBeginHookType(HookType::HOOK_90T);
             } else if (lineEnd == "arrow") {
-                m_logger->logError(String(u"line-end \"arrow\" not supported"));
+                textLine->setBeginHookType(HookType::ARROW_FILLED);
             } else if (lineEnd == "none") {
                 textLine->setBeginHookType(HookType::NONE);
             }
@@ -5179,16 +5184,17 @@ void MusicXmlParserDirection::bracket(const String& type, const int number,
             if (!endLength.empty()) {
                 double length = endLength.toDouble();
                 textLine->setEndHookHeight(Spatium(lineEnd == "both" ? length / 20 : length / 10));
+                textLine->setPropertyFlags(Pid::END_HOOK_HEIGHT, PropertyFlags::UNSTYLED);
             }
             if (lineEnd == "up") {
                 textLine->setEndHookType(HookType::HOOK_90);
-                textLine->setEndHookHeight(-1 * textLine->endHookHeight());
             } else if (lineEnd == "down") {
                 textLine->setEndHookType(HookType::HOOK_90);
+                textLine->setEndHookHeight(-1 * textLine->endHookHeight());
             } else if (lineEnd == "both") {
                 textLine->setEndHookType(HookType::HOOK_90T);
             } else if (lineEnd == "arrow") {
-                m_logger->logError(String(u"line-end \"arrow\" not supported"));
+                textLine->setEndHookType(HookType::ARROW_FILLED);
             } else if (lineEnd == "none") {
                 textLine->setEndHookType(HookType::NONE);
             }
@@ -5273,7 +5279,7 @@ void MusicXmlParserDirection::octaveShift(const String& type, const int number,
             return;
         }
         int ottavasize = m_e.intAttribute("size");
-        if (!(ottavasize == 8 || ottavasize == 15)) {
+        if (!(ottavasize == 8 || ottavasize == 15 || ottavasize == 22)) {
             m_logger->logError(String(u"unknown octave-shift size %1").arg(ottavasize), &m_e);
         } else {
             Ottava* o = spdesc.isStopped ? toOttava(spdesc.sp) : Factory::createOttava(m_score->dummy());
@@ -5743,17 +5749,20 @@ Regular barlines should not be added at the start or end of a measure, as that c
 
 void MusicXmlParserPass2::barline(const String& partId, Measure* measure, const Fraction& tick)
 {
-    String loc = m_e.attribute("location");
+    AsciiStringView loc = m_e.asciiAttribute("location");
     if (loc.empty()) {
-        loc = u"right";
+        loc = "right";
     }
     // Place barline in correct place
     Fraction locTick = tick;
-    if (loc == u"left") {
+    if (loc == "left") {
         locTick = measure->tick();
-    } else if (loc == u"right") {
+    } else if (loc == "right") {
         locTick = measure->endTick();
     }
+
+    const String codaLabel = m_e.attribute("coda");
+    const String segnoLabel = m_e.attribute("segno");
 
     String barStyle;
     Color barlineColor;
@@ -5762,23 +5771,68 @@ void MusicXmlParserPass2::barline(const String& partId, Measure* measure, const 
     Color endingColor;
     String endingText;
     String repeat;
-    String count;
     bool printEnding = true;
 
     while (m_e.readNextStartElement()) {
         if (m_e.name() == "bar-style") {
             barlineColor = Color::fromString(m_e.asciiAttribute("color").ascii());
             barStyle = m_e.readText();
-        } else if (m_e.name() == "ending") {
-            endingNumber = m_e.attribute("number");
-            endingType   = m_e.attribute("type");
-            endingColor = Color::fromString(m_e.asciiAttribute("color").ascii());
-            printEnding = m_e.asciiAttribute("print-object") != "no";
-            endingText = m_e.readText();
+        } else if (m_e.name() == "segno") {
+            const Color segnoColor = Color::fromString(m_e.asciiAttribute("color").ascii());
+            const AsciiStringView segnoSymbol = m_e.asciiAttribute("smufl");
+            Measure* markedMeasure = (loc == "right") ? measure->nextMeasure() : measure;
+            if (markedMeasure == nullptr) {
+                m_logger->logError(u"coda or segno marker cannot be placed at the end of the score", &m_e);
+                m_e.skipCurrentElement();
+                continue;
+            }
+            Marker* m = Factory::createMarker(markedMeasure);
+            m->setMarkerType(MarkerType::SEGNO);
+            if (!segnoSymbol.empty()) {
+                m->setXmlText(u"<sym>" + String::fromAscii(segnoSymbol.ascii()) + u"</sym>");
+            }
+            if (!segnoLabel.empty()) {
+                m->setLabel(segnoLabel);
+            }
+            if (segnoColor.isValid()) {
+                colorItem(m, segnoColor);
+            }
+            const track_idx_t track = m_pass1.trackForPart(partId);
+            addElemOffset(m, track, u"above", markedMeasure, markedMeasure->tick());
+            m_e.skipCurrentElement();
+        } else if (m_e.name() == "coda") {
+            const Color codaColor = Color::fromString(m_e.asciiAttribute("color").ascii());
+            const AsciiStringView codaSymbol = m_e.asciiAttribute("smufl");
+            Measure* markedMeasure = (loc == "right") ? measure->nextMeasure() : measure;
+            if (markedMeasure == nullptr) {
+                m_logger->logError(u"coda or segno marker cannot be placed at the end of the score", &m_e);
+                m_e.skipCurrentElement();
+                continue;
+            }
+            Marker* m = Factory::createMarker(markedMeasure);
+            m->setMarkerType(MarkerType::CODA);
+            if (!codaSymbol.empty()) {
+                m->setXmlText(u"<sym>" + String::fromAscii(codaSymbol.ascii()) + u"</sym>");
+            }
+            if (!codaLabel.empty()) {
+                m->setLabel(codaLabel);
+            }
+            if (codaColor.isValid()) {
+                colorItem(m, codaColor);
+            }
+            const track_idx_t track = m_pass1.trackForPart(partId);
+            addElemOffset(m, track, u"above", markedMeasure, markedMeasure->tick());
+            m_e.skipCurrentElement();
         } else if (m_e.name() == "fermata") {
             const Color fermataColor = Color::fromString(m_e.asciiAttribute("color").ascii());
             const String fermataType = m_e.attribute("type");
-            Segment* const segment = measure->getSegment(SegmentType::EndBarLine, locTick);
+            SegmentType st = SegmentType::BarLine;
+            if (locTick == measure->endTick()) {
+                st = SegmentType::EndBarLine;
+            } else if (locTick == measure->tick()) {
+                st = SegmentType::BeginBarLine;
+            }
+            Segment* const segment = measure->getSegment(st, locTick);
             const track_idx_t track = m_pass1.trackForPart(partId);
             Fermata* fermata = Factory::createFermata(segment);
             fermata->setSymId(convertFermataToSymId(m_e.readText()));
@@ -5795,13 +5849,21 @@ void MusicXmlParserPass2::barline(const String& partId, Measure* measure, const 
             // Terminate tempo lines
             const InferredTempoLineStack& lines = getInferredTempoLine();
             terminateInferredLine(std::vector<TextLineBase*>(lines.begin(), lines.end()), locTick, track);
+        } else if (m_e.name() == "ending") {
+            endingNumber = m_e.attribute("number");
+            endingType   = m_e.attribute("type");
+            endingColor = Color::fromString(m_e.asciiAttribute("color").ascii());
+            printEnding = m_e.asciiAttribute("print-object") != "no";
+            endingText = m_e.readText();
         } else if (m_e.name() == "repeat") {
             repeat = m_e.attribute("direction");
-            count = m_e.attribute("times");
-            if (count.empty()) {
-                count = u"2";
+            int count = m_e.attribute("times").toInt();
+            if (!count) {
+                count = 2;
             }
-            measure->setRepeatCount(count.toInt());
+            measure->setRepeatCount(count);
+            bool repeatBarTips = !m_e.attribute("winged").empty() && m_e.attribute("winged") != "none";
+            m_score->undoChangeStyleVal(Sid::repeatBarTips, repeatBarTips);
             m_e.skipCurrentElement();
         } else {
             skipLogCurrElem();
@@ -6964,6 +7026,8 @@ Note* MusicXmlParserPass2::note(const String& partId,
     String noteheadFilled;
     int velocity = round(m_e.doubleAttribute("dynamics") * 0.9);
     bool graceSlash = false;
+    double graceStealFollowing = -1.0;
+    double graceStealPrevious  = -1.0;
     bool printObject = m_e.asciiAttribute("print-object") != "no";
     bool printLyric = (printObject && m_e.asciiAttribute("print-lyric") != "no") || m_e.asciiAttribute("print-lyric") == "yes";
     bool isSingleDrumset = false;
@@ -6999,6 +7063,8 @@ Note* MusicXmlParserPass2::note(const String& partId,
         } else if (m_e.name() == "grace") {
             grace = true;
             graceSlash = m_e.asciiAttribute("slash") == "yes";
+            graceStealFollowing = m_e.doubleAttribute("steal-time-following", -1.0);
+            graceStealPrevious  = m_e.doubleAttribute("steal-time-previous", -1.0);
             m_e.skipCurrentElement();  // skip but don't log
         } else if (m_e.name() == "instrument") {
             instrumentId = m_e.attribute("id");
@@ -7343,9 +7409,12 @@ Note* MusicXmlParserPass2::note(const String& partId,
         }
     }
 
-    // handle grace after state: remember current grace list size
-    if (grace && notations.mustStopGraceAFter()) {
-        gac = gcl.size();
+    if (grace) {
+        const bool afterByStealTime = graceStealPrevious >= 0.0 && c && c->noteType() != NoteType::ACCIACCATURA;
+        if (graceStealFollowing < 0.0 && (afterByStealTime || notations.mustStopGraceAfter())) {
+            // handle grace after state: remember current grace list size
+            gac = gcl.size();
+        }
     }
 
     // handle tremolo before handling tuplet (two note tremolos modify timeMod)
@@ -9220,6 +9289,8 @@ static void addChordLine(const Notation& notation, Note* note,
                          MusicXmlLogger* logger, const XmlStreamReader* const xmlreader)
 {
     const String chordLineType = notation.subType();
+    const String lineType = notation.attribute(u"line-type");
+    const String lineShape = notation.attribute(u"line-shape");
     if (!chordLineType.empty()) {
         if (note) {
             ChordLine* const chordline = Factory::createChordLine(note->chord());
@@ -9231,6 +9302,14 @@ static void addChordLine(const Notation& notation, Note* note,
                 chordline->setChordLineType(ChordLineType::PLOP);
             } else if (chordLineType == u"scoop") {
                 chordline->setChordLineType(ChordLineType::SCOOP);
+            }
+            if (lineShape == u"straight") {
+                chordline->setStraight(true);
+            }
+            if (lineType == u"wavy") {
+                chordline->setWavy(true);
+            } else if (!lineType.empty() && lineType != u"solid") {
+                logger->logError(String(u"unsupported line-type: %1").arg(lineType), xmlreader);
             }
             chordline->setVisible(notation.visible());
             colorItem(chordline, Color::fromString(notation.attribute(u"color")));

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -27,11 +27,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Violins</trackName>
       <Instrument id="violins">
-        <InstrumentLabel>
-          <longName>Violins</longName>
-          <shortName>Vlns.</shortName>
-          </InstrumentLabel>
+        <longName>Violins</longName>
+        <shortName>Vlns.</shortName>
         <trackName>Violins (section)</trackName>
         <minPitchP>55</minPitchP>
         <maxPitchP>103</maxPitchP>
@@ -110,11 +109,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Trumpet</trackName>
       <Instrument id="bb-trumpet">
-        <InstrumentLabel>
-          <longName>Trumpet</longName>
-          <shortName>Tpt.</shortName>
-          </InstrumentLabel>
+        <longName>Trumpet</longName>
+        <shortName>Tpt.</shortName>
         <trackName>Trumpet</trackName>
         <minPitchP>52</minPitchP>
         <maxPitchP>85</maxPitchP>
@@ -184,11 +182,10 @@
           </StaffType>
         <defaultClef>F</defaultClef>
         </Staff>
+      <trackName>Trombone</trackName>
       <Instrument id="trombone">
-        <InstrumentLabel>
-          <longName>Trombone</longName>
-          <shortName>Tbn.</shortName>
-          </InstrumentLabel>
+        <longName>Trombone</longName>
+        <shortName>Tbn.</shortName>
         <trackName>Trombone</trackName>
         <minPitchP>36</minPitchP>
         <maxPitchP>74</maxPitchP>

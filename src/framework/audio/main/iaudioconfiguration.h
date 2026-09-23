@@ -58,6 +58,7 @@ public:
     virtual void setSampleRate(unsigned int sampleRate) = 0;
     virtual async::Notification sampleRateChanged() const = 0;
 
+    virtual OutputSpec defaultOutputSpec() const = 0;
     virtual OutputSpec desiredOutputSpec() const = 0;
 
     // synthesizers
@@ -69,6 +70,10 @@ public:
     virtual bool autoProcessOnlineSoundsInBackground() const = 0;
     virtual void setAutoProcessOnlineSoundsInBackground(bool value) = 0;
     virtual async::Channel<bool> autoProcessOnlineSoundsInBackgroundChanged() const = 0;
+
+    virtual bool useSoundFontLowPassFilter() const = 0;
+    virtual void setUseSoundFontLowPassFilter(bool value) = 0;
+    virtual async::Channel<bool> useSoundFontLowPassFilterChanged() const = 0;
 
     virtual bool shouldMeasureInputLag() const = 0;
 };

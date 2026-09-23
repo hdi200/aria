@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -390,7 +390,9 @@ void MnxImporter::createStaff(Part* part, const mnx::Part& mnxPart, int staffNum
 
 void MnxImporter::importParts()
 {
+    size_t partNum = 0;
     for (mnx::Part mnxPart : mnxDocument().parts()) {
+        partNum++;
         Part* part = new Part(m_score);
         /// @todo a better way to find the instrument, perhaps by part name or else some future mnx enhancement
         const InstrumentTemplate* it = [&]() {
@@ -402,6 +404,7 @@ void MnxImporter::importParts()
         if (it) {
             part->initFromInstrTemplate(it);
         }
+        part->setPartName(String::fromStdString(mnxPart.name_or("Part " + mnxPart.id_or(std::to_string((partNum))))));
         part->setLongName(String::fromStdString(mnxPart.name_or("")));
         part->setShortName(String::fromStdString(mnxPart.shortName_or("")));
         loadInstrument(mnxDocument(), part, mnxPart, part->instrument(), m_mnxKitComponentToMidi);
@@ -848,7 +851,7 @@ void MnxImporter::importGlobalMeasures()
         /// a measure number.
         int currDisplayNum = mnxMeasure.calcVisibleNumber();
         if (currDisplayNum != lastDisplayNum + 1) {
-            measure->setMeasureNumberOffset(currDisplayNum - lastDisplayNum - 1);
+            measure->setNoOffset(currDisplayNum - lastDisplayNum - 1);
         }
         lastDisplayNum = currDisplayNum;
 

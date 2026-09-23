@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -45,19 +45,11 @@ using namespace mu::engraving;
 //---------------------------------------------------------
 
 TimeSignaturePropertiesDialog::TimeSignaturePropertiesDialog(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
+    : QDialog(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setObjectName(TIME_SIGNATURE_PROPERTIES_DIALOG_NAME);
     setupUi(this);
-}
 
-TimeSignaturePropertiesDialog::~TimeSignaturePropertiesDialog()
-{
-    delete m_editedTimeSig;
-}
-
-void TimeSignaturePropertiesDialog::componentComplete()
-{
     QString musicalFontFamily = QString::fromStdString(uiConfiguration()->musicalFontFamily());
     int musicalFontSize = uiConfiguration()->musicalFontSize();
 
@@ -131,7 +123,7 @@ void TimeSignaturePropertiesDialog::componentComplete()
         SymId::mensuralProlation11, // tempus imperf., prol. imperfecta, dimin. 5
     };
 
-    IEngravingFontPtr symbolFont = paletteScoreProvider()->paletteScore()->engravingFont();
+    IEngravingFontPtr symbolFont = gpaletteScore->engravingFont();
 
     otherCombo->clear();
     otherCombo->setStyleSheet(QString("QComboBox { font-family: \"%1 Text\"; font-size: %2px; max-height: 30px } ")
@@ -163,6 +155,11 @@ void TimeSignaturePropertiesDialog::componentComplete()
         g = Groups::endings(m_editedTimeSig->sig()); // initialize with default
     }
     groups->setSig(m_editedTimeSig->sig(), g, m_editedTimeSig->numeratorString(), m_editedTimeSig->denominatorString());
+}
+
+TimeSignaturePropertiesDialog::~TimeSignaturePropertiesDialog()
+{
+    delete m_editedTimeSig;
 }
 
 void TimeSignaturePropertiesDialog::showEvent(QShowEvent* event)
@@ -237,7 +234,7 @@ void TimeSignaturePropertiesDialog::accept()
 
     m_originTimeSig->triggerLayoutAll();
     notation->undoStack()->commitChanges();
-    notation->notationChanged().send(muse::RectF());
+    notation->notationChanged().notify();
 
     QDialog::accept();
 }

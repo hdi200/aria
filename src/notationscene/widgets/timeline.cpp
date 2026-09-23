@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -53,8 +53,6 @@
 
 using namespace mu::notation;
 using namespace mu::engraving;
-
-using namespace Qt::StringLiterals;
 
 //---------------------------------------------------------
 //   TRowLabels
@@ -706,8 +704,8 @@ QString TRowLabels::cursorIsOn()
 //   Timeline
 //---------------------------------------------------------
 
-Timeline::Timeline(QSplitter* splitter)
-    : QGraphicsView(splitter), muse::Contextable(muse::iocCtxForQWidget(this))
+Timeline::Timeline(QSplitter* splitter, const muse::modularity::ContextPtr& iocCtx)
+    : QGraphicsView(splitter), muse::Contextable(iocCtx)
 {
     TRACEFUNC;
 
@@ -1037,7 +1035,7 @@ void Timeline::drawGrid(int globalRows, int globalCols, int startMeasure, int en
                 }
             }
 
-            graphicsRectItem->setToolTip(initialLetter + u" "_s + QString::number(currMeasure->measureNumber() + 1) + u", "_s + partName);
+            graphicsRectItem->setToolTip(initialLetter + QString(" ") + QString::number(currMeasure->no() + 1) + QString(", ") + partName);
             graphicsRectItem->setPen(QPen(activeTheme().backgroundColor));
             graphicsRectItem->setBrush(QBrush(colorBox(graphicsRectItem)));
             graphicsRectItem->setZValue(-3);
@@ -1513,7 +1511,7 @@ void Timeline::measureMeta(Segment*, int*, int pos)
     }
 
     // Add measure number
-    QString measureNumber = (currMeasure->excludeFromNumbering()) ? u"( )"_s : QString::number(currMeasure->measureNumber() + 1);
+    QString measureNumber = (currMeasure->irregular()) ? "( )" : QString::number(currMeasure->no() + 1);
     QGraphicsTextItem* graphicsTextItem = new QGraphicsTextItem(measureNumber);
     graphicsTextItem->setData(keyItemType, QVariant::fromValue(ItemType::TYPE_META));
     graphicsTextItem->setDefaultTextColor(activeTheme().measureMetaColor);
@@ -2310,6 +2308,27 @@ void Timeline::mousePressEvent(QMouseEvent* event)
     } else {
         interaction()->clearSelection();
     }
+
+    this->seekSelection();
+}
+
+void Timeline::seekSelection()
+{
+    const INotationSelectionPtr selection = interaction()->selection();
+    const std::vector<EngravingItem*>& elements = selection->elements();
+    if (elements.empty()) {
+        return;
+    }
+
+    EngravingItem* elementToSeek = elements.front();
+    for (EngravingItem* element : elements) {
+        if (element->tick() > elementToSeek->tick()) {
+            continue;
+        }
+        elementToSeek = element;
+    }
+
+    playbackController()->seekElement(elementToSeek);
 }
 
 //---------------------------------------------------------
@@ -3038,7 +3057,7 @@ void Timeline::toggleShow(int staff)
     m_notation->undoStack()->prepareChanges(actionName);
     part->undoChangeProperty(Pid::VISIBLE, newShow);
     m_notation->undoStack()->commitChanges();
-    m_notation->notationChanged().send(muse::RectF());
+    m_notation->notationChanged().notify();
 }
 
 //---------------------------------------------------------

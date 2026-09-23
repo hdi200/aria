@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,7 +22,7 @@
 #include "notationscenemodule.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 #include "ui/iuiactionsregister.h"
 
 #include "internal/notationsceneconfiguration.h"
@@ -47,24 +47,33 @@
 using namespace mu::notation;
 using namespace muse;
 using namespace muse::modularity;
-
-static const std::string mname("notationscene");
+using namespace muse::ui;
+using namespace muse::actions;
+using namespace muse::uicomponents;
 
 std::string NotationSceneModule::moduleName() const
 {
-    return mname;
+    return "notationscene";
 }
 
 void NotationSceneModule::registerExports()
 {
-    m_configuration = std::make_shared<NotationSceneConfiguration>();
+    m_configuration = std::make_shared<NotationSceneConfiguration>(iocContext());
+    m_actionController = std::make_shared<NotationActionController>(iocContext());
+    m_notationUiActions = std::make_shared<NotationUiActions>(m_actionController, iocContext());
+    m_midiInputOutputController = std::make_shared<MidiInputOutputController>(iocContext());
 
-    globalIoc()->registerExport<INotationSceneConfiguration>(mname, m_configuration);
+    ioc()->registerExport<INotationSceneConfiguration>(moduleName(), m_configuration);
 }
 
 void NotationSceneModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<muse::interactive::IInteractiveUriRegister>("notationscene");
+    auto ar = ioc()->resolve<IUiActionsRegister>(moduleName());
+    if (ar) {
+        ar->reg(m_notationUiActions);
+    }
+
+    auto ir = ioc()->resolve<IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerWidgetUri<EditStyle>(Uri("musescore://notation/style"));
         ir->registerWidgetUri<PageSettings>(Uri("musescore://notation/pagesettings"));
@@ -87,33 +96,9 @@ void NotationSceneModule::resolveImports()
     }
 }
 
-void NotationSceneModule::onInit(const IApplication::RunMode&)
+void NotationSceneModule::onInit(const IApplication::RunMode& mode)
 {
     m_configuration->init();
-}
-
-IContextSetup* NotationSceneModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new NotationSceneContext(ctx);
-}
-
-void NotationSceneContext::registerExports()
-{
-    m_actionController = std::make_shared<NotationActionController>(iocContext());
-    m_notationUiActions = std::make_shared<NotationUiActions>(m_actionController, iocContext());
-    m_midiInputOutputController = std::make_shared<MidiInputOutputController>(iocContext());
-}
-
-void NotationSceneContext::resolveImports()
-{
-    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>("notationscene");
-    if (ar) {
-        ar->reg(m_notationUiActions);
-    }
-}
-
-void NotationSceneContext::onInit(const IApplication::RunMode& mode)
-{
     m_actionController->init();
     m_notationUiActions->init();
 
@@ -122,9 +107,9 @@ void NotationSceneContext::onInit(const IApplication::RunMode& mode)
     }
 }
 
-void NotationSceneContext::onAllInited(const IApplication::RunMode& mode)
+void NotationSceneModule::onAllInited(const IApplication::RunMode& mode)
 {
     if (mode == IApplication::RunMode::GuiApp) {
-        NotationActionsShortcutsMigrator::migrate(iocContext());
+        NotationActionsShortcutsMigrator::migrate();
     }
 }

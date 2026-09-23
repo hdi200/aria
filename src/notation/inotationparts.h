@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -48,7 +48,7 @@ public:
     virtual const Staff* staff(const muse::ID& staffId) const = 0;
     virtual bool staffExists(const muse::ID& staffId) const = 0;
 
-    virtual StaffConfig staffConfig(const muse::ID& staffId, Fraction tick = Fraction(0, 1)) const = 0;
+    virtual StaffConfig staffConfig(const muse::ID& staffId) const = 0;
     virtual ScoreOrder scoreOrder() const = 0;
 
     virtual void setParts(const PartInstrumentList& instruments, const ScoreOrder& order) = 0;
@@ -59,11 +59,8 @@ public:
     virtual void setPartSharpFlat(const muse::ID& partId, const SharpFlat& sharpFlat) = 0;
     virtual void setInstrumentName(const InstrumentKey& instrumentKey, const QString& name) = 0;
     virtual void setInstrumentAbbreviature(const InstrumentKey& instrumentKey, const QString& abbreviature) = 0;
-    virtual void setInstrumentGroupNameOptions(const std::vector<InstrumentKey>& instruments, bool useCustom, const QString& longName,
-                                               const QString& shortName) = 0;
-    virtual void setInstrumentNumber(const InstrumentKey& instrumentKey, int v) = 0;
     virtual void setStaffType(const muse::ID& staffId, StaffTypeId type) = 0;
-    virtual void setStaffConfig(const muse::ID& staffId, const StaffConfig& config, Fraction tick = Fraction(0, 1)) = 0;
+    virtual void setStaffConfig(const muse::ID& staffId, const StaffConfig& config) = 0;
 
     virtual void removeParts(const muse::IDList& partsIds) = 0;
     virtual void removeStaves(const muse::IDList& stavesIds) = 0;

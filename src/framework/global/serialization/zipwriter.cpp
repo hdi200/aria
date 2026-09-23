@@ -21,10 +21,10 @@
  */
 #include "zipwriter.h"
 
-#include "global/io/iodevice.h"
-#include "global/types/bytearray.h"
-
+#include "global/io/file.h"
 #include "internal/zipcontainer.h"
+
+#include "log.h"
 
 using namespace muse;
 
@@ -33,6 +33,18 @@ struct ZipWriter::Impl
     ZipContainer* zip = nullptr;
     bool isClosed = false;
 };
+
+ZipWriter::ZipWriter(const io::path_t& filePath)
+{
+    m_selfDevice = true;
+    m_device = new io::File(filePath);
+    if (!m_device->open(io::IODevice::WriteOnly)) {
+        LOGE() << "failed open file: " << filePath;
+    }
+
+    m_impl = new Impl();
+    m_impl->zip = new ZipContainer(m_device);
+}
 
 ZipWriter::ZipWriter(io::IODevice* device)
 {
@@ -46,6 +58,11 @@ ZipWriter::~ZipWriter()
     close();
     delete m_impl->zip;
     delete m_impl;
+
+    if (m_selfDevice) {
+        m_device->close();
+        delete m_device;
+    }
 }
 
 void ZipWriter::flush()

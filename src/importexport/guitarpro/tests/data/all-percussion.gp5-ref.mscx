@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -26,10 +26,9 @@
           </StaffType>
         <defaultClef>PERC</defaultClef>
         </Staff>
+      <trackName>Percussions</trackName>
       <Instrument id="percussion-synthesizer">
-        <InstrumentLabel>
-          <longName>Percussions</longName>
-          </InstrumentLabel>
+        <longName>Percussions</longName>
         <trackName></trackName>
         <instrumentId>drum.group</instrumentId>
         <useDrumset>1</useDrumset>

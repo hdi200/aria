@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -33,7 +33,7 @@
 #include "uicomponents/qml/Muse/UiComponents/itemmultiselectionmodel.h"
 
 namespace mu::instrumentsscene {
-class InstrumentListModel : public QAbstractListModel, public muse::async::Asyncable
+class InstrumentListModel : public QAbstractListModel, public muse::async::Asyncable, public muse::Contextable
 {
     Q_OBJECT
 
@@ -48,7 +48,7 @@ class InstrumentListModel : public QAbstractListModel, public muse::async::Async
 
     QML_ELEMENT
 
-    muse::GlobalInject<notation::IInstrumentsRepository> repository;
+    muse::ContextInject<notation::IInstrumentsRepository> repository = { this };
 
 public:
     InstrumentListModel(QObject* parent = nullptr);

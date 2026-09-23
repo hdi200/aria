@@ -38,8 +38,17 @@ public:
     AudioEngine();
     ~AudioEngine();
 
-    Ret init(const OutputSpec& outputSpec, const RenderConstraints& consts) override;
-    void deinit() override;
+    struct RenderConstraints {
+        samples_t minSamplesToReserveWhenIdle = 0;
+        samples_t minSamplesToReserveInRealtime = 0;
+
+        // mixer
+        size_t desiredAudioThreadNumber = 0;
+        size_t minTrackCountForMultithreading = 0;
+    };
+
+    Ret init(const OutputSpec& outputSpec, const RenderConstraints& consts);
+    void deinit();
 
     void setOutputSpec(const OutputSpec& outputSpec) override;
     OutputSpec outputSpec() const override;

@@ -46,14 +46,15 @@ void DrawModule::registerExports()
 {
 #ifndef DRAW_NO_INTERNAL
 
-    globalIoc()->registerExport<draw::IImageProvider>(moduleName(), new QImageProvider());
+    ioc()->registerExport<draw::IImageProvider>(moduleName(), new QImageProvider());
 
     auto qtFProvider = std::make_shared<QFontProvider>();
-    globalIoc()->registerExport<draw::IFontProvider>(moduleName(), qtFProvider);
-    globalIoc()->registerExport<draw::IFontsDatabase>(moduleName(), new FontsDatabase());
+
+    ioc()->registerExport<draw::IFontProvider>(moduleName(), qtFProvider);
+    ioc()->registerExport<draw::IFontsDatabase>(moduleName(), new FontsDatabase());
 #ifndef DRAW_QT_FONT_PROVIDER_ONLY
-    m_fontsEngine = std::make_shared<FontsEngine>(globalCtx());
-    globalIoc()->registerExport<draw::IFontsEngine>(moduleName(), m_fontsEngine);
+    m_fontsEngine = std::make_shared<FontsEngine>(iocContext());
+    ioc()->registerExport<draw::IFontsEngine>(moduleName(), m_fontsEngine);
 #endif
 
 #endif // DRAW_NO_INTERNAL

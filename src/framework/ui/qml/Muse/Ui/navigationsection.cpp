@@ -34,20 +34,13 @@ NavigationSection::NavigationSection(QObject* parent)
 {
 }
 
-NavigationSection::NavigationSection(const muse::modularity::ContextPtr& iocCtx, QObject* parent)
-    : AbstractNavigation(iocCtx, parent)
-{
-}
-
 NavigationSection::~NavigationSection()
 {
     if (m_type == QmlType::Ignore) {
         return;
     }
 
-    if (navigationController()) {
-        navigationController()->unreg(this);
-    }
+    navigationController()->unreg(this);
 }
 
 void NavigationSection::componentComplete()

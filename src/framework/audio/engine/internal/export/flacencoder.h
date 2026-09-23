@@ -20,31 +20,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MUSE_AUDIO_FLACENCODER_H
+#define MUSE_AUDIO_FLACENCODER_H
 
 #include "abstractaudioencoder.h"
 
-#include <memory>
-
-namespace muse::io {
-class IODevice;
-}
+struct FlacHandler;
 
 namespace muse::audio::encode {
-class FlacHandler;
-
 class FlacEncoder : public AbstractAudioEncoder
 {
 public:
-    FlacEncoder(const SoundTrackFormat&, io::IODevice&);
+    bool init(const io::path_t& path, const SoundTrackFormat& format, const samples_t totalSamplesNumber) override;
 
-    ~FlacEncoder() noexcept override;
-
-    bool begin(samples_t totalSamplesNumber) override;
     size_t encode(samples_t samplesPerChannel, const float* input) override;
-    size_t end() override;
+    size_t flush() override;
+
+protected:
+    size_t requiredOutputBufferSize(samples_t totalSamplesNumber) const override;
+    void prepareOutputBuffer(const samples_t totalSamplesNumber) override;
+    bool openDestination(const io::path_t& path) override;
+    void closeDestination() override;
 
 private:
-    std::unique_ptr<FlacHandler> m_flac;
+    FlacHandler* m_flac = nullptr;
 };
 }
+
+#endif // MUSE_AUDIO_FLACENCODER_H

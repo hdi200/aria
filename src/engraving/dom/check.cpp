@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -85,12 +85,11 @@ void Score::checkScore()
                     Fraction timeStretch = st->timeStretch(lcr->tick());
                     Fraction f = cr->globalTicks() * timeStretch;
                     LOGD() << "Chord/Rest gap at tick " << tick.ticks() << "(" << lcr->typeName() << "+" << f.ticks() << ")-"
-                           << s->tick().ticks() << "(" << cr->typeName() << ") staffIdx " << staffIdx
-                           << " measure " << cr->measure()->measureNumber()
+                           << s->tick().ticks() << "(" << cr->typeName() << ") staffIdx " << staffIdx << " measure " << cr->measure()->no()
                            << " (len = " << (cr->tick() - tick).ticks() << ")";
                 } else {
                     LOGD() << "Chord/Rest gap at tick " << tick.ticks() << "-" << s->tick().ticks() << "(" << cr->typeName() << ") "
-                           << "staffIdx " << staffIdx << " measure " << cr->measure()->measureNumber()
+                           << "staffIdx " << staffIdx << " measure " << cr->measure()->no()
                            << "  (len = " << (cr->tick() - tick).ticks() << ")";
                 }
                 tick = s->tick();
@@ -248,7 +247,7 @@ bool Score::checkKeys()
                 }
             }
             if (staff(i)->key(m->tick()) != k) {
-                LOGD("measure %d (tick %d) : key %d, map %d", m->measureNumber(), m->tick().ticks(), int(k),
+                LOGD("measure %d (tick %d) : key %d, map %d", m->no(), m->tick().ticks(), int(k),
                      int(staff(i)->key(m->tick())));
                 rc = false;
             }

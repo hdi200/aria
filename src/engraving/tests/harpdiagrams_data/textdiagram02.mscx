@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
     <Style>
-      <windsNameByGroup>0</windsNameByGroup>
-      <vocalsNameByGroup>0</vocalsNameByGroup>
       <maskBarlinesForText>0</maskBarlinesForText>
       <dividerLeftAlignToSystemBarline>0</dividerLeftAlignToSystemBarline>
       <dividerRightAlignToSystemBarline>0</dividerRightAlignToSystemBarline>
@@ -86,11 +84,7 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Brace</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="1" span="2" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -100,11 +94,10 @@
           </StaffType>
         <defaultClef>F</defaultClef>
         </Staff>
+      <trackName>Harp</trackName>
       <Instrument id="harp">
-        <InstrumentLabel>
-          <longName>Harp</longName>
-          <shortName>Hrp.</shortName>
-          </InstrumentLabel>
+        <longName>Harp</longName>
+        <shortName>Hrp.</shortName>
         <trackName>Harp</trackName>
         <minPitchP>23</minPitchP>
         <maxPitchP>104</maxPitchP>

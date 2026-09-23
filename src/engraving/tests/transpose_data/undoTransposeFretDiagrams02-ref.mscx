@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>2kOmbTnFT2K_1Ffu11EvJBD</eid>
     <Division>480</Division>
@@ -79,11 +79,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Flute</trackName>
       <Instrument id="flute">
-        <InstrumentLabel>
-          <longName>Flute</longName>
-          <shortName>Fl.</shortName>
-          </InstrumentLabel>
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
         <trackName>Flute</trackName>
         <minPitchP>59</minPitchP>
         <maxPitchP>98</maxPitchP>
@@ -298,7 +297,7 @@
               <string no="3">
                 <dot fret="2">normal</dot>
                 </string>
-              <barre start="0" end="-1">1</barre>
+              <barre start="0" end="5">1</barre>
               </fretDiagram>
             </FretDiagram>
           <Chord>

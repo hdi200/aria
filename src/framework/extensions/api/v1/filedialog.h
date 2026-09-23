@@ -27,7 +27,7 @@
 #include <QUrl>
 
 #include "global/modularity/ioc.h"
-#include "interactive/iinteractive.h"
+#include "global/iinteractive.h"
 
 namespace muse::extensions::apiv1 {
 class FileDialog : public QObject, public Contextable

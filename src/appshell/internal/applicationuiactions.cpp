@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -296,7 +296,7 @@ void ApplicationUiActions::init()
         m_actionCheckedChanged.send({ FULL_SCREEN_CODE });
     });
 
-    appShellState()->isNotationNavigatorVisibleChanged().onNotify(this, [this]() {
+    configuration()->isNotationNavigatorVisibleChanged().onNotify(this, [this]() {
         m_actionCheckedChanged.send({ TOGGLE_NAVIGATOR_ACTION_CODE });
     });
 
@@ -364,7 +364,7 @@ bool ApplicationUiActions::actionChecked(const UiAction& act) const
     }
 
     if (dockName == NOTATION_NAVIGATOR_PANEL_NAME) {
-        return appShellState()->isNotationNavigatorVisible();
+        return configuration()->isNotationNavigatorVisible();
     }
 
     if (dockName == NOTATION_BRAILLE_PANEL_NAME) {

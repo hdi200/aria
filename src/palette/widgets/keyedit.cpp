@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -25,7 +25,6 @@
 #include <QMouseEvent>
 #include <QDragEnterEvent>
 #include <QMimeData>
-#include <QVBoxLayout>
 
 #include "keyedit.h"
 
@@ -62,8 +61,7 @@ KeyCanvas::KeyCanvas(QWidget* parent)
     : QFrame(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setAcceptDrops(true);
-    qreal mag = configuration()->paletteSpatium() * configuration()->paletteScaling()
-                / paletteScoreProvider()->paletteScore()->style().spatium();
+    qreal mag = configuration()->paletteSpatium() * configuration()->paletteScaling() / gpaletteScore->style().spatium();
     _matrix = QTransform(mag, 0.0, 0.0, mag, 0.0, 0.0);
     imatrix = _matrix.inverted();
     dragElement = 0;
@@ -71,7 +69,7 @@ KeyCanvas::KeyCanvas(QWidget* parent)
     QAction* a = new QAction("delete", this);
     a->setShortcut(Qt::Key_Delete);
     addAction(a);
-    clef = Factory::createClef(paletteScoreProvider()->paletteScore()->dummy()->segment());
+    clef = Factory::createClef(gpaletteScore->dummy()->segment());
     clef->setClefType(ClefType::G);
     connect(a, &QAction::triggered, this, &KeyCanvas::deleteElement);
 }
@@ -117,8 +115,7 @@ void KeyCanvas::paintEvent(QPaintEvent*)
     qreal ww = double(width());
     double y = wh * .5 - 2 * configuration()->paletteSpatium() * extraMag;
 
-    const double paletteScoreSpatium = paletteScoreProvider()->paletteScore()->style().spatium();
-    qreal mag  = configuration()->paletteSpatium() * extraMag / paletteScoreSpatium;
+    qreal mag  = configuration()->paletteSpatium() * extraMag / gpaletteScore->style().spatium();
     _matrix    = QTransform(mag, 0.0, 0.0, mag, 0.0, y);
     imatrix    = _matrix.inverted();
 
@@ -137,26 +134,23 @@ void KeyCanvas::paintEvent(QPaintEvent*)
 
     muse::draw::Pen pen(opt.invertColors ? engravingConfiguration()->scoreInversionColor()
                         : engravingConfiguration()->defaultColor());
-    pen.setWidthF(engraving::DefaultStyle::defaultStyle().styleS(
-                      Sid::staffLineWidth).val() * paletteScoreSpatium);
+    pen.setWidthF(engraving::DefaultStyle::defaultStyle().styleS(Sid::staffLineWidth).val() * gpaletteScore->style().spatium());
     painter.setPen(pen);
 
     for (int i = 0; i < 5; ++i) {
-        qreal yy = r.y() + i * paletteScoreSpatium;
+        qreal yy = r.y() + i * gpaletteScore->style().spatium();
         painter.drawLine(LineF(r.x(), yy, r.x() + r.width(), yy));
     }
-
-    const auto paletteRenderer = paletteScoreProvider()->paletteScore()->renderer();
     if (dragElement) {
         painter.save();
         painter.translate(dragElement->pagePos());
-        paletteRenderer->drawItem(dragElement, &painter, opt);
+        gpaletteScore->renderer()->drawItem(dragElement, &painter, opt);
         painter.restore();
     }
     foreach (Accidental* a, accidentals) {
         painter.save();
         painter.translate(a->pagePos());
-        paletteRenderer->drawItem(a, &painter, opt);
+        gpaletteScore->renderer()->drawItem(a, &painter, opt);
         painter.restore();
     }
     clef->setPos(0.0, 0.0);
@@ -164,7 +158,7 @@ void KeyCanvas::paintEvent(QPaintEvent*)
     engravingRender()->layoutItem(clef);
 
     painter.translate(clef->pagePos());
-    paletteRenderer->drawItem(clef, &painter, opt);
+    gpaletteScore->renderer()->drawItem(clef, &painter, opt);
 }
 
 //---------------------------------------------------------
@@ -235,7 +229,7 @@ void KeyCanvas::dragEnterEvent(QDragEnterEvent* event)
         }
 
         event->acceptProposedAction();
-        dragElement = static_cast<Accidental*>(Factory::createItem(type, paletteScoreProvider()->paletteScore()->dummy()));
+        dragElement = static_cast<Accidental*>(Factory::createItem(type, gpaletteScore->dummy()));
         dragElement->resetExplicitParent();
 
         rw::RWRegister::reader()->readItem(dragElement, e);
@@ -286,7 +280,7 @@ void KeyCanvas::dropEvent(QDropEvent*)
 
 void KeyCanvas::snap(Accidental* a)
 {
-    double _spatium = paletteScoreProvider()->paletteScore()->style().spatium();
+    double _spatium = gpaletteScore->style().spatium();
     double spatium2 = _spatium * .5;
     double y = a->ldata()->pos().y();
     double x = KEYEDIT_ACC_ZERO_POINT * _spatium;
@@ -312,9 +306,12 @@ void KeyCanvas::snap(Accidental* a)
 //---------------------------------------------------------
 
 KeyEditor::KeyEditor(QWidget* parent)
-    : QWidget(parent), muse::Contextable(muse::iocCtxForQWidget(this))
+    : QWidget(parent, Qt::WindowFlags(Qt::Dialog | Qt::Window)), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setupUi(this);
+    setWindowTitle(muse::qtrc("palette", "Key signatures"));
+
+    setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
@@ -383,23 +380,23 @@ KeyEditor::KeyEditor(QWidget* parent)
 void KeyEditor::addClicked()
 {
     const QList<Accidental*> al = canvas->getAccidentals();
-    double spatium = paletteScoreProvider()->paletteScore()->style().spatium();
+    double spatium = gpaletteScore->style().spatium();
     double xoff = KEYEDIT_ACC_ZERO_POINT * spatium;
 
     KeySigEvent e;
     e.setCustom(true);
-    Spatium accidentalGap = DefaultStyle::baseStyle().styleS(Sid::keysigAccidentalDistance);
+    qreal accidentalGap = DefaultStyle::baseStyle().styleS(Sid::keysigAccidentalDistance).val();
     for (int i = 0; i < al.size(); ++i) {
         Accidental* a = al[i];
         CustDef c;
         c.sym = a->symId();
         PointF pos = a->ldata()->pos();
-        c.xAlt = Spatium::fromAbsolute(pos.x() - xoff, spatium);
+        c.xAlt = (pos.x() - xoff) / spatium;
         if (i > 0) {
             Accidental* prev = al[i - 1];
             PointF prevPos = prev->ldata()->pos();
             qreal prevWidth = prev->symWidth(prev->symId());
-            c.xAlt -= Spatium::fromAbsolute(prevPos.x() - xoff + prevWidth, spatium) + accidentalGap;
+            c.xAlt -= (prevPos.x() - xoff + prevWidth) / spatium + accidentalGap;
         }
         int line = static_cast<int>(round((pos.y() / spatium) * 2));
         bool flat = std::string(SymNames::nameForSymId(c.sym).ascii()).find("Flat") != std::string::npos;
@@ -409,7 +406,7 @@ void KeyEditor::addClicked()
         c.octAlt = static_cast<int>((line - (line >= 0 ? 0 : 6)) / 7);
         e.customKeyDefs().push_back(c);
     }
-    auto ks = Factory::makeKeySig(paletteScoreProvider()->paletteScore()->dummy()->segment());
+    auto ks = Factory::makeKeySig(gpaletteScore->dummy()->segment());
     ks->setKeySigEvent(e);
     m_keySigPaletteWidget->appendElement(ks, "custom");
     m_dirty = true;
@@ -449,30 +446,4 @@ void KeyEditor::save()
 bool KeyEditor::showKeyPalette() const
 {
     return m_keySigArea->isVisible();
-}
-
-KeyEditorDialog::KeyEditorDialog(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
-{
-    setWindowTitle(muse::qtrc("palette", "Key signatures"));
-    setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
-}
-
-void KeyEditorDialog::classBegin()
-{
-    m_keyEditor = new KeyEditor(this);
-    QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSizeConstraint(QLayout::SetFixedSize);
-    layout->addWidget(m_keyEditor);
-}
-
-bool KeyEditorDialog::showKeyPalette() const
-{
-    return m_keyEditor->showKeyPalette();
-}
-
-void KeyEditorDialog::setShowKeyPalette(bool showKeyPalette)
-{
-    m_keyEditor->setShowKeyPalette(showKeyPalette);
 }

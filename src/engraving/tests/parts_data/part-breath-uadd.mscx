@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
     <Style>
-      <windsNameByGroup>0</windsNameByGroup>
-      <vocalsNameByGroup>0</vocalsNameByGroup>
       <maskBarlinesForText>0</maskBarlinesForText>
       <dividerLeftAlignToSystemBarline>0</dividerLeftAlignToSystemBarline>
       <dividerRightAlignToSystemBarline>0</dividerRightAlignToSystemBarline>
@@ -41,11 +39,10 @@
           <name>Standard</name>
           </StaffType>
         </Staff>
+      <trackName>Alto</trackName>
       <Instrument id="alto">
-        <InstrumentLabel>
-          <longName>Alto</longName>
-          <shortName>A.</shortName>
-          </InstrumentLabel>
+        <longName>Alto</longName>
+        <shortName>A.</shortName>
         <trackName>Alto</trackName>
         <minPitchP>55</minPitchP>
         <maxPitchP>77</maxPitchP>
@@ -80,11 +77,10 @@
           <name>Standard</name>
           </StaffType>
         </Staff>
+      <trackName>Tenor</trackName>
       <Instrument id="tenor">
-        <InstrumentLabel>
-          <longName>Tenor</longName>
-          <shortName>T.</shortName>
-          </InstrumentLabel>
+        <longName>Tenor</longName>
+        <shortName>T.</shortName>
         <trackName>Tenor</trackName>
         <minPitchP>48</minPitchP>
         <maxPitchP>72</maxPitchP>
@@ -838,11 +834,10 @@
             <name>Standard</name>
             </StaffType>
           </Staff>
+        <trackName>Alto</trackName>
         <Instrument id="alto">
-          <InstrumentLabel>
-            <longName>Alto</longName>
-            <shortName>A.</shortName>
-            </InstrumentLabel>
+          <longName>Alto</longName>
+          <shortName>A.</shortName>
           <trackName>Alto</trackName>
           <minPitchP>55</minPitchP>
           <maxPitchP>77</maxPitchP>
@@ -1313,11 +1308,10 @@
             <name>Standard</name>
             </StaffType>
           </Staff>
+        <trackName>Tenor</trackName>
         <Instrument id="tenor">
-          <InstrumentLabel>
-            <longName>Tenor</longName>
-            <shortName>T.</shortName>
-            </InstrumentLabel>
+          <longName>Tenor</longName>
+          <shortName>T.</shortName>
           <trackName>Tenor</trackName>
           <minPitchP>48</minPitchP>
           <maxPitchP>72</maxPitchP>

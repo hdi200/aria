@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -28,6 +28,7 @@
 #include "internal/wavewriter.h"
 #include "internal/oggwriter.h"
 #include "internal/flacwriter.h"
+#include "internal/aacwriter.h"
 
 #include "internal/audioexportconfiguration.h"
 
@@ -47,17 +48,18 @@ void AudioExportModule::registerExports()
 {
     m_configuration = std::make_shared<AudioExportConfiguration>();
 
-    globalIoc()->registerExport<AudioExportConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<AudioExportConfiguration>(moduleName(), m_configuration);
 }
 
 void AudioExportModule::resolveImports()
 {
-    auto writers = globalIoc()->resolve<INotationWritersRegister>(moduleName());
+    auto writers = ioc()->resolve<INotationWritersRegister>(moduleName());
     if (writers) {
-        writers->reg({ "wav" }, std::make_shared<WaveWriter>(globalCtx()));
-        writers->reg({ "mp3" }, std::make_shared<Mp3Writer>(globalCtx()));
-        writers->reg({ "ogg" }, std::make_shared<OggWriter>(globalCtx()));
-        writers->reg({ "flac" }, std::make_shared<FlacWriter>(globalCtx()));
+        writers->reg({ "wav" }, std::make_shared<WaveWriter>(iocContext()));
+        writers->reg({ "mp3" }, std::make_shared<Mp3Writer>(iocContext()));
+        writers->reg({ "ogg" }, std::make_shared<OggWriter>(iocContext()));
+        writers->reg({ "flac" }, std::make_shared<FlacWriter>(iocContext()));
+        writers->reg({ "aac" }, std::make_shared<AacWriter>(iocContext()));
     }
 }
 

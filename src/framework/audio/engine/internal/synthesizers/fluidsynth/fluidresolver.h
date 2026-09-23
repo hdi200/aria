@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MUSE_AUDIO_FLUIDSYNTHCREATOR_H
+#define MUSE_AUDIO_FLUIDSYNTHCREATOR_H
 
 #include <optional>
 #include <unordered_map>
@@ -34,16 +35,16 @@
 #include "fluidsynth.h"
 
 namespace muse::audio::synth {
-class FluidResolver : public ISynthResolver::IResolver, public async::Asyncable
+class FluidResolver : public ISynthResolver::IResolver, public muse::Contextable, public async::Asyncable
 {
-    muse::GlobalInject<ISoundFontRepository> soundFontRepository;
+    muse::ContextInject<ISoundFontRepository> soundFontRepository = { this };
 
 public:
-    FluidResolver();
+    explicit FluidResolver(const muse::modularity::ContextPtr& iocCtx = nullptr);
     ~FluidResolver() override;
 
-    ISynthesizerPtr resolveSynth(const audio::TrackId trackId, const audio::AudioInputParams& params, const OutputSpec& spec,
-                                 const muse::modularity::ContextPtr& iocCtx) const override;
+    ISynthesizerPtr resolveSynth(const audio::TrackId trackId, const audio::AudioInputParams& params,
+                                 const OutputSpec& spec) const override;
     bool hasCompatibleResources(const audio::PlaybackSetupData& setup) const override;
 
     audio::AudioResourceMetaList resolveResources() const override;
@@ -64,3 +65,5 @@ private:
     std::unordered_map<AudioResourceId, SoundFontResource> m_resourcesCache;
 };
 }
+
+#endif // MUSE_AUDIO_FLUIDSYNTHCREATOR_H

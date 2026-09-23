@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -117,7 +117,7 @@ public:
 
     const PropertyValue& styleV(Sid idx) const { return style().styleV(idx); }
     Spatium styleS(Sid idx) const { return style().styleS(idx); }
-    double styleAbsolute(Sid idx) const { return style().styleAbsolute(idx); }
+    Millimetre styleMM(Sid idx) const { return style().styleMM(idx); }
     String styleSt(Sid idx) const { return style().styleSt(idx); }
     bool styleB(Sid idx) const { return style().styleB(idx); }
     double styleD(Sid idx) const { return style().styleD(idx); }
@@ -156,7 +156,6 @@ public:
     const std::vector<System*>& systems() const;
 
     size_t nstaves() const;
-    size_t visibleStaffCount() const;
     const std::vector<Staff*>& staves() const;
     const Staff* staff(staff_idx_t idx) const;
     bool allStavesInvisible() const;
@@ -242,7 +241,7 @@ public:
     const MeasureBase* nextMeasure() const { return m_nextMeasure; }
     const MeasureBase* systemOldMeasure() const { return m_systemOldMeasure; }
     const MeasureBase* pageOldMeasure() const { return m_pageOldMeasure; }
-    int measureNumber() const { return m_measureNumber; }
+    int measureNo() const { return m_measureNo; }
 
     bool rangeDone() const { return m_rangeDone; }
 
@@ -279,7 +278,7 @@ public:
     void setNextMeasure(MeasureBase* m) { m_nextMeasure = m; }
     void setSystemOldMeasure(MeasureBase* m) { m_systemOldMeasure = m; }
     void setPageOldMeasure(MeasureBase* m) { m_pageOldMeasure = m; }
-    void setMeasureNumber(int n) { m_measureNumber = n; }
+    void setMeasureNo(int no) { m_measureNo = no; }
 
     std::set<Spanner*>& processedSpanners() { return m_processedSpanners; }
 
@@ -312,13 +311,13 @@ private:
     MeasureBase* m_nextMeasure = nullptr;
     MeasureBase* m_systemOldMeasure = nullptr;
     MeasureBase* m_pageOldMeasure = nullptr;
-    int m_measureNumber = 0;
+    int m_measureNo = 0;
 
     std::set<Spanner*> m_processedSpanners;
 
     bool m_rangeDone = false;
 
-    bool m_mustRecomputeHeadersFooters = false;
+    bool m_mustRecomputeHeadersFooters = false; // we may need to re-compute headers/footers after laying out all pages if they contained a page count
 
     // cache
     double m_totalBracketsWidth = -1.0;

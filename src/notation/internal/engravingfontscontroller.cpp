@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -83,10 +83,6 @@ void EngravingFontsController::scanAllDirectories() const
             musicFonts << QString::fromStdString(font->name());
             musicFonts << QString::fromStdString(font->name() + " Text");
         }
-        if (!musicFonts.contains("Gootville")) {
-            musicFonts << "Gootville";
-            musicFonts << "Gootville Text";
-        }
         uiConfiguration()->setNonTextFonts(musicFonts);
     }
 }
@@ -141,19 +137,19 @@ void EngravingFontsController::scanDirectory(const muse::io::path_t& path, bool 
             symbolFontPath = findFontPath(tmp.replace(" ", ""));
         }
 
-        muse::io::path_t textFontPath = findFontPath(fontName + " Text");
         if (symbolFontPath.empty()) {
+            LOGE() << "Music font \"" << fontName << "\" for " << metadataPath << " not found";
+            continue;
+        }
+
+        muse::io::path_t textFontPath = findFontPath(fontName + " Text");
+        if (textFontPath.empty()) {
             QString tmp = fontName;
-            symbolFontPath = findFontPath(tmp.replace(" ", "") + "Text");
+            textFontPath = findFontPath(tmp.replace(" ", "") + "Text");
         }
 
         if (textFontPath.empty()) {
             textFontPath = symbolFontPath;
-        }
-
-        if (symbolFontPath.empty()) {
-            LOGE() << "Music font \"" << fontName << "\" for " << metadataPath << " not found";
-            continue;
         }
 
         LOGI() << "Adding custom SMuFL font: " << fontName

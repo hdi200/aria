@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef __KEYCANVAS_H__
+#define __KEYCANVAS_H__
 
 #include <QFrame>
 
@@ -29,13 +30,17 @@
 #include "notation/inotationconfiguration.h"
 #include "engraving/iengravingconfiguration.h"
 #include "engraving/rendering/isinglerenderer.h"
-#include "engraving/ipalettescoreprovider.h"
+
 namespace mu::engraving {
 class Accidental;
 class Clef;
 }
 
 namespace mu::palette {
+//---------------------------------------------------------
+//   KeyCanvas
+//---------------------------------------------------------
+
 class KeyCanvas : public QFrame, public muse::Contextable
 {
     Q_OBJECT
@@ -43,8 +48,7 @@ class KeyCanvas : public QFrame, public muse::Contextable
     muse::GlobalInject<IPaletteConfiguration> configuration;
     muse::GlobalInject<notation::INotationConfiguration> notationConfiguration;
     muse::GlobalInject<engraving::IEngravingConfiguration> engravingConfiguration;
-    muse::GlobalInject<engraving::rendering::ISingleRenderer> engravingRender;
-    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { this };
+    muse::ContextInject<engraving::rendering::ISingleRenderer> engravingRender = { this };
 
     engraving::Accidental* dragElement = nullptr;
     engraving::Accidental* moveElement = nullptr;
@@ -73,4 +77,5 @@ public:
     void clear();
     const QList<engraving::Accidental*> getAccidentals() const { return accidentals; }
 };
-}
+} // namespace Ms
+#endif

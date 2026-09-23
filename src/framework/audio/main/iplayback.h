@@ -19,19 +19,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MUSE_AUDIO_ISEQUENCER_H
+#define MUSE_AUDIO_ISEQUENCER_H
 
 #include "modularity/imoduleinterface.h"
 #include "global/types/retval.h"
 #include "global/async/channel.h"
 #include "global/async/promise.h"
+#include "global/io/path.h"
 
 #include "../common/audiotypes.h"
-
-namespace muse::io {
-class IODevice;
-}
 
 namespace muse::audio {
 class ITracks;
@@ -108,8 +105,8 @@ public:
     virtual async::Promise<AudioSignalChanges> signalChanges(const TrackSequenceId sequenceId, const TrackId trackId) const = 0;
     virtual async::Promise<AudioSignalChanges> masterSignalChanges() const = 0;
 
-    virtual async::Promise<bool> saveSoundTrack(const TrackSequenceId sequenceId, const SoundTrackFormat& format,
-                                                io::IODevice& dstDevice) = 0;
+    virtual async::Promise<bool> saveSoundTrack(const TrackSequenceId sequenceId, const io::path_t& destination,
+                                                const SoundTrackFormat& format) = 0;
     virtual void abortSavingAllSoundTracks() = 0;
     virtual SaveSoundTrackProgress saveSoundTrackProgressChanged(const TrackSequenceId sequenceId) const = 0;
 
@@ -118,3 +115,4 @@ public:
 
 using IPlaybackPtr = std::shared_ptr<IPlayback>;
 }
+#endif // MUSE_AUDIO_ISEQUENCER_H

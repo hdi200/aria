@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -29,6 +29,7 @@
       <chordSymbolAFontSize>7.4</chordSymbolAFontSize>
       <chordSymbolBFontFace>Times</chordSymbolBFontFace>
       <chordSymbolBFontSize>7.4</chordSymbolBFontSize>
+      <romanNumeralFontFace>Times</romanNumeralFontFace>
       <nashvilleNumberFontFace>Times</nashvilleNumberFontFace>
       <nashvilleNumberFontSize>7.4</nashvilleNumberFontSize>
       <smallNoteMag>0.65</smallNoteMag>
@@ -61,8 +62,6 @@
       <shortInstrumentFontSize>7.4</shortInstrumentFontSize>
       <partInstrumentFontFace>Times</partInstrumentFontFace>
       <partInstrumentFontSize>7.4</partInstrumentFontSize>
-      <groupBracketFontFace>Times</groupBracketFontFace>
-      <groupBracketFontSize>7.4</groupBracketFontSize>
       <expressionFontFace>Times</expressionFontFace>
       <expressionFontSize>7.4</expressionFontSize>
       <tempoFontFace>Times</tempoFontFace>
@@ -166,18 +165,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>3</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="3" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Flute/Piccolo</trackName>
       <Instrument id="flute">
-        <InstrumentLabel>
-          <longName>Flute/Piccolo</longName>
-          <shortName>Fl./Picc.</shortName>
-          </InstrumentLabel>
+        <longName>Flute/Piccolo</longName>
+        <shortName>Fl./Picc.</shortName>
         <trackName>Flute/Piccolo</trackName>
         <minPitchP>59</minPitchP>
         <maxPitchP>98</maxPitchP>
@@ -241,11 +235,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Oboe</trackName>
       <Instrument id="oboe">
-        <InstrumentLabel>
-          <longName>Oboe</longName>
-          <shortName>Ob.</shortName>
-          </InstrumentLabel>
+        <longName>Oboe</longName>
+        <shortName>Ob.</shortName>
         <trackName>Oboe</trackName>
         <minPitchP>58</minPitchP>
         <maxPitchP>96</maxPitchP>
@@ -308,11 +301,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Bassoon</trackName>
       <Instrument id="bassoon">
-        <InstrumentLabel>
-          <longName>Bassoon</longName>
-          <shortName>Bsn.</shortName>
-          </InstrumentLabel>
+        <longName>Bassoon</longName>
+        <shortName>Bsn.</shortName>
         <trackName>Bassoon</trackName>
         <minPitchP>34</minPitchP>
         <maxPitchP>76</maxPitchP>
@@ -375,18 +367,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>4</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="4" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>B♭ Clarinet 1</trackName>
       <Instrument id="bb-clarinet">
-        <InstrumentLabel>
-          <longName>B♭ Clarinet 1</longName>
-          <shortName>Cl. 1</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Clarinet 1</longName>
+        <shortName>Cl. 1</shortName>
         <trackName>Bb Clarinet 1</trackName>
         <minPitchP>50</minPitchP>
         <maxPitchP>94</maxPitchP>
@@ -450,11 +437,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>B♭ Clarinet 2, 3</trackName>
       <Instrument id="bb-clarinet">
-        <InstrumentLabel>
-          <longName>B♭ Clarinet 2, 3</longName>
-          <shortName>Cl. 2, 3</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Clarinet 2, 3</longName>
+        <shortName>Cl. 2, 3</shortName>
         <trackName>Bb Clarinet 2, 3</trackName>
         <minPitchP>50</minPitchP>
         <maxPitchP>94</maxPitchP>
@@ -518,11 +504,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>E♭ Alto Clarinet</trackName>
       <Instrument id="alto-clarinet">
-        <InstrumentLabel>
-          <longName>E♭ Alto Clarinet</longName>
-          <shortName>A. Cl.</shortName>
-          </InstrumentLabel>
+        <longName>E♭ Alto Clarinet</longName>
+        <shortName>A. Cl.</shortName>
         <trackName>Eb Alto Clarinet</trackName>
         <minPitchP>43</minPitchP>
         <maxPitchP>84</maxPitchP>
@@ -585,11 +570,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>B♭ Bass Clarinet</trackName>
       <Instrument id="bb-bass-clarinet">
-        <InstrumentLabel>
-          <longName>B♭ Bass Clarinet</longName>
-          <shortName>Bs. Cl.</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Bass Clarinet</longName>
+        <shortName>Bs. Cl.</shortName>
         <trackName>Bb Bass Clarinet</trackName>
         <minPitchP>34</minPitchP>
         <maxPitchP>82</maxPitchP>
@@ -653,18 +637,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>3</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="3" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>E♭ Alto Sax. 1, 2</trackName>
       <Instrument id="alto-saxophone">
-        <InstrumentLabel>
-          <longName>E♭ Alto Sax. 1, 2</longName>
-          <shortName>A. Sx. 1, 2</shortName>
-          </InstrumentLabel>
+        <longName>E♭ Alto Sax. 1, 2</longName>
+        <shortName>A. Sx. 1, 2</shortName>
         <trackName>Eb Alto Sax. 1, 2</trackName>
         <minPitchP>49</minPitchP>
         <maxPitchP>92</maxPitchP>
@@ -728,11 +707,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>B♭ Tenor Sax.</trackName>
       <Instrument id="tenor-saxophone">
-        <InstrumentLabel>
-          <longName>B♭ Tenor Sax.</longName>
-          <shortName>T. Sx.</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Tenor Sax.</longName>
+        <shortName>T. Sx.</shortName>
         <trackName>Bb Tenor Sax.</trackName>
         <minPitchP>44</minPitchP>
         <maxPitchP>87</maxPitchP>
@@ -797,11 +775,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>E♭ Bari. Sax.</trackName>
       <Instrument id="baritone-saxophone">
-        <InstrumentLabel>
-          <longName>E♭ Bari. Sax.</longName>
-          <shortName>B. Sx.</shortName>
-          </InstrumentLabel>
+        <longName>E♭ Bari. Sax.</longName>
+        <shortName>B. Sx.</shortName>
         <trackName>Eb Bari. Sax.</trackName>
         <minPitchP>36</minPitchP>
         <maxPitchP>80</maxPitchP>
@@ -865,18 +842,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>3</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="3" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>B♭ Trumpet 1</trackName>
       <Instrument id="bb-trumpet">
-        <InstrumentLabel>
-          <longName>B♭ Trumpet 1</longName>
-          <shortName>Tpt. 1</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Trumpet 1</longName>
+        <shortName>Tpt. 1</shortName>
         <trackName>Bb Trumpet 1</trackName>
         <minPitchP>52</minPitchP>
         <maxPitchP>85</maxPitchP>
@@ -945,11 +917,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>B♭ Trumpet 2, 3</trackName>
       <Instrument id="bb-trumpet">
-        <InstrumentLabel>
-          <longName>B♭ Trumpet 2, 3</longName>
-          <shortName>Tpt. 2, 3</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Trumpet 2, 3</longName>
+        <shortName>Tpt. 2, 3</shortName>
         <trackName>Bb Trumpet 2, 3</trackName>
         <minPitchP>52</minPitchP>
         <maxPitchP>85</maxPitchP>
@@ -1017,11 +988,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>F Horn 1, 2</trackName>
       <Instrument id="horn">
-        <InstrumentLabel>
-          <longName>F Horn 1, 2</longName>
-          <shortName>Horn 1, 2</shortName>
-          </InstrumentLabel>
+        <longName>F Horn 1, 2</longName>
+        <shortName>Horn 1, 2</shortName>
         <trackName>F Horn 1, 2</trackName>
         <minPitchP>31</minPitchP>
         <maxPitchP>77</maxPitchP>
@@ -1088,18 +1058,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>3</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="3" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Trombone 1, 2</trackName>
       <Instrument id="trombone">
-        <InstrumentLabel>
-          <longName>Trombone 1, 2</longName>
-          <shortName>Tbn. 1, 2</shortName>
-          </InstrumentLabel>
+        <longName>Trombone 1, 2</longName>
+        <shortName>Tbn. 1, 2</shortName>
         <trackName>Trombone 1, 2</trackName>
         <minPitchP>36</minPitchP>
         <maxPitchP>74</maxPitchP>
@@ -1170,11 +1135,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Baritone</trackName>
       <Instrument id="baritone">
-        <InstrumentLabel>
-          <longName>Baritone</longName>
-          <shortName>Bar.</shortName>
-          </InstrumentLabel>
+        <longName>Baritone</longName>
+        <shortName>Bar.</shortName>
         <trackName>Baritone</trackName>
         <minPitchP>41</minPitchP>
         <maxPitchP>65</maxPitchP>
@@ -1239,11 +1203,11 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Tuba
+(String Bass)</trackName>
       <Instrument id="tuba">
-        <InstrumentLabel>
-          <longName>Tuba<br/>(String Bass)</longName>
-          <shortName>Tuba</shortName>
-          </InstrumentLabel>
+        <longName>Tuba<br/>(String Bass)</longName>
+        <shortName>Tuba</shortName>
         <trackName>Tuba
 (String Bass)</trackName>
         <minPitchP>22</minPitchP>
@@ -1307,18 +1271,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>4</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="4" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Percussion 1</trackName>
       <Instrument id="percussion-synthesizer">
-        <InstrumentLabel>
-          <longName>Percussion 1</longName>
-          <shortName>Perc. 1</shortName>
-          </InstrumentLabel>
+        <longName>Percussion 1</longName>
+        <shortName>Perc. 1</shortName>
         <trackName>Percussion 1</trackName>
         <instrumentId>drum.group</instrumentId>
         <useDrumset>1</useDrumset>
@@ -1956,11 +1915,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Percussion 2</trackName>
       <Instrument id="percussion-synthesizer">
-        <InstrumentLabel>
-          <longName>Percussion 2</longName>
-          <shortName>Perc. 2</shortName>
-          </InstrumentLabel>
+        <longName>Percussion 2</longName>
+        <shortName>Perc. 2</shortName>
         <trackName>Percussion 2</trackName>
         <instrumentId>drum.group</instrumentId>
         <useDrumset>1</useDrumset>
@@ -2598,11 +2556,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Mallet Perc.</trackName>
       <Instrument id="grand-piano">
-        <InstrumentLabel>
-          <longName>Mallet Perc.</longName>
-          <shortName>Mllt. Perc.</shortName>
-          </InstrumentLabel>
+        <longName>Mallet Perc.</longName>
+        <shortName>Mllt. Perc.</shortName>
         <trackName>Mallet Perc.</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -2667,11 +2624,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Timpani</trackName>
       <Instrument id="timpani">
-        <InstrumentLabel>
-          <longName>Timpani</longName>
-          <shortName>Timp.</shortName>
-          </InstrumentLabel>
+        <longName>Timpani</longName>
+        <shortName>Timp.</shortName>
         <trackName>Timpani</trackName>
         <minPitchP>36</minPitchP>
         <maxPitchP>62</maxPitchP>

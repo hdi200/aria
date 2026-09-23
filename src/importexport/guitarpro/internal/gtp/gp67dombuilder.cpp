@@ -1217,8 +1217,8 @@ void GP67DomBuilder::readBeatProperties(const XmlDomNode& propertiesNode, GPBeat
 
 void GP67DomBuilder::readTrackProperties(XmlDomNode* propertiesNode, GPTrack* track, bool ignoreTuningFlats) const
 {
-    GPTrack::StaffProperties properties;
-    properties.ignoreFlats = ignoreTuningFlats;
+    GPTrack::StaffProperty property;
+    property.ignoreFlats = ignoreTuningFlats;
 
     auto propertyNode = propertiesNode->firstChild();
 
@@ -1226,20 +1226,20 @@ void GP67DomBuilder::readTrackProperties(XmlDomNode* propertiesNode, GPTrack* tr
         String propertyName = propertyNode.toElement().attribute("name").value();
 
         if (propertyName == u"CapoFret") {
-            properties.capoFret = propertyNode.firstChild().toElement().text().toInt();
+            property.capoFret = propertyNode.firstChild().toElement().text().toInt();
         } else if (propertyName == u"FretCount") {
-            properties.fretCount = propertyNode.firstChild().toElement().text().toInt();
+            property.fretCount = propertyNode.firstChild().toElement().text().toInt();
         } else if (propertyName == "Tuning") {
-            String tuningStr = propertyNode.firstChildElement("Pitches").text();
+            String tunningStr = propertyNode.firstChildElement("Pitches").text();
             std::vector<int> tunning;
             tunning.reserve(6);
-            for (const String& val : tuningStr.split(u' ')) {
+            for (const String& val : tunningStr.split(u' ')) {
                 tunning.push_back(val.toInt());
             }
-            properties.tuning.swap(tunning);
-            properties.useFlats = !propertyNode.firstChildElement("Flat").isNull();
+            property.tunning.swap(tunning);
+            property.useFlats = !propertyNode.firstChildElement("Flat").isNull();
         } else if (propertyName == u"TuningFlat") {
-            properties.useFlats = !propertyNode.firstChildElement("Enable").isNull();
+            property.useFlats = !propertyNode.firstChildElement("Enable").isNull();
         } else if (propertyName == u"DiagramCollection" || propertyName == u"DiagramWorkingSet") {
             readDiagram(propertyNode.firstChild(), track);
         }
@@ -1247,7 +1247,7 @@ void GP67DomBuilder::readTrackProperties(XmlDomNode* propertiesNode, GPTrack* tr
         propertyNode = propertyNode.nextSibling();
     }
 
-    track->setStaffProperties(properties);
+    track->addStaffProperty(property);
 }
 
 void GP67DomBuilder::readDiagram(const XmlDomNode& items, GPTrack* track) const

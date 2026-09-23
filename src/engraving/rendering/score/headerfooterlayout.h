@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -47,6 +47,8 @@ public:
     /// How much the footer extends into the page (i.e., not in the margins)
     static double footerExtension(const LayoutContext& ctx, const Page* page);
 
+    static bool scoreHasTimestampHeadersFooters(const Score* score);
+
 private:
     static void createUpdateHeaderText(LayoutContext& ctx, Page* page, int area, const String& s);
     static void createUpdateFooterText(LayoutContext& ctx, Page* page, int area, const String& s);
@@ -61,5 +63,7 @@ private:
     static CharFormat formatForMacro(const LayoutContext& ctx, const String& macro);
     static void appendFormattedString(std::list<TextFragment>& fragments, const String& s, const CharFormat& defaultFormat,
                                       const CharFormat& macroFormat);
+
+    static bool containsTimestampMacros(const String& text);
 };
 }

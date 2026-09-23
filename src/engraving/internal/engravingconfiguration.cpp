@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -305,6 +305,11 @@ Color EngravingConfiguration::voiceColor(voice_idx_t voiceIdx) const
     return VOICE_COLORS[voiceIdx].color;
 }
 
+double EngravingConfiguration::guiScaling() const
+{
+    return uiConfiguration() ? uiConfiguration()->guiScaling() : 1.0;
+}
+
 Color EngravingConfiguration::selectionColor(voice_idx_t voice, bool itemVisible, bool itemIsUnlinkedFromScore) const
 {
     Color color = itemIsUnlinkedFromScore ? unlinkedColor() : VOICE_COLORS[voice].color;
@@ -423,6 +428,11 @@ void EngravingConfiguration::setDebuggingOptions(const DebuggingOptions& options
 muse::async::Notification EngravingConfiguration::debuggingOptionsChanged() const
 {
     return m_debuggingOptions.notification;
+}
+
+bool EngravingConfiguration::isAccessibleEnabled() const
+{
+    return accessibilityConfiguration() ? accessibilityConfiguration()->enabled() : false;
 }
 
 bool EngravingConfiguration::doNotSaveEIDsForBackCompat() const

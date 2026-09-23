@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -198,27 +198,27 @@ bool TieSegment::isEdited() const
 
 double TieSegment::minShoulderHeight() const
 {
-    return style().styleAbsolute(Sid::tieMinShoulderHeight);
+    return style().styleMM(Sid::tieMinShoulderHeight);
 }
 
 double TieSegment::maxShoulderHeight() const
 {
-    return style().styleAbsolute(Sid::tieMaxShoulderHeight);
+    return style().styleMM(Sid::tieMaxShoulderHeight);
 }
 
 double TieSegment::endWidth() const
 {
-    return style().styleAbsolute(Sid::tieEndWidth);
+    return style().styleMM(Sid::tieEndWidth);
 }
 
 double TieSegment::midWidth() const
 {
-    return style().styleAbsolute(Sid::tieMidWidth);
+    return style().styleMM(Sid::tieMidWidth);
 }
 
 double TieSegment::dottedWidth() const
 {
-    return style().styleAbsolute(Sid::tieDottedWidth);
+    return style().styleMM(Sid::tieDottedWidth);
 }
 
 //---------------------------------------------------------
@@ -404,8 +404,6 @@ PropertyValue Tie::getProperty(Pid propertyId) const
 PropertyValue Tie::propertyDefault(Pid id) const
 {
     switch (id) {
-    case Pid::ANCHOR:
-        return int(Anchor::NOTE);
     case Pid::TIE_PLACEMENT:
         return TiePlacement::AUTO;
     default:

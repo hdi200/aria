@@ -44,6 +44,7 @@
 #include "api/internal/apiregister.h"
 #include "api/iapiregister.h"
 #include "api/logapi.h"
+#include "api/interactiveapi.h"
 #include "api/filesystemapi.h"
 #include "api/processapi.h"
 
@@ -51,6 +52,13 @@
 
 #ifdef MUSE_MODULE_DIAGNOSTICS
 #include "diagnostics/idiagnosticspathsregister.h"
+#endif
+
+#ifdef MUSE_MODULE_UI
+#include "internal/interactive.h"
+#ifdef Q_OS_WASM
+#include "internal/platform/web/webinteractive.h"
+#endif
 #endif
 
 #ifdef Q_OS_WASM
@@ -69,6 +77,21 @@ using namespace muse;
 using namespace muse::modularity;
 using namespace muse::io;
 
+class ApplicationStub : public BaseApplication
+{
+public:
+
+    ApplicationStub()
+        : BaseApplication(std::make_shared<modularity::Context>()) {}
+
+    void setup() override {}
+    void finish() override {}
+
+    modularity::ContextPtr setupNewContext() override { return nullptr; }
+    int contextCount() const override { return 0; }
+    std::vector<modularity::ContextPtr> contexts() const override { return {}; }
+};
+
 GlobalModule::GlobalModule()
 {
 }
@@ -80,21 +103,35 @@ std::string GlobalModule::moduleName() const
 
 void GlobalModule::registerExports()
 {
-    m_configuration = std::make_shared<GlobalConfiguration>();
+    if (!m_application) {
+        m_application = std::make_shared<ApplicationStub>();
+    }
+
+    m_configuration = std::make_shared<GlobalConfiguration>(iocContext());
     m_systemInfo = std::make_shared<SystemInfo>();
     m_tickerProvider = std::make_shared<TickerProvider>();
 
-    globalIoc()->registerExport<IGlobalConfiguration>(moduleName(), m_configuration);
-    globalIoc()->registerExport<ISystemInfo>(moduleName(), m_systemInfo);
-    globalIoc()->registerExport<ICryptographicHash>(moduleName(), new CryptographicHash());
-    globalIoc()->registerExport<IProcess>(moduleName(), new Process());
-    globalIoc()->registerExport<ITickerProvider>(moduleName(), m_tickerProvider);
-    globalIoc()->registerExport<api::IApiRegister>(moduleName(), new api::ApiRegister());
+    ioc()->registerExport<IApplication>(moduleName(), m_application);
+    ioc()->registerExport<IGlobalConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<ISystemInfo>(moduleName(), m_systemInfo);
+    ioc()->registerExport<ICryptographicHash>(moduleName(), new CryptographicHash());
+    ioc()->registerExport<IProcess>(moduleName(), new Process());
+    ioc()->registerExport<ITickerProvider>(moduleName(), m_tickerProvider);
+    ioc()->registerExport<api::IApiRegister>(moduleName(), new api::ApiRegister());
 
 #ifdef Q_OS_WASM
-    globalIoc()->registerExport<IFileSystem>(moduleName(), new MemFileSystem());
+    ioc()->registerExport<IFileSystem>(moduleName(), new MemFileSystem());
 #else
-    globalIoc()->registerExport<IFileSystem>(moduleName(), new FileSystem());
+    ioc()->registerExport<IFileSystem>(moduleName(), new FileSystem());
+#endif
+
+#ifdef MUSE_MODULE_UI
+#ifdef Q_OS_WASM
+    std::shared_ptr<IInteractive> originInteractive = std::make_shared<Interactive>(iocContext());
+    ioc()->registerExport<muse::IInteractive>(moduleName(), new WebInteractive(originInteractive));
+#else
+    ioc()->registerExport<IInteractive>(moduleName(), new Interactive(iocContext()));
+#endif
 #endif
 }
 
@@ -102,11 +139,14 @@ void GlobalModule::registerApi()
 {
     using namespace muse::api;
 
-    auto api = globalIoc()->resolve<IApiRegister>(moduleName());
+    auto api = ioc()->resolve<IApiRegister>(moduleName());
     if (api) {
         api->regApiCreator(moduleName(), "MuseApi.Log", new ApiCreator<LogApi>());
+        api->regApiCreator(moduleName(), "MuseApi.Interactive", new api::ApiCreator<InteractiveApi>());
         api->regApiCreator(moduleName(), "api.process", new ApiCreator<ProcessApi>());
         api->regApiCreator(moduleName(), "api.filesystem", new ApiCreator<FileSystemApi>());
+
+        api->regGlobalEnum(moduleName(), QMetaEnum::fromType<InteractiveApi::ButtonCode>());
     }
 }
 
@@ -174,12 +214,9 @@ void GlobalModule::onPreInit(const IApplication::RunMode& mode)
 #endif
     }
 
-    auto application = globalIoc()->resolve<IApplication>("global");
-    if (application) {
-        LOGI() << "=== Started " << application->title()
-               << " " << application->fullVersion().toString()
-               << ", build: " << application->build() << " ===";
-    }
+    LOGI() << "=== Started " << m_application->title()
+           << " " << m_application->fullVersion().toString()
+           << ", build: " << m_application->build() << " ===";
 
     //! --- Setup profiler ---
     using namespace muse::profiler;
@@ -211,7 +248,7 @@ void GlobalModule::onPreInit(const IApplication::RunMode& mode)
 
     //! --- Diagnostics ---
 #ifdef MUSE_MODULE_DIAGNOSTICS
-    auto pr = globalIoc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(moduleName());
+    auto pr = ioc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(moduleName());
     if (pr) {
         pr->reg("appBinPath", m_configuration->appBinPath());
         pr->reg("appBinDirPath", m_configuration->appBinDirPath());
@@ -262,13 +299,4 @@ void GlobalModule::onDeinit()
 void GlobalModule::setLoggerLevel(const muse::logger::Level& level)
 {
     m_loggerLevel = level;
-}
-
-IContextSetup* GlobalModule::newContext(const kors::modularity::ContextPtr& ctx) const
-{
-    return new GlobalContext(ctx);
-}
-
-void GlobalContext::registerExports()
-{
 }

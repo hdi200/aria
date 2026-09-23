@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -36,7 +36,6 @@ public:
     MOCK_METHOD(void, showShadowNoteForMidiPitch, (const uint8_t), (override));
     MOCK_METHOD(void, hideShadowNote, (), (override));
     MOCK_METHOD(muse::RectF, shadowNoteRect, (), (const, override));
-    MOCK_METHOD(muse::RectF, previewMeasureRect, (), (const, override));
     MOCK_METHOD(muse::async::Channel<bool>, shadowNoteChanged, (), (const, override));
 
     MOCK_METHOD(void, toggleVisible, (), (override));
@@ -176,7 +175,6 @@ public:
     MOCK_METHOD(bool, canAddTupletToSelectedChordRests, (), (const, override));
     MOCK_METHOD(void, addTupletToSelectedChordRests, (const TupletOptions&), (override));
     MOCK_METHOD(void, addBeamToSelectedChordRests, (BeamMode), (override));
-    MOCK_METHOD(void, beamSelectedRange, (), (override));
 
     MOCK_METHOD(void, increaseDecreaseDuration, (int, bool), (override));
 

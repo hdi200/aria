@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,8 +19,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef MU_ENGRAVING_XMLREADER_H
+#define MU_ENGRAVING_XMLREADER_H
 
-#pragma once
+#include <map>
 
 #include "serialization/xmlstreamreader.h"
 
@@ -78,3 +80,5 @@ private:
     int64_t m_byteOffsetAdjustment = 0;
 };
 }
+
+#endif // MU_ENGRAVING_XMLREADER_H

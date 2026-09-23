@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,7 +29,7 @@
 #include "inotationreader.h"
 
 namespace mu::project {
-class INotationReadersRegister : MODULE_GLOBAL_INTERFACE
+class INotationReadersRegister : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(INotationReadersRegister)
 

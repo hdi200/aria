@@ -31,18 +31,16 @@ endif()
 if (MUSE_MODULE_UI)
     add_subdirectory(ui)
     add_subdirectory(uicomponents)
-endif()
 
-if (MUSE_MODULE_INTERACTIVE)
-    add_subdirectory(interactive)
+    if (MUSE_MODULE_UI_QML)
+        # This sub-part of the UI module depends on the `uicomponents` module,
+        # so needs to be declared after it.
+        add_subdirectory(ui/qml/Muse/Ui/Dialogs)
+    endif()
 endif()
 
 if (MUSE_MODULE_DOCKWINDOW)
-    if (MUSE_MODULE_DOCKWINDOW_KDDOCKWIDGETS_V2)
-        add_subdirectory(dockwindow_v2)
-    else()
-        add_subdirectory(dockwindow)
-    endif()
+    add_subdirectory(dockwindow)
 endif()
 
 if (MUSE_MODULE_ACCESSIBILITY)
@@ -63,10 +61,6 @@ endif()
 
 if (MUSE_MODULE_AUTOBOT)
     add_subdirectory(autobot)
-endif()
-
-if (MUSE_MODULE_AUTOMATION)
-    add_subdirectory(automation)
 endif()
 
 if (MUSE_MODULE_CLOUD)
@@ -119,6 +113,10 @@ endif()
 
 if (MUSE_MODULE_LEARN)
     add_subdirectory(learn)
+endif()
+
+if (MUSE_MODULE_MEDIA)
+    add_subdirectory(media)
 endif()
 
 if (MUSE_MODULE_EXTENSIONS)

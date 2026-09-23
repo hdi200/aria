@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -294,11 +294,5 @@ public:
 
     static AsciiStringView toXml(MeasureNumberPlacement v);
     static MeasureNumberPlacement fromXml(const AsciiStringView& str, MeasureNumberPlacement def);
-
-    static AsciiStringView toXml(InstrumentNamesAlign v);
-    static InstrumentNamesAlign fromXml(const AsciiStringView& str, InstrumentNamesAlign def);
-
-    static AsciiStringView toXml(InstrumentNamesFormat v);
-    static InstrumentNamesFormat fromXml(const AsciiStringView& str, InstrumentNamesFormat def);
 };
 }

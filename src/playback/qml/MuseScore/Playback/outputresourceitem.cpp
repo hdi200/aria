@@ -99,7 +99,7 @@ void OutputResourceItem::handleMenuItem(const QString& menuItemId)
     } else if (menuItemId == GET_MORE_EFFECTS) {
         const QString url = QString::fromStdString(globalConfiguration()->museHubWebUrl());
         const QString urlParams("plugins?utm_source=mss-mixer-fx&utm_medium=mh-fx&utm_campaign=mss-mixer-fx-mainpage");
-        platformInteractive()->openUrl(url + urlParams);
+        interactive()->openUrl(url + urlParams);
         return;
     }
 
@@ -185,6 +185,7 @@ void OutputResourceItem::updateCurrentFxParams(const AudioResourceMeta& newMeta)
     audio::AudioFxParams newParams = m_currentFxParams;
     newParams.categories = audio::audioFxCategoriesFromString(newMeta.attributeVal(audio::CATEGORIES_ATTRIBUTE));
     newParams.resourceMeta = newMeta;
+    newParams.configuration.clear();
     newParams.active = newMeta.isValid();
 
     setParams(newParams);

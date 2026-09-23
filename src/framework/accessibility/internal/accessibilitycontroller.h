@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MUSE_ACCESSIBILITY_ACCESSIBILITYCONTROLLER_H
+#define MUSE_ACCESSIBILITY_ACCESSIBILITYCONTROLLER_H
 
 #include <memory>
 #include <QObject>
@@ -32,14 +32,14 @@
 #include "global/async/channel.h"
 #include "global/iapplication.h"
 
+#include "framework/actions/iactionsdispatcher.h"
 #include "modularity/ioc.h"
-#include "../iaccessibilitycontextconfiguration.h"
+#include "ui/imainwindow.h"
+#include "ui/iinteractiveprovider.h"
+#include "ui/iuiactionsregister.h"
+#include "../iaccessibilityconfiguration.h"
 #include "../iaccessibilitycontroller.h"
 #include "accessibleobject.h"
-#include "actions/iactionsdispatcher.h"
-#include "interactive/iinteractive.h"
-#include "ui/imainwindow.h"
-#include "ui/iuiactionsregister.h"
 
 class QAccessibleInterface;
 class QAccessibleEvent;
@@ -53,13 +53,12 @@ class AccessibilityController : public IAccessibilityController, public IAccessi
     public std::enable_shared_from_this<AccessibilityController>
 {
 public:
-
-    GlobalInject<IApplication> application;
-    ContextInject<IAccessibilityContextConfiguration> configuration = { this };
-    ContextInject<actions::IActionsDispatcher> actionsDispatcher = { this };
-    ContextInject<IInteractive> interactive = { this };
+    GlobalInject<IAccessibilityConfiguration> configuration;
+    ContextInject<IApplication> application = { this };
     ContextInject<ui::IMainWindow> mainWindow = { this };
+    ContextInject<ui::IInteractiveProvider> interactiveProvider = { this };
     ContextInject<ui::IUiActionsRegister> actionsRegister = { this };
+    ContextInject<actions::IActionsDispatcher> actionsDispatcher = { this };
 
 public:
     AccessibilityController(const muse::modularity::ContextPtr& iocCtx);
@@ -67,8 +66,7 @@ public:
 
     static QAccessibleInterface* accessibleInterface(QObject* object);
 
-    void setAccessibilityEnabled(bool enabled);
-    void deinit();
+    void setAccesibilityEnabled(bool enabled);
 
     // IAccessibilityController
     void reg(IAccessible* item) override;
@@ -193,3 +191,5 @@ private:
     bool m_needToVoicePanelInfo = false;
 };
 }
+
+#endif // MUSE_ACCESSIBILITY_ACCESSIBILITYCONTROLLER_H

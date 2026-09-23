@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -87,7 +87,7 @@ private:
     static void createMMRest(LayoutContext& ctx, Measure* firstMeasure, Measure* lastMeasure, const Fraction& len);
     static void cloneAnnotationsToMMRest(Segment* underlyingSeg, Segment* mmrSeg, LayoutContext& ctx);
 
-    static int adjustMeasureNumber(Measure* m, int measureNumber);
+    static int adjustMeasureNo(MeasureBase* m, int measureNo);
 
     static void barLinesSetSpan(Segment* seg, LayoutContext& ctx);
 
@@ -97,7 +97,7 @@ private:
     static void layoutMeasure(MeasureBase* currentMB, LayoutContext& ctx);
     static void checkStaffMoveValidity(Measure* measure, const LayoutContext& ctx);
 
-    static void createMultiMeasureRestsIfNeed(Measure* firstMeasure, LayoutContext& ctx);
+    static void createMultiMeasureRestsIfNeed(MeasureBase* currentMB, LayoutContext& ctx);
     static void removeMMRestElements(Measure* mmRestMeasure);
 
     static void setClefSegVisibility(Measure* m, bool isLastMeasureInSystem, LayoutContext& ctx);

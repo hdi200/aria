@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -53,18 +53,6 @@ void NotationRuler::paint(Painter* painter, const NoteInputState& state)
     }
 
     const muse::PointF measurePos = measure->canvasPos();
-    const size_t lineCount = timeSig->numerator() * 2;
-    const double spatium = staff->score()->style().spatium();
-    const double aboveStaffSpacing = spatium * 2;
-    const double lineY = measurePos.y() + sysStaff->y() - aboveStaffSpacing;
-
-    if (state.beyondScore()) {
-        const Measure* lastMeasure = state.staff()->score()->lastMeasure();
-        const double lineX = lastMeasure->pageBoundingRect().right() + spatium;
-        paintLine(painter, LineType::CurrentPosition, PointF(lineX, lineY), spatium, state.voice());
-        return;
-    }
-
     const int inputTicks = state.tick().ticks();
     const int measureTicks = measure->tick().ticks();
     const int ticksBeat = mu::engraving::ticks_beat(timeSig->denominator());
@@ -85,6 +73,11 @@ void NotationRuler::paint(Painter* painter, const NoteInputState& state)
         const size_t line = (segmentTicks - measureTicks) / subdivisionTicks;
         lineToSegment[line] = &segment;
     }
+
+    const size_t lineCount = timeSig->numerator() * 2;
+    const double spatium = staff->score()->style().spatium();
+    const double aboveStaffSpacing = spatium * 2;
+    const double lineY = measurePos.y() + sysStaff->y() - aboveStaffSpacing;
 
     size_t prevAccurateLine = muse::nidx;
     bool currentPositionPainted = false;

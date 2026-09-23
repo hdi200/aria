@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -139,7 +139,7 @@ QString EngravingStyleModel::typeToString(P_TYPE pt) const
     case P_TYPE::DRAW_PATH:     return "Undefined";
     case P_TYPE::SCALE:         return "Size";
     case P_TYPE::SPATIUM:       return "Double";
-    case P_TYPE::ABSOLUTE:    return "Double";
+    case P_TYPE::MILLIMETRE:    return "Double";
     case P_TYPE::PAIR_REAL:     return "Undefined";
 
     // Draw

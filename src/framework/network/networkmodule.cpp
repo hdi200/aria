@@ -41,17 +41,17 @@ std::string NetworkModule::moduleName() const
 
 void NetworkModule::registerExports()
 {
-    m_configuration = std::make_shared<NetworkConfiguration>(muse::modularity::globalCtx());
+    m_configuration = std::make_shared<NetworkConfiguration>(iocContext());
 
-    globalIoc()->registerExport<INetworkManagerCreator>(moduleName(), new NetworkManagerCreator());
-    globalIoc()->registerExport<INetworkConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<INetworkManagerCreator>(moduleName(), new NetworkManagerCreator());
+    ioc()->registerExport<INetworkConfiguration>(moduleName(), m_configuration);
 }
 
 void NetworkModule::registerApi()
 {
     using namespace muse::api;
 
-    auto api = globalIoc()->resolve<IApiRegister>(moduleName());
+    auto api = ioc()->resolve<IApiRegister>(moduleName());
     if (api) {
 #ifdef MUSE_MODULE_NETWORK_WEBSOCKET
         api->regApiCreator(moduleName(), "MuseApi.Websocket", new ApiCreator<api::WebSocketApi>());

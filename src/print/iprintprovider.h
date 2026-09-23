@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,6 +21,9 @@
  */
 #ifndef MU_PRINT_IPRINTPROVIDER_H
 #define MU_PRINT_IPRINTPROVIDER_H
+
+#include <functional>
+#include <QSizeF>
 
 #include "modularity/imoduleinterface.h"
 #include "types/ret.h"

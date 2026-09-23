@@ -81,12 +81,12 @@ muse::network::RequestHeaders UpdateConfigurationStub::updateHeaders() const
     return {};
 }
 
-std::string UpdateConfigurationStub::appWebSiteUrl() const
+std::string UpdateConfigurationStub::museScoreUrl() const
 {
     return "";
 }
 
-std::string UpdateConfigurationStub::privacyPolicyUrl() const
+std::string UpdateConfigurationStub::museScorePrivacyPolicyUrl() const
 {
     return "";
 }

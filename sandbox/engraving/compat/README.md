@@ -1,10 +1,10 @@
 # MuseScore 4.7.5 round-trip check
 
 Aria users move scores between the iPad and desktop MuseScore Studio. The current
-stable desktop release is 4.7.5, which uses file format 4.70. Aria's engine is a
-MuseScore 5.0 development snapshot, so every save has to come back to 4.7.5 intact.
-This check proves that on a corpus of scores. Run it after any engine change or
-upstream merge.
+stable desktop release is 4.7.5, which uses file format 4.70. Aria's engine is
+MuseScore 4.7.5 plus a few Aria patches (see ENGINE.md), and every save has to come
+back to 4.7.5 intact. This check proves that on a corpus of scores. Run it after any
+engine change or upstream merge.
 
 ## What it does
 
@@ -27,37 +27,52 @@ also tests how Aria reads older formats.
 
 ```bash
 # one-time configure (Mac host build, separate from the iOS render-core outputs)
-cmake -S sandbox/engraving -B build-aria-compat-host -G Ninja -DCMAKE_BUILD_TYPE=Release \
+cmake -S sandbox/engraving -B build-aria-475-host -G Ninja -DCMAKE_BUILD_TYPE=Release -DSCORE_RENDER_BUILD_TESTS=ON \
   -DQt6_DIR=$HOME/Qt/6.11.0/macos/lib/cmake/Qt6 -DSCORE_RENDER_QT_HOST_ROOT=$HOME/Qt/6.11.0/macos
 
-cmake --build build-aria-compat-host --target score_render_resave
+cmake --build build-aria-475-host --target score_render_resave
 python3 sandbox/engraving/compat/roundtrip_475.py            # vtest + Aria templates + fixtures
 python3 sandbox/engraving/compat/roundtrip_475.py ~/some-scores --direct
 ```
 
 It needs MuseScore Studio 4.7.5 at `/Applications/MuseScore 4.app`; use `--mscore`
-to point elsewhere. The report goes to `build-aria-compat-host/roundtrip/report.md`,
+to point elsewhere. The report goes to `build-aria-475-host/roundtrip/report.md`,
 and the exit code is non-zero if any score changed.
 
 `fixtures/` holds scores that each exercise a known 4.7-only feature, such as the
 "pitch names, no accidentals" notehead schemes added in MuseScore 4.7.
 
-## Known differences (baseline, September 2026)
+## Known differences (baseline, September 2026, 4.7.5 engine)
 
-Default run: 890 of 892 identical. The remaining two are `lyrics-15` and `lyrics-16`:
-a linked part loses a measure-long multimeasure-rest measure that 4.7.5 keeps.
+Default run: 890 of 892 identical. The remaining two are `lyrics-15` and `lyrics-16`,
+and Aria's file is the correct one. Their 4-bar Piano part carries a stale 32-bar
+multimeasure rest from the original test file. Desktop writes it back untouched
+because it never lays out a part it has not displayed. Aria lays out every part
+before saving, so the impossible rest is dropped, as desktop also does once the part
+is opened.
 
-`--direct` run: 604 of 892 identical. Almost all of the rest are files opened in
-Aria straight from older formats without passing through 4.7.5 first:
+`--direct` run: 890 of 892 identical (the 5.0 development engine managed 604); only
+the same two lyrics files differ. Run it with `PAPERSIZE=letter` on a US Mac: files
+that store no page size start from the default style, whose page size follows the
+region (Letter in the US, A4 elsewhere) in both Aria and desktop, and the command-line
+tool has no region of its own.
 
-- 2.x/3.x files: instrument-name vertical alignment defaults differ (`longInstrumentAlign`).
-- Some 3.x–4.4 files: `paddingToNotationAbove/Below` compatibility values differ.
-- `.mscx` files with no style file: Aria defaults to A4 where 4.7.5 uses Letter.
-- `text-offset-scale` (4.60): text offsets on scaled staves are converted differently.
-- 5.00 files: Aria keeps instrument names that 4.7.5 itself drops when forced open.
+MuseScore 5 files (5.00) open with "open anyway", as desktop 4.7.5 does, and come
+back identical to what 4.7.5 itself writes after forcing them open.
 
-These all come from the 5.0-dev engine's reading differing from 4.7.5's. They go
-away if the engine is moved to the 4.7.5 release.
+## Page layout
+
+`layout_compare.py` checks that Aria draws the same pages as desktop: it compares page
+counts and page 1 pixel by pixel against 4.7.5's PDF export (build `score_render_probe`;
+needs poppler, Pillow and numpy).
+
+```bash
+PAPERSIZE=letter python3 sandbox/engraving/compat/layout_compare.py --out /tmp/aria-layout
+```
+
+September 2026 baseline: all 842 vtest scores have the same page count and a
+pixel-identical page 1 (the 5.0 development engine: 533). Getting there needed the
+desktop-equivalent master score setup after loading (see ENGINE.md).
 
 Native tests in `tests/score_render_accidental_tests.cpp` cover the edit side, which
 this check does not (build with `-DSCORE_RENDER_BUILD_TESTS=ON`):

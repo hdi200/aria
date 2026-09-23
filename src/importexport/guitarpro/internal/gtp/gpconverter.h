@@ -13,7 +13,6 @@
 #include "gpdrumsetresolver.h"
 #include "gpmasterbar.h"
 #include "gpmastertracks.h"
-#include "engraving/dom/stringdata.h"
 
 namespace mu::iex::guitarpro {
 class GPScore;
@@ -151,7 +150,6 @@ private:
     void fillTuplet();
     bool tupletParamsChanged(const GPBeat* beat, const ChordRest* cr);
     void setBeamMode(const GPBeat* beat, ChordRest* cr, Measure* measure, Fraction tick);
-    void addTuning();
     void addCapos();
 
     mu::engraving::Score* _score;

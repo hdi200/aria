@@ -30,25 +30,14 @@
 using namespace muse::shortcuts;
 using namespace muse::modularity;
 
-static const std::string mname("shortcuts_stub");
-
 std::string ShortcutsModule::moduleName() const
 {
-    return mname;
+    return "shortcuts_stub";
 }
 
 void ShortcutsModule::registerExports()
 {
-    globalIoc()->registerExport<IShortcutsConfiguration>(mname, new ShortcutsConfigurationStub());
-}
-
-IContextSetup* ShortcutsModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new ShortcutsContext(ctx);
-}
-
-void ShortcutsContext::registerExports()
-{
-    ioc()->registerExport<IShortcutsRegister>(mname, new ShortcutsRegisterStub());
-    ioc()->registerExport<IShortcutsController>(mname, new ShortcutsControllerStub());
+    ioc()->registerExport<IShortcutsRegister>(moduleName(), new ShortcutsRegisterStub());
+    ioc()->registerExport<IShortcutsController>(moduleName(), new ShortcutsControllerStub());
+    ioc()->registerExport<IShortcutsConfiguration>(moduleName(), new ShortcutsConfigurationStub());
 }

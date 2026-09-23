@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -79,7 +79,7 @@ AbstractElementPopup {
             RowLayout {
                 spacing: root.controlSpacing
 
-                FontDropdown { // 1
+                StyledDropdown { // 1
                     id: fontDropdown
 
                     Layout.fillWidth: true
@@ -95,7 +95,7 @@ AbstractElementPopup {
                     model: {
                         var resultList = [];
 
-                        var fontFamilies = ui.allTextFonts();
+                        var fontFamilies = Qt.fontFamilies();
 
                         for (var i = 0; i < fontFamilies.length; ++i) {
                             resultList.push({

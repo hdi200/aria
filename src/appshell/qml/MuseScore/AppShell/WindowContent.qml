@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -24,10 +24,9 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-import Muse.Dock
-import Muse.Interactive
 import Muse.Ui
 import Muse.UiComponents
+import Muse.Dock
 import MuseScore.AppShell
 
 import "./HomePage"
@@ -41,7 +40,6 @@ DockWindow {
     objectName: "WindowContent"
 
     onPageLoaded: {
-        console.log("WindowContent::onPageLoaded")
         interactiveProvider.onPageOpened()
         window.opacity = 1.0
     }
@@ -87,7 +85,7 @@ DockWindow {
                 }
 
                 onSelected: function(uri) {
-                    root.loadPage(uri, {})
+                    api.launcher.open(uri)
                 }
 
                 Component.onCompleted: {

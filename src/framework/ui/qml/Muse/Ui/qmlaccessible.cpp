@@ -36,11 +36,6 @@ AccessibleItem::AccessibleItem(QObject* parent)
 {
 }
 
-AccessibleItem::AccessibleItem(const muse::modularity::ContextPtr& iocCtx, QObject* parent)
-    : QObject(parent), Contextable(iocCtx)
-{
-}
-
 AccessibleItem::~AccessibleItem()
 {
     QList<AccessibleItem*> children = m_children;

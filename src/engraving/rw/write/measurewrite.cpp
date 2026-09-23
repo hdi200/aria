@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -39,12 +39,12 @@ void MeasureWrite::writeMeasure(const Measure* measure, XmlWriter& xml, WriteCon
                                 bool forceTimeSig)
 {
     if (MScore::debugMode) {
-        const int mno = measure->measureNumber() + 1;
+        const int mno = measure->no() + 1;
         xml.comment(String(u"Measure %1").arg(mno));
     }
-    if (measure->ticks() != measure->timesig()) {
+    if (measure->m_len != measure->m_timesig) {
         // this is an irregular measure
-        xml.startElement(measure, { { "len", measure->ticks().toString() } });
+        xml.startElement(measure, { { "len", measure->m_len.toString() } });
     } else {
         xml.startElement(measure);
     }
@@ -52,8 +52,8 @@ void MeasureWrite::writeMeasure(const Measure* measure, XmlWriter& xml, WriteCon
     ctx.setCurTick(measure->tick());
     ctx.setCurTrack(staff * VOICES);
 
-    if (measure->mmRestCount() > 0) {
-        xml.tag("multiMeasureRest", measure->mmRestCount());
+    if (measure->m_mmRestCount > 0) {
+        xml.tag("multiMeasureRest", measure->m_mmRestCount);
     }
     if (writeSystemElements) {
         TWrite::writeItemEid(measure, xml, ctx);
@@ -61,15 +61,15 @@ void MeasureWrite::writeMeasure(const Measure* measure, XmlWriter& xml, WriteCon
             xml.tag("startRepeat");
         }
         if (measure->repeatEnd()) {
-            xml.tag("endRepeat", measure->repeatCount());
+            xml.tag("endRepeat", measure->m_repeatCount);
         }
-        TWrite::writeProperty(measure, xml, Pid::EXCLUDE_FROM_NUMBERING);
+        TWrite::writeProperty(measure, xml, Pid::IRREGULAR);
         TWrite::writeProperty(measure, xml, Pid::BREAK_MMR);
         TWrite::writeProperty(measure, xml, Pid::USER_STRETCH);
-        TWrite::writeProperty(measure, xml, Pid::MEASURE_NUMBER_OFFSET);
+        TWrite::writeProperty(measure, xml, Pid::NO_OFFSET);
         TWrite::writeProperty(measure, xml, Pid::MEASURE_NUMBER_MODE);
     }
-    MStaff* mstaff = measure->mstaves()[staff];
+    MStaff* mstaff = measure->m_mstaves[staff];
     if (mstaff->measureNumber() && !mstaff->measureNumber()->generated()) {
         TWrite::write(mstaff->measureNumber(), xml, ctx);
     }

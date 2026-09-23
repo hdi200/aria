@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -28,7 +28,7 @@ using namespace muse;
 using namespace muse::audio;
 using namespace mu::iex::audioexport;
 
-Ret Mp3Writer::write(notation::INotationPtr notation, io::IODevice& destinationDevice, const Options&)
+Ret Mp3Writer::write(notation::INotationPtr notation, io::IODevice& destinationDevice, const Options& options)
 {
     const SoundTrackFormat format {
         SoundTrackType::MP3,
@@ -41,5 +41,5 @@ Ret Mp3Writer::write(notation::INotationPtr notation, io::IODevice& destinationD
         configuration()->exportMp3Bitrate()
     };
 
-    return doWriteAndWait(notation, destinationDevice, format);
+    return doWriteAndWait(notation, destinationDevice, format, options);
 }

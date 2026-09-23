@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2024 MuseScore Limited
+# Copyright (C) 2024 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -72,11 +72,14 @@ endif()
 # Setup paths
 ###########################################
 if (OS_IS_MAC)
-    set(MUSE_APP_INSTALL_RESOURCES_LOCATION "mscore.app/Contents/Resources")
+    set(Mscore_INSTALL_NAME    "Contents/Resources/")
+    set(Mscore_SHARE_NAME      "mscore.app/")
 elseif (OS_IS_WIN)
-    set(MUSE_APP_INSTALL_RESOURCES_LOCATION ".")
+    set(Mscore_INSTALL_NAME  "")
+    set(Mscore_SHARE_NAME    "./")
 else()
-    set(MUSE_APP_INSTALL_RESOURCES_LOCATION "share/mscore${MUSE_APP_INSTALL_SUFFIX}-${MUSE_APP_VERSION_MAJ_MIN}")
+    set(Mscore_INSTALL_NAME  "mscore${MUSE_APP_INSTALL_SUFFIX}-${MUSE_APP_VERSION_MAJ_MIN}/")
+    set(Mscore_SHARE_NAME    "share/")
 endif()
 
 ###########################################
@@ -125,7 +128,7 @@ if(BUILD_CONFIGURATION STREQUAL "APP-WEB")
     endif()
 
     set(MUSE_MODULE_UI_SYSTEMDRAG_SUPPORTED OFF)
-    set(MUSE_MODULE_INTERACTIVE_SYNC_SUPPORTED OFF)
+    set(MUSE_MODULE_UI_SYNCINTERACTIVE_SUPPORTED OFF)
 
     set(MUE_GENERAL_APP ON)
     set(MUSE_MODULE_SHORTCUTS ON)
@@ -145,7 +148,6 @@ if(BUILD_CONFIGURATION STREQUAL "APP-WEB")
     set(MUSE_MODULE_DIAGNOSTICS_CRASHPAD_CLIENT OFF)
     set(MUSE_MODULE_AUDIO_EXPORT OFF)
     set(MUSE_MODULE_AUDIOPLUGINS OFF)
-    set(MUSE_MODULE_AUTOMATION OFF)
     set(MUSE_MODULE_ACCESSIBILITY OFF)
     set(MUSE_MODULE_DOCKWINDOW OFF)
     set(MUSE_MODULE_MIDI OFF)
@@ -174,7 +176,6 @@ if(BUILD_CONFIGURATION STREQUAL "APP-WEB")
     set(MUE_BUILD_IMPEXP_BWW_MODULE OFF)
     set(MUE_BUILD_IMPEXP_CAPELLA_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MIDI_MODULE OFF)
-    set(MUE_BUILD_IMPEXP_MLSCORE_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MNX_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MUSEDATA_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MUSICXML_MODULE OFF)
@@ -200,18 +201,15 @@ if(BUILD_CONFIGURATION STREQUAL "VTEST")
     set(MUSE_ENABLE_UNIT_TESTS OFF)
     set(MUSE_MODULE_GLOBAL_LOGGER_DEBUGLEVEL ON)
     set(MUSE_COMPILE_ASAN ON)
-    set(MUE_RUN_LRELEASE OFF)
 
     set(MUSE_MODULE_ACCESSIBILITY OFF)
     set(MUSE_MODULE_AUDIO OFF)
     set(MUSE_MODULE_AUDIOPLUGINS OFF)
-    set(MUSE_MODULE_AUTOMATION OFF)
     set(MUSE_MODULE_AUTOBOT OFF)
     set(MUSE_MODULE_CLOUD OFF)
     set(MUSE_MODULE_DIAGNOSTICS OFF)
     set(MUSE_MODULE_DOCKWINDOW OFF)
     set(MUSE_MODULE_EXTENSIONS OFF)
-    set(MUSE_MODULE_INTERACTIVE OFF)
     set(MUSE_MODULE_LANGUAGES OFF)
     set(MUSE_MODULE_LEARN OFF)
     set(MUSE_MODULE_MIDI OFF)
@@ -248,7 +246,6 @@ if(BUILD_CONFIGURATION STREQUAL "VTEST")
     set(MUE_BUILD_IMPEXP_BWW_MODULE OFF)
     set(MUE_BUILD_IMPEXP_CAPELLA_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MIDI_MODULE OFF)
-    set(MUE_BUILD_IMPEXP_MLSCORE_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MNX_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MUSEDATA_MODULE OFF)
     set(MUE_BUILD_IMPEXP_MUSICXML_MODULE OFF)
@@ -280,9 +277,8 @@ if(BUILD_CONFIGURATION STREQUAL "UTEST")
 
     message(STATUS "If you added tests to a module that didn't have them yet, make sure that this module is enabled, see SetupConfigure.cmake")
     set(MUSE_MODULE_AUTOBOT OFF)
-    set(MUSE_MODULE_AUTOMATION OFF)
     set(MUSE_MODULE_CLOUD OFF)
-    set(MUSE_MODULE_INTERACTIVE OFF)
+    set(MUSE_MODULE_LANGUAGES OFF)
     set(MUSE_MODULE_LEARN OFF)
     set(MUSE_MODULE_MIDI OFF)
     set(MUSE_MODULE_MIDIREMOTE OFF)
@@ -312,6 +308,7 @@ endif()
 set(MUSE_APP_REVISION ${MUSESCORE_REVISION})
 set(MUSE_APP_BUILD_NUMBER ${CMAKE_BUILD_NUMBER})
 set(MUSE_APP_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
+set(MUSE_APP_INSTALL_NAME ${Mscore_INSTALL_NAME})
 
 include(${MUSE_FRAMEWORK_SRC_PATH}/cmake/MuseSetupConfiguration.cmake)
 
@@ -371,14 +368,6 @@ endif()
 
 if (MUSE_MODULE_NETWORK_WEBSOCKET)
     set(QT_ADD_WEBSOCKET ON)
-endif()
-
-if (MUE_BUILD_IMPEXP_MNX_MODULE)
-    find_program(XXD_PROGRAM xxd QUIET)
-    if (NOT XXD_PROGRAM)
-        message(WARNING "xxd not found, disabling MNX import/export module")
-        set(MUE_BUILD_IMPEXP_MNX_MODULE OFF)
-    endif()
 endif()
 
 ###########################################

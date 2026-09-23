@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -254,9 +254,10 @@ void MasterScore::removeExcerpt(Excerpt* ex)
 
 MasterScore* MasterScore::clone()
 {
-    auto buffer = Buffer::opened(IODevice::WriteOnly);
+    Buffer buffer;
+    buffer.open(IODevice::WriteOnly);
 
-    rw::RWRegister::writer()->writeScore(this, &buffer);
+    rw::RWRegister::writer(iocContext())->writeScore(this, &buffer);
 
     buffer.close();
 
@@ -376,14 +377,6 @@ void MasterScore::setLayout(const Fraction& tick1, const Fraction& tick2, staff_
 
         m_cmdState.setElement(e);
     }
-}
-
-void MasterScore::initAutomation()
-{
-    IF_ASSERT_FAILED(m_automationController) {
-        return;
-    }
-    m_automationController->init(this);
 }
 
 //---------------------------------------------------------
@@ -786,7 +779,7 @@ MeasureBase* MasterScore::insertMeasure(MeasureBase* beforeMeasure, const Insert
 
     undoInsertTime(tick, ticks);
 
-    if (masterMeasure && !options.createMeasureRests) {
+    if (masterMeasure && !options.createEmptyMeasures) {
         //
         // fill measure with rest
         // undoAddCR adds rest to linked staves as well

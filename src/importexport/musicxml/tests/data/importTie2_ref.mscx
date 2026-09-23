@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -28,6 +28,7 @@
       <chordSymbolAFontSize>10.25</chordSymbolAFontSize>
       <chordSymbolBFontFace>Times New Roman</chordSymbolBFontFace>
       <chordSymbolBFontSize>10.25</chordSymbolBFontSize>
+      <romanNumeralFontFace>Times New Roman</romanNumeralFontFace>
       <nashvilleNumberFontFace>Times New Roman</nashvilleNumberFontFace>
       <nashvilleNumberFontSize>10.25</nashvilleNumberFontSize>
       <smallNoteMag>0.6</smallNoteMag>
@@ -60,8 +61,6 @@
       <shortInstrumentFontSize>10.25</shortInstrumentFontSize>
       <partInstrumentFontFace>Times New Roman</partInstrumentFontFace>
       <partInstrumentFontSize>10.25</partInstrumentFontSize>
-      <groupBracketFontFace>Times New Roman</groupBracketFontFace>
-      <groupBracketFontSize>10.25</groupBracketFontSize>
       <expressionFontFace>Times New Roman</expressionFontFace>
       <expressionFontSize>10.25</expressionFontSize>
       <tempoFontFace>Times New Roman</tempoFontFace>
@@ -157,11 +156,7 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Brace</type>
-          <bracketSpan>2</bracketSpan>
-          <level>1</level>
-          </BracketItem>
+        <bracket type="1" span="2" col="1" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -170,10 +165,9 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>MusicXML Part</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>MusicXML Part</longName>
-          </InstrumentLabel>
+        <longName>MusicXML Part</longName>
         <trackName>MusicXML Part</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

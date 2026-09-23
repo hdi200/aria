@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -30,7 +30,7 @@
 using namespace mu::notation;
 using namespace muse::async;
 
-NotationUndoStack::NotationUndoStack(IGetScore* getScore, Channel<muse::RectF> notationChanged)
+NotationUndoStack::NotationUndoStack(IGetScore* getScore, Notification notationChanged)
     : m_getScore(getScore), m_notationChanged(notationChanged)
 {
 }
@@ -278,7 +278,7 @@ mu::engraving::UndoStack* NotationUndoStack::undoStack() const
 
 void NotationUndoStack::notifyAboutNotationChanged()
 {
-    m_notationChanged.send(muse::RectF());
+    m_notationChanged.notify();
 }
 
 void NotationUndoStack::notifyAboutStateChanged()

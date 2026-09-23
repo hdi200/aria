@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -118,7 +118,7 @@ QVariant ScoreElement::get(mu::engraving::Pid pid) const
     }
     case P_TYPE::POINT:
         return val.value<PointF>().toQPointF() / spatium();
-    case P_TYPE::ABSOLUTE:
+    case P_TYPE::MILLIMETRE:
         return val.toReal() / spatium();
     case P_TYPE::SPATIUM:
         return val.value<Spatium>().val();
@@ -201,8 +201,8 @@ void ScoreElement::set(mu::engraving::Pid pid, const QVariant& val)
     case P_TYPE::POINT:
         newValue = PointF::fromQPointF(val.toPointF() * spatium());
         break;
-    case P_TYPE::ABSOLUTE:
-        newValue = val.toReal() * spatium();
+    case P_TYPE::MILLIMETRE:
+        newValue = Millimetre(val.toReal() * spatium());
         break;
     case P_TYPE::ALIGN: {
         apiv1::enums::Align apiValue = apiv1::enums::Align(val.toInt());

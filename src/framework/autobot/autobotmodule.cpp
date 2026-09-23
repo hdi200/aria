@@ -22,7 +22,7 @@
 #include "autobotmodule.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 #include "ui/iuiactionsregister.h"
 
 #include "internal/autobot.h"
@@ -39,41 +39,52 @@
 
 using namespace muse::autobot;
 using namespace muse::api;
-using namespace muse::modularity;
-
-static const std::string mname("autobot");
 
 std::string AutobotModule::moduleName() const
 {
-    return mname;
+    return "autobot";
 }
 
 void AutobotModule::registerExports()
 {
-    m_configuration = std::make_shared<AutobotConfiguration>(globalCtx());
+    m_configuration = std::make_shared<AutobotConfiguration>(iocContext());
+    m_autobot = std::make_shared<Autobot>(iocContext());
+    m_actionsController = std::make_shared<AutobotActionsController>(iocContext());
 
-    globalIoc()->registerExport<IAutobotConfiguration>(mname, m_configuration);
+    ioc()->registerExport<IAutobot>(moduleName(), m_autobot);
+    ioc()->registerExport<IAutobotConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IAutobotScriptsRepository>(moduleName(), new AutobotScriptsRepository(iocContext()));
+
+    // draw::Painter::extended = AbPaintProvider::instance();
 }
 
 void AutobotModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<muse::interactive::IInteractiveUriRegister>(mname);
+    auto ir = ioc()->resolve<muse::ui::IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerQmlUri(Uri("muse://diagnostics/autobot/scripts"), "Muse.Autobot", "ScriptsDialog");
         ir->registerQmlUri(Uri("muse://autobot/selectfile"), "Muse.Autobot", "AutobotSelectFileDialog");
     }
 
-    auto api = globalIoc()->resolve<IApiRegister>(mname);
+    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(moduleName());
+    if (ar) {
+        ar->reg(std::make_shared<AutobotActions>());
+    }
+
+    auto api = ioc()->resolve<IApiRegister>(moduleName());
     if (api) {
-        api->regApiCreator(mname, "api.autobot", new ApiCreator<api::AutobotApi>());
-        api->regApiCreator(mname, "api.context", new ApiCreator<ContextApi>());
+        api->regApiCreator("autobot", "api.autobot", new ApiCreator<api::AutobotApi>());
+        api->regApiCreator("autobot", "api.context", new ApiCreator<ContextApi>());
     }
 }
 
 void AutobotModule::onInit(const IApplication::RunMode&)
 {
+    m_autobot->init();
+    m_actionsController->init();
+
     //! --- Diagnostics ---
-    auto pr = globalIoc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(mname);
+    auto pr = ioc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(moduleName());
     if (pr) {
         for (const io::path_t& p : m_configuration->scriptsDirPaths()) {
             pr->reg("autobotScriptsPath", p);
@@ -86,34 +97,4 @@ void AutobotModule::onInit(const IApplication::RunMode&)
         pr->reg("autobotReportsPath", m_configuration->reportsPath());
         pr->reg("autobotDrawDataPath", m_configuration->drawDataPath());
     }
-}
-
-IContextSetup* AutobotModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new AutobotContext(ctx);
-}
-
-// Context
-
-void AutobotContext::registerExports()
-{
-    m_autobot = std::make_shared<Autobot>(iocContext());
-    m_actionsController = std::make_shared<AutobotActionsController>(iocContext());
-
-    ioc()->registerExport<IAutobot>(mname, m_autobot);
-    ioc()->registerExport<IAutobotScriptsRepository>(mname, new AutobotScriptsRepository(iocContext()));
-}
-
-void AutobotContext::resolveImports()
-{
-    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(mname);
-    if (ar) {
-        ar->reg(std::make_shared<AutobotActions>());
-    }
-}
-
-void AutobotContext::onInit(const IApplication::RunMode&)
-{
-    m_autobot->init();
-    m_actionsController->init();
 }

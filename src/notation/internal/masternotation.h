@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -47,7 +47,7 @@ public:
     muse::Ret setupNewScore(engraving::MasterScore* score, const ScoreCreateOptions& options) override;
     void applyOptions(engraving::MasterScore* score, const ScoreCreateOptions& options, bool createdFromTemplate = false) override;
     engraving::MasterScore* masterScore() const override;
-    void setMasterScore(engraving::MasterScore* masterScore, bool disablePlayback = false) override;
+    void setMasterScore(engraving::MasterScore* masterScore) override;
 
     INotationPtr notation() override;
     int mscVersion() const override;
@@ -72,13 +72,11 @@ public:
     INotationPlaybackPtr playback() const override;
     void initNotationSoloMuteState(const INotationPtr notation) override;
 
-    INotationAutomationPtr automation() const override;
-
 private:
     friend class project::NotationProject;
     explicit MasterNotation(project::INotationProject* project, const muse::modularity::ContextPtr& iocCtx);
 
-    void initAfterSettingScore(const engraving::MasterScore* score, bool disablePlayback = false);
+    void initAfterSettingScore(const engraving::MasterScore* score);
 
     void initExcerptNotations(const std::vector<engraving::Excerpt*>& excerpts);
     void addExcerptsToMasterScore(const std::vector<engraving::Excerpt*>& excerpts);
@@ -100,7 +98,6 @@ private:
     ExcerptNotationList m_excerpts;
     muse::async::Notification m_excerptsChanged;
     INotationPlaybackPtr m_notationPlayback = nullptr;
-    INotationAutomationPtr m_notationAutomation = nullptr;
     muse::async::Notification m_hasPartsChanged;
 
     mutable ExcerptNotationList m_potentialExcerpts;

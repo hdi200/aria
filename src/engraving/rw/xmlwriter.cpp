@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -117,9 +117,9 @@ void XmlWriter::tagProperty(Pid id, const PropertyValue& val, const PropertyValu
 
     const String writableVal(propertyToString(id, val, /* mscx */ true));
     if (writableVal.isEmpty()) {
-        //! NOTE The data type is ABSOLUTE, but we write SPATIUM
-        //! (the conversion from Absolute to Spatium occurred higher up the stack)
-        if (propType == P_TYPE::ABSOLUTE) {
+        //! NOTE The data type is MILLIMETRE, but we write SPATIUM
+        //! (the conversion from Millimetre to Spatium occurred higher up the stack)
+        if (propType == P_TYPE::MILLIMETRE) {
             propType = P_TYPE::SPATIUM;
         }
 
@@ -156,7 +156,6 @@ void XmlWriter::tagProperty(const AsciiStringView& name, P_TYPE type, const Prop
         element(name, int(data.value<bool>()));
         break;
     case P_TYPE::INT:
-    case P_TYPE::SIZE_T:
         element(name, data.value<int>());
         break;
     case P_TYPE::REAL:
@@ -186,8 +185,8 @@ void XmlWriter::tagProperty(const AsciiStringView& name, P_TYPE type, const Prop
     case P_TYPE::SPATIUM:
         element(name, data.value<Spatium>().val());
         break;
-    case P_TYPE::ABSOLUTE:
-        element(name, data.value<double>());
+    case P_TYPE::MILLIMETRE:
+        element(name, data.value<Millimetre>().val());
         break;
 
     // draw

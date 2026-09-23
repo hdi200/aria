@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -37,7 +37,7 @@
 
 // IWYU pragma: begin_exports
 #include "bps.h"
-#include "spatium.h"
+#include "dimension.h"
 #include "fraction.h"
 #include "groupnode.h"
 #include "pitchvalue.h"
@@ -79,9 +79,13 @@ enum class ElementType : unsigned char {
     BAR_LINE,
     STAFF_LINES,
     SYSTEM_DIVIDER,
+    SLUR,
     SLUR_SEGMENT,
+    TIE,
     TIE_SEGMENT,
+    LAISSEZ_VIB,
     LAISSEZ_VIB_SEGMENT,
+    PARTIAL_TIE,
     PARTIAL_TIE_SEGMENT,
     STEM_SLASH,
     ARPEGGIO,
@@ -101,9 +105,6 @@ enum class ElementType : unsigned char {
     SYMBOL,
     BREATH,
     MEASURE_REPEAT,
-    TIE,
-    LAISSEZ_VIB,
-    PARTIAL_TIE,
     ARTICULATION,
     ORNAMENT,
     FERMATA,
@@ -136,23 +137,40 @@ enum class ElementType : unsigned char {
     BEND,
     TREMOLOBAR,
     VOLTA,
-    HAIRPIN_SEGMENT,
-    OTTAVA_SEGMENT,
-    TRILL_SEGMENT,
-    LET_RING_SEGMENT,
-    GRADUAL_TEMPO_CHANGE_SEGMENT,
-    VIBRATO_SEGMENT,
-    PALM_MUTE_SEGMENT,
-    WHAMMY_BAR_SEGMENT,
-    RASGUEADO_SEGMENT,
-    HARMONIC_MARK_SEGMENT,
-    PICK_SCRAPE_SEGMENT,
-    TEXTLINE_SEGMENT,
     VOLTA_SEGMENT,
+    HAIRPIN,
+    HAIRPIN_SEGMENT,
+    OTTAVA,
+    OTTAVA_SEGMENT,
+    TRILL,
+    TRILL_SEGMENT,
+    LET_RING,
+    LET_RING_SEGMENT,
+    GRADUAL_TEMPO_CHANGE,
+    GRADUAL_TEMPO_CHANGE_SEGMENT,
+    VIBRATO,
+    VIBRATO_SEGMENT,
+    PALM_MUTE,
+    PALM_MUTE_SEGMENT,
+    WHAMMY_BAR,
+    WHAMMY_BAR_SEGMENT,
+    RASGUEADO,
+    RASGUEADO_SEGMENT,
+    HARMONIC_MARK,
+    HARMONIC_MARK_SEGMENT,
+    PICK_SCRAPE,
+    PICK_SCRAPE_SEGMENT,
+    TEXTLINE,
+    TEXTLINE_SEGMENT,
+    PEDAL,
     PEDAL_SEGMENT,
+    LYRICSLINE,
     LYRICSLINE_SEGMENT,
+    PARTIAL_LYRICSLINE,
     PARTIAL_LYRICSLINE_SEGMENT,
+    GLISSANDO,
     GLISSANDO_SEGMENT,
+    NOTELINE,
     NOTELINE_SEGMENT,
     STAFF_VISIBILITY_INDICATOR,
     SYSTEM_LOCK_INDICATOR,
@@ -168,29 +186,11 @@ enum class ElementType : unsigned char {
     TAB_DURATION_SYMBOL,
     FSYMBOL,
     PAGE,
-    HAIRPIN,
-    OTTAVA,
-    PEDAL,
-    TRILL,
-    LET_RING,
-    GRADUAL_TEMPO_CHANGE,
-    VIBRATO,
-    PALM_MUTE,
-    WHAMMY_BAR,
-    RASGUEADO,
-    HARMONIC_MARK,
-    PICK_SCRAPE,
-    TEXTLINE,
     TEXTLINE_BASE,
-    NOTELINE,
-    LYRICSLINE,
-    PARTIAL_LYRICSLINE,
-    GLISSANDO,
     BRACKET,
     SEGMENT,
     SYSTEM,
     CHORD,
-    SLUR,
     HBOX,
     VBOX,
     TBOX,
@@ -276,21 +276,6 @@ enum class AlignH : unsigned char {
     RIGHT,
     HCENTER,
     JUSTIFY
-};
-
-enum class InstrumentNamesAlign : unsigned char {
-    // Represents possible INSTRUMENT_STAFF alignment combinations
-    RIGHT_RIGHT,
-    CENTER_RIGHT,
-    CENTER_CENTER,
-    LEFT_RIGHT,
-};
-
-enum class InstrumentNamesFormat : unsigned char {
-    NAME_IN_TRANSP_NUM,
-    NAME_NUM_IN_TRANSP,
-    TRANSP_NAME_NUM,
-    CUSTOM,
 };
 
 struct Align {
@@ -838,7 +823,6 @@ enum class TextStyleType : unsigned char {
     INSTRUMENT_LONG,
     INSTRUMENT_SHORT,
     INSTRUMENT_CHANGE,
-    GROUP_BRACKET,
     HEADER,
     FOOTER,
     COPYRIGHT,
@@ -1134,7 +1118,7 @@ enum class TremoloChordType : unsigned char {
 };
 
 enum class BracketType : signed char {
-    NORMAL, BRACE, SQUARE, LINE, GROUP, NO_BRACKET = -1
+    NORMAL, BRACE, SQUARE, LINE, NO_BRACKET = -1
 };
 
 using InstrumentTrackIdList = std::vector<InstrumentTrackId>;

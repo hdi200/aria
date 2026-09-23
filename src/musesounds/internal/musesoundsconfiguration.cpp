@@ -76,8 +76,8 @@ RequestHeaders MuseSoundsConfiguration::headers() const
 UriQuery MuseSoundsConfiguration::soundsUri() const
 {
     return !getSoundsTestMode()
-           ? UriQuery("https://cosmos-customer-webservice.azurewebsites.net/graphql")
-           : UriQuery("https://cosmos-customer-webservice-dev.azurewebsites.net/graphql");
+           ? UriQuery("https://customers-api.musehub.com/graphql/v3")
+           : UriQuery("https://customers-api-dev.musehub.com/graphql/v3");
 }
 
 UriQuery MuseSoundsConfiguration::soundPageUri(const muse::String& soundCode) const
@@ -95,7 +95,7 @@ QUrl MuseSoundsConfiguration::checkForMuseSoundsUpdateUrl() const
 
 QUrl MuseSoundsConfiguration::checkForMuseSamplerUpdateUrl() const
 {
-    return QUrl("https://cosmos-customer-webservice.azurewebsites.net/graphql");
+    return QUrl("https://customers-api.musehub.com/graphql/v3");
 }
 
 QString MuseSoundsConfiguration::getMuseSamplerVersionQuery() const
@@ -122,9 +122,4 @@ bool MuseSoundsConfiguration::museSoundsCheckForUpdateTestMode() const
 bool MuseSoundsConfiguration::getSoundsTestMode() const
 {
     return settings()->value(GET_SOUNDS_TEST_MODE_KEY).toBool();
-}
-
-void MuseSoundsConfiguration::setSoundsTestMode(bool enabled)
-{
-    settings()->setSharedValue(GET_SOUNDS_TEST_MODE_KEY, Val(enabled));
 }

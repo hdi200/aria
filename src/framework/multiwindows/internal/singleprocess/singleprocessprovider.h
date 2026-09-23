@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -40,15 +40,14 @@ namespace muse::mi {
 class IProjectProvider;
 class SingleProcessProvider : public IMultiWindowsProvider
 {
-    GlobalInject<IApplication> application;
+    ContextInject<IApplication> application = { nullptr };
 
 public:
 
-    void initOnGlobal() {}
+    void init() {}
 
     // Windows info
-    size_t windowCount() const override;
-    bool isFirstWindow() const override;
+    int windowCount() const override;
 
     // Project opening
     bool isProjectAlreadyOpened(const muse::io::path_t& projectPath) const override;
@@ -74,8 +73,7 @@ public:
 
     // Quit for all
     void notifyAboutWindowWasQuited() override {}
-    void quitForAll() override;
-    void quitWindow(const modularity::ContextPtr& ctx) override;
+    void quitForAll() override {}
     void quitAllAndRestartLast() override {}
     void quitAllAndRunInstallation(const muse::io::path_t&) override {}
 

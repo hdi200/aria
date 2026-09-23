@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -1362,74 +1362,74 @@ static const std::vector<DynamicItem> DYNAMIC_TYPES = {
     { DynamicType::OTHER,   "other-dynamics",   SymId::noSym,                      muse::TranslatableString("engraving/dynamictype",
                                                                                                             "Other dynamic") },
     { DynamicType::PPPPPP,  "pppppp",           SymId::dynamicPPPPPP,              muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "pppppp") },
+                                                                                                            "pppppp (Pianissississississimo)") },
     { DynamicType::PPPPP,   "ppppp",            SymId::dynamicPPPPP,               muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "ppppp") },
+                                                                                                            "ppppp (Pianississississimo)") },
     { DynamicType::PPPP,    "pppp",             SymId::dynamicPPPP,                muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "pppp") },
+                                                                                                            "pppp (Pianissississimo)") },
     { DynamicType::PPP,     "ppp",              SymId::dynamicPPP,                 muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "ppp (piano pianissimo)") },
+                                                                                                            "ppp (Pianississimo)") },
     { DynamicType::PP,      "pp",               SymId::dynamicPP,                  muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "pp (pianissimo)") },
+                                                                                                            "pp (Pianissimo)") },
     { DynamicType::P,       "p",                SymId::dynamicPiano,               muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "p (piano)") },
+                                                                                                            "p (Piano)") },
 
     { DynamicType::MP,      "mp",               SymId::dynamicMP,                  muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "mp (mezzo piano)") },
+                                                                                                            "mp (Mezzo-piano)") },
     { DynamicType::MF,      "mf",               SymId::dynamicMF,                  muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "mf (mezzo forte)") },
+                                                                                                            "mf (Mezzo-forte)") },
 
     { DynamicType::F,       "f",                SymId::dynamicForte,               muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "f (forte)") },
+                                                                                                            "f (Forte)") },
     { DynamicType::FF,      "ff",               SymId::dynamicFF,                  muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "ff (fortissimo)") },
+                                                                                                            "ff (Fortissimo)") },
     { DynamicType::FFF,     "fff",              SymId::dynamicFFF,                 muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "fff (forte fortissimo)") },
+                                                                                                            "fff (Fortississimo)") },
     { DynamicType::FFFF,    "ffff",             SymId::dynamicFFFF,                muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "ffff") },
+                                                                                                            "ffff (Fortissississimo)") },
     { DynamicType::FFFFF,   "fffff",            SymId::dynamicFFFFF,               muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "fffff") },
+                                                                                                            "fffff (Fortississississimo)") },
     { DynamicType::FFFFFF,  "ffffff",           SymId::dynamicFFFFFF,              muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "ffffff") },
+                                                                                                            "ffffff (Fortissississississimo)") },
 
     { DynamicType::FP,      "fp",               SymId::dynamicFortePiano,          muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "fp (forte piano)") },
+                                                                                                            "fp (Fortepiano)") },
     { DynamicType::PF,      "pf",               SymId::noSym,                      muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "pf (poco forte)") },
+                                                                                                            "pf (Pianoforte)") },
 
     { DynamicType::SF,      "sf",               SymId::dynamicSforzando1,          muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sf (sforzando)") },
+                                                                                                            "sf (Sforzando)") },
     { DynamicType::SFZ,     "sfz",              SymId::dynamicSforzato,            muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sfz (sforzato)") },
+                                                                                                            "sfz (Sforzato)") },
     { DynamicType::SFF,     "sff",              SymId::noSym,                      muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sff (sforzando)") },
+                                                                                                            "sff (Sforzando)") },
     { DynamicType::SFFZ,    "sffz",             SymId::dynamicSforzatoFF,          muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sffz (sforzato)") },
+                                                                                                            "sffz (Sforzato)") },
     { DynamicType::SFFF,    "sfff",             SymId::noSym,                      muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sfff (sforzando)") },
+                                                                                                            "sfff (Sforzando)") },
     { DynamicType::SFFFZ,   "sfffz",            SymId::noSym,                      muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sfffz (sforzato)") },
+                                                                                                            "sfffz (Sforzato)") },
     { DynamicType::SFP,     "sfp",              SymId::dynamicSforzandoPiano,      muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sfp (sforzando piano)") },
+                                                                                                            "sfp (Sforzando-piano)") },
     { DynamicType::SFPP,    "sfpp",             SymId::dynamicSforzandoPianissimo, muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "sfpp (sforzando pianissimo)") },
+                                                                                                            "sfpp (Sforzando-pianissimo)") },
 
     { DynamicType::RFZ,     "rfz",              SymId::dynamicRinforzando2,        muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "rfz (rinforzando)") },
+                                                                                                            "rfz (Rinforzando)") },
     { DynamicType::RF,      "rf",               SymId::dynamicRinforzando1,        muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "rf (rinforzando)") },
+                                                                                                            "rf (Rinforzando)") },
     { DynamicType::FZ,      "fz",               SymId::dynamicForzando,            muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "fz (forzando)") },
+                                                                                                            "fz (Forzando)") },
     { DynamicType::M,       "m",                SymId::dynamicMezzo,               muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "m (mezzo)") },
+                                                                                                            "m (Mezzo)") },
     { DynamicType::R,       "r",                SymId::dynamicRinforzando,         muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "r (rinforzando)") },
+                                                                                                            "r (Rinforzando)") },
     { DynamicType::S,       "s",                SymId::dynamicSforzando,           muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "s (sforzando)") },
+                                                                                                            "s (Sforzando)") },
     { DynamicType::Z,       "z",                SymId::dynamicZ,                   muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "z (forzando)") },
+                                                                                                            "z (Forzando)") },
     { DynamicType::N,       "n",                SymId::dynamicNiente,              muse::TranslatableString("engraving/dynamictype",
-                                                                                                            "n (niente)") },
+                                                                                                            "n (Niente)") },
 };
 
 SymId TConv::symId(DynamicType v)
@@ -1708,7 +1708,6 @@ static const std::vector<Item<TextStyleType> > TEXTSTYLE_TYPES = {
     { TextStyleType::INSTRUMENT_LONG,   "instrument_long",      muse::TranslatableString("engraving", "Instrument name (Long)") },
     { TextStyleType::INSTRUMENT_SHORT,  "instrument_short",     muse::TranslatableString("engraving", "Instrument name (Short)") },
     { TextStyleType::INSTRUMENT_CHANGE, "instrument_change",    muse::TranslatableString("engraving", "Instrument change") },
-    { TextStyleType::GROUP_BRACKET,     "group_bracket",        muse::TranslatableString("engraving", "Group bracket") },
     { TextStyleType::HEADER,            "header",               muse::TranslatableString("engraving", "Header") },
     { TextStyleType::FOOTER,            "footer",               muse::TranslatableString("engraving", "Footer") },
     { TextStyleType::COPYRIGHT,         "copyright",            muse::TranslatableString("engraving", "Copyright") },
@@ -2521,7 +2520,6 @@ static const std::vector<Item<BracketType> > BRACKET_TYPES = {
     { BracketType::BRACE,      "Brace",     muse::TranslatableString("engraving/brackettype", "Brace") },
     { BracketType::SQUARE,     "Square",    muse::TranslatableString("engraving/brackettype", "Square") },
     { BracketType::LINE,       "Line",      muse::TranslatableString("engraving/brackettype", "Line") },
-    { BracketType::GROUP,      "Group",     muse::TranslatableString("engraving/brackettype", "Group") },
     { BracketType::NO_BRACKET, "NoBracket", muse::TranslatableString("engraving/brackettype", "No bracket") }
 };
 
@@ -3398,38 +3396,4 @@ AsciiStringView TConv::toXml(MeasureNumberPlacement v)
 MeasureNumberPlacement TConv::fromXml(const AsciiStringView& tag, MeasureNumberPlacement def)
 {
     return findTypeByXmlTag<MeasureNumberPlacement>(MEASURE_NUMBER_MODES, tag, def);
-}
-
-const std::array<Item<InstrumentNamesAlign>, 4> INSTR_LABELS_ALIGN = { {
-    { InstrumentNamesAlign::RIGHT_RIGHT, "right-right" },
-    { InstrumentNamesAlign::CENTER_RIGHT, "center-right" },
-    { InstrumentNamesAlign::CENTER_CENTER, "center-center" },
-    { InstrumentNamesAlign::LEFT_RIGHT, "left-right" }
-} };
-
-mu::engraving::AsciiStringView mu::engraving::TConv::toXml(InstrumentNamesAlign v)
-{
-    return findXmlTagByType<InstrumentNamesAlign>(INSTR_LABELS_ALIGN, v);
-}
-
-InstrumentNamesAlign TConv::fromXml(const AsciiStringView& str, InstrumentNamesAlign def)
-{
-    return findTypeByXmlTag<InstrumentNamesAlign>(INSTR_LABELS_ALIGN, str, def);
-}
-
-const std::array<Item<InstrumentNamesFormat>, 4> INSTR_NAMES_FORMAT = { {
-    { InstrumentNamesFormat::NAME_IN_TRANSP_NUM, "name-in-transp-num" },
-    { InstrumentNamesFormat::NAME_NUM_IN_TRANSP, "name-num-in-transp" },
-    { InstrumentNamesFormat::TRANSP_NAME_NUM, "transp-name-num" },
-    { InstrumentNamesFormat::CUSTOM, "custom" }
-} };
-
-mu::engraving::AsciiStringView mu::engraving::TConv::toXml(InstrumentNamesFormat v)
-{
-    return findXmlTagByType<InstrumentNamesFormat>(INSTR_NAMES_FORMAT, v);
-}
-
-InstrumentNamesFormat TConv::fromXml(const AsciiStringView& str, InstrumentNamesFormat def)
-{
-    return findTypeByXmlTag<InstrumentNamesFormat>(INSTR_NAMES_FORMAT, str, def);
 }

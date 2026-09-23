@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -81,7 +81,6 @@
 #include "slurtielayout.h"
 #include "horizontalspacing.h"
 #include "dynamicslayout.h"
-#include "systemheaderlayout.h"
 
 #include "defer.h"
 #include "log.h"
@@ -132,7 +131,7 @@ System* SystemLayout::collectSystem(LayoutContext& ctx)
 
     Fraction lcmTick = ctx.state().curMeasure()->tick();
     bool longNames = ctx.mutState().firstSystem() ? ctx.mutState().startWithLongNames() : subsSysLongName;
-    SystemHeaderLayout::setInstrumentNames(system, ctx, longNames, lcmTick);
+    SystemLayout::setInstrumentNames(system, ctx, longNames, lcmTick);
 
     double curSysWidth = 0.0;
     double layoutSystemMinWidth = 0.0;
@@ -212,9 +211,7 @@ System* SystemLayout::collectSystem(LayoutContext& ctx)
             ctx.mutState().curMeasure()->setParent(oldSystem);
             while (ctx.state().prevMeasure() && ctx.state().prevMeasure()->noBreak() && system->measures().size() > 1) {
                 ctx.mutState().setTick(ctx.state().tick() - ctx.state().curMeasure()->ticks());
-                if (ctx.state().curMeasure()->isMeasure()) {
-                    ctx.mutState().setMeasureNumber(toMeasure(ctx.state().curMeasure())->measureNumber());
-                }
+                ctx.mutState().setMeasureNo(ctx.state().curMeasure()->no());
 
                 ctx.mutState().setNextMeasure(ctx.mutState().curMeasure());
                 ctx.mutState().setCurMeasure(ctx.mutState().prevMeasure());
@@ -434,7 +431,7 @@ System* SystemLayout::collectSystem(LayoutContext& ctx)
             MeasureLayout::layoutMeasureElements(m, ctx);
             MeasureLayout::layoutStaffLines(m, ctx);
             if (createBrackets) {
-                SystemHeaderLayout::addBrackets(system, toMeasure(mb), ctx);
+                SystemLayout::addBrackets(system, toMeasure(mb), ctx);
                 createBrackets = false;
             }
         } else if (mb->isHBox()) {
@@ -1434,15 +1431,23 @@ void SystemLayout::collectElementsToLayout(Measure* measure, ElementsToLayout& e
                     if (cr->isChord()) {
                         elements.chords.push_back(toChord(cr));
 
-                        auto collectBends = [&elements] (Chord* chord) {
+                        auto collectBends = [&elements, system] (Chord* chord) {
                             for (Note* note : chord->notes()) {
                                 for (Spanner* sp : note->spannerBack()) {
                                     if (sp->isGuitarBend()) {
                                         elements.guitarBends.push_back(toGuitarBend(sp));
                                     }
                                 }
-                                if (GuitarBend* bendFor = note->bendFor(); bendFor && bendFor->bendType() == GuitarBendType::SLIGHT_BEND) {
-                                    elements.guitarBends.push_back(bendFor);
+
+                                for (Spanner* sp : note->spannerFor()) {
+                                    if (sp->isGuitarBend()) {
+                                        GuitarBend* bend = toGuitarBend(sp);
+                                        Note* endNote = bend->endNote();
+                                        if (bend->bendType() == GuitarBendType::SLIGHT_BEND
+                                            || (endNote && endNote->tick() >= system->endTick())) {
+                                            elements.guitarBends.push_back(bend);
+                                        }
+                                    }
                                 }
                             }
                         };
@@ -1782,7 +1787,9 @@ void SystemLayout::layoutTiesAndBends(const ElementsToLayout& elementsToLayout, 
     GuitarDiveLayout::updateDiveSequences(elementsToLayout.guitarBends, ctx);
 
     for (GuitarBend* bend : elementsToLayout.guitarBends) {
-        TLayout::layoutGuitarBend(bend, ctx);
+        /* Bends which cross a system break are collected by both systems they touch, so we
+         * lay out only the segment which belongs to this one: */
+        TLayout::layoutGuitarBend(bend, ctx, system);
     }
 }
 
@@ -2081,19 +2088,39 @@ void SystemLayout::layoutSystem(System* system, LayoutContext& ctx, double xo1, 
         return;
     }
 
-    SystemHeaderLayout::computeInstrumentNameOffset(system, ctx);
-    double instrumentNameOffset = system->ldata()->instrumentNameOffset();
+    // Get standard instrument name distance
+    double instrumentNameOffset = ctx.conf().styleMM(Sid::instrumentNameOffset);
+    // Now scale it depending on the text size (which also may not follow staff scaling)
+    double textSizeScaling = 1.0;
+    double actualSize = 0.0;
+    double defaultSize = 0.0;
+    bool followStaffSize = true;
+    if (ctx.state().startWithLongNames()) {
+        actualSize = ctx.conf().styleD(Sid::longInstrumentFontSize);
+        defaultSize = DefaultStyle::defaultStyle().value(Sid::longInstrumentFontSize).toDouble();
+        followStaffSize = ctx.conf().styleB(Sid::longInstrumentFontSpatiumDependent);
+    } else {
+        actualSize = ctx.conf().styleD(Sid::shortInstrumentFontSize);
+        defaultSize = DefaultStyle::defaultStyle().value(Sid::shortInstrumentFontSize).toDouble();
+        followStaffSize = ctx.conf().styleB(Sid::shortInstrumentFontSpatiumDependent);
+    }
+    textSizeScaling = actualSize / defaultSize;
+    if (!followStaffSize) {
+        textSizeScaling *= DefaultStyle::defaultStyle().value(Sid::spatium).toDouble() / ctx.conf().styleD(Sid::spatium);
+    }
+    textSizeScaling = std::max(textSizeScaling, 1.0);
+    instrumentNameOffset *= textSizeScaling;
 
     size_t nstaves = system->staves().size();
 
     //---------------------------------------------------
     //  find x position of staves
     //---------------------------------------------------
-    SystemHeaderLayout::layoutBrackets(system, ctx);
-    double maxBracketsWidth = SystemHeaderLayout::totalBracketOffset(ctx);
+    SystemLayout::layoutBrackets(system, ctx);
+    double maxBracketsWidth = SystemLayout::totalBracketOffset(ctx);
 
-    SystemHeaderLayout::computeInstrumentNamesWidth(system, ctx);
-    double maxNamesWidth = system->ldata()->totalNamesWidth();
+    double maxNamesWidth = SystemLayout::instrumentNamesWidth(system, ctx, isFirstSystem);
+
     double indent = maxNamesWidth > 0 ? maxNamesWidth + instrumentNameOffset : 0.0;
     if (isFirstSystem && firstSystemIndent) {
         indent = std::max(indent, system->styleP(Sid::firstSystemIndentationValue) * system->mag() - maxBracketsWidth);
@@ -2134,10 +2161,32 @@ void SystemLayout::layoutSystem(System* system, LayoutContext& ctx, double xo1, 
     //  layout brackets
     //---------------------------------------------------
 
-    SystemHeaderLayout::setBracketsXPosition(system, xo1 + system->leftMargin());
+    system->setBracketsXPosition(xo1 + system->leftMargin());
 
-    SystemHeaderLayout::setInstrumentNamesHorizontalPos(system);
-    SystemHeaderLayout::setGroupBracketsHorizontalPos(system);
+    //---------------------------------------------------
+    //  layout instrument names x position
+    //     at this point it is not clear which staves will
+    //     be hidden, so layout all instrument names
+    //---------------------------------------------------
+
+    for (const SysStaff* s : system->staves()) {
+        for (InstrumentName* t : s->instrumentNames) {
+            TLayout::layoutInstrumentName(t, t->mutldata());
+
+            switch (t->align().horizontal) {
+            case AlignH::JUSTIFY:   // Justify is not supported for instrument names
+            case AlignH::LEFT:
+                t->mutldata()->setPosX(0);
+                break;
+            case AlignH::HCENTER:
+                t->mutldata()->setPosX(maxNamesWidth * .5);
+                break;
+            case AlignH::RIGHT:
+                t->mutldata()->setPosX(maxNamesWidth);
+                break;
+            }
+        }
+    }
 
     for (MeasureBase* mb : system->measures()) {
         if (!mb->isMeasure()) {
@@ -2148,6 +2197,268 @@ void SystemLayout::layoutSystem(System* system, LayoutContext& ctx, double xo1, 
             MeasureLayout::createSystemBeginBarLine(m, ctx);
         }
     }
+}
+
+double SystemLayout::instrumentNamesWidth(System* system, LayoutContext& ctx, bool isFirstSystem)
+{
+    double namesWidth = 0.0;
+
+    for (staff_idx_t staffIdx = 0; staffIdx < ctx.dom().nstaves(); ++staffIdx) {
+        const SysStaff* staff = system->staff(staffIdx);
+        if (!staff || (isFirstSystem && !staff->show())) {
+            continue;
+        }
+
+        for (InstrumentName* name : staff->instrumentNames) {
+            TLayout::layoutInstrumentName(name, name->mutldata());
+            namesWidth = std::max(namesWidth, name->width());
+        }
+    }
+
+    return namesWidth;
+}
+
+/// Calculates the total width of all brackets together that
+/// would be visible when all staves are visible.
+/// The logic in this method is closely related to the logic in
+/// System::layoutBrackets and System::createBracket.
+double SystemLayout::totalBracketOffset(LayoutContext& ctx)
+{
+    if (ctx.state().totalBracketsWidth() >= 0) {
+        return ctx.state().totalBracketsWidth();
+    }
+
+    size_t columns = 0;
+    for (const Staff* staff : ctx.dom().staves()) {
+        for (const BracketItem* bi : staff->brackets()) {
+            columns = std::max(columns, bi->column() + 1);
+        }
+    }
+
+    size_t nstaves = ctx.dom().nstaves();
+    std::vector < double > bracketWidth(nstaves, 0.0);
+    for (staff_idx_t staffIdx = 0; staffIdx < nstaves; ++staffIdx) {
+        const Staff* staff = ctx.dom().staff(staffIdx);
+        for (auto bi : staff->brackets()) {
+            if (bi->bracketType() == BracketType::NO_BRACKET || !bi->visible()) {
+                continue;
+            }
+
+            //! This logic is partially copied from System::createBracket.
+            //! Of course, we don't need to worry about invisible staves,
+            //! but we do need to worry about brackets that span past the
+            //! last staff.
+            staff_idx_t firstStaff = staffIdx;
+            staff_idx_t lastStaff = staffIdx + bi->bracketSpan() - 1;
+            if (lastStaff >= nstaves) {
+                lastStaff = nstaves - 1;
+            }
+
+            for (; firstStaff <= lastStaff; ++firstStaff) {
+                if (ctx.dom().staff(firstStaff)->show()) {
+                    break;
+                }
+            }
+            for (; lastStaff >= firstStaff; --lastStaff) {
+                if (ctx.dom().staff(lastStaff)->show()) {
+                    break;
+                }
+            }
+
+            size_t span = lastStaff - firstStaff + 1;
+            if (span > 1
+                || (bi->bracketSpan() == span)
+                || (span == 1 && ctx.conf().styleB(Sid::alwaysShowBracketsWhenEmptyStavesAreHidden))) {
+                Bracket* dummyBr = Factory::createBracket(ctx.mutDom().dummyParent(), /*isAccessibleEnabled=*/ false);
+                dummyBr->setBracketItem(bi);
+                dummyBr->setStaffSpan(firstStaff, lastStaff);
+                dummyBr->mutldata()->bracketHeight.set_value(3.5 * dummyBr->spatium() * 2); // default
+                TLayout::layoutBracket(dummyBr, dummyBr->mutldata(), ctx.conf());
+                for (staff_idx_t stfIdx = firstStaff; stfIdx <= lastStaff; ++stfIdx) {
+                    bracketWidth[stfIdx] += dummyBr->ldata()->bracketWidth();
+                }
+                delete dummyBr;
+            }
+        }
+    }
+
+    double totalBracketsWidth = 0.0;
+    for (double w : bracketWidth) {
+        totalBracketsWidth = std::max(totalBracketsWidth, w);
+    }
+    ctx.mutState().setTotalBracketsWidth(totalBracketsWidth);
+
+    return totalBracketsWidth;
+}
+
+double SystemLayout::layoutBrackets(System* system, LayoutContext& ctx)
+{
+    size_t nstaves = system->staves().size();
+    size_t columns = system->getBracketsColumnsCount();
+
+    std::vector<double> bracketWidth(columns, 0.0);
+
+    std::vector<Bracket*> bl;
+    bl.swap(system->brackets());
+
+    for (size_t staffIdx = 0; staffIdx < nstaves; ++staffIdx) {
+        const Staff* s = ctx.dom().staff(staffIdx);
+        for (size_t i = 0; i < columns; ++i) {
+            for (auto bi : s->brackets()) {
+                if (bi->column() != i || bi->bracketType() == BracketType::NO_BRACKET) {
+                    continue;
+                }
+                Bracket* b = SystemLayout::createBracket(system, ctx, bi, i, static_cast<int>(staffIdx), bl, system->firstMeasure());
+                if (b != nullptr) {
+                    b->mutldata()->bracketHeight.set_value(3.5 * b->spatium() * 2); // dummy
+                    TLayout::layoutBracket(b, b->mutldata(), ctx.conf());
+                    bracketWidth[i] = std::max(bracketWidth[i], b->ldata()->bracketWidth());
+                }
+            }
+        }
+    }
+
+    for (Bracket* b : bl) {
+        delete b;
+    }
+
+    double totalBracketWidth = 0.0;
+
+    if (!system->brackets().empty()) {
+        for (double w : bracketWidth) {
+            totalBracketWidth += w;
+        }
+    }
+
+    return totalBracketWidth;
+}
+
+void SystemLayout::addBrackets(System* system, Measure* measure, LayoutContext& ctx)
+{
+    if (system->staves().empty()) {                 // ignore vbox
+        return;
+    }
+
+    size_t nstaves = system->staves().size();
+
+    //---------------------------------------------------
+    //  find x position of staves
+    //    create brackets
+    //---------------------------------------------------
+
+    size_t columns = system->getBracketsColumnsCount();
+
+    std::vector<Bracket*> bl;
+    bl.swap(system->brackets());
+
+    for (staff_idx_t staffIdx = 0; staffIdx < nstaves; ++staffIdx) {
+        const Staff* s = ctx.dom().staff(staffIdx);
+        for (size_t i = 0; i < columns; ++i) {
+            for (auto bi : s->brackets()) {
+                if (bi->column() != i || bi->bracketType() == BracketType::NO_BRACKET) {
+                    continue;
+                }
+                SystemLayout::createBracket(system, ctx, bi, i, staffIdx, bl, measure);
+            }
+        }
+        if (!system->staff(staffIdx)->show()) {
+            continue;
+        }
+    }
+
+    //---------------------------------------------------
+    //  layout brackets
+    //---------------------------------------------------
+    SystemLayout::layoutBracketsVertical(system, ctx);
+
+    system->setBracketsXPosition(measure->x());
+
+    muse::join(system->brackets(), bl);
+}
+
+//---------------------------------------------------------
+//   createBracket
+//---------------------------------------------------------
+
+Bracket* SystemLayout::createBracket(System* system, LayoutContext& ctx, BracketItem* bi, size_t column, staff_idx_t staffIdx,
+                                     std::vector<Bracket*>& bl,
+                                     Measure* measure)
+{
+    if (!measure) {
+        return nullptr;
+    }
+
+    size_t nstaves = system->staves().size();
+    staff_idx_t firstStaff = staffIdx;
+    staff_idx_t lastStaff = staffIdx + bi->bracketSpan() - 1;
+    if (lastStaff >= nstaves) {
+        lastStaff = nstaves - 1;
+    }
+
+    for (; firstStaff <= lastStaff; ++firstStaff) {
+        if (system->staff(firstStaff)->show()) {
+            break;
+        }
+    }
+    for (; lastStaff >= firstStaff; --lastStaff) {
+        if (system->staff(lastStaff)->show()) {
+            break;
+        }
+    }
+    size_t span = lastStaff - firstStaff + 1;
+    //
+    // do not show bracket if it only spans one
+    // system due to some invisible staves
+    //
+    if (span > 1
+        || (bi->bracketSpan() == span)
+        || (span == 1 && ctx.conf().styleB(Sid::alwaysShowBracketsWhenEmptyStavesAreHidden)
+            && bi->bracketType() != BracketType::SQUARE)
+        || (span == 1 && ctx.conf().styleB(Sid::alwaysShowSquareBracketsWhenEmptyStavesAreHidden)
+            && bi->bracketType() == BracketType::SQUARE)) {
+        //
+        // this bracket is visible
+        //
+        Bracket* b = 0;
+        track_idx_t track = staffIdx * VOICES;
+        for (size_t k = 0; k < bl.size(); ++k) {
+            if (bl[k]->track() == track && bl[k]->column() == column && bl[k]->bracketType() == bi->bracketType()
+                && bl[k]->measure() == measure) {
+                b = muse::takeAt(bl, k);
+                break;
+            }
+        }
+        if (b == 0) {
+            b = Factory::createBracket(ctx.mutDom().dummyParent());
+            b->setBracketItem(bi);
+            b->setGenerated(true);
+            b->setTrack(track);
+            b->setMeasure(measure);
+        }
+        system->add(b);
+
+        if (bi->selected()) {
+            bool needSelect = true;
+
+            std::vector<EngravingItem*> brackets = ctx.selection().elements(ElementType::BRACKET);
+            for (const EngravingItem* element : brackets) {
+                if (toBracket(element)->bracketItem() == bi) {
+                    needSelect = false;
+                    break;
+                }
+            }
+
+            if (needSelect) {
+                ctx.select(b, SelectType::ADD);
+            }
+        }
+
+        b->setStaffSpan(firstStaff, lastStaff);
+
+        return b;
+    }
+
+    return nullptr;
 }
 
 //---------------------------------------------------------
@@ -2183,12 +2494,12 @@ void SystemLayout::layout2(System* system, LayoutContext& ctx)
 
     double _spatium            = system->spatium();
     double y                   = 0.0;
-    double minVerticalDistance = ctx.conf().styleAbsolute(Sid::minVerticalDistance);
-    double staffDistance       = ctx.conf().styleAbsolute(Sid::staffDistance);
-    double akkoladeDistance    = ctx.conf().styleAbsolute(Sid::akkoladeDistance);
+    double minVerticalDistance = ctx.conf().styleMM(Sid::minVerticalDistance);
+    double staffDistance       = ctx.conf().styleMM(Sid::staffDistance);
+    double akkoladeDistance    = ctx.conf().styleMM(Sid::akkoladeDistance);
     if (ctx.conf().isVerticalSpreadEnabled()) {
-        staffDistance       = ctx.conf().styleAbsolute(Sid::minStaffSpread);
-        akkoladeDistance    = ctx.conf().styleAbsolute(Sid::minStaffSpread);
+        staffDistance       = ctx.conf().styleMM(Sid::minStaffSpread);
+        akkoladeDistance    = ctx.conf().styleMM(Sid::minStaffSpread);
     }
 
     if (visibleStaves.empty()) {
@@ -2260,7 +2571,7 @@ void SystemLayout::layout2(System* system, LayoutContext& ctx)
             // the result is space is good to start and grows as needed
             // it does not, however, shrink when possible - only by trigger a full layout
             // (such as by toggling to page view and back)
-            const double minHorizontalClearance = ctx.conf().styleAbsolute(Sid::skylineMinHorizontalClearance);
+            const double minHorizontalClearance = ctx.conf().styleMM(Sid::skylineMinHorizontalClearance);
             double d = ss->skyline().minDistance(system->System::staff(si2)->skyline(), minHorizontalClearance);
             if (ctx.conf().isLineMode()) {
                 double previousDist = ss->continuousDist();
@@ -2288,13 +2599,13 @@ void SystemLayout::layout2(System* system, LayoutContext& ctx)
     //  layout brackets vertical position
     //---------------------------------------------------
 
-    SystemHeaderLayout::layoutBracketsVertical(system, ctx);
+    SystemLayout::layoutBracketsVertical(system, ctx);
 
     //---------------------------------------------------
     //  layout instrument names
     //---------------------------------------------------
 
-    SystemHeaderLayout::setInstrumentNamesVerticalPos(system, ctx);
+    SystemLayout::layoutInstrumentNames(system, ctx);
 }
 
 double SystemLayout::minVertSpaceForCrossStaffBeams(System* system, staff_idx_t staffIdx1, staff_idx_t staffIdx2, LayoutContext& ctx)
@@ -2361,7 +2672,7 @@ double SystemLayout::minVertSpaceForCrossStaffBeams(System* system, staff_idx_t 
                         // In this case the two opposing stems overlap the beam height, so we must subtract it
                         int strokeCount = std::min(BeamTremoloLayout::strokeCount(beam->ldata(), limitingChordAbove),
                                                    BeamTremoloLayout::strokeCount(beam->ldata(), limitingChordBelow));
-                        double beamHeight = ctx.conf().styleAbsolute(Sid::beamWidth) + beam->beamDist() * (strokeCount - 1);
+                        double beamHeight = ctx.conf().styleMM(Sid::beamWidth).val() + beam->beamDist() * (strokeCount - 1);
                         minSpaceRequired -= beamHeight;
                     }
                     minSpace = std::max(minSpace, minSpaceRequired);
@@ -2386,11 +2697,6 @@ void SystemLayout::restoreLayout2(System* system, LayoutContext& ctx)
 
     system->setHeight(system->systemHeight());
     SystemLayout::setMeasureHeight(system, system->systemHeight(), ctx);
-
-    // Reused systems can move across pages during partial relayout.
-    // Refresh geometry derived from SysStaff vertical positions.
-    SystemHeaderLayout::layoutBracketsVertical(system, ctx);
-    SystemHeaderLayout::setInstrumentNamesVerticalPos(system, ctx);
 }
 
 void SystemLayout::setMeasureHeight(System* system, double height, const LayoutContext& ctx)
@@ -2412,6 +2718,183 @@ void SystemLayout::setMeasureHeight(System* system, double height, const LayoutC
         } else {
             LOGD("unhandled measure type %s", m->typeName());
         }
+    }
+}
+
+void SystemLayout::layoutBracketsVertical(System* system, LayoutContext& ctx)
+{
+    for (Bracket* b : system->brackets()) {
+        int staffIdx1 = static_cast<int>(b->firstStaff());
+        int staffIdx2 = static_cast<int>(b->lastStaff());
+        double sy = 0;                           // assume bracket not visible
+        double ey = 0;
+        // if start staff not visible, try next staff
+        while (staffIdx1 <= staffIdx2 && !system->staves().at(staffIdx1)->show()) {
+            ++staffIdx1;
+        }
+        // if end staff not visible, try prev staff
+        while (staffIdx1 <= staffIdx2 && !system->staves().at(staffIdx2)->show()) {
+            --staffIdx2;
+        }
+        // if the score doesn't have "alwaysShowBracketsWhenEmptyStavesAreHidden" as true,
+        // the bracket will be shown IF:
+        // it spans at least 2 visible staves (staffIdx1 < staffIdx2) OR
+        // it spans just one visible staff (staffIdx1 == staffIdx2) but it is required to do so
+        // (the second case happens at least when the bracket is initially dropped)
+        bool notHidden = ctx.conf().styleB(Sid::alwaysShowBracketsWhenEmptyStavesAreHidden)
+                         ? (staffIdx1 <= staffIdx2) : (staffIdx1 < staffIdx2) || (b->span() == 1 && staffIdx1 == staffIdx2);
+        if (notHidden) {                        // set vert. pos. and height to visible spanned staves
+            sy = system->staves().at(staffIdx1)->bbox().top();
+            ey = system->staves().at(staffIdx2)->bbox().bottom();
+        }
+
+        Bracket::LayoutData* bldata = b->mutldata();
+        bldata->setPosY(sy);
+        bldata->bracketHeight = ey - sy;
+        TLayout::layoutBracket(b, bldata, ctx.conf());
+    }
+}
+
+void SystemLayout::layoutInstrumentNames(System* system, LayoutContext& ctx)
+{
+    staff_idx_t staffIdx = 0;
+
+    for (const Part* p : ctx.dom().parts()) {
+        SysStaff* s = system->staff(staffIdx);
+        SysStaff* s2;
+        size_t nstaves = p->nstaves();
+
+        staff_idx_t visible = system->firstVisibleSysStaffOfPart(p);
+        if (visible != muse::nidx) {
+            // The top staff might be invisible but this top staff contains the instrument names.
+            // To make sure these instrument name are drawn, even when the top staff is invisible,
+            // move the InstrumentName elements to the first visible staff of the part.
+            if (visible != staffIdx) {
+                SysStaff* vs = system->staff(visible);
+                for (InstrumentName* t : s->instrumentNames) {
+                    t->setTrack(visible * VOICES);
+                    t->setSysStaff(vs);
+                    vs->instrumentNames.push_back(t);
+                }
+                s->instrumentNames.clear();
+                s = vs;
+            }
+
+            for (InstrumentName* t : s->instrumentNames) {
+                //
+                // override Text->layout()
+                //
+                double y1, y2;
+                switch (t->layoutPos()) {
+                default:
+                case 0:                         // center at part
+                    y1 = s->bbox().top();
+                    s2 = system->staff(staffIdx);
+                    for (int i = static_cast<int>(staffIdx + nstaves - 1); i > 0; --i) {
+                        SysStaff* s3 = system->staff(i);
+                        if (s3->show()) {
+                            s2 = s3;
+                            break;
+                        }
+                    }
+                    y2 = s2->bbox().bottom();
+                    break;
+                case 1:                         // center at first staff
+                    y1 = s->bbox().top();
+                    y2 = s->bbox().bottom();
+                    break;
+                case 2:                         // center between first and second staff
+                    y1 = s->bbox().top();
+                    y2 = system->staff(staffIdx + 1)->bbox().bottom();
+                    break;
+                case 3:                         // center at second staff
+                    y1 = system->staff(staffIdx + 1)->bbox().top();
+                    y2 = system->staff(staffIdx + 1)->bbox().bottom();
+                    break;
+                case 4:                         // center between first and second staff
+                    y1 = system->staff(staffIdx + 1)->bbox().top();
+                    y2 = system->staff(staffIdx + 2)->bbox().bottom();
+                    break;
+                case 5:                         // center at third staff
+                    y1 = system->staff(staffIdx + 2)->bbox().top();
+                    y2 = system->staff(staffIdx + 2)->bbox().bottom();
+                    break;
+                }
+                t->mutldata()->setPosY(y1 + (y2 - y1) * .5 + t->offset().y());
+            }
+        }
+        staffIdx += nstaves;
+    }
+}
+
+void SystemLayout::setInstrumentNames(System* system, LayoutContext& ctx, bool longName, Fraction tick)
+{
+    //
+    // remark: add/remove instrument names is not undo/redoable
+    //         as add/remove of systems is not undoable
+    //
+    if (system->vbox()) {                 // ignore vbox
+        return;
+    }
+    if (!ctx.conf().isShowInstrumentNames()
+        || (ctx.conf().styleB(Sid::hideInstrumentNameIfOneInstrument) && ctx.dom().visiblePartCount() <= 1)
+        || (ctx.state().firstSystem()
+            && ctx.conf().styleV(Sid::firstSystemInstNameVisibility).value<InstrumentLabelVisibility>() == InstrumentLabelVisibility::HIDE)
+        || (!ctx.state().firstSystem()
+            && ctx.conf().styleV(Sid::subsSystemInstNameVisibility).value<InstrumentLabelVisibility>()
+            == InstrumentLabelVisibility::HIDE)) {
+        for (SysStaff* staff : system->staves()) {
+            for (InstrumentName* t : staff->instrumentNames) {
+                ctx.mutDom().removeElement(t);
+            }
+        }
+        return;
+    }
+
+    int staffIdx = 0;
+    for (SysStaff* staff : system->staves()) {
+        const Staff* s = ctx.dom().staff(staffIdx);
+        Part* part = s->part();
+
+        bool atLeastOneVisibleStaff = false;
+        for (Staff* partStaff : part->staves()) {
+            if (partStaff->show()) {
+                atLeastOneVisibleStaff = true;
+                break;
+            }
+        }
+
+        bool showName = part->show() && atLeastOneVisibleStaff;
+        if (!s->isTop() || !showName) {
+            for (InstrumentName* t : staff->instrumentNames) {
+                ctx.mutDom().removeElement(t);
+            }
+            ++staffIdx;
+            continue;
+        }
+
+        const StaffNameList& names = longName ? part->longNames(tick) : part->shortNames(tick);
+
+        size_t idx = 0;
+        for (const StaffName& sn : names) {
+            InstrumentName* iname = muse::value(staff->instrumentNames, idx);
+            if (iname == 0) {
+                iname = new InstrumentName(system);
+                iname->setGenerated(true);
+                iname->setParent(system);
+                iname->setSysStaff(staff);
+                iname->setTrack(staffIdx * VOICES);
+                iname->setInstrumentNameType(longName ? InstrumentNameType::LONG : InstrumentNameType::SHORT);
+                iname->setLayoutPos(sn.pos());
+                ctx.mutDom().addElement(iname);
+            }
+            iname->setXmlText(sn.name());
+            ++idx;
+        }
+        for (; idx < staff->instrumentNames.size(); ++idx) {
+            ctx.mutDom().removeElement(staff->instrumentNames[idx]);
+        }
+        ++staffIdx;
     }
 }
 
@@ -2455,8 +2938,8 @@ double SystemLayout::minDistance(const System* top, const System* bottom, const 
         return 0.0;
     }
 
-    double minVerticalDistance = conf.styleAbsolute(Sid::minVerticalDistance);
-    double dist = conf.isVerticalSpreadEnabled() ? conf.styleAbsolute(Sid::minSystemSpread) : conf.styleAbsolute(Sid::minSystemDistance);
+    double minVerticalDistance = conf.styleMM(Sid::minVerticalDistance);
+    double dist = conf.isVerticalSpreadEnabled() ? conf.styleMM(Sid::minSystemSpread) : conf.styleMM(Sid::minSystemDistance);
     size_t firstStaff = 0;
     size_t lastStaff = 0;
 
@@ -2477,7 +2960,7 @@ double SystemLayout::minDistance(const System* top, const System* bottom, const 
     top->setFixedDownDistance(false);
 
     const SysStaff* sysStaff = top->staff(lastStaff);
-    const double minHorizontalClearance = conf.styleAbsolute(Sid::skylineMinHorizontalClearance);
+    const double minHorizontalClearance = conf.styleMM(Sid::skylineMinHorizontalClearance);
     double sld = sysStaff ? sysStaff->skyline().minDistance(bottom->staff(firstStaff)->skyline(), minHorizontalClearance) : 0;
     sld -= sysStaff ? sysStaff->bbox().height() - minVerticalDistance : 0;
 
@@ -2751,7 +3234,7 @@ void SystemLayout::centerElementBetweenStaves(EngravingItem* element, const Syst
     }
 
     double elementXinSystemCoord = element->pageX() - system->pageX();
-    const double minHorizontalClearance = system->style().styleAbsolute(Sid::skylineMinHorizontalClearance);
+    const double minHorizontalClearance = system->style().styleMM(Sid::skylineMinHorizontalClearance);
 
     Shape elementShape = element->ldata()->shape()
                          .translated(PointF(elementXinSystemCoord, element->y()))
@@ -2776,7 +3259,7 @@ void SystemLayout::centerElementBetweenStaves(EngravingItem* element, const Syst
     SkylineLine nextSkyline = isAbove ? nextStaff->skyline().south() : nextStaff->skyline().north();
     nextSkyline.translateY(yStaffDiff);
 
-    double elementMinDist = element->absoluteFromSpatium(element->minDistance());
+    double elementMinDist = element->minDistance().toMM(element->spatium());
     double availSpaceAbove = (isAbove ? nextSkyline.verticalClaranceBelow(elementShape) : thisSkyline.verticalClaranceBelow(elementShape))
                              - elementMinDist;
     double availSpaceBelow = (isAbove ? thisSkyline.verticalClearanceAbove(elementShape) : nextSkyline.verticalClearanceAbove(elementShape))
@@ -2810,7 +3293,7 @@ void SystemLayout::centerMMRestBetweenStaves(MMRest* mmRest, const System* syste
     double prevStaffHeight = system->score()->staff(prevIdx)->staffHeight(mmRest->tick());
     double yStaffDiff = prevStaff->y() + prevStaffHeight - thisStaff->y();
 
-    PointF mmRestDefaultNumberPosition = mmRest->numberPos() - PointF(0.0, mmRest->absoluteFromSpatium(mmRest->numberOffset()));
+    PointF mmRestDefaultNumberPosition = mmRest->numberPos() - PointF(0.0, mmRest->numberOffset().toMM(mmRest->spatium()));
     RectF numberBbox = mmRest->numberRect().translated(mmRestDefaultNumberPosition + mmRest->pos());
     double yBaseLine = 0.5 * (yStaffDiff - numberBbox.height());
     double yDiff = yBaseLine - numberBbox.top();

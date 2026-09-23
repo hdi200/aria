@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -36,8 +36,6 @@
 #include "engraving/dom/pitchspelling.h"
 #include "engraving/dom/segment.h"
 #include "engraving/dom/tremolosinglechord.h"
-
-#include "engraving/editing/editnote.h"
 
 #include "utils/scorerw.h"
 #include "utils/scorecomp.h"
@@ -401,13 +399,13 @@ TEST_F(Engraving_NoteTests, tpcTranspose)
     score->startCmd(TranslatableString::untranslatable("Engraving note tests"));
     Measure* m = score->firstMeasure();
     score->select(m, SelectType::SINGLE, 0);
-    EditNote::changeAccidental(score, AccidentalType::FLAT);
+    score->changeAccidental(AccidentalType::FLAT);
     score->endCmd();
 
     score->startCmd(TranslatableString::untranslatable("Engraving note tests"));
     m = m->nextMeasure();
     score->select(m, SelectType::SINGLE, 0);
-    EditNote::upDown(score, false, UpDownMode::CHROMATIC);
+    score->upDown(false, UpDownMode::CHROMATIC);
     score->endCmd();
 
     score->startCmd(TranslatableString::untranslatable("Engraving note tests"));

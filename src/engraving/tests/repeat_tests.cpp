@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -54,7 +54,7 @@ void Engraving_RepeatTests::repeat(const char* path, const String& ref)
         int endTick   = rs->endTick();
 
         for (const Measure* m = score->tick2measure(Fraction::fromTicks(startTick)); m; m = m->nextMeasure()) {
-            sl.append(String::number(m->measureNumber() + 1));
+            sl.append(String::number(m->no() + 1));
 
             if (m->endTick().ticks() >= endTick) {
                 break;

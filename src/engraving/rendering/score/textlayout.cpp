@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -131,13 +131,6 @@ void TextLayout::layoutBaseTextBase1(const TextBase* item, TextBase::LayoutData*
 
     if (!item->isDynamic() && !(item->explicitParent() && item->parent()->isBox())) {
         computeTextHighResShape(item, ldata);
-    }
-
-    if (!muse::RealIsNull(item->textAngle())) {
-        Transform t;
-        t.rotate(item->textAngle());
-        ldata->setShape(shape.transform(t));
-        ldata->highResShape.mut_value().transform(t);
     }
 }
 
@@ -314,15 +307,13 @@ void TextLayout::layoutTextBlock(TextBlock* item, const TextBase* t)
 
     if (fragments.empty()) {
         FontMetrics fm = t->fontMetrics();
-        shape.add(RectF(0.0, -fm.ascent(), 1.0, fm.ascent()), t);
+        shape.add(RectF(0.0, -fm.ascent(), 1.0, fm.descent()), t);
         lineSpacing = fm.lineSpacing();
     } else if (fragments.size() == 1 && fragments.front().text.isEmpty()) {
         auto fi = fragments.begin();
         TextFragment& f = *fi;
         f.pos.setX(x);
-        Font font = f.font(t);
-        substituteMusicFont(font, f.calculatedFontSize(t));
-        FontMetrics fm(font);
+        FontMetrics fm(f.font(t));
         if (f.format.valign() != VerticalAlignment::AlignNormal) {
             double voffset = fm.xHeight() / SUBSCRIPT_SIZE;   // use original height
             if (f.format.valign() == VerticalAlignment::AlignSubScript) {
@@ -336,7 +327,7 @@ void TextLayout::layoutTextBlock(TextBlock* item, const TextBase* t)
             f.pos.setY(0.0);
         }
 
-        RectF temp(0.0, -fm.ascent(), 1.0, fm.ascent());
+        RectF temp(0.0, -fm.ascent(), 1.0, fm.descent());
         shape.add(temp, t);
         lineSpacing = std::max(lineSpacing, fm.lineSpacing());
     } else {
@@ -395,17 +386,6 @@ void TextLayout::layoutTextBlock(TextBlock* item, const TextBase* t)
     // Apply style/custom line spacing
     lineSpacing *= t->textLineSpacing();
     item->setLineSpacing(lineSpacing);
-}
-
-void TextLayout::substituteMusicFont(Font& font, double size)
-{
-    if (font.type() == Font::Type::MusicSymbol) {
-        String textFontId(font.family().id() + String(u" Text"));
-        font.setFamily(textFontId, Font::Type::MusicSymbolText);
-        font.setPointSizeF(size);
-    } else if (font.type() == Font::Type::MusicSymbolText) {
-        font.setPointSizeF(size);
-    }
 }
 
 double TextLayout::musicSymbolBaseLineAdjust(const TextBlock* block, const TextBase* t, const TextFragment& f,

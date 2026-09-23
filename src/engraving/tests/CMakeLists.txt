@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2021 MuseScore Limited
+# Copyright (C) 2021 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -98,11 +98,10 @@ set(MODULE_TEST_SRC
     ${CMAKE_CURRENT_LIST_DIR}/fretdiagram_tests.cpp
     ${CMAKE_CURRENT_LIST_DIR}/engraving_xml_tests.cpp
     ${CMAKE_CURRENT_LIST_DIR}/parentheses_tests.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/lyrics_tests.cpp
     ${CMAKE_CURRENT_LIST_DIR}/automation/automation_tests.cpp
 
     ${CMAKE_CURRENT_LIST_DIR}/mocks/engravingconfigurationmock.h
-
-    ${CMAKE_CURRENT_LIST_DIR}/lv_tests.cpp
 )
 
 if (MUE_BUILD_ENGRAVING_DEVTOOLS)

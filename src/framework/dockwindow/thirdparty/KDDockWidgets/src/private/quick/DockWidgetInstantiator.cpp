@@ -9,8 +9,6 @@
   Contact KDAB at <info@kdab.com> for commercial licensing options.
 */
 
-#include <QQmlContext>
-
 #include "DockWidgetInstantiator_p.h"
 #include "DockWidgetQuick.h"
 #include "../DockRegistry_p.h"
@@ -165,11 +163,7 @@ void DockWidgetInstantiator::componentComplete()
         return;
     }
 
-    QQmlContext* qmlCtx = qmlContext(this);
-    assert(qmlCtx);
-    const int ctx = qmlCtx->contextProperty(QStringLiteral("_kddw_context")).value<int>();
-
-    if (DockRegistry::self(ctx)->containsDockWidget(m_uniqueName)) {
+    if (DockRegistry::self()->containsDockWidget(m_uniqueName)) {
         // Dock widget already exists. all good.
         return;
     }
@@ -185,7 +179,7 @@ void DockWidgetInstantiator::componentComplete()
         return;
     }
 
-    m_dockWidget = new DockWidgetQuick(ctx, m_uniqueName, {}, {}, qmlEngine(this));
+    m_dockWidget = new DockWidgetQuick(m_uniqueName, {}, {}, qmlEngine(this));
 
     connect(m_dockWidget, &DockWidgetQuick::titleChanged, this,
             &DockWidgetInstantiator::titleChanged);

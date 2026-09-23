@@ -50,7 +50,7 @@ using namespace muse::modularity;
 using namespace muse::accessibility;
 
 AccessibleObject* s_rootObject = nullptr;
-std::shared_ptr<IQAccessibleInterfaceRegister> s_accessibleInterfaceRegister = nullptr;
+std::shared_ptr<IQAccessibleInterfaceRegister> accessibleInterfaceRegister = nullptr;
 
 static void updateHandlerNoop(QAccessibleEvent*)
 {
@@ -68,6 +68,8 @@ AccessibilityController::AccessibilityController(const muse::modularity::Context
 
 AccessibilityController::~AccessibilityController()
 {
+    m_pretendFocusTimer.stop();
+    unreg(this);
 }
 
 QAccessibleInterface* AccessibilityController::accessibleInterface(QObject* window)
@@ -75,24 +77,18 @@ QAccessibleInterface* AccessibilityController::accessibleInterface(QObject* wind
     return static_cast<QAccessibleInterface*>(new AccessibleWindowInterface(window, s_rootObject));
 }
 
-void AccessibilityController::deinit()
-{
-    m_pretendFocusTimer.stop();
-    unreg(this);
-}
-
-void AccessibilityController::setAccessibilityEnabled(bool enabled)
+void AccessibilityController::setAccesibilityEnabled(bool enabled)
 {
     m_enabled = enabled;
 }
 
 static QAccessibleInterface* muAccessibleFactory(const QString& classname, QObject* object)
 {
-    if (!s_accessibleInterfaceRegister) {
-        s_accessibleInterfaceRegister = globalIoc()->resolve<IQAccessibleInterfaceRegister>("accessibility");
+    if (!accessibleInterfaceRegister) {
+        accessibleInterfaceRegister = globalIoc()->resolve<IQAccessibleInterfaceRegister>("accessibility");
     }
 
-    auto interfaceGetter = s_accessibleInterfaceRegister->interfaceGetter(classname);
+    auto interfaceGetter = accessibleInterfaceRegister->interfaceGetter(classname);
     if (interfaceGetter) {
         return interfaceGetter(object);
     }
@@ -417,7 +413,7 @@ void AccessibilityController::propertyChanged(IAccessible* item, IAccessible::Pr
 
 void AccessibilityController::stateChanged(IAccessible* aitem, State state, bool arg)
 {
-    if (!configuration()->isAccessibleEnabled()) {
+    if (!configuration()->enabled()) {
         return;
     }
 
@@ -500,7 +496,7 @@ void AccessibilityController::sendEvent(QAccessibleEvent* ev)
 
 void AccessibilityController::cancelPreviousReading()
 {
-    if (!configuration()->isAccessibleActive()) {
+    if (!configuration()->active()) {
         return;
     }
 
@@ -569,7 +565,7 @@ bool AccessibilityController::needsRevoicing(const QAccessibleInterface& iface, 
 
 void AccessibilityController::triggerRevoicing(const Item& current)
 {
-    if (current.item != m_lastFocused || !configuration()->isAccessibleActive()) {
+    if (current.item != m_lastFocused || !configuration()->active()) {
         return;
     }
 
@@ -747,7 +743,7 @@ QAccessibleInterface* AccessibilityController::parentIface(const IAccessible* it
 
     if (it.item->accessibleRole() == IAccessible::Role::Application) {
         if (!qApp->isQuitLockEnabled()) {
-            return QAccessible::queryAccessibleInterface(interactive()->topWindow());
+            return QAccessible::queryAccessibleInterface(interactiveProvider()->topWindow());
         } else {
             return QAccessible::queryAccessibleInterface(qApp->focusWindow());
         }

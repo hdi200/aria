@@ -61,7 +61,6 @@ public:
 
 public:
     explicit AbstractNavigation(QObject* parent = nullptr);
-    explicit AbstractNavigation(const muse::modularity::ContextPtr& iocCtx, QObject* parent = nullptr);
 
     int order() const;
     int column() const;

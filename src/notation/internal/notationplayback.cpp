@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -54,11 +54,11 @@ using namespace muse::async;
 static constexpr double PLAYBACK_TAIL_SECS = 3;
 
 NotationPlayback::NotationPlayback(IGetScore* getScore,
-                                   muse::async::Channel<muse::RectF> notationChanged,
+                                   muse::async::Notification notationChanged,
                                    const modularity::ContextPtr& iocCtx)
     : muse::Contextable(iocCtx), m_getScore(getScore), m_notationChanged(notationChanged), m_playbackModel(iocCtx)
 {
-    m_notationChanged.onReceive(this, [this](const muse::RectF&) {
+    m_notationChanged.onNotify(this, [this]() {
         updateLoopBoundaries();
     });
 }
@@ -454,7 +454,7 @@ void NotationPlayback::addSoundFlags(const std::vector<StaffText*>& staffTextLis
 
     if (added) {
         score()->update();
-        m_notationChanged.send(muse::RectF());
+        m_notationChanged.notify();
     }
 }
 
@@ -521,7 +521,7 @@ void NotationPlayback::removeSoundFlags(const InstrumentTrackIdSet& trackIdSet)
     score()->update();
 
     m_playbackModel.reload();
-    m_notationChanged.send(muse::RectF());
+    m_notationChanged.notify();
 }
 
 bool NotationPlayback::hasSoundFlags(const engraving::InstrumentTrackIdSet& trackIdSet)

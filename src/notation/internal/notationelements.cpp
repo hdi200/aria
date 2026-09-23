@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -89,7 +89,8 @@ std::vector<EngravingItem*> NotationElements::search(const QString& searchText) 
         return result;
     }
     case SearchCommandsParser::SearchData::Type::Page: {
-        mu::engraving::Page* page = this->page(searchData.pageIndex() - 1);
+        int pageIndex = static_cast<int>(searchData.pageIndex()) - 1;
+        mu::engraving::Page* page = this->page(pageIndex);
         if (page) {
             return { page };
         }
@@ -159,9 +160,9 @@ const Page* NotationElements::pageByPoint(const PointF& point) const
     return score()->searchPage(point);
 }
 
-mu::engraving::Page* NotationElements::page(const size_t pageIndex) const
+mu::engraving::Page* NotationElements::page(const int pageIndex) const
 {
-    if (pageIndex >= score()->pages().size()) {
+    if (pageIndex < 0 || size_t(pageIndex) >= score()->pages().size()) {
         return nullptr;
     }
 

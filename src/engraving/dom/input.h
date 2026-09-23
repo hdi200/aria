@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -131,9 +131,7 @@ public:
     void update(Selection& selection);
     void moveInputPos(EngravingItem* e);
     void moveToNextInputPos();
-
-    bool beyondScore() const { return m_beyondScore; }
-    void setBeyondScore(bool val) { m_beyondScore = val; }
+    bool endOfScore() const;
 
     // TODO: unify with Selection::cr()?
     static Note* note(EngravingItem*);
@@ -167,8 +165,6 @@ private:
     Slur* m_slur = nullptr;
 
     std::set<SymId> m_articulationIds;
-
-    bool m_beyondScore = false;
 };
 } // namespace mu::engraving
 #endif

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -28,12 +28,11 @@
 #include "modularity/ioc.h"
 
 #include "ui/iuiactionsregister.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 
 #include "internal/applicationuiactions.h"
 #include "internal/applicationactioncontroller.h"
 #include "internal/appshellconfiguration.h"
-#include "internal/appshellstate.h"
 #include "internal/startupscenario.h"
 #include "internal/applicationactioncontroller.h"
 #include "internal/sessionsmanager.h"
@@ -47,6 +46,7 @@
 using namespace mu::appshell;
 using namespace muse;
 using namespace muse::modularity;
+using namespace muse::ui;
 using namespace muse::dock;
 
 static const std::string mname("appshell");
@@ -58,14 +58,23 @@ std::string AppShellModule::moduleName() const
 
 void AppShellModule::registerExports()
 {
-    m_appShellConfiguration = std::make_shared<AppShellConfiguration>(globalCtx());
+    m_appShellConfiguration = std::make_shared<AppShellConfiguration>(iocContext());
+    m_sessionsManager = std::make_shared<SessionsManager>(iocContext());
 
-    globalIoc()->registerExport<IAppShellConfiguration>(moduleName(), m_appShellConfiguration);
+    ioc()->registerExport<IAppShellConfiguration>(moduleName(), m_appShellConfiguration);
+    ioc()->registerExport<IStartupScenario>(moduleName(), new StartupScenario(iocContext()));
+    ioc()->registerExport<ISessionsManager>(moduleName(), m_sessionsManager);
+
+#ifdef Q_OS_MAC
+    ioc()->registerExport<IAppMenuModelHook>(moduleName(), std::make_shared<MacOSAppMenuModelHook>());
+#else
+    ioc()->registerExport<IAppMenuModelHook>(moduleName(), std::make_shared<AppMenuModelHookStub>());
+#endif
 }
 
 void AppShellModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<muse::interactive::IInteractiveUriRegister>(mname);
+    auto ir = ioc()->resolve<IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerPageUri(Uri("musescore://home"));
         ir->registerPageUri(Uri("musescore://notation"));
@@ -80,9 +89,14 @@ void AppShellModule::resolveImports()
     }
 }
 
+void AppShellModule::onPreInit(const IApplication::RunMode&)
+{
+}
+
 void AppShellModule::onInit(const IApplication::RunMode&)
 {
     m_appShellConfiguration->init();
+    m_sessionsManager->init();
 }
 
 void AppShellModule::onAllInited(const IApplication::RunMode&)
@@ -93,7 +107,12 @@ void AppShellModule::onAllInited(const IApplication::RunMode&)
 #endif
 }
 
-// Context
+void AppShellModule::onDeinit()
+{
+    m_sessionsManager->deinit();
+}
+
+// Session
 muse::modularity::IContextSetup* AppShellModule::newContext(const muse::modularity::ContextPtr& ctx) const
 {
     return new AppShellContext(ctx);
@@ -101,20 +120,8 @@ muse::modularity::IContextSetup* AppShellModule::newContext(const muse::modulari
 
 void AppShellContext::registerExports()
 {
-    m_appshellState = std::make_shared<AppShellState>(iocContext());
     m_applicationActionController = std::make_shared<ApplicationActionController>(iocContext());
     m_applicationUiActions = std::make_shared<ApplicationUiActions>(m_applicationActionController, iocContext());
-    m_sessionsManager = std::make_shared<SessionsManager>(iocContext());
-
-    ioc()->registerExport<IAppShellState>(mname, m_appshellState);
-    ioc()->registerExport<IStartupScenario>(mname, new StartupScenario(iocContext()));
-    ioc()->registerExport<ISessionsManager>(mname, m_sessionsManager);
-
-#ifdef Q_OS_MAC
-    ioc()->registerExport<IAppMenuModelHook>(mname, std::make_shared<MacOSAppMenuModelHook>());
-#else
-    ioc()->registerExport<IAppMenuModelHook>(mname, std::make_shared<AppMenuModelHookStub>());
-#endif
 }
 
 void AppShellContext::resolveImports()
@@ -132,15 +139,8 @@ void AppShellContext::onPreInit(const muse::IApplication::RunMode&)
 
 void AppShellContext::onInit(const muse::IApplication::RunMode& mode)
 {
-    m_sessionsManager->init();
-
     if (mode == IApplication::RunMode::GuiApp) {
         m_applicationUiActions->init();
         m_applicationActionController->init();
     }
-}
-
-void AppShellContext::onDeinit()
-{
-    m_sessionsManager->deinit();
 }

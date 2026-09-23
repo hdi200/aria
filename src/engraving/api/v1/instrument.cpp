@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -217,7 +217,8 @@ Channel* ChannelListProperty::at(QQmlListProperty<Channel>* l, qsizetype i)
 
 QString Instrument::longName() const
 {
-    return instrument()->longName().toQString();
+    const StaffNameList& names = instrument()->longNames();
+    return names.empty() ? QString() : names.front().name().toQString();
 }
 
 //---------------------------------------------------------
@@ -226,7 +227,8 @@ QString Instrument::longName() const
 
 QString Instrument::shortName() const
 {
-    return instrument()->shortName().toQString();
+    const StaffNameList& names = instrument()->shortNames();
+    return names.empty() ? QString() : names.front().name().toQString();
 }
 
 //---------------------------------------------------------

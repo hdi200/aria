@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -63,7 +63,6 @@
 namespace mu::notation {
 using Page = mu::engraving::Page;
 using System = mu::engraving::System;
-using SysStaff = mu::engraving::SysStaff;
 using EngravingItem = mu::engraving::EngravingItem;
 using ElementType = mu::engraving::ElementType;
 using PropertyValue = engraving::PropertyValue;
@@ -123,8 +122,8 @@ using BracketType = mu::engraving::BracketType;
 using StaffGroup = mu::engraving::StaffGroup;
 using StaffType = mu::engraving::StaffType;
 using StaffTypeId = mu::engraving::StaffTypes;
-using StaffLabel = mu::engraving::StaffLabel;
-using InstrumentLabel = mu::engraving::InstrumentLabel;
+using StaffName = mu::engraving::StaffName;
+using StaffNameList = mu::engraving::StaffNameList;
 using Segment = mu::engraving::Segment;
 using TextStyleType = mu::engraving::TextStyleType;
 using TraitType = mu::engraving::TraitType;
@@ -513,7 +512,7 @@ struct ScoreConfig
 inline QString staffTypeToString(StaffTypeId type)
 {
     const StaffType* preset = StaffType::preset(type);
-    return preset ? preset->staffTypeName().toQString() : QString();
+    return preset ? preset->name().toQString() : QString();
 }
 
 enum class BracketsType : unsigned char

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -45,8 +45,6 @@ public:
     explicit Notation(MasterNotation* master, const muse::modularity::ContextPtr& iocCtx, engraving::Score* score = nullptr);
     ~Notation() override;
 
-    const muse::modularity::ContextPtr& iocContext() const override;
-
     project::INotationProject* project() const override;
     IMasterNotationPtr masterNotation() const override;
 
@@ -81,18 +79,18 @@ public:
     INotationAccessibilityPtr accessibility() const override;
     INotationPartsPtr parts() const override;
 
-    muse::async::Channel<muse::RectF> notationChanged() const override;
+    muse::async::Notification notationChanged() const override;
 
 protected:
     mu::engraving::Score* score() const override;
     void setScore(mu::engraving::Score* score);
     muse::async::Notification scoreInited() const override;
 
-    void notifyAboutNotationChanged(const muse::RectF& updateRect = muse::RectF());
+    void notifyAboutNotationChanged();
 
     INotationPartsPtr m_parts = nullptr;
     INotationUndoStackPtr m_undoStack = nullptr;
-    muse::async::Channel<muse::RectF> m_notationChanged;
+    muse::async::Notification m_notationChanged;
 
     MasterNotation* m_masterNotation = nullptr;
 

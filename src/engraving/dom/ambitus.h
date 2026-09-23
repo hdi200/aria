@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -26,6 +26,7 @@
 
 #include "pitchspelling.h"
 
+#include "../types/dimension.h"
 #include "../types/types.h"
 
 namespace mu::engraving {
@@ -48,7 +49,7 @@ public:
     static constexpr DirectionH DIRECTION_DEFAULT = DirectionH::AUTO;
     static constexpr bool HASLINE_DEFAULT = true;
     static constexpr Spatium LINEWIDTH_DEFAULT = 0.12_sp;
-    static constexpr Spatium LINEOFFSET_DEFAULT = 0.8_sp;               // the distance between notehead and line
+    static constexpr double LINEOFFSET_DEFAULT = 0.8;               // the distance between notehead and line
 
     Ambitus* clone() const override { return new Ambitus(*this); }
 

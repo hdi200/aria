@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,7 +23,6 @@
 #include <gtest/gtest.h>
 
 #include "engraving/dom/masterscore.h"
-#include "engraving/editing/implodeexplode.h"
 #include "engraving/editing/undo.h"
 
 #include "utils/scorerw.h"
@@ -59,7 +58,7 @@ void Engraving_ImplodeExplodeTests::testUndoExplode(String fileName)
 
     // do
     score->startCmd(TranslatableString::untranslatable("Implode/explode tests"));
-    ImplodeExplode::explode(score);
+    score->cmdExplode();
     score->endCmd();
     EXPECT_TRUE(ScoreComp::saveCompareScore(score, writeFile1, reference1));
 
@@ -90,7 +89,7 @@ void Engraving_ImplodeExplodeTests::testUndoImplode(String filename)
 
     // do
     score->startCmd(TranslatableString::untranslatable("Implode/explode tests"));
-    ImplodeExplode::implode(score);
+    score->cmdImplode();
     score->endCmd();
     EXPECT_TRUE(ScoreComp::saveCompareScore(score, writeFile1, reference1));
 
@@ -130,4 +129,9 @@ TEST_F(Engraving_ImplodeExplodeTests, explodeDynamics)
 TEST_F(Engraving_ImplodeExplodeTests, implodeDynamics)
 {
     testUndoImplode(u"implodeDynamics");
+}
+
+TEST_F(Engraving_ImplodeExplodeTests, implodeArticulations)
+{
+    testUndoImplode(u"implodeArticulations");
 }

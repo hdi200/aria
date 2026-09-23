@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -105,6 +105,9 @@ public:
 
     void reset() override;
 
+    int id() const { return m_id; }
+    void setId(int i) const { m_id = i; }
+
     TDuration baseLen() const { return m_baseLen; }
     void setBaseLen(const TDuration& d) { m_baseLen = d; }
 
@@ -194,6 +197,7 @@ private:
 
     PointF m_p1, m_p2;
     PointF m_userP1, m_userP2;      // user offset
+    mutable int m_id;                   // used during read/write
 
     Text* m_number = nullptr;
 };

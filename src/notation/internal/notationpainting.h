@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MU_NOTATION_NOTATIONPAINTING_H
+#define MU_NOTATION_NOTATIONPAINTING_H
 
 #include "../inotationpainting.h"
 
@@ -28,7 +28,7 @@
 #include "../inotationconfiguration.h"
 #include "engraving/iengravingconfiguration.h"
 #include "engraving/rendering/iscorerenderer.h"
-#include "ui/iuicontextconfiguration.h"
+#include "ui/iuiconfiguration.h"
 
 namespace mu::engraving {
 class Score;
@@ -41,11 +41,11 @@ class NotationPainting : public INotationPainting, public muse::Contextable
 {
     muse::GlobalInject<INotationConfiguration> configuration;
     muse::GlobalInject<engraving::IEngravingConfiguration> engravingConfiguration;
-    muse::GlobalInject<engraving::rendering::IScoreRenderer> scoreRenderer;
-    muse::ContextInject<muse::ui::IUiContextConfiguration> uiConfiguration = { this };
+    muse::GlobalInject<muse::ui::IUiConfiguration> uiConfiguration;
+    muse::ContextInject<engraving::rendering::IScoreRenderer> scoreRenderer = { this };
 
 public:
-    NotationPainting(Notation* notation);
+    NotationPainting(Notation* notation, const muse::modularity::ContextPtr& ctx);
 
     void setViewMode(const ViewMode& viewMode) override;
     ViewMode viewMode() const override;
@@ -55,7 +55,7 @@ public:
     muse::SizeF pageSizeInch() const override;
     muse::SizeF pageSizeInch(const Options& opt) const override;
 
-    void paintView(muse::draw::Painter* painter, const muse::RectF& frameRect, bool isPrinting, bool isAutomation) override;
+    void paintView(muse::draw::Painter* painter, const muse::RectF& frameRect, bool isPrinting) override;
     void paintPdf(muse::draw::Painter* painter, const Options& opt) override;
     void paintPrint(muse::draw::Painter* painter, const Options& opt) override;
     void paintPng(muse::draw::Painter* painter, const Options& opt) override;
@@ -74,3 +74,5 @@ private:
     muse::async::Notification m_viewModeChanged;
 };
 }
+
+#endif // MU_NOTATION_NOTATIONPAINTING_H

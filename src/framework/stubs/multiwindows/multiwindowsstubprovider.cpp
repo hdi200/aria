@@ -108,10 +108,6 @@ void MultiWindowsStubProvider::quitForAll()
 {
 }
 
-void MultiWindowsStubProvider::quitWindow(const modularity::ContextPtr&)
-{
-}
-
 void MultiWindowsStubProvider::quitAllAndRestartLast()
 {
 }

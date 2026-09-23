@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -425,12 +425,12 @@ void TWrite::writeProperty(const EngravingItem* item, XmlWriter& xml, Pid pid, b
     }
 
     P_TYPE type = propertyType(pid);
-    if (P_TYPE::ABSOLUTE == type) {
+    if (P_TYPE::MILLIMETRE == type) {
         double f1 = p.toReal();
         if (d.isValid() && std::abs(f1 - d.toReal()) < 0.0001) {            // fuzzy compare
             return;
         }
-        p = PropertyValue(Spatium::fromAbsolute(f1, item->spatium()));
+        p = PropertyValue(Spatium::fromMM(f1, item->spatium()));
         d = PropertyValue();
     } else if (P_TYPE::POINT == type) {
         PointF p1 = p.value<PointF>();
@@ -534,11 +534,10 @@ void TWrite::writeSystemLock(const SystemLock* systemLock, XmlWriter& xml)
     xml.endElement();
 }
 
-String TWrite::lineBreakToTag(const String& str)
+void TWrite::lineBreakToTag(String& str)
 {
     // Raw newlines appearing next to tags (<font size="10> or <sym>...) get eaten by XML readers.
-    String s = str;
-    return s.replace(u"\n", u"<br/>");
+    str.replace(u"\n", u"<br/>");
 }
 
 void TWrite::writeStyledProperties(const EngravingItem* item, XmlWriter& xml)
@@ -693,7 +692,7 @@ void TWrite::write(const Articulation* item, XmlWriter& xml, WriteContext& ctx)
     if (!ctx.canWrite(item)) {
         return;
     }
-    if (item->isOrnament()) {
+    if (toEngravingItem(item)->isOrnament()) {
         write(toOrnament(item), xml, ctx);
         return;
     }
@@ -918,7 +917,6 @@ void TWrite::write(const Bracket* item, XmlWriter& xml, WriteContext& ctx)
     case BracketType::BRACE:
     case BracketType::SQUARE:
     case BracketType::LINE:
-    case BracketType::GROUP:
     {
         xml.startElement(item, { { "type", TConv::toXml(item->bracketItem()->bracketType()) } });
         isStartTag = true;
@@ -1027,7 +1025,7 @@ void TWrite::write(const Chord* item, XmlWriter& xml, WriteContext& ctx)
     if (item->hook() && item->hook()->isUserModified()) {
         write(item->hook(), xml, ctx);
     }
-    if (item->showStemSlash() && item->isUserModified()) {
+    if (item->showStemSlash() != item->propertyDefault(Pid::SHOW_STEM_SLASH).toBool()) {
         xml.tag("showStemSlash", item->showStemSlash());
     }
     if (item->stemSlash() && item->stemSlash()->isUserModified()) {
@@ -1344,7 +1342,9 @@ void TWrite::writeProperties(const TextBase* item, XmlWriter& xml, WriteContext&
         writeProperty(item, xml, spp.pid);
     }
     if (writeText) {
-        xml.writeXml(u"text", lineBreakToTag(item->xmlText()));
+        String xmlStr = item->xmlText();
+        lineBreakToTag(xmlStr);
+        xml.writeXml(u"text", xmlStr);
     }
 
     writeProperty(item, xml, Pid::TEXT_LINKED_TO_MASTER);
@@ -1915,13 +1915,8 @@ void TWrite::write(const Instrument* item, XmlWriter& xml, WriteContext&, const 
         xml.tag("soundId", item->soundId());
     }
 
-    if (!item->longName().empty()) {
-        xml.writeXml(u"longName", lineBreakToTag(item->longName()));
-    }
-    if (!item->shortName().empty()) {
-        xml.writeXml(u"shortName", lineBreakToTag(item->shortName()));
-    }
-
+    write(item->longNames(), xml, "longName");
+    write(item->shortNames(), xml, "shortName");
 //      if (!_trackName.empty())
     xml.tag("trackName", item->trackName());
     if (item->minPitchP() > MIN_PITCH) {
@@ -2098,100 +2093,23 @@ void TWrite::write(const MidiArticulation* item, XmlWriter& xml)
     xml.endElement();
 }
 
-void TWrite::write(const StaffLabel& item, XmlWriter& xml)
+void TWrite::write(const StaffName& item, XmlWriter& xml, const char* tag)
 {
-    xml.startElement("StaffLabel");
-    writeProperties(item, xml);
-    xml.endElement();
-}
-
-void TWrite::writeProperties(const StaffLabel& item, XmlWriter& xml)
-{
-    String longName = item.longName();
-    if (!longName.empty()) {
-        xml.writeXml(u"longName", lineBreakToTag(longName));
-    }
-
-    String shortName = item.shortName();
-    if (!shortName.empty()) {
-        xml.writeXml(u"shortName", lineBreakToTag(shortName));
+    if (!item.name().isEmpty()) {
+        String name = item.name();
+        lineBreakToTag(name);
+        if (item.pos() == 0) {
+            xml.writeXml(String::fromUtf8(tag), name);
+        } else {
+            xml.writeXml(String(u"%1 pos=\"%2\"").arg(String::fromUtf8(tag)).arg(item.pos()), name);
+        }
     }
 }
 
-void TWrite::write(const InstrumentLabel& item, XmlWriter& xml)
+void TWrite::write(const StaffNameList& item, XmlWriter& xml, const char* name)
 {
-    xml.startElement("InstrumentLabel");
-    writeProperties(item, xml);
-    xml.endElement();
-}
-
-void TWrite::writeProperties(const InstrumentLabel& item, XmlWriter& xml)
-{
-    writeProperties(static_cast<StaffLabel>(item), xml);
-
-    String transposition = item.transposition();
-    if (!transposition.empty()) {
-        xml.writeXml(u"transposition", lineBreakToTag(transposition));
-    }
-
-    if (!item.showTranspositionLong()) {
-        xml.tag("showTranspositionLong", item.showTranspositionLong());
-    }
-
-    if (!item.showTranspositionShort()) {
-        xml.tag("showTranspositionShort", item.showTranspositionShort());
-    }
-
-    if (item.number() != 0) {
-        xml.tag("number", item.number());
-    }
-
-    if (!item.showNumberLong()) {
-        xml.tag("showNumberLong", item.showNumberLong());
-    }
-
-    if (!item.showNumberShort()) {
-        xml.tag("showNumberShort", item.showNumberShort());
-    }
-
-    if (item.useCustomName()) {
-        xml.tag("useCustomName", item.useCustomName());
-    }
-
-    if (!item.customNameLong().empty()) {
-        xml.writeXml(u"customNameLong", item.customNameLong());
-    }
-
-    if (!item.customNameShort().empty()) {
-        xml.writeXml(u"customNameShort", item.customNameShort());
-    }
-
-    if (!item.allowGroupName()) {
-        xml.tag("allowGroupName", item.allowGroupName());
-    }
-
-    if (!item.customNameLongGroup().empty()) {
-        xml.writeXml(u"customNameLongGroup", item.customNameLongGroup());
-    }
-
-    if (!item.customNameShortGroup().empty()) {
-        xml.writeXml(u"customNameShortGroup", item.customNameShortGroup());
-    }
-
-    if (item.useCustomGroupName()) {
-        xml.tag("useCustomGroupName", item.useCustomGroupName());
-    }
-
-    if (!item.customNameLongIndividual().empty()) {
-        xml.writeXml(u"customNameLongIndividual", item.customNameLongIndividual());
-    }
-
-    if (!item.customNameShortIndividual().empty()) {
-        xml.writeXml(u"customNameShortIndividual", item.customNameShortIndividual());
-    }
-
-    if (item.useCustomIndividualName()) {
-        xml.tag("useCustomIndividualName", item.useCustomIndividualName());
+    for (const StaffName& sn : item) {
+        write(sn, xml, name);
     }
 }
 
@@ -2245,7 +2163,7 @@ void TWrite::write(const KeySig* item, XmlWriter& xml, WriteContext& ctx)
             for (const CustDef& cd : item->customKeyDefs()) {
                 xml.startElement("CustDef");
                 xml.tag("sym", SymNames::nameForSymId(cd.sym));
-                xml.tag("def", { { "degree", cd.degree }, { "xAlt", cd.xAlt.val() }, { "octAlt", cd.octAlt } });
+                xml.tag("def", { { "degree", cd.degree }, { "xAlt", cd.xAlt }, { "octAlt", cd.octAlt } });
                 xml.endElement();
             }
         }
@@ -2591,7 +2509,7 @@ void TWrite::write(const Part* item, XmlWriter& xml, WriteContext& ctx)
         xml.tag("soloist", item->soloist());
     }
 
-    xml.tag("trackName", item->trackNameForSave());
+    xml.tag("trackName", item->partName());
 
     if (item->color() != Part::DEFAULT_COLOR) {
         xml.tag("color", item->color());
@@ -2655,22 +2573,7 @@ void TWrite::write(const Pedal* item, XmlWriter& xml, WriteContext& ctx)
         return;
     }
     xml.startElement(item);
-
-    for (auto i : {
-        Pid::END_HOOK_TYPE,
-        Pid::LINE_VISIBLE,
-        Pid::BEGIN_HOOK_TYPE,
-        Pid::BEGIN_TEXT_OFFSET,
-        Pid::CONTINUE_TEXT_OFFSET,
-        Pid::END_TEXT_OFFSET
-    }) {
-        writeProperty(item, xml, i);
-    }
-    for (const StyledProperty& spp : *item->styledProperties()) {
-        writeProperty(item, xml, spp.pid);
-    }
-
-    writeProperties(static_cast<const SLine*>(item), xml, ctx);
+    writeProperties(static_cast<const TextLineBase*>(item), xml, ctx);
     xml.endElement();
 }
 
@@ -2881,7 +2784,7 @@ void TWrite::write(const Staff* item, XmlWriter& xml, WriteContext& ctx)
     for (const BracketItem* i : item->brackets()) {
         BracketType a = i->bracketType();
         size_t b = i->bracketSpan();
-        if (a == BracketType::NO_BRACKET || a == BracketType::GROUP || b == 0) {
+        if (a == BracketType::NO_BRACKET || b == 0) {
             continue;
         }
         XmlWriter::Attributes attrs = {
@@ -2905,28 +2808,6 @@ void TWrite::write(const Staff* item, XmlWriter& xml, WriteContext& ctx)
     writeProperty(item, xml, Pid::PLAYBACK_VOICE3);
     writeProperty(item, xml, Pid::PLAYBACK_VOICE4);
     writeProperty(item, xml, Pid::SHOW_MEASURE_NUMBERS);
-
-    xml.endElement();
-}
-
-void TWrite::write(const BracketItem* item, XmlWriter& xml)
-{
-    if (item->bracketType() == BracketType::NO_BRACKET) {
-        return;
-    }
-
-    xml.startElement(item);
-
-    xml.tag("type", TConv::toXml(item->bracketType()));
-    writeProperty(item, xml, Pid::BRACKET_SPAN, /*force*/ true);
-    writeProperty(item, xml, Pid::BRACKET_COLUMN, /*force*/ true);
-    writeProperty(item, xml, Pid::VISIBLE);
-
-    if (item->bracketType() == BracketType::GROUP) {
-        writeProperty(item, xml, Pid::GROUP_BRACKET_SHOW_TEXT);
-        writeProperty(item, xml, Pid::GROUP_BRACKET_SHOW_BRACKET);
-        write(item->label(), xml);
-    }
 
     xml.endElement();
 }
@@ -3530,6 +3411,8 @@ static void writeTimeSig(Score* score, const Fraction& tick, XmlWriter& xml, Wri
     TimeSig* ts = Factory::createTimeSig(score->dummy()->segment());
     ts->setSig(tsf);
     TWrite::write(ts, xml, ctx);
+    ts->masterScore()->eidRegister()->removeItem(ts);
+    delete ts;
 }
 
 //---------------------------------------------------------
@@ -3711,6 +3594,7 @@ void TWrite::writeSegments(XmlWriter& xml, WriteContext& ctx, track_idx_t strack
                     KeySig* ks = Factory::createKeySig(score->dummy()->segment());
                     ks->setKey(ck, tk);
                     TWrite::write(ks, xml, ctx);
+                    ks->masterScore()->eidRegister()->removeItem(ks);
                     delete ks;
                     keySigWritten = true;
                 }

@@ -30,16 +30,5 @@ class UpdateModule : public modularity::IModuleSetup
 public:
     std::string moduleName() const override;
     void registerExports() override;
-
-    modularity::IContextSetup* newContext(const muse::modularity::ContextPtr& ctx) const override;
-};
-
-class UpdateContext : public modularity::IContextSetup
-{
-public:
-    UpdateContext(const muse::modularity::ContextPtr& ctx)
-        : modularity::IContextSetup(ctx) {}
-
-    void registerExports() override;
 };
 }

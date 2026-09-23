@@ -33,11 +33,7 @@ using namespace muse::accessibility;
 NavigationPanel::NavigationPanel(QObject* parent)
     : AbstractNavigation(parent)
 {
-}
-
-NavigationPanel::NavigationPanel(const muse::modularity::ContextPtr& iocCtx, QObject* parent)
-    : AbstractNavigation(iocCtx, parent)
-{
+    accessible()->setRole(MUAccessible::Panel);
 }
 
 NavigationPanel::~NavigationPanel()
@@ -49,8 +45,6 @@ NavigationPanel::~NavigationPanel()
 
 void NavigationPanel::componentComplete()
 {
-    accessible()->setRole(MUAccessible::Panel);
-
     AbstractNavigation::componentComplete();
 }
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>9Je8EOSdoiK_qjT8dFWC6nG</eid>
     <Division>480</Division>
@@ -30,11 +30,10 @@
           <name>Standard</name>
           </StaffType>
         </Staff>
+      <trackName>Violin</trackName>
       <Instrument id="violin">
-        <InstrumentLabel>
-          <longName>Violin</longName>
-          <shortName>Vln.</shortName>
-          </InstrumentLabel>
+        <longName>Violin</longName>
+        <shortName>Vln.</shortName>
         <trackName>Violin</trackName>
         <minPitchP>55</minPitchP>
         <maxPitchP>103</maxPitchP>
@@ -82,11 +81,10 @@
           <name>Standard</name>
           </StaffType>
         </Staff>
+      <trackName>Viola</trackName>
       <Instrument id="viola">
-        <InstrumentLabel>
-          <longName>Viola</longName>
-          <shortName>Vla.</shortName>
-          </InstrumentLabel>
+        <longName>Viola</longName>
+        <shortName>Vla.</shortName>
         <trackName>Viola</trackName>
         <minPitchP>48</minPitchP>
         <maxPitchP>93</maxPitchP>

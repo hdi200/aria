@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -235,6 +235,11 @@ void RepeatList::updateTempo()
         return;
     }
 
+    // Collect the end-ticks of all segments that carry a section-break pause.
+    // tick2time() always includes the pause at the queried tick, so for repeated
+    // sections every segment ending at a section break would accumulate the pause
+    // once per iteration.  We subtract it from non-final segments so that it is
+    // counted only once (in the last segment, where s->pause > 0.0).
     std::set<int> sectionBreakEndTicks;
     for (RepeatSegment* s : *this) {
         if (s->pause > 0.0) {
@@ -253,6 +258,8 @@ void RepeatList::updateTempo()
         int len       = s->len();
         utick        += len;
         double delta  = tl->tick2time(s->tick + len) - ct;
+        // For a non-final segment that ends at a section break, remove the
+        // section-break pause from the delta so the pause is not double-counted.
         if (s->pause == 0.0 && sectionBreakEndTicks.count(s->tick + len)) {
             delta -= tl->pauseSecs(s->tick + len);
         }
@@ -535,60 +542,61 @@ void RepeatList::collectRepeatListElements()
     volta = nullptr;
     for (; mb; mb = mb->next()) {
         if (mb->isMeasure()) {
-            Measure* m = toMeasure(mb);
             sectionEndMeasureBase = mb; // ending measure of section is the most recently encountered actual Measure
 
             // Volta ?
-            if ((!preProcessedVoltas.empty()) && (preProcessedVoltas.front()->startMeasure() == m)) {
+            if ((!preProcessedVoltas.empty()) && (preProcessedVoltas.front()->startMeasure() == mb)) {
                 if (volta != nullptr) {
-                    //if (volta->endMeasure()->tick() < m->tick()) {
+                    //if (volta->endMeasure()->tick() < mb->tick()) {
                     // The previous volta was supposed to end before us (open volta case) -> insert the end
-                    sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, m->prevMeasure()));
+                    sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, toMeasure(
+                                                                          mb->prevMeasure())));
                     //volta = nullptr; // No need, replaced immediately further down
                     //      }
                     //else { // Overlapping voltas; this should not happen as preProcessedVoltas should've dealt with this already }
                 }
                 // Now insert the start of the current volta
                 volta = preProcessedVoltas.front();
-                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_START, volta, m));
+                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_START, volta, toMeasure(mb)));
                 // Look for start of next volta
                 preProcessedVoltas.pop_front();
             }
             // Start
-            if (m->repeatStart()) {
+            if (mb->repeatStart()) {
                 if (volta != nullptr) {
-                    if (volta->startMeasure() != m) {
+                    if (volta->startMeasure() != toMeasure(mb)) {
                         // Volta and Start repeat are not on the same measure
                         // assume the previous volta was supposed to end before us (open volta case) -> insert the end
                         // Warning: This might "break" a volta prematurely if its explicit notated end is later than this point
                         //          Consider splitting the volta or ignoring this repeat all together
-                        sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, m->prevMeasure()));
+                        sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta,
+                                                                          toMeasure(mb->prevMeasure())));
                         volta = nullptr;
                     }
                     //else { // Volta and Start Repeat coincide on the same measure, see test::repeat56.mscx }
                 }
-                startFromRepeatMeasure = new RepeatListElement(RepeatListElementType::REPEAT_START, m, m);
+                startFromRepeatMeasure = new RepeatListElement(RepeatListElementType::REPEAT_START, mb, toMeasure(mb));
                 sectionRLElements.push_back(startFromRepeatMeasure);
             }
             // Jumps and Markers
-            for (EngravingItem* e : m->el()) {
+            for (EngravingItem* e : mb->el()) {
                 if (e->systemFlag() && !e->isTopSystemObject()) {
                     continue;
                 }
 
                 if (e->isJump()) {
-                    sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::JUMP, e, m));
+                    sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::JUMP, e, toMeasure(mb)));
                     if (volta != nullptr) {
-                        if ((volta->endMeasure()->tick() < m->tick())
-                            || ((volta->endMeasure()->tick() == m->tick())
+                        if ((volta->endMeasure()->tick() < mb->tick())
+                            || ((volta->endMeasure()->tick() == mb->tick())
                                 && (volta->getProperty(Pid::END_HOOK_TYPE).value<HookType>() == HookType::NONE)
                                 )
                             ) {
                             // The previous volta was supposed to end before us
                             // or open volta ends together with us -> insert the end
-                            if (!m->repeatEnd()) {
+                            if (!mb->repeatEnd()) {
                                 // But only do so if this measure doesn't also have an end repeat: see #327681
-                                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, m));
+                                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, toMeasure(mb)));
                                 volta = nullptr;
                             }
                             //else {
@@ -599,7 +607,7 @@ void RepeatList::collectRepeatListElements()
                         //else { // Volta is spanning past this jump instruction }
                     }
                 } else if (e->isMarker()) {
-                    RepeatListElement* markerRLE = new RepeatListElement(RepeatListElementType::MARKER, e, m);
+                    RepeatListElement* markerRLE = new RepeatListElement(RepeatListElementType::MARKER, e, toMeasure(mb));
                     // There may be multiple markers in the same measure. Make sure we place right markers before left
                     // At the same time, we should ensure Markers are evaluated before Jumps
                     bool markerRLEisRight = toMarker(e)->isRightMarker();
@@ -629,15 +637,15 @@ void RepeatList::collectRepeatListElements()
                 }
             }
             // End
-            if (m->repeatEnd()) {
-                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::REPEAT_END, m, m));
+            if (mb->repeatEnd()) {
+                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::REPEAT_END, mb, toMeasure(mb)));
                 if (startFromRepeatMeasure != nullptr) {
-                    startFromRepeatMeasure->addToRepeatCount(m->repeatCount() - 1);
+                    startFromRepeatMeasure->addToRepeatCount(toMeasure(mb)->repeatCount() - 1);
                 }
                 if (volta != nullptr) {
-                    //if (volta->endMeasure()->tick() < m->tick()) {
+                    //if (volta->endMeasure()->tick() < mb->tick()) {
                     // The previous volta was supposed to end before us (open volta case) -> insert the end
-                    sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, m));
+                    sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, toMeasure(mb)));
                     volta = nullptr;
                     //} else {
                     //    // Volta is spanning over this end repeat, consider splitting the volta
@@ -647,10 +655,10 @@ void RepeatList::collectRepeatListElements()
             }
             // Volta end
             if ((volta != nullptr)
-                && (volta->endMeasure()->tick() == m->tick())
+                && (volta->endMeasure()->tick() == mb->tick())
                 && (volta->getProperty(Pid::END_HOOK_TYPE).value<HookType>() != HookType::NONE)) {
                 // end of closed volta
-                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, m));
+                sectionRLElements.push_back(new RepeatListElement(RepeatListElementType::VOLTA_END, volta, toMeasure(mb)));
                 volta = nullptr;
             }
         }

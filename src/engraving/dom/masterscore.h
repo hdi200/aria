@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -171,8 +171,6 @@ public:
     void initEmptyExcerpt(Excerpt*);
     void markExcerptInited(Excerpt*);
 
-    void initAutomation(); // TODO: Placeholder?
-
     void setPlaybackScore(Score*);
     Score* playbackScore() { return m_playbackScore; }
     const Score* playbackScore() const { return m_playbackScore; }
@@ -248,4 +246,6 @@ private:
     // We can't yet, because m_project is not set on every MasterScore
     IFileInfoProviderPtr m_fileInfoProvider;
 };
+
+extern MasterScore* gpaletteScore;
 }

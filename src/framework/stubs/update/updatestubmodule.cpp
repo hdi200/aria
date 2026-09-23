@@ -31,25 +31,14 @@
 using namespace muse::update;
 using namespace muse::modularity;
 
-static const std::string mname("update_stub");
-
 std::string UpdateModule::moduleName() const
 {
-    return mname;
+    return "update_stub";
 }
 
 void UpdateModule::registerExports()
 {
-    globalIoc()->registerExport<IUpdateConfiguration>(mname, new UpdateConfigurationStub());
-}
-
-IContextSetup* UpdateModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new UpdateContext(ctx);
-}
-
-void UpdateContext::registerExports()
-{
-    ioc()->registerExport<IAppUpdateService>(mname, std::make_shared<AppUpdateServiceStub>());
-    ioc()->registerExport<IAppUpdateScenario>(mname, std::make_shared<AppUpdateScenarioStub>());
+    ioc()->registerExport<IAppUpdateService>(moduleName(), std::make_shared<AppUpdateServiceStub>());
+    ioc()->registerExport<IAppUpdateScenario>(moduleName(), std::make_shared<AppUpdateScenarioStub>());
+    ioc()->registerExport<IUpdateConfiguration>(moduleName(), std::make_shared<UpdateConfigurationStub>());
 }

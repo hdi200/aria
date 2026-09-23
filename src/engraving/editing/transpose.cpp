@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -511,27 +511,19 @@ void Transpose::transposeChord(Chord* c, const Fraction& tick)
 
 Interval Transpose::keydiff2Interval(Key oKey, Key nKey, TransposeDirection dir)
 {
-    static int stepTable[STEP_DELTA_OCTAVE] = {
-        // C  G  D  A  E  B F
-        0, 4, 1, 5, 2, 6, 3,
-    };
+    int diatonic = tpc2step(key2Tpc(nKey)) - tpc2step(key2Tpc(oKey));
+    int chromatic = ((int(nKey) - int(oKey)) + (diatonic * TPC_DELTA_ENHARMONIC)) / TPC_DELTA_SEMITONE;
 
-    int cofSteps = (nKey > oKey) ? int(nKey) - int(oKey) : int(nKey) - int(oKey) + PITCH_DELTA_OCTAVE; // circle of fifth steps
-    int diatonic = stepTable[(int(nKey) + 7) % 7] - stepTable[(int(oKey) + 7) % 7];
-    if (diatonic < 0) {
-        diatonic += STEP_DELTA_OCTAVE;
-    }
-    diatonic %= STEP_DELTA_OCTAVE;
-    int chromatic = (cofSteps * 7) % PITCH_DELTA_OCTAVE;
-
-    if ((dir == TransposeDirection::CLOSEST) && (chromatic > 6)) {
-        dir = TransposeDirection::DOWN;
+    if ((dir == TransposeDirection::CLOSEST && chromatic > 6)
+        || (dir == TransposeDirection::DOWN && chromatic > 0)) {
+        diatonic -= 7;
+        chromatic -= 12;
+    } else if ((dir == TransposeDirection::CLOSEST && chromatic < -6)
+               || (dir == TransposeDirection::UP && chromatic < 0)) {
+        diatonic += 7;
+        chromatic += 12;
     }
 
-    if (dir == TransposeDirection::DOWN) {
-        chromatic = chromatic == 0 ? 0 : chromatic - 12;
-        diatonic  = diatonic == 0 ? 0 : diatonic - 7;
-    }
     return Interval(diatonic, chromatic);
 }
 
@@ -732,35 +724,25 @@ int Transpose::transposeTpc(int tpc, Interval interval, bool useDoubleSharpsFlat
     return clampEnharmonic(tpc + deltaTpc, useDoubleSharpsFlats);
 }
 
-//---------------------------------------------------------
-//   undoTransposeHarmony
-//---------------------------------------------------------
-
-namespace {
-class TransposeHarmony : public UndoCommand
+void Transpose::undoTransposeHarmony(Score* score, Harmony* harmony, Interval interval, bool doubleSharpFlat)
 {
-    OBJECT_ALLOCATOR(engraving, TransposeHarmony)
+    score->undo(new TransposeHarmony(harmony, interval, doubleSharpFlat));
+}
 
-public:
-    TransposeHarmony(Harmony* harmony, Interval interval, bool useDoubleSharpsFlats)
-        : m_harmony(harmony)
-        , m_interval(interval)
-        , m_useDoubleSharpsFlats(useDoubleSharpsFlats)
-    {
-    }
+void Transpose::undoTransposeHarmonyDiatonic(Score* score, Harmony* harmony, int interval, bool doubleSharpFlat, bool transposeKeys)
+{
+    score->undo(new TransposeHarmonyDiatonic(harmony, interval, doubleSharpFlat, transposeKeys));
+}
 
-    UNDO_TYPE(CommandType::TransposeHarmony)
-    UNDO_NAME("TransposeHarmony")
-    UNDO_CHANGED_OBJECTS({ m_harmony })
+//---------------------------------------------------------
+//   TransposeHarmony
+//---------------------------------------------------------
 
-private:
-    void flip(EditData*) override;
-
-    Harmony* m_harmony = nullptr;
-
-    Interval m_interval = Interval(0, 0);
-    bool m_useDoubleSharpsFlats = false;
-};
+TransposeHarmony::TransposeHarmony(Harmony* h, Interval interval, bool doubleSharpsFlats)
+{
+    m_harmony = h;
+    m_interval = interval;
+    m_useDoubleSharpsFlats = doubleSharpsFlats;
 }
 
 void TransposeHarmony::flip(EditData*)
@@ -777,41 +759,16 @@ void TransposeHarmony::flip(EditData*)
     m_interval.flip();
 }
 
-void Transpose::undoTransposeHarmony(Score* score, Harmony* harmony, Interval interval, bool doubleSharpFlat)
-{
-    score->undo(new TransposeHarmony(harmony, interval, doubleSharpFlat));
-}
-
 //---------------------------------------------------------
-//   undoTransposeHarmonyDiatonic
+//   TransposeHarmonyDiatonic
 //---------------------------------------------------------
 
-namespace {
-class TransposeHarmonyDiatonic : public UndoCommand
+TransposeHarmonyDiatonic::TransposeHarmonyDiatonic(Harmony* h, int interval, bool useDoubleSharpsFlats, bool transposeKeys)
 {
-    OBJECT_ALLOCATOR(engraving, TransposeHarmonyDiatonic)
-
-public:
-    TransposeHarmonyDiatonic(Harmony* harmony, int interval, bool useDoubleSharpsFlats, bool transposeKeys)
-        : m_harmony(harmony)
-        , m_interval(interval)
-        , m_useDoubleSharpsFlats(useDoubleSharpsFlats)
-        , m_transposeKeys(transposeKeys)
-    {
-    }
-
-    UNDO_TYPE(CommandType::TransposeHarmony)
-    UNDO_NAME("TransposeHarmonyDiatonic")
-    UNDO_CHANGED_OBJECTS({ m_harmony })
-
-private:
-    void flip(EditData*) override;
-
-    Harmony* m_harmony = nullptr;
-    int m_interval = 0;
-    bool m_useDoubleSharpsFlats = false;
-    bool m_transposeKeys = false;
-};
+    m_harmony = h;
+    m_interval = interval;
+    m_useDoubleSharpsFlats = useDoubleSharpsFlats;
+    m_transposeKeys = transposeKeys;
 }
 
 void TransposeHarmonyDiatonic::flip(EditData*)
@@ -834,9 +791,4 @@ void TransposeHarmonyDiatonic::flip(EditData*)
     m_harmony->triggerLayout();
 
     m_interval *= -1;
-}
-
-void Transpose::undoTransposeHarmonyDiatonic(Score* score, Harmony* harmony, int interval, bool doubleSharpFlat, bool transposeKeys)
-{
-    score->undo(new TransposeHarmonyDiatonic(harmony, interval, doubleSharpFlat, transposeKeys));
 }

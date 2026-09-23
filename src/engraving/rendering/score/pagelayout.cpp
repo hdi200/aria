@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -59,7 +59,6 @@
 #include "tlayout.h"
 #include "tupletlayout.h"
 #include "verticalgapdata.h"
-#include "systemheaderlayout.h"
 
 #include "log.h"
 
@@ -126,13 +125,17 @@ void PageLayout::collectPage(LayoutContext& ctx)
 
     LAYOUT_CALL() << "pageNumber: " << page->pageNumber();
 
+    /* The page count will be wrong unless this is the final page, but we need to
+     * take into account the space taken up by headers/footers, when positioning
+     * other elements. If there was a page count involved, all headers/footers will
+     * be re-computed after all pages are laid out */
     HeaderFooterLayout::layoutHeaderFooter(ctx, page);
 
-    const double slb = conf.styleAbsolute(Sid::staffLowerBorder);
+    const double slb = conf.styleMM(Sid::staffLowerBorder);
     const bool breakPages = conf.viewMode() != LayoutMode::SYSTEM;
     const double footerExtension = HeaderFooterLayout::footerExtension(ctx, page);
     const double headerExtension = HeaderFooterLayout::headerExtension(ctx, page);
-    const double headerFooterPadding = conf.styleAbsolute(Sid::staffHeaderFooterPadding);
+    const double headerFooterPadding = conf.styleMM(Sid::staffHeaderFooterPadding);
     const double endY = page->height() - page->bm();
     double y = 0.0;
 
@@ -173,7 +176,7 @@ void PageLayout::collectPage(LayoutContext& ctx)
                 // to avoid collisions
                 distance = headerExtension ? headerExtension + headerFooterPadding : 0.0;
             } else {
-                distance = ctx.conf().styleAbsolute(Sid::staffUpperBorder);
+                distance = ctx.conf().styleMM(Sid::staffUpperBorder);
                 bool fixedDistance = false;
                 for (MeasureBase* mb : ctx.mutState().curSystem()->measures()) {
                     if (mb->isMeasure()) {
@@ -232,7 +235,7 @@ void PageLayout::collectPage(LayoutContext& ctx)
         }
 
         if (ctx.dom().lastSegment()) {
-            float curPercent = static_cast<float>(ctx.state().measureNumber()) / ctx.dom().lastSegment()->measure()->index();
+            float curPercent = static_cast<float>(ctx.state().measureNo()) / ctx.dom().lastSegment()->measure()->index();
             page->score()->layoutProgressChannel().send(curPercent);
         }
 
@@ -251,9 +254,7 @@ void PageLayout::collectPage(LayoutContext& ctx)
                     dist += footerExtension;
                 }
             } else if (!ctx.state().prevSystem()->hasFixedDownDistance()) {
-                // Down spacers define distance to the following system, not to the page footer.
-                // Using them here can visually pin/stretch the current system to page edge.
-                double margin = ctx.state().curSystem()->minBottom();
+                double margin = std::max(ctx.state().curSystem()->minBottom(), ctx.state().curSystem()->spacerDistance(false));
                 // ensure it doesn't collide with footer
                 if (footerExtension > 0) {
                     margin += footerExtension + headerFooterPadding;
@@ -263,10 +264,7 @@ void PageLayout::collectPage(LayoutContext& ctx)
             isPageBreak = (y + dist) >= endY && breakPages;
         }
         if (isPageBreak) {
-            double dist = ctx.state().prevSystem()->minBottom();
-            if (!ctx.conf().isVerticalSpreadEnabled()) {
-                dist = std::max(dist, ctx.state().prevSystem()->spacerDistance(false));
-            }
+            double dist = std::max(ctx.state().prevSystem()->minBottom(), ctx.state().prevSystem()->spacerDistance(false));
             double footerPadding = 0.0;
             // ensure it doesn't collide with footer
             if (footerExtension > 0) {
@@ -700,7 +698,7 @@ void PageLayout::distributeStaves(LayoutContext& ctx, Page* page, double footerP
         }
     }
     --ngaps;
-    const double staffLowerBorder = ctx.conf().styleAbsolute(Sid::staffLowerBorder);
+    const double staffLowerBorder = ctx.conf().styleMM(Sid::staffLowerBorder);
     const double combinedBottomMargin = page->bm() + footerPadding;
     const double marginToStaff = page->bm() + staffLowerBorder;
     double spaceRemaining{ std::min(page->height() - combinedBottomMargin - yBottom, page->height() - marginToStaff - prevYBottom) };
@@ -759,7 +757,7 @@ void PageLayout::distributeStaves(LayoutContext& ctx, Page* page, double footerP
 
     // If there is still space left, distribute the space of the staves.
     // However, there is a limit on how much space is added per gap.
-    const double maxPageFill = ctx.conf().styleAbsolute(Sid::maxPageFillSpread);
+    const double maxPageFill = ctx.conf().styleMM(Sid::maxPageFillSpread);
     spaceRemaining = std::min(maxPageFill * static_cast<double>(vgdl.size()), spaceRemaining);
     pass = 0;
     ngaps = 1;
@@ -809,8 +807,8 @@ void PageLayout::distributeStaves(LayoutContext& ctx, Page* page, double footerP
 
     for (System* system : systems) {
         SystemLayout::setMeasureHeight(system, system->height(), ctx);
-        SystemHeaderLayout::layoutBracketsVertical(system, ctx);
-        SystemHeaderLayout::setInstrumentNamesVerticalPos(system, ctx);
+        SystemLayout::layoutBracketsVertical(system, ctx);
+        SystemLayout::layoutInstrumentNames(system, ctx);
     }
     vgdl.deleteAll();
 }
@@ -868,6 +866,7 @@ void PageLayout::updateSystemDivider(LayoutContext& ctx, System* system, System*
     SystemDivider::LayoutData* ldata = divider->mutldata();
     TLayout::layoutSystemDivider(divider, ldata, ctx);
 
+    double spatium = system->spatium();
     RectF systemBBox = system->ldata()->bbox();
     double xDefault = 0.0;
     if (left) {
@@ -905,11 +904,10 @@ void PageLayout::updateSystemDivider(LayoutContext& ctx, System* system, System*
             xDefault = systemBBox.right() - ldata->bbox().width();
         }
     }
-    double xPos = xDefault
-                  + system->absoluteFromSpatium(left ? ctx.conf().styleS(Sid::dividerLeftX) : ctx.conf().styleS(Sid::dividerRightX));
+    double xPos = xDefault + (left ? ctx.conf().styleS(Sid::dividerLeftX) : ctx.conf().styleS(Sid::dividerRightX)).toMM(spatium);
 
     double yInnerPos = -ldata->bbox().top() - 0.5 * ldata->bbox().height()
-                       + system->absoluteFromSpatium(left ? ctx.conf().styleS(Sid::dividerLeftY) : ctx.conf().styleS(Sid::dividerRightY));
+                       + (left ? ctx.conf().styleS(Sid::dividerLeftY) : ctx.conf().styleS(Sid::dividerRightY)).toMM(spatium);
 
     SysStaff* lastVisibleOfThis = system->staff(system->lastVisibleStaff());
     double bottomOfThisSystem = lastVisibleOfThis->bbox().bottom();

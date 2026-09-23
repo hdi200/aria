@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -95,7 +95,7 @@ void SplitJoinMeasure::splitMeasure(MasterScore* masterScore, const Fraction& ti
 
     // create empty measures:
     Score::InsertMeasureOptions options;
-    options.createMeasureRests = true;
+    options.createEmptyMeasures = true;
     options.moveSignaturesClef = false;
     options.moveStaffTypeChanges = false;
     options.ignoreBarLines = true;
@@ -252,7 +252,7 @@ void SplitJoinMeasure::joinMeasures(MasterScore* masterScore, const Fraction& ti
     masterScore->deleteMeasures(m1, m2, true);
 
     Score::InsertMeasureOptions options;
-    options.createMeasureRests = true;
+    options.createEmptyMeasures = true;
     options.moveSignaturesClef = false;
     options.moveStaffTypeChanges = false;
     options.ignoreBarLines = true;

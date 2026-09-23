@@ -31,18 +31,12 @@ SOFTWARE.
 
 #include "context.h"
 #include "modulesioc.h"
+#include "conf.h"
 
 namespace kors::modularity {
-#ifdef IOC_CHECK_INTERFACE_TYPE
-ModulesGlobalIoC* globalIoc();
-ModulesContextIoC* ioc(const ContextPtr& ctx);
-#else
-ModulesIoCBase* globalIoc();
-ModulesIoCBase* ioc(const ContextPtr& ctx);
-#endif
-
-void removeIoC(const ContextPtr& ctx);
-void resetAll();
+ModulesIoC* globalIoc();
+ModulesIoC* ioc(const ContextPtr& ctx);
+void removeIoC(const ContextPtr& ctx = nullptr);
 
 //! NOTE Internal base class
 template<class I>
@@ -69,37 +63,25 @@ public:
     const std::shared_ptr<I>& get() const
     {
         if (!m_i) {
-            if constexpr (I::modularity_isGlobalInterface()) {
-                doResolve(globalIoc());
-            } else {
-#ifdef IOC_CHECK_INTERFACE_TYPE
-                doResolve(ioc(iocContext()));
-#else
-                if (iocContext()) {
-                    doResolve(ioc(iocContext()));
-                    if (!m_i) {
-                        //! NOTE Temporary for compatibility
-                        doResolve(globalIoc());
-                    }
-                } else {
-                    //! NOTE Temporary for compatibility
-                    doResolve(globalIoc());
-                }
-#endif
+            static std::string_view module = "";
+            m_i = ioc(iocContext())->template resolve<I>(module);
+
+            if (!m_i && conf::FALLBACK_TO_GLOBAL) {
+                m_i = globalIoc()->template resolve<I>(module);
             }
         }
         return m_i;
-    }
-
-    const std::shared_ptr<I>& operator()() const
-    {
-        return get();
     }
 
     /// For testing purposes only. Not thread-safe.
     void set(std::shared_ptr<I> impl)
     {
         m_i = impl;
+    }
+
+    const std::shared_ptr<I>& operator()() const
+    {
+        return get();
     }
 
 protected:
@@ -113,23 +95,9 @@ protected:
     {
     }
 
-    template<class C>
-    void doResolve(const C& ioc) const
-    {
-        static std::string_view module = "";
-        m_i = ioc->template resolve<I>(module);
-        if (m_i) {
-            m_subscriber.onChanged = [this](const std::shared_ptr<I>& p) {
-                m_i = p;
-            };
-            ioc->template subscribe<I>(&m_subscriber);
-        }
-    }
-
     const ContextPtr m_ctx;
     const Contextable* m_inj = nullptr;
     mutable std::shared_ptr<I> m_i = nullptr;
-    mutable Subscriber<I> m_subscriber;
 };
 
 template<class I>

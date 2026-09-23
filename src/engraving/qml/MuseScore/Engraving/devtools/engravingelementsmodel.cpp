@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -224,7 +224,7 @@ void EngravingElementsModel::reload()
     EngravingObjectSet notpalettes;
 
     for (const mu::engraving::EngravingObject* el : elements) {
-        if (el->score()->isPaletteScore()) {
+        if (el == mu::engraving::gpaletteScore || el->score() == mu::engraving::gpaletteScore) {
             continue;
         }
 
@@ -252,7 +252,7 @@ void EngravingElementsModel::load(const EngravingObjectSet& elements, Item* root
 {
     TRACEFUNC;
     for (const mu::engraving::EngravingObject* el : elements) {
-        if (el->score()->isPaletteScore()) {
+        if (el == mu::engraving::gpaletteScore) {
             continue;
         }
 

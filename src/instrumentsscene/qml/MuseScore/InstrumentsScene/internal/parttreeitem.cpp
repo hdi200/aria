@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -53,7 +53,7 @@ void PartTreeItem::init(const notation::Part* masterPart)
 
     setId(part->id());
 
-    const String instName = part->partName();
+    const String instName = part->instrument()->nameAsPlainText();
     setTitle(instName.simplified()); // Collapse whitespace...
 
     setIsVisible(visible);
@@ -77,7 +77,7 @@ void PartTreeItem::onScoreChanged(const mu::engraving::ScoreChanges&)
         return;
     }
 
-    const String instName = m_part->partName();
+    const String instName = m_part->instrument()->nameAsPlainText();
     setTitle(instName.simplified()); // Collapse whitespace...
 
     m_ignoreVisibilityChange = true;

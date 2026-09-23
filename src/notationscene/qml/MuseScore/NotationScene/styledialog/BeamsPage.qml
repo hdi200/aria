@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,159 +29,146 @@ import Muse.Ui
 import Muse.UiComponents
 import MuseScore.NotationScene
 
-StyledFlickable {  
+StyleDialogPage {
     id: root
-
-    contentWidth: Math.max(column.implicitWidth, root.width)
-    contentHeight: column.implicitHeight
 
     BeamsPageModel {
         id: beamsPageModel
     }
 
-    ColumnLayout {
-        id: column
-        width: parent.width
-        spacing: 12
+    ItemWithTitle {
+        title: qsTrc("notation", "Beam distance")
 
-        ItemWithTitle {
-            Layout.fillWidth: true
-            title: qsTrc("notation", "Beam distance")
+        RadioButtonGroup {
+            Layout.preferredHeight: 70
+            spacing: 12
+
+            model: [
+                { iconCode: IconCode.USE_WIDE_BEAMS_REGULAR, text: qsTrc("notation", "Regular"), value: false },
+                { iconCode: IconCode.USE_WIDE_BEAMS_WIDE, text: qsTrc("notation", "Wide"), value: true }
+            ]
+
+            delegate: FlatRadioButton {
+                id: delegateItem
+
+                required property var modelData
+                required property bool value
+
+                width: 106
+                height: 70
+
+                checked: modelData.value === beamsPageModel.useWideBeams.value
+
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    StyledIconLabel {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        iconCode: delegateItem.modelData.iconCode
+                        font.pixelSize: 28
+                    }
+
+                    StyledTextLabel {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: delegateItem.modelData.text
+                    }
+                }
+
+                onToggled: {
+                    beamsPageModel.useWideBeams.value = modelData.value
+                }
+            }
+        }
+    }
+
+    ItemWithTitle {
+        title: qsTrc("notation", "Beam thickness")
+
+        IncrementalPropertyControl {
+            Layout.preferredWidth: 106
+
+            currentValue: beamsPageModel.beamWidth.value
+
+            minValue: 0
+            maxValue: 99
+            step: 0.01
+            decimals: 2
+            measureUnitsSymbol: qsTrc("global", "sp")
+
+            onValueEdited: function(newValue) {
+                beamsPageModel.beamWidth.value = newValue
+            }
+        }
+    }
+
+    ItemWithTitle {
+        title: qsTrc("notation", "Broken beam minimum length")
+
+        IncrementalPropertyControl {
+            Layout.preferredWidth: 106
+
+            currentValue: beamsPageModel.beamMinLen.value
+
+            minValue: 0
+            maxValue: 99
+            step: 0.05
+            decimals: 2
+            measureUnitsSymbol: qsTrc("global", "sp")
+
+            onValueEdited: function(newValue) {
+                beamsPageModel.beamMinLen.value = newValue
+            }
+        }
+    }
+
+    CheckBox {
+        width: parent.width
+        text: qsTrc("notation", "Flatten all beams")
+        checked: beamsPageModel.beamNoSlope.value
+        onClicked: {
+            beamsPageModel.beamNoSlope.value = !checked
+        }
+    }
+
+    StyledGroupBox {
+        width: parent.width
+        height: Math.max(120, implicitHeight)
+
+        title: qsTrc("notation", "Beam style")
+
+        RowLayout {
+            anchors.fill: parent
+            spacing: 12
 
             RadioButtonGroup {
-                Layout.preferredHeight: 70
+                Layout.fillWidth: true
+
                 spacing: 12
+                orientation: ListView.Vertical
 
                 model: [
-                    { iconCode: IconCode.USE_WIDE_BEAMS_REGULAR, text: qsTrc("notation", "Regular"), value: false },
-                    { iconCode: IconCode.USE_WIDE_BEAMS_WIDE, text: qsTrc("notation", "Wide"), value: true }
+                    { text: qsTrc("notation", "Draw inner stems through beams"), value: false },
+                    { text: qsTrc("notation", "Draw inner stems to nearest beam (“French” style)"), value: true }
                 ]
 
-                delegate: FlatRadioButton {
-                    id: delegateItem
-
-                    required property var modelData
+                delegate: RoundedRadioButton {
+                    required text
                     required property bool value
 
-                    width: 106
-                    height: 70
-
-                    checked: modelData.value === beamsPageModel.useWideBeams.value
-
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 8
-
-                        StyledIconLabel {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            iconCode: delegateItem.modelData.iconCode
-                            font.pixelSize: 28
-                        }
-
-                        StyledTextLabel {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: delegateItem.modelData.text
-                        }
-                    }
-
+                    width: ListView.view.width
+                    checked: value === beamsPageModel.frenchStyleBeams.value
                     onToggled: {
-                        beamsPageModel.useWideBeams.value = modelData.value
+                        beamsPageModel.frenchStyleBeams.value = value
                     }
                 }
             }
-        }
 
-        ItemWithTitle {
-            Layout.fillWidth: true
-            title: qsTrc("notation", "Beam thickness")
-
-            IncrementalPropertyControl {
-                Layout.preferredWidth: 106
-
-                currentValue: beamsPageModel.beamWidth.value
-
-                minValue: 0
-                maxValue: 99
-                step: 0.01
-                decimals: 2
-                measureUnitsSymbol: qsTrc("global", "sp")
-
-                onValueEdited: function(newValue) {
-                    beamsPageModel.beamWidth.value = newValue
-                }
-            }
-        }
-
-        ItemWithTitle {
-            Layout.fillWidth: true
-            title: qsTrc("notation", "Broken beam minimum length")
-
-            IncrementalPropertyControl {
-                Layout.preferredWidth: 106
-
-                currentValue: beamsPageModel.beamMinLen.value
-
-                minValue: 0
-                maxValue: 99
-                step: 0.05
-                decimals: 2
-                measureUnitsSymbol: qsTrc("global", "sp")
-
-                onValueEdited: function(newValue) {
-                    beamsPageModel.beamMinLen.value = newValue
-                }
-            }
-        }
-
-        CheckBox {
-            Layout.fillWidth: true
-            text: qsTrc("notation", "Flatten all beams")
-            checked: beamsPageModel.beamNoSlope.value
-            onClicked: {
-                beamsPageModel.beamNoSlope.value = !checked
-            }
-        }
-
-        StyledGroupBox {
-            Layout.fillWidth: true
-            height: Math.max(120, implicitHeight)
-
-            title: qsTrc("notation", "Beam style")
-
-            RowLayout {
-                anchors.fill: parent
-                spacing: 12
-
-                RadioButtonGroup {
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 300
-
-                    spacing: 12
-                    orientation: ListView.Vertical
-
-                    model: [
-                        { text: qsTrc("notation", "Draw inner stems through beams"), value: false },
-                        { text: qsTrc("notation", "Draw inner stems to nearest beam (“French” style)"), value: true }
-                    ]
-
-                    delegate: RoundedRadioButton {
-                        required text
-                        required property bool value
-
-                        width: ListView.view.width
-                        checked: value === beamsPageModel.frenchStyleBeams.value
-                        onToggled: {
-                            beamsPageModel.frenchStyleBeams.value = value
-                        }
-                    }
-                }
-
-                StyledImage {
-                    forceWidth: 140
-                    forceHeight: 52
-                    verticalPadding: 12
-                    source: beamsPageModel.frenchStyleBeams.value ? "beamImages/beam_style_french.svg" : "beamImages/beam_style_regular.svg"
-                }
+            StyledImage {
+                forceWidth: 140
+                forceHeight: 52
+                verticalPadding: 12
+                source: beamsPageModel.frenchStyleBeams.value ? "beamImages/beam_style_french.svg" : "beamImages/beam_style_regular.svg"
             }
         }
     }

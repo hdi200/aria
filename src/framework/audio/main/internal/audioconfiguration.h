@@ -63,6 +63,7 @@ public:
     void setSampleRate(unsigned int sampleRate) override;
     async::Notification sampleRateChanged() const override;
 
+    OutputSpec defaultOutputSpec() const override;
     OutputSpec desiredOutputSpec() const override;
 
     io::paths_t soundFontDirectories() const override;
@@ -74,6 +75,10 @@ public:
     void setAutoProcessOnlineSoundsInBackground(bool process) override;
     async::Channel<bool> autoProcessOnlineSoundsInBackgroundChanged() const override;
 
+    bool useSoundFontLowPassFilter() const override;
+    void setUseSoundFontLowPassFilter(bool value) override;
+    async::Channel<bool> useSoundFontLowPassFilterChanged() const override;
+
     bool shouldMeasureInputLag() const override;
 
 private:
@@ -82,6 +87,7 @@ private:
     async::Channel<io::paths_t> m_soundFontDirsChanged;
     async::Channel<samples_t> m_samplesToPreallocateChanged;
     async::Channel<bool> m_autoProcessOnlineSoundsInBackgroundChanged;
+    async::Channel<bool> m_useSoundFontLowPassFilterChanged;
 
     async::Notification m_currentAudioApiChanged;
     async::Notification m_audioOutputDeviceIdChanged;

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -59,33 +59,31 @@ Rectangle {
             id: menu
 
             Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
-            Layout.fillWidth: menu.truncated ? true : false
-            Layout.preferredWidth: implicitWidth
-            Layout.preferredHeight: implicitHeight
-
-            availableWidth: root.width - (content.spacing + titleLabel.minDistanceFromMenu + titleTextmetrics.width + content.spacing + systemButtons.width)
+            Layout.preferredWidth: width
+            Layout.preferredHeight: height
         }
 
         StyledTextLabel {
             id: titleLabel
 
-            readonly property int minDistanceFromMenu: 24
-
-            Layout.fillWidth: !menu.truncated ? true : false
+            Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.minimumWidth: titleTextmetrics.advanceWidth
 
             horizontalAlignment: Text.AlignLeft
             verticalAlignment: Text.AlignVCenter
             leftPadding: {
                 var parentCenterX = parent.width / 2
                 var expectedTextCenterX = parentCenterX - titleTextmetrics.width / 2
-                return Math.max(expectedTextCenterX - x, minDistanceFromMenu)
+                if (expectedTextCenterX > x) {
+                    return expectedTextCenterX - x
+                }
+
+                return 0
             }
 
             text: titleTextmetrics.elidedText
             textFormat: Text.RichText
-            font: ui.theme.bodyFont
+            font: ui.theme.defaultFont
 
             visible: root.windowVisibility !== Window.FullScreen
 
@@ -105,7 +103,6 @@ Rectangle {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             Layout.preferredWidth: width
             Layout.preferredHeight: height
-            Layout.minimumWidth: width
 
             windowIsMiximized: root.windowVisibility === Window.Maximized
 

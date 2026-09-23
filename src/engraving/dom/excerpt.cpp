@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -364,6 +364,7 @@ void Excerpt::createExcerpt(Excerpt* excerpt)
         Part* p = new Part(score);
         p->setId(part->id());
         p->setInstrument(*part->instrument());
+        p->setPartName(part->partName());
         p->setPreferSharpFlat(part->preferSharpFlat());
 
         for (Staff* staff : part->staves()) {
@@ -930,9 +931,9 @@ static MeasureBase* cloneMeasure(MeasureBase* mb, Score* score, const Score* osc
         nm->setRepeatEnd(m->repeatEnd());
         nm->setRepeatJump(m->repeatJump());
 
-        nm->setExcludeFromNumbering(m->excludeFromNumbering());
-        nm->setMeasureNumber(m->measureNumber());
-        nm->setMeasureNumberOffset(m->measureNumberOffset());
+        nm->setIrregular(m->irregular());
+        nm->setNo(m->no());
+        nm->setNoOffset(m->noOffset());
         nm->setBreakMultiMeasureRest(m->breakMultiMeasureRest());
 
         for (staff_idx_t dstStaffIdx = 0; dstStaffIdx < sourceStavesIndexes.size(); ++dstStaffIdx) {

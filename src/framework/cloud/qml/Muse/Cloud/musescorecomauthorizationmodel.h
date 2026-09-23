@@ -39,7 +39,7 @@ class MuseScoreComAuthorizationModel : public QObject, public Contextable, publi
 
     QML_ELEMENT
 
-    GlobalInject<IMuseScoreComService> museScoreComService;
+    ContextInject<IMuseScoreComService> museScoreComService = { this };
 
 public:
     explicit MuseScoreComAuthorizationModel(QObject* parent = nullptr);

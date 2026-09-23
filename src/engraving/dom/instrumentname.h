@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,9 +29,6 @@ namespace mu::engraving {
 enum class InstrumentNameType : char {
     LONG, SHORT
 };
-enum class InstrumentNameRole : char {
-    STAFF, PART, GROUP
-};
 
 class System;
 class SysStaff;
@@ -50,11 +47,13 @@ public:
 
     InstrumentName* clone() const override { return new InstrumentName(*this); }
 
+    int layoutPos() const { return m_layoutPos; }
+    void setLayoutPos(int val) { m_layoutPos = val; }
+
+    String instrumentNameTypeName() const;
     InstrumentNameType instrumentNameType() const { return m_instrumentNameType; }
     void setInstrumentNameType(InstrumentNameType v);
-
-    InstrumentNameRole instrumentNameRole() const { return m_instrumentNameRole; }
-    void setInstrumentNameRole(InstrumentNameRole v) { m_instrumentNameRole = v; }
+    void setInstrumentNameType(const String& s);
 
     System* system() const { return toSystem(explicitParent()); }
 
@@ -64,30 +63,16 @@ public:
     double largestStaffSpatium() const;
 
     bool isEditable() const override { return false; }
-
+    PropertyValue getProperty(Pid propertyId) const override;
     bool setProperty(Pid propertyId, const PropertyValue&) override;
+    PropertyValue propertyDefault(Pid) const override;
 
     bool positionRelativeToNoteheadRest() const override { return false; }
-
-    staff_idx_t effectiveStaffIdx() const override;
-
-    struct LayoutData : public TextBase::LayoutData {
-    public:
-        int column() const { return m_column; }
-        void setColumn(int v) { m_column = v; }
-        staff_idx_t endIdxOfGroup() const { return m_endIdxOfGroup; }
-        void setEndIdxOfGroup(staff_idx_t v) { m_endIdxOfGroup = v; }
-
-    private:
-        int m_column = 0;
-        staff_idx_t m_endIdxOfGroup = muse::nidx; // one-after last spanned staff (for GROUP types)
-    };
-    DECLARE_LAYOUTDATA_METHODS(InstrumentName)
 
 private:
 
     InstrumentNameType m_instrumentNameType = InstrumentNameType::LONG;
-    InstrumentNameRole m_instrumentNameRole = InstrumentNameRole::PART;
+    int m_layoutPos = 0;
     SysStaff* m_sysStaff = nullptr;
 };
 } // namespace mu::engraving

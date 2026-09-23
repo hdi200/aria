@@ -172,7 +172,7 @@ void FluidSequencer::addNoteEvent(EventSequenceMap& destination, const mpe::Note
 
         const mpe::ArticulationMeta& meta = artPair.second.meta;
 
-        if (muse::contains(BEND_SUPPORTED_TYPES, meta.type)) {
+        if (!noteEvent.pitchCtx().pitchCurve.empty() && muse::contains(BEND_SUPPORTED_TYPES, meta.type)) {
             addPitchCurve(destination, noteEvent, meta, channelIdx);
             continue;
         }
@@ -237,21 +237,28 @@ void FluidSequencer::addControlChangeEvent(EventSequenceMap& destination, const 
 void FluidSequencer::addControlChange(EventSequenceMap& destination, const mpe::timestamp_t timestamp,
                                       const int midiControlIdx, const channel_t channelIdx, const uint32_t value)
 {
+    EventSequence& events = destination[timestamp];
+    for (const EventType& e : events) {
+        const midi::Event& midiEvent = std::get<midi::Event>(e);
+        if (midiEvent.opcode() == Event::Opcode::ControlChange
+            && midiEvent.channel() == channelIdx
+            && midiEvent.index() == static_cast<uint8_t>(midiControlIdx)
+            && midiEvent.data() == value) {
+            return;
+        }
+    }
+
     midi::Event cc(Event::Opcode::ControlChange, Event::MessageType::ChannelVoice10);
     cc.setIndex(midiControlIdx);
     cc.setChannel(channelIdx);
     cc.setData(value);
 
-    destination[timestamp].emplace_back(std::move(cc));
+    events.emplace_back(cc);
 }
 
 void FluidSequencer::addPitchCurve(EventSequenceMap& destination, const mpe::NoteEvent& noteEvent,
                                    const mpe::ArticulationMeta& artMeta, const channel_t channelIdx)
 {
-    if (noteEvent.pitchCtx().pitchCurve.empty()) {
-        return;
-    }
-
     const timestamp_t noteTimestampTo = noteEvent.arrangementCtx().actualTimestamp + noteEvent.arrangementCtx().actualDuration;
     const timestamp_t pitchBendTimestampTo = std::min(artMeta.timestamp + artMeta.overallDuration, noteTimestampTo);
 
@@ -261,35 +268,35 @@ void FluidSequencer::addPitchCurve(EventSequenceMap& destination, const mpe::Not
     auto nextIt = std::next(currIt);
     auto endIt = noteEvent.pitchCtx().pitchCurve.cend();
 
-    auto makePoint = [](mpe::timestamp_t time, int value) {
-        return Interpolation::Point { static_cast<double>(time), static_cast<double>(value) };
-    };
+    int prevBendValue = -1;
 
     for (; nextIt != endIt; currIt = nextIt, nextIt = std::next(currIt)) {
-        int currBendValue = pitchBendLevel(currIt->second);
-        int nextBendValue = pitchBendLevel(nextIt->second);
+        const int currValue = pitchBendLevel(currIt->second);
+        const int nextValue = pitchBendLevel(nextIt->second);
 
-        timestamp_t currTime = artMeta.timestamp + artMeta.overallDuration * percentageToFactor(currIt->first);
-        timestamp_t nextTime = artMeta.timestamp + artMeta.overallDuration * percentageToFactor(nextIt->first);
+        const timestamp_t currTime = artMeta.timestamp + artMeta.overallDuration * percentageToFactor(currIt->first);
+        const timestamp_t nextTime = artMeta.timestamp + artMeta.overallDuration * percentageToFactor(nextIt->first);
 
-        Interpolation::Point p0 = makePoint(currTime, currBendValue);
-        Interpolation::Point p1 = makePoint(nextTime, currBendValue);
-        Interpolation::Point p2 = makePoint(nextTime, nextBendValue);
+        using namespace muse::interpolation;
+        const Point currPoint { static_cast<double>(currTime), static_cast<double>(currValue) };
+        const Point nextPoint { static_cast<double>(nextTime), static_cast<double>(nextValue) };
 
         //! NOTE: Increasing this number results in fewer points being interpolated
-        constexpr mpe::pitch_level_t POINT_WEIGHT = mpe::PITCH_LEVEL_STEP / 10;
+        constexpr mpe::pitch_level_t POINT_WEIGHT = mpe::PITCH_LEVEL_STEP / 25;
         size_t pointCount = std::abs(nextIt->second - currIt->second) / POINT_WEIGHT;
         pointCount = std::max(pointCount, size_t(1));
 
-        std::vector<Interpolation::Point> points = Interpolation::quadraticBezierCurve(p0, p1, p2, pointCount);
+        const std::vector<Point> points = lerp(currPoint, nextPoint, pointCount);
 
-        for (const Interpolation::Point& point : points) {
-            timestamp_t time = static_cast<timestamp_t>(std::round(point.x));
-            int bendValue = static_cast<int>(std::round(point.y));
+        for (const Point& point : points) {
+            const timestamp_t time = static_cast<timestamp_t>(std::round(point.x));
+            const int bendValue = static_cast<int>(std::round(point.y));
 
-            if (time < pitchBendTimestampTo) {
+            if (time < pitchBendTimestampTo && bendValue != prevBendValue) {
                 addPitchBend(destination, time, channelIdx, bendValue);
             }
+
+            prevBendValue = bendValue;
         }
     }
 }
@@ -358,13 +365,11 @@ velocity_t FluidSequencer::noteVelocity(const mpe::NoteEvent& noteEvent) const
     }
 
     if (m_useDynamicEvents) {
-        float fraction = expressionCtx.expressionCurve.empty() ? 0.5f : expressionCtx.expressionCurve.velocityFraction();
-        velocity_t result = RealRound(fraction * MAX_SUPPORTED_VELOCITY, 0);
+        velocity_t result = RealRound(expressionCtx.expressionCurve.velocityFraction() * MAX_SUPPORTED_VELOCITY, 0);
         return std::clamp<velocity_t>(result, 0, MAX_SUPPORTED_VELOCITY);
     }
 
-    dynamic_level_t dynamicLevel = expressionCtx.expressionCurve.empty()
-                                   ? expressionCtx.nominalDynamicLevel : expressionCtx.expressionCurve.maxAmplitudeLevel();
+    dynamic_level_t dynamicLevel = expressionCtx.expressionCurve.maxAmplitudeLevel();
     return expressionLevel(dynamicLevel) << 9; // midi::Event::scaleUp(7,16)
 }
 
@@ -393,7 +398,7 @@ int FluidSequencer::expressionLevel(const mpe::dynamic_level_t dynamicLevel) con
 
     dynamic_level_t result = RealRound(MIN_SUPPORTED_VOLUME + (stepCount * VOLUME_STEP), 0);
 
-    return std::min(result, MAX_SUPPORTED_DYNAMICS_LEVEL);
+    return std::clamp((int)result, MIN_SUPPORTED_VOLUME, MAX_SUPPORTED_VOLUME);
 }
 
 int FluidSequencer::pitchBendLevel(const mpe::pitch_level_t pitchLevel) const

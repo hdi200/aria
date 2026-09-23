@@ -30,25 +30,14 @@
 using namespace muse::tours;
 using namespace muse::modularity;
 
-static const std::string mname("tours_stub");
-
 std::string ToursModule::moduleName() const
 {
-    return mname;
+    return "tours_stub";
 }
 
 void ToursModule::registerExports()
 {
-    globalIoc()->registerExport<IToursConfiguration>(mname, new ToursConfigurationStub());
-}
-
-IContextSetup* ToursModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new ToursContext(ctx);
-}
-
-void ToursContext::registerExports()
-{
-    ioc()->registerExport<IToursService>(mname, new ToursServiceStub());
-    ioc()->registerExport<IToursProvider>(mname, new ToursProviderStub());
+    ioc()->registerExport<IToursConfiguration>(moduleName(), new ToursConfigurationStub());
+    ioc()->registerExport<IToursService>(moduleName(), new ToursServiceStub());
+    ioc()->registerExport<IToursProvider>(moduleName(), new ToursProviderStub());
 }

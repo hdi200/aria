@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,10 +19,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 #pragma once
 
-#include "types/color.h"
+#include <functional>
+
+#include "draw/types/color.h"
 
 namespace mu::engraving {
 class EngravingItem;
@@ -34,6 +35,7 @@ struct PaintOptions
     bool isPrinting = false;
     bool invertColors = false;
 
+    // Aria: lets the host recolor items (e.g. its own selection colors) while painting.
     std::function<muse::Color(const EngravingItem* item, muse::Color defaultColor)> overrideItemColor;
 };
 }

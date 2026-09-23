@@ -17,7 +17,12 @@ if(NOT DEFINED CMAKE_SCRIPT_MODE_FILE)
     )
 endif()
 
-cmake_minimum_required(VERSION 3.22) # should match version in CMakeLists.txt
+# should match version requirement in CMakeLists.txt
+if (APPLE)
+    cmake_minimum_required(VERSION 3.26...3.31) # Min. required for Swift-C++ interop
+else()
+    cmake_minimum_required(VERSION 3.22...3.31) # Min. required by Qt 6.10
+endif()
 
 # CMake arguments up to '-P' (ignore these)
 set(i "1")
@@ -143,7 +148,11 @@ endif()
 
 fn__get_option(GENERATOR -G ${CONFIGURE_ARGS})
 if(WIN32)
-    fn__set_default(GENERATOR "Visual Studio 17 2022")
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 4.2)
+        fn__set_default(GENERATOR "Visual Studio 18 2026")
+    else()
+        fn__set_default(GENERATOR "Visual Studio 17 2022")
+    endif()
 else()
     fn__set_default(GENERATOR "Unix Makefiles")
 endif()
@@ -161,7 +170,7 @@ fn__set_default(INSTALL_PATH "install") # relative to BUILD_PATH
 
 # MSCORE_EXECUTABLE (path relative to INSTALL_PATH)
 if(WIN32)
-    fn__set_default(MSCORE_EXECUTABLE "bin/MuseScore5.exe")
+    fn__set_default(MSCORE_EXECUTABLE "bin/MuseScore4.exe")
 elseif(APPLE)
     fn__set_default(MSCORE_EXECUTABLE "mscore.app/Contents/MacOS/mscore")
 else()

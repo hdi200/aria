@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,6 +21,7 @@
  */
 #include "lyricslayout.h"
 
+#include "dom/factory.h"
 #include "dom/masterscore.h"
 #include "dom/repeatlist.h"
 #include "style/styledef.h"
@@ -240,10 +241,10 @@ void LyricsLayout::layoutMelismaLine(LyricsLineSegment* item)
     double endX = lyricsLineEndX(item);
 
     double tolerance = 0.05 * item->spatium();
-    if (endX - startX < style.styleAbsolute(Sid::lyricsMelismaMinLength) - tolerance) {
+    if (endX - startX < style.styleMM(Sid::lyricsMelismaMinLength) - tolerance) {
         const Fraction ticks = isPartialLyricsLine ? lyricsLine->ticks() : startLyrics->ticks();
         if (style.styleB(Sid::lyricsMelismaForce) || ticks == Lyrics::TEMP_MELISMA_TICKS) {
-            endX = startX + style.styleAbsolute(Sid::lyricsMelismaMinLength);
+            endX = startX + style.styleMM(Sid::lyricsMelismaMinLength);
         } else {
             endX = startX;
         }
@@ -306,11 +307,11 @@ void LyricsLayout::layoutDashes(LyricsLineSegment* item)
     const double userStart = startX + item->offset().x();
     const double userEnd = endX + item->userOff2().x();
     double curLength = userEnd - userStart;
-    double dashMinLength = style.styleAbsolute(Sid::lyricsDashMinLength);
+    double dashMinLength = style.styleMM(Sid::lyricsDashMinLength);
     bool firstAndLastGapAreHalf = style.styleB(Sid::lyricsDashFirstAndLastGapAreHalf);
     bool forceDash = style.styleB(Sid::lyricsDashForce)
                      || (style.styleB(Sid::lyricsShowDashIfSyllableOnFirstNote) && isDashOnFirstSyllable);
-    double maxDashDistance = style.styleAbsolute(Sid::lyricsDashMaxDistance);
+    double maxDashDistance = style.styleMM(Sid::lyricsDashMaxDistance);
     int dashCount = firstAndLastGapAreHalf && curLength > maxDashDistance ? std::ceil(curLength / maxDashDistance)
                     : std::floor(curLength / maxDashDistance);
 
@@ -335,7 +336,7 @@ void LyricsLayout::layoutDashes(LyricsLineSegment* item)
         curLength = endX - startX;
     }
 
-    double dashWidth = std::min(curLength, style.styleAbsolute(Sid::lyricsDashMaxLength));
+    double dashWidth = std::min(curLength, style.styleMM(Sid::lyricsDashMaxLength).val());
 
     LyricsDashSystemStart lyricsDashSystemStart = style.styleV(Sid::lyricsDashPosAtStartOfSystem).value<LyricsDashSystemStart>();
     bool dashesLeftAligned = lyricsDashSystemStart != LyricsDashSystemStart::STANDARD && !item->isSingleBeginType();
@@ -481,8 +482,9 @@ void LyricsLayout::createOrRemoveLyricsLine(Lyrics* item, LayoutContext& ctx)
 
     if (isEndMelisma() || item->syllabic() == LyricsSyllabic::BEGIN || item->syllabic() == LyricsSyllabic::MIDDLE) {
         if (!item->separator()) {
-            LyricsLine* separator = new LyricsLine(ctx.mutDom().dummyParent());
+            LyricsLine* separator = Factory::createLyricsLine(ctx.mutDom().dummyParent());
             separator->setTick(cr->tick());
+            separator->setVisible(item->visible());
             item->setSeparator(separator);
             ctx.mutDom().addUnmanagedSpanner(item->separator());
         }
@@ -491,7 +493,6 @@ void LyricsLayout::createOrRemoveLyricsLine(Lyrics* item, LayoutContext& ctx)
         item->separator()->setTicks(lyricsLineTicks);
         item->separator()->setTrack(item->track());
         item->separator()->setTrack2(item->track());
-        item->separator()->setVisible(item->visible());
         item->separator()->styleChanged();
     } else {
         if (item->separator()) {
@@ -618,7 +619,7 @@ void LyricsLayout::checkCollisionsWithStaffElements(System* system, staff_idx_t 
 {
     SysStaff* systemStaff = system->staff(staffIdx);
 
-    double lyricsMinDist = ctx.conf().styleAbsolute(Sid::lyricsMinTopDistance);
+    double lyricsMinDist = ctx.conf().styleMM(Sid::lyricsMinTopDistance);
 
     SkylineLine& staffSkylineNorth = systemStaff->skyline().north();
     SkylineLine& staffSkylineSouth = systemStaff->skyline().south();
@@ -705,8 +706,7 @@ void LyricsLayout::addToSkyline(System* system, staff_idx_t staffIdx, LayoutCont
 {
     double systemX = system->pageX();
     // HACK: subtract minVerticalDistance here because it's added later during staff distance calculations. Needs a better solution.
-    double lyricsVerticalPadding = ctx.conf().styleAbsolute(Sid::lyricsMinBottomDistance) - ctx.conf().styleAbsolute(
-        Sid::minVerticalDistance);
+    double lyricsVerticalPadding = ctx.conf().styleMM(Sid::lyricsMinBottomDistance) - ctx.conf().styleMM(Sid::minVerticalDistance);
     Skyline& skyline = system->staff(staffIdx)->skyline();
     for (auto& pair : lyricsVersesAbove) {
         const LyricsVerse& lyricsVerse = pair.second;
@@ -765,7 +765,7 @@ double LyricsLayout::lyricsLineStartX(const LyricsLineSegment* item)
     }
 
     // Full melisma or dashes in middle of system
-    const double pad = melisma ? style.styleAbsolute(Sid::lyricsMelismaPad) : style.styleAbsolute(Sid::lyricsDashPad);
+    const double pad = melisma ? style.styleMM(Sid::lyricsMelismaPad) : style.styleMM(Sid::lyricsDashPad);
     const double lyricsRightEdge = startLyrics->pageX() - system->pageX() + startLyrics->shape().right();
     return lyricsRightEdge + pad;
 }
@@ -796,7 +796,7 @@ double LyricsLayout::lyricsLineEndX(const LyricsLineSegment* item, const Lyrics*
     if (!melisma && hasPrecedingJump && item->isPartialLyricsLineSegment()) {
         if (endLyrics) {
             const double lyricsLeftEdge = endLyrics->pageX() - systemPageX + endLyrics->ldata()->bbox().left();
-            return lyricsLeftEdge - style.styleAbsolute(Sid::lyricsDashPad);
+            return lyricsLeftEdge - style.styleMM(Sid::lyricsDashPad);
         } else if (endChordRest->isChord()) {
             const Chord* endChord = toChord(endChordRest);
             const Note* note = endChord->up() ? endChord->downNote() : endChord->upNote();
@@ -816,7 +816,7 @@ double LyricsLayout::lyricsLineEndX(const LyricsLineSegment* item, const Lyrics*
     // Full or partial dashes in middle of system
     if (!melisma && endLyrics) {
         const double lyricsLeftEdge = endLyrics->pageX() - systemPageX + endLyrics->ldata()->bbox().left();
-        return lyricsLeftEdge - style.styleAbsolute(Sid::lyricsDashPad);
+        return lyricsLeftEdge - style.styleMM(Sid::lyricsDashPad);
     }
 
     // Full or partial melisma in middle of system

@@ -27,7 +27,7 @@
 
 #include "modularity/ioc.h"
 #include "iextensionsprovider.h"
-#include "interactive/iinteractive.h"
+#include "global/iinteractive.h"
 
 namespace muse::extensions {
 class DevExtensionsListModel : public QObject, public Contextable

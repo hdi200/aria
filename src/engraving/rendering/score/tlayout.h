@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -245,7 +245,7 @@ public:
     static void layoutGraceNotesGroup2(const GraceNotesGroup* item, GraceNotesGroup::LayoutData* ldata);
     static void layoutGradualTempoChangeSegment(GradualTempoChangeSegment* item, LayoutContext& ctx);
     static void layoutGradualTempoChange(GradualTempoChange* item, LayoutContext& ctx);
-    static void layoutGuitarBend(GuitarBend* item, LayoutContext& ctx);
+    static void layoutGuitarBend(GuitarBend* item, LayoutContext& ctx, System* system = nullptr);
     static void layoutGuitarBendSegment(GuitarBendSegment* item, LayoutContext& ctx);
     static void fillGuitarBendSegmentShape(const GuitarBendSegment* item, GuitarBendSegment::LayoutData* ldata);
 
@@ -397,7 +397,5 @@ private:
     static void doLayoutGradualTempoChangeSegment(GradualTempoChangeSegment* item, LayoutContext& ctx);
 
     static void alignTabGraceNotesToMainStave(GraceNotesGroup* graceNotes, const Staff* notationStaff);
-
-    static void layoutGroupBracket(const Bracket* item, Bracket::LayoutData* ldata, const LayoutConfiguration& conf);
 };
 }

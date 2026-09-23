@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -36,19 +36,11 @@ using namespace mu::engraving;
 static const QString STAFF_TEXT_PROPERTIES_DIALOG_NAME("StaffTextPropertiesDialog");
 
 StaffTextPropertiesDialog::StaffTextPropertiesDialog(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
+    : QDialog(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setObjectName(STAFF_TEXT_PROPERTIES_DIALOG_NAME);
     setupUi(this);
-}
 
-StaffTextPropertiesDialog::~StaffTextPropertiesDialog()
-{
-    delete m_staffText;
-}
-
-void StaffTextPropertiesDialog::componentComplete()
-{
     const INotationPtr notation = globalContext()->currentNotation();
     const INotationInteractionPtr interaction = notation ? notation->interaction() : nullptr;
     EngravingItem* element = interaction ? interaction->hitElementContext().element : nullptr;
@@ -91,6 +83,11 @@ void StaffTextPropertiesDialog::componentComplete()
     connect(swingSixteenth, &QRadioButton::toggled, this, &StaffTextPropertiesDialog::setSwingControls);
 
     connect(this, &QDialog::accepted, this, &StaffTextPropertiesDialog::saveValues);
+}
+
+StaffTextPropertiesDialog::~StaffTextPropertiesDialog()
+{
+    delete m_staffText;
 }
 
 void StaffTextPropertiesDialog::showEvent(QShowEvent* event)
@@ -137,6 +134,8 @@ void StaffTextPropertiesDialog::saveValues()
             m_staffText->setSwingParameters(Constants::DIVISION / 4, swingBox->value());
             swingBox->setEnabled(true);
         }
+    } else {
+        m_staffText->setSwing(false);
     }
 
     INotationUndoStackPtr stack = undoStack();

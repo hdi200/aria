@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -24,11 +24,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Clean Guitar</trackName>
       <Instrument id="electric-guitar">
-        <InstrumentLabel>
-          <longName>Clean Guitar</longName>
-          <shortName>el.guit.</shortName>
-          </InstrumentLabel>
+        <longName>Clean Guitar</longName>
+        <shortName>el.guit.</shortName>
         <trackName></trackName>
         <transposeDiatonic>-7</transposeDiatonic>
         <transposeChromatic>-12</transposeChromatic>

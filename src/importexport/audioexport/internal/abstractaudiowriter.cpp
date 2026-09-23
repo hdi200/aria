@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -79,8 +79,8 @@ Ret AbstractAudioWriter::writeList(const INotationPtrList&, io::IODevice&, const
 
 void AbstractAudioWriter::abort()
 {
-    muse::ContextInject<muse::audio::IPlayback> playback = { m_iocContext };
     playback()->abortSavingAllSoundTracks();
+    m_writeRet = make_ret(Ret::Code::Cancel);
     m_isCompleted = true;
 }
 
@@ -90,15 +90,18 @@ muse::Progress* AbstractAudioWriter::progress()
 }
 
 Ret AbstractAudioWriter::doWriteAndWait(INotationPtr notation,
-                                        io::IODevice& dstDevice,
-                                        const SoundTrackFormat& format)
+                                        io::IODevice& destinationDevice,
+                                        const SoundTrackFormat& format,
+                                        const Options& options)
 {
-    //! NOTE Temporary fix for the context injection
-    m_iocContext = notation->iocContext();
+    //!Note Temporary workaround, since QIODevice is the alias for QIODevice, which falls with SIGSEGV
+    //!     on any call from background thread. Once we have our own implementation of QIODevice
+    //!     we can pass QIODevice directly into IPlayback::IAudioOutput::saveSoundTrack
 
-    muse::ContextInject<context::IGlobalContext> globalContext = { m_iocContext };
-    muse::ContextInject<muse::audio::IStartAudioController> startAudioController = { m_iocContext };
-    muse::ContextInject<playback::IPlaybackController> playbackController  = { m_iocContext };
+    QString path = QString::fromStdString(destinationDevice.meta("file_path"));
+    IF_ASSERT_FAILED(!path.isEmpty()) {
+        return make_ret(Ret::Code::InternalError);
+    }
 
     //! NOTE Waiting for the audio system to start if it is not already running
     while (!startAudioController()->isAudioStarted()) {
@@ -112,23 +115,37 @@ Ret AbstractAudioWriter::doWriteAndWait(INotationPtr notation,
     playbackController()->setNotation(notation);
     playbackController()->setIsExportingAudio(true);
 
-    doWrite(dstDevice, format);
+    SoundTrackFormat actualFormat = format;
 
-    while (!m_isCompleted) {
-        application()->processEvents();
-        QThread::yieldCurrentThread();
+    double leadingSilenceSec = muse::value(options, OptionKey::LEADING_SILENCE_SEC, Val(0.0)).toDouble();
+    actualFormat.leadingSilenceDuration = std::isfinite(leadingSilenceSec)
+                                          ? static_cast<msecs_t>(leadingSilenceSec * 1000000.0) : 0;
+
+    double trailingSilenceSec = muse::value(options, OptionKey::TRAILING_SILENCE_SEC, Val(0.0)).toDouble();
+    actualFormat.trailingSilenceDuration = std::isfinite(trailingSilenceSec)
+                                           ? static_cast<msecs_t>(trailingSilenceSec * 1000000.0) : 0;
+
+    doWrite(path, actualFormat);
+
+    bool waitForCompletion = muse::value(options, OptionKey::WAIT_FOR_COMPLETION, Val(true)).toBool();
+    if (waitForCompletion) {
+        while (!m_isCompleted) {
+            application()->processEvents();
+            QThread::yieldCurrentThread();
+        }
     }
-
-    playbackController()->setIsExportingAudio(false);
-    playbackController()->setNotation(globalContext()->currentNotation());
 
     return m_writeRet;
 }
 
-void AbstractAudioWriter::doWrite(io::IODevice& dstDevice, const SoundTrackFormat& format)
+void AbstractAudioWriter::doWrite(const QString& path, const SoundTrackFormat& format)
 {
-    muse::ContextInject<muse::audio::IPlayback> playback = { m_iocContext };
     const std::string processingOnlineSoundsMsg = trc("iex_audio", "Processing online sounds…");
+
+    auto restoreState = [this]() {
+        playbackController()->setIsExportingAudio(false);
+        playbackController()->setNotation(globalContext()->currentNotation());
+    };
 
     auto sendProgress = [this, processingOnlineSoundsMsg](int64_t current, int64_t total, SaveSoundTrackStage stage) {
         switch (stage) {
@@ -143,10 +160,8 @@ void AbstractAudioWriter::doWrite(io::IODevice& dstDevice, const SoundTrackForma
     };
 
     playback()->sequenceIdList()
-    .onResolve(this, [this, &dstDevice, format, sendProgress](const TrackSequenceIdList& sequenceIdList) {
+    .onResolve(this, [this, path, format, sendProgress, restoreState](const TrackSequenceIdList& sequenceIdList) {
         m_progress.start();
-
-        muse::ContextInject<muse::audio::IPlayback> playback = { m_iocContext };
 
         for (const TrackSequenceId sequenceId : sequenceIdList) {
             playback()->saveSoundTrackProgressChanged(sequenceId)
@@ -154,27 +169,31 @@ void AbstractAudioWriter::doWrite(io::IODevice& dstDevice, const SoundTrackForma
                 sendProgress(current, total, stage);
             });
 
-            playback()->saveSoundTrack(sequenceId, std::move(format), dstDevice)
-            .onResolve(this, [this, sequenceId](const bool /*result*/) {
-                LOGI() << "Successfully saved sound track";
+            playback()->saveSoundTrack(sequenceId, muse::io::path_t(path), std::move(format))
+            .onResolve(this, [this, path, sequenceId, restoreState](const bool /*result*/) {
+                LOGI() << "Successfully saved sound track by path: " << path;
                 m_writeRet = muse::make_ok();
                 m_isCompleted = true;
                 m_progress.finish(muse::make_ok());
-                muse::ContextInject<muse::audio::IPlayback> playback = { m_iocContext };
                 playback()->saveSoundTrackProgressChanged(sequenceId).disconnect(this);
+
+                restoreState();
             })
-            .onReject(this, [this, sequenceId](int errorCode, const std::string& msg) {
+            .onReject(this, [this, sequenceId, restoreState](int errorCode, const std::string& msg) {
                 m_writeRet = Ret(errorCode, msg);
                 m_isCompleted = true;
                 m_progress.finish(make_ret(errorCode, msg));
-                muse::ContextInject<muse::audio::IPlayback> playback = { m_iocContext };
                 playback()->saveSoundTrackProgressChanged(sequenceId).disconnect(this);
+
+                restoreState();
             });
         }
     })
-    .onReject(this, [this](int errorCode, const std::string& msg) {
+    .onReject(this, [this, restoreState](int errorCode, const std::string& msg) {
         LOGE() << "errorCode: " << errorCode << ", " << msg;
         m_isCompleted = true;
+
+        restoreState();
     });
 }
 

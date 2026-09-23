@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -89,6 +89,8 @@ muse::Ret Read410::readScoreFile(Score* score, XmlReader& e, rw::ReadInOutData* 
             if (score->isMaster()) {
                 score->setMscoreRevision(rev);
             }
+        } else if (tag == "Revision") {
+            e.skipCurrentElement();
         } else if (tag == "LastEID") {
             e.skipCurrentElement();
         } else if (tag == "Score") {
@@ -101,7 +103,7 @@ muse::Ret Read410::readScoreFile(Score* score, XmlReader& e, rw::ReadInOutData* 
         } else if (tag == "museScore") {
             // pass
         } else {
-            e.unknown();
+            e.skipCurrentElement();
         }
     }
 
@@ -134,11 +136,21 @@ bool Read410::readScoreTag(Score* score, XmlReader& e, ReadContext& ctx)
             }
         } else if (tag == "Staff") {
             StaffRead::readStaff(score, e, ctx);
+        } else if (tag == "Omr") {
+            e.skipCurrentElement();
         } else if (tag == "Audio") {
             score->m_audio = new Audio;
             TRead::read(score->m_audio, e, ctx);
+        } else if (tag == "showOmr") {
+            e.skipCurrentElement();
         } else if (tag == "playMode") {
             score->m_playMode = PlayMode(e.readInt());
+        } else if (tag == "LayerTag") {
+            e.skipCurrentElement();
+        } else if (tag == "Layer") {
+            e.skipCurrentElement();
+        } else if (tag == "currentLayer") {
+            e.skipCurrentElement();
         } else if (tag == "Synthesizer") {
             score->m_synthesizerState.read(e);
         } else if (tag == "page-offset") {

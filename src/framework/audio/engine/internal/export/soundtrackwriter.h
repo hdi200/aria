@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MUSE_AUDIO_SOUNDTRACKWRITER_H
+#define MUSE_AUDIO_SOUNDTRACKWRITER_H
 
 #include <vector>
 
@@ -35,10 +36,6 @@
 
 #include "abstractaudioencoder.h"
 
-namespace muse::io {
-class IODevice;
-}
-
 namespace muse::audio::soundtrack {
 class SoundTrackWriter : public muse::Contextable, public async::Asyncable
 {
@@ -46,8 +43,9 @@ class SoundTrackWriter : public muse::Contextable, public async::Asyncable
     muse::ContextInject<rpc::IRpcChannel> rpcChannel = { this };
 
 public:
-    SoundTrackWriter(io::IODevice& dstDevice, const SoundTrackFormat& format, const msecs_t totalDuration, engine::IAudioSourcePtr source,
-                     const muse::modularity::ContextPtr& iocCtx);
+    SoundTrackWriter(const io::path_t& destination, const SoundTrackFormat& format, const msecs_t totalDuration,
+                     engine::IAudioSourcePtr source, const muse::modularity::ContextPtr& iocCtx);
+    ~SoundTrackWriter() override;
 
     Ret write();
     void abort();
@@ -57,13 +55,16 @@ public:
 private:
     Ret writeStreaming();
 
-    void sendProgress(uint64_t framesWritten, uint64_t totalFrames);
+    void sendStreamingProgress(uint64_t framesWritten, uint64_t totalFrames);
 
     engine::IAudioSourcePtr m_source = nullptr;
 
     std::vector<float> m_intermBuffer;
+
     samples_t m_renderStep = 0;
-    samples_t m_totalSamplesPerChannel = 0;
+    samples_t m_leadingSilenceSamples = 0;
+    samples_t m_dataSamples = 0;
+    samples_t m_totalSamples = 0;
 
     encode::AbstractAudioEncoderPtr m_encoderPtr = nullptr;
 
@@ -71,3 +72,5 @@ private:
     std::atomic<bool> m_isAborted = false;
 };
 }
+
+#endif // MUSE_AUDIO_SOUNDTRACKWRITER_H

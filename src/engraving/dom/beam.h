@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -83,6 +83,9 @@ public:
     void remove(EngravingItem*) override;
 
     void move(const PointF&) override;
+
+    void setId(int i) const { m_id = i; }
+    int id() const { return m_id; }
 
     void setDirection(DirectionV d) override;
 
@@ -202,6 +205,8 @@ private:
     const StaffType* m_tab = nullptr;
 
     std::vector<BeamFragment*> m_fragments; // beam splits across systems
+
+    mutable int m_id = 0;                // used in read()/write()
 
     int m_minCRMove = 0;                   // set in layout1()
     int m_maxCRMove = 0;

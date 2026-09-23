@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -335,6 +335,7 @@ public:
     const std::vector<NoteDot*>& dots() const { return m_dots; }
     std::vector<NoteDot*>& dots() { return m_dots; }
 
+    int qmlDotsCount();
     void updateAccidental(AccidentalState*);
     void updateLine();
     void setNval(const NoteVal&, Fraction = { -1, 1 });
@@ -385,7 +386,7 @@ public:
     EngravingItem* prevInEl(EngravingItem* e);
     EngravingItem* nextElement() override;
     EngravingItem* prevElement() override;
-    EngravingItem* lastElementBeforeSegment();
+    virtual EngravingItem* lastElementBeforeSegment();
     EngravingItem* nextSegmentElement() override;
     EngravingItem* prevSegmentElement() override;
 

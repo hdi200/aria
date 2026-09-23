@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -383,13 +383,13 @@ PointF Volta::linePos(Grip grip, System** system) const
     if (start) {
         bool alignLeftOfRepeatBarLine = false;
         if (segment->isChordRestType()) {
-            x -= style().styleAbsolute(Sid::barNoteDistance);
+            x -= style().styleMM(Sid::barNoteDistance);
         } else if (segment->isKeySigType()) {
             KeySig* sig = toKeySig(segment->element(track()));
             if (sig && !sig->ldata()->keySymbols.empty()) {
                 KeySym keySym = sig->ldata()->keySymbols.front();
                 PointF cutoutNW = score()->engravingFont()->smuflAnchor(keySym.sym, SmuflAnchorId::cutOutNW, 1.0);
-                x += cutoutNW.x();
+                x += keySym.xPos + cutoutNW.x();
             }
         } else if (segment->segmentType() & SegmentType::BarLineType && !isAtSystemStart) {
             x += segment->width();
@@ -397,7 +397,7 @@ PointF Volta::linePos(Grip grip, System** system) const
             alignLeftOfRepeatBarLine = barline && barline->barLineType() == BarLineType::END_REPEAT
                                        && style().styleB(Sid::voltaAlignEndLeftOfBarline);
             if (alignLeftOfRepeatBarLine) {
-                x -= style().styleAbsolute(Sid::endBarWidth);
+                x -= style().styleMM(Sid::endBarWidth);
             }
         }
         x += (isAtSystemStart || alignLeftOfRepeatBarLine ? 0.5 : -0.5) * absoluteFromSpatium(lineWidth());
@@ -412,7 +412,7 @@ PointF Volta::linePos(Grip grip, System** system) const
         } else if (segment->segmentType() & SegmentType::BarLineType) {
             BarLine* barLine = toBarLine(segment->element(track()));
             if (barLine->barLineType() == BarLineType::END_REPEAT || barLine->barLineType() == BarLineType::END_START_REPEAT) {
-                x += symWidth(SymId::repeatDot) + style().styleAbsolute(Sid::repeatBarlineDotSeparation);
+                x += symWidth(SymId::repeatDot) + style().styleMM(Sid::repeatBarlineDotSeparation);
             }
             x += 0.5 * absoluteFromSpatium(lineWidth());
         }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,18 +29,16 @@
 using namespace mu;
 using namespace mu::engraving;
 
-void EngravingFontsProvider::deinit()
+EngravingFontsProvider::EngravingFontsProvider(const muse::modularity::ContextPtr& iocCtx)
+    : muse::Contextable(iocCtx)
 {
-    m_symbolFonts.clear();
-    m_externalSymbolFonts.clear();
-    m_fallback.font = nullptr;
 }
 
 void EngravingFontsProvider::addInternalFont(const std::string& name, const std::string& family, const muse::io::path_t& filePath)
 {
     muse::io::path_t basePath = muse::io::dirpath(filePath.toQString());
     muse::io::path_t metadataPath = basePath + "/metadata.json";
-    std::shared_ptr<EngravingFont> f = std::make_shared<EngravingFont>(name, family, filePath, metadataPath);
+    std::shared_ptr<EngravingFont> f = std::make_shared<EngravingFont>(name, family, filePath, metadataPath, iocContext());
     m_symbolFonts.push_back(f);
     m_fallback.font = nullptr;
 }
@@ -48,7 +46,7 @@ void EngravingFontsProvider::addInternalFont(const std::string& name, const std:
 void EngravingFontsProvider::addExternalFont(const std::string& name, const std::string& family, const muse::io::path_t& filePath,
                                              const muse::io::path_t& metadataPath)
 {
-    std::shared_ptr<EngravingFont> f = std::make_shared<EngravingFont>(name, family, filePath, metadataPath);
+    std::shared_ptr<EngravingFont> f = std::make_shared<EngravingFont>(name, family, filePath, metadataPath, iocContext());
     m_externalSymbolFonts.emplace(muse::strings::toLower(name), f);
 }
 

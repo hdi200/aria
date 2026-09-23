@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include <QPointer>
 #include <QQuickItem>
 #include <qqmlintegration.h>
 
@@ -108,7 +107,7 @@ private:
     QQmlComponent* currentTitleBar() const;
     void updateTitleBar();
 
-    QPointer<KDDockWidgets::Frame> m_frame;
+    KDDockWidgets::Frame* m_frame = nullptr;
     QQmlComponent* m_titleBar = nullptr;
     bool m_titleBarAllowed = false;
     bool m_isHorizontalPanel = false;

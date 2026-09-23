@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -89,7 +89,8 @@ Ret MscLoader::loadMscz(MasterScore* masterScore, const MscReader& mscReader, rw
         {
             ByteArray styleData = mscReader.readStyleFile();
             if (!styleData.empty()) {
-                auto buf = Buffer::opened(IODevice::ReadOnly, &styleData);
+                Buffer buf(&styleData);
+                buf.open(IODevice::ReadOnly);
                 masterScore->style().read(&buf);
                 if (inOut) {
                     inOut->originalSpatium = masterScore->style().spatium();
@@ -102,7 +103,8 @@ Ret MscLoader::loadMscz(MasterScore* masterScore, const MscReader& mscReader, rw
             bool chordListOk = false;
             ByteArray chordListData = mscReader.readChordListFile();
             if (!chordListData.empty()) {
-                auto buf = Buffer::opened(IODevice::ReadOnly, &chordListData);
+                Buffer buf(&chordListData);
+                buf.open(IODevice::ReadOnly);
 
                 chordListOk = masterScore->chordList()->read(&buf);
             }
@@ -166,7 +168,8 @@ Ret MscLoader::loadMscz(MasterScore* masterScore, const MscReader& mscReader, rw
             ex->setFileName(excerptFileName);
 
             ByteArray excerptStyleData = mscReader.readExcerptStyleFile(excerptFileName);
-            auto excerptStyleBuf = Buffer::opened(IODevice::ReadOnly, &excerptStyleData);
+            Buffer excerptStyleBuf(&excerptStyleData);
+            excerptStyleBuf.open(IODevice::ReadOnly);
             partScore->style().read(&excerptStyleBuf);
 
             ByteArray excerptData = mscReader.readExcerptFile(excerptFileName);

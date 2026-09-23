@@ -21,7 +21,6 @@
  */
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
 import Muse.Ui
 import Muse.UiComponents
@@ -32,11 +31,9 @@ Item {
     id: root
 
     property var model: null
-    property alias contentListItem: dropdownLoader.contentListItem
     property int count: Boolean(model) ? model.length : 0
     property string textRole: "text"
     property string valueRole: "value"
-    property Component contentItem: null
 
     property int currentIndex: -1
 
@@ -52,6 +49,9 @@ Item {
     property string indeterminateText: "--"
 
     property int popupItemsCount: 18
+
+    property alias dropIcon: mainItem.dropIcon
+    property alias label: mainItem.label
 
     property alias navigation: mainItem.navigation
 
@@ -122,6 +122,9 @@ Item {
         property bool selected: false
         property bool insideDropdownList: false
 
+        property alias label: labelItem
+        property alias dropIcon: dropIconItem
+
         property color hoveredColor: backgroundItem.color
 
         property alias navigation: navCtrl
@@ -132,7 +135,7 @@ Item {
             name: mainItem.objectName != "" ? mainItem.objectName : "Dropdown"
             enabled: mainItem.enabled && mainItem.visible
             accessible.role: MUAccessible.ComboBox
-            accessible.name: root.displayText
+            accessible.name: labelItem.text
 
             onActiveChanged: {
                 if (!mainItem.activeFocus) {
@@ -155,50 +158,25 @@ Item {
             NavigationFocusBorder { navigationCtrl: navCtrl }
         }
 
-        Loader {
-            id: contentLoader
+        StyledTextLabel {
+            id: labelItem
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: dropIconItem.left
+            anchors.leftMargin: 12
+            anchors.rightMargin: 6
+            horizontalAlignment: Text.AlignLeft
+            text: root.displayText
+        }
 
-            anchors.fill: parent
+        StyledIconLabel {
+            id: dropIconItem
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: 8
 
-            sourceComponent: root.contentItem ?? defaultContentComponent
-
-            onLoaded: {
-                const item = contentLoader.item
-                if (!item) {
-                    return
-                }
-
-                if (item.text !== undefined) {
-                    item.text = Qt.binding(function() { return root.displayText })
-                }
-            }
-
-            Component {
-                id: defaultContentComponent
-
-                RowLayout {
-                    property alias labelItem: labelItem
-
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 8
-                    spacing: 6
-
-                    StyledTextLabel {
-                        id: labelItem
-
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
-                        horizontalAlignment: Text.AlignLeft
-                        text: root.displayText
-                    }
-
-                    StyledIconLabel {
-                        Layout.alignment: Qt.AlignVCenter
-                        iconCode: IconCode.SMALL_ARROW_DOWN
-                    }
-                }
-            }
+            iconCode: IconCode.SMALL_ARROW_DOWN
         }
 
         MouseArea {
@@ -211,13 +189,12 @@ Item {
             onClicked: mainItem.clicked()
 
             onContainsMouseChanged: {
-                const defaultLabel = contentLoader.item ? contentLoader.item.labelItem : null
-                if (!defaultLabel || !defaultLabel.truncated) {
+                if (!labelItem.truncated) {
                     return
                 }
 
                 if (mouseAreaItem.containsMouse) {
-                    ui.tooltip.show(mainItem, root.displayText)
+                    ui.tooltip.show(mainItem, labelItem.text)
                 } else {
                     ui.tooltip.hide(mainItem)
                 }

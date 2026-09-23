@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -533,7 +533,7 @@ std::vector<PointF> BarLine::gripsPositions(const EditData& ed) const
 {
     const BarLineEditData* bed = static_cast<const BarLineEditData*>(ed.getData(this).get());
 
-    double lw = style().styleAbsolute(Sid::barWidth) * staff()->staffMag(tick());
+    double lw = style().styleMM(Sid::barWidth) * staff()->staffMag(tick());
     const_cast<BarLine*>(this)->calcY();
 
     const PointF pp = pagePos();

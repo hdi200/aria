@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -52,7 +52,11 @@ bool PartialTiePopupModel::canOpen(const EngravingItem* element)
     }
 
     Tie* tieItem = toTieSegment(element)->tie();
-    if (!tieItem || !tieItem->tieJumpPoints()) {
+    if (!tieItem) {
+        return false;
+    }
+    tieItem->updatePossibleJumpPoints();
+    if (!tieItem->tieJumpPoints()) {
         return false;
     }
 

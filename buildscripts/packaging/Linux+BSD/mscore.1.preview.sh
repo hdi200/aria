@@ -5,7 +5,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2021 MuseScore Limited
+# Copyright (C) 2021 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -37,5 +37,6 @@ sed \
     -e 's!@MAN_PORTABLE@!'"$portable"'!g' \
     -e 's!@PORTABLE_INSTALL_NAME@!MuseScorePortable!g' \
     -e 's!@CMAKE_INSTALL_PREFIX@!/usr!g' \
-    -e 's!@MUSE_APP_INSTALL_RESOURCES_LOCATION@!share/mscore-4.0!g' \
+    -e 's!@Mscore_SHARE_NAME@!share/!g' \
+    -e 's!@Mscore_INSTALL_NAME@!mscore-4.0/!g' \
     <mscore.1.in | man -l -

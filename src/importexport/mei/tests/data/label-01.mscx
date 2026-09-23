@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -28,11 +28,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Very long<br/>Instrument Name<br/>that does not<br/>fit within<br/>one line</longName>
-          <shortName>Vl.<br/>I/II</shortName>
-          </InstrumentLabel>
+        <longName>Very long<br/>Instrument Name<br/>that does not<br/>fit within<br/>one line</longName>
+        <shortName>Vl.<br/>I/II</shortName>
         <trackName></trackName>
         <instrumentId>keyboard.piano</instrumentId>
         <Channel>

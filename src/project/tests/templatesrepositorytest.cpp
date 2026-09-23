@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,7 +23,7 @@
 
 #include "project/internal/templatesrepository.h"
 
-#include "mocks/mscmetareadermock.h"
+#include "notation/tests/mocks/msczreadermock.h"
 #include "mocks/projectconfigurationmock.h"
 #include "global/tests/mocks/filesystemmock.h"
 
@@ -44,12 +44,12 @@ protected:
     void SetUp() override
     {
         m_repository = std::make_shared<TemplatesRepository>();
-        m_mscMetaReader = std::make_shared<NiceMock<MscMetaReaderMock> >();
+        m_msczReader = std::make_shared<NiceMock<MsczReaderMock> >();
         m_fileSystem = std::make_shared<NiceMock<FileSystemMock> >();
         m_configuration = std::make_shared<NiceMock<ProjectConfigurationMock> >();
 
         m_repository->configuration.set(m_configuration);
-        m_repository->mscReader.set(m_mscMetaReader);
+        m_repository->mscReader.set(m_msczReader);
         m_repository->fileSystem.set(m_fileSystem);
     }
 
@@ -84,7 +84,7 @@ protected:
 
     std::shared_ptr<TemplatesRepository> m_repository;
     std::shared_ptr<ProjectConfigurationMock> m_configuration;
-    std::shared_ptr<MscMetaReaderMock> m_mscMetaReader;
+    std::shared_ptr<MsczReaderMock> m_msczReader;
     std::shared_ptr<FileSystemMock> m_fileSystem;
 };
 
@@ -176,7 +176,7 @@ TEST_F(Project_TemplatesRepositoryTest, Templates)
     }
 
     for (const Template& templ : std::as_const(expectedTemplates)) {
-        ON_CALL(*m_mscMetaReader, readMeta(templ.meta.filePath))
+        ON_CALL(*m_msczReader, readMeta(templ.meta.filePath))
         .WillByDefault(Return(RetVal<ProjectMeta>::make_ok(templ.meta)));
     }
 

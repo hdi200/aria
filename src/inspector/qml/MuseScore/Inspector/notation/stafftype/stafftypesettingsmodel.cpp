@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -58,9 +58,6 @@ void StaffTypeSettingsModel::createProperties()
     m_shouldGenerateClefs = buildPropertyItem(mu::engraving::Pid::STAFF_GEN_CLEF);
     m_shouldGenerateTimeSignatures = buildPropertyItem(mu::engraving::Pid::STAFF_GEN_TIMESIG);
     m_shouldGenerateKeySignatures = buildPropertyItem(mu::engraving::Pid::STAFF_GEN_KEYSIG);
-
-    m_staffLongName = buildPropertyItem(mu::engraving::Pid::STAFF_LONG_NAME);
-    m_staffShortName = buildPropertyItem(mu::engraving::Pid::STAFF_SHORT_NAME);
 }
 
 void StaffTypeSettingsModel::requestElements()
@@ -89,9 +86,6 @@ void StaffTypeSettingsModel::loadProperties()
     loadPropertyItem(m_shouldGenerateClefs);
     loadPropertyItem(m_shouldGenerateTimeSignatures);
     loadPropertyItem(m_shouldGenerateKeySignatures);
-
-    loadPropertyItem(m_staffLongName);
-    loadPropertyItem(m_staffShortName);
 }
 
 void StaffTypeSettingsModel::resetProperties()
@@ -113,9 +107,6 @@ void StaffTypeSettingsModel::resetProperties()
     m_shouldGenerateClefs->resetToDefault();
     m_shouldGenerateTimeSignatures->resetToDefault();
     m_shouldGenerateKeySignatures->resetToDefault();
-
-    m_staffLongName->resetToDefault();
-    m_staffShortName->resetToDefault();
 }
 
 PropertyItem* StaffTypeSettingsModel::isSmall() const
@@ -191,14 +182,4 @@ PropertyItem* StaffTypeSettingsModel::shouldGenerateTimeSignatures() const
 PropertyItem* StaffTypeSettingsModel::shouldGenerateKeySignatures() const
 {
     return m_shouldGenerateKeySignatures;
-}
-
-PropertyItem* StaffTypeSettingsModel::staffLongName() const
-{
-    return m_staffLongName;
-}
-
-PropertyItem* StaffTypeSettingsModel::staffShortName() const
-{
-    return m_staffShortName;
 }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -73,6 +73,7 @@ Tuplet::Tuplet(Measure* parent)
     m_number       = 0;
     m_hasBracket   = false;
     m_isUp         = true;
+    m_id           = 0;
     initElementStyle(&tupletStyle);
 }
 
@@ -95,6 +96,7 @@ Tuplet::Tuplet(const Tuplet& t)
     m_userP1            = t.m_userP1;
     m_userP2            = t.m_userP2;
 
+    m_id            = t.m_id;
     // recreated on layout
     m_number = 0;
 }

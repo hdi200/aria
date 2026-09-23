@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -28,51 +28,40 @@
 #include "internal/instrumentsuiactions.h"
 #include "internal/instrumentsactionscontroller.h"
 
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 #include "ui/iuiactionsregister.h"
 
 using namespace mu::instrumentsscene;
 using namespace muse;
 using namespace muse::modularity;
-
-static const std::string mname("instrumentsscene");
+using namespace muse::ui;
 
 std::string InstrumentsSceneModule::moduleName() const
 {
-    return mname;
+    return "instrumentsscene";
+}
+
+void InstrumentsSceneModule::registerExports()
+{
+    m_actionsController = std::make_shared<InstrumentsActionsController>(iocContext());
+
+    ioc()->registerExport<notation::ISelectInstrumentsScenario>(moduleName(), new SelectInstrumentsScenario(iocContext()));
 }
 
 void InstrumentsSceneModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<interactive::IInteractiveUriRegister>(mname);
+    auto ar = ioc()->resolve<IUiActionsRegister>(moduleName());
+    if (ar) {
+        ar->reg(std::make_shared<InstrumentsUiActions>(iocContext()));
+    }
+
+    auto ir = ioc()->resolve<IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerQmlUri(Uri("musescore://instruments/select"), "MuseScore.InstrumentsScene", "InstrumentsDialog");
     }
 }
 
-IContextSetup* InstrumentsSceneModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new InstrumentsSceneContext(ctx);
-}
-
-// Context
-
-void InstrumentsSceneContext::registerExports()
-{
-    m_actionsController = std::make_shared<InstrumentsActionsController>(iocContext());
-
-    ioc()->registerExport<notation::ISelectInstrumentsScenario>(mname, new SelectInstrumentsScenario(iocContext()));
-}
-
-void InstrumentsSceneContext::resolveImports()
-{
-    auto ar = ioc()->resolve<ui::IUiActionsRegister>(mname);
-    if (ar) {
-        ar->reg(std::make_shared<InstrumentsUiActions>(iocContext()));
-    }
-}
-
-void InstrumentsSceneContext::onInit(const IApplication::RunMode&)
+void InstrumentsSceneModule::onInit(const IApplication::RunMode&)
 {
     m_actionsController->init();
 }

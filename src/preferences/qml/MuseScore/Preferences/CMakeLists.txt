@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2021 MuseScore Limited
+# Copyright (C) 2021 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -56,8 +56,8 @@ qt_add_qml_module(preferences_qml
         saveandpublishpreferencesmodel.h
         scorepreferencesmodel.cpp
         scorepreferencesmodel.h
-        updatepreferencesmodel.cpp
-        updatepreferencesmodel.h
+        videopreferencesmodel.cpp
+        videopreferencesmodel.h
     QML_FILES
         AccentColorsList.qml
         AdvancedPreferencesPage.qml
@@ -77,7 +77,7 @@ qt_add_qml_module(preferences_qml
         ScorePreferencesPage.qml
         ShortcutsPreferencesPage.qml
         ThemeSamplesList.qml
-        UpdatePreferencesPage.qml
+        VideoPreferencesPage.qml
 
         internal/AccentColorsSection.qml
         internal/AdvancedTopSection.qml
@@ -94,6 +94,7 @@ qt_add_qml_module(preferences_qml
         internal/CommonAudioApiConfiguration.qml
         internal/DefaultStyleSection.qml
         internal/FoldersSection.qml
+        internal/FFmpegSection.qml
         internal/ImportStyleSection.qml
         internal/IncrementalPropertyControlWithTitle.qml
         internal/KeyboardLayoutsSection.qml
@@ -105,6 +106,7 @@ qt_add_qml_module(preferences_qml
         internal/MiscellaneousSection.qml
         internal/MixerSection.qml
         internal/MusicXmlSection.qml
+        internal/PlaybackQualitySection.qml
         internal/NoteInput/FretboardDiagramsSection.qml
         internal/NoteInput/MidiInputSection.qml
         internal/NoteInput/NoteColorsSection.qml

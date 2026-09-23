@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -30,6 +30,7 @@
 #include "log.h"
 
 using namespace mu::notation;
+using namespace muse::workspace;
 using namespace muse::ui;
 using namespace muse::uicomponents;
 using namespace muse::actions;
@@ -47,7 +48,7 @@ void NoteInputBarCustomiseModel::load()
 
     QList<Item*> items;
 
-    ToolConfig toolConfig = uiState()->toolConfig(NOTE_INPUT_TOOLBAR_NAME, NotationUiActions::defaultNoteInputBarConfig());
+    ToolConfig toolConfig = uiConfiguration()->toolConfig(NOTE_INPUT_TOOLBAR_NAME, NotationUiActions::defaultNoteInputBarConfig());
 
     for (const ToolConfig::Item& item : toolConfig.items) {
         const UiAction& action = actionsRegister()->action(item.action);
@@ -252,5 +253,5 @@ void NoteInputBarCustomiseModel::saveActions()
         config.items.append(citem);
     }
 
-    uiState()->setToolConfig(NOTE_INPUT_TOOLBAR_NAME, config);
+    uiConfiguration()->setToolConfig(NOTE_INPUT_TOOLBAR_NAME, config);
 }

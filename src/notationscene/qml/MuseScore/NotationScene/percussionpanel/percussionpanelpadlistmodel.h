@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -28,7 +28,7 @@
 #include "modularity/ioc.h"
 #include "async/asyncable.h"
 
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 #include "inotationsceneconfiguration.h"
 
 #include "engraving/dom/drumset.h"

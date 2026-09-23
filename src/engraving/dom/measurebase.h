@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -134,8 +134,29 @@ public:
 
     double pause() const;
 
+    PropertyValue getProperty(Pid) const override;
+    bool setProperty(Pid, const PropertyValue&) override;
+    PropertyValue propertyDefault(Pid) const override;
+
     void clearElements();
     ElementList takeElements();
+
+    int no() const { return m_no; }
+    void setNo(int n) { m_no = n; }
+    int noOffset() const { return m_noOffset; }
+    void setNoOffset(int n) { m_noOffset = n; }
+
+    bool repeatEnd() const { return flag(ElementFlag::REPEAT_END); }
+    void setRepeatEnd(bool v) { setFlag(ElementFlag::REPEAT_END, v); }
+
+    bool repeatStart() const { return flag(ElementFlag::REPEAT_START); }
+    void setRepeatStart(bool v) { setFlag(ElementFlag::REPEAT_START, v); }
+
+    bool repeatJump() const { return flag(ElementFlag::REPEAT_JUMP); }
+    void setRepeatJump(bool v) { setFlag(ElementFlag::REPEAT_JUMP, v); }
+
+    bool irregular() const { return flag(ElementFlag::IRREGULAR); }
+    void setIrregular(bool v) { setFlag(ElementFlag::IRREGULAR, v); }
 
     bool lineBreak() const { return flag(ElementFlag::LINE_BREAK); }
     void setLineBreak(bool v) { setFlag(ElementFlag::LINE_BREAK, v); }
@@ -148,6 +169,18 @@ public:
 
     bool noBreak() const { return flag(ElementFlag::NO_BREAK); }
     void setNoBreak(bool v) { setFlag(ElementFlag::NO_BREAK, v); }
+
+    bool hasCourtesyKeySig() const { return flag(ElementFlag::COURTESY_KEYSIG); }
+    void setHasCourtesyKeySig(bool v) { setFlag(ElementFlag::COURTESY_KEYSIG, v); }
+
+    bool hasCourtesyTimeSig() const { return flag(ElementFlag::COURTESY_TIMESIG); }
+    void setHasCourtesyTimeSig(bool v) const { setFlag(ElementFlag::COURTESY_TIMESIG, v); }
+
+    bool hasCourtesyClef() const { return flag(ElementFlag::COURTESY_CLEF); }
+    void setHasCourtesyClef(bool v) const { setFlag(ElementFlag::COURTESY_CLEF, v); }
+
+    bool endOfMeasureChange() const { return flag(ElementFlag::END_OF_MEASURE_CHANGE); }
+    void setEndOfMeasureChange(bool val) const { setFlag(ElementFlag::END_OF_MEASURE_CHANGE, val); }
 
     virtual void computeMinWidth() { }
 
@@ -177,6 +210,8 @@ private:
     MeasureBase* m_prev = nullptr;
 
     Fraction m_tick = Fraction(0, 1);
+    int m_no = 0;                         // Measure number, counting from zero
+    int m_noOffset = 0;                   // Offset to measure number
 };
 
 //---------------------------------------------------------

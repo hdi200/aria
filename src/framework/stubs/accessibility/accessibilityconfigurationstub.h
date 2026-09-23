@@ -30,7 +30,8 @@ class AccessibilityConfigurationStub : public IAccessibilityConfiguration
 public:
     AccessibilityConfigurationStub() = default;
 
-    bool isAccessibleActive() const override { return false; }
+    bool enabled() const override;
+    bool active() const override;
 };
 }
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -85,8 +85,13 @@ static void writeMeasureEvents(XmlStreamWriter& writer, Measure* m, int offset, 
     }
 }
 
-PositionsWriter::PositionsWriter(PositionsWriter::ElementType elementType)
-    : m_elementType(elementType)
+PositionsWriter::PositionsWriter(const muse::modularity::ContextPtr& ctx)
+    : muse::Contextable(ctx)
+{
+}
+
+PositionsWriter::PositionsWriter(PositionsWriter::ElementType elementType, const muse::modularity::ContextPtr& ctx)
+    : muse::Contextable(ctx), m_elementType(elementType)
 {
 }
 
@@ -113,7 +118,11 @@ Ret PositionsWriter::write(INotationPtr notation, io::IODevice& destinationDevic
         return make_ret(Ret::Code::UnknownError);
     }
 
-    auto buf = Buffer::opened(IODevice::WriteOnly);
+    Buffer buf;
+    if (!buf.open(IODevice::WriteOnly)) {
+        return make_ret(Ret::Code::InternalError);
+    }
+
     XmlStreamWriter writer(&buf);
 
     writer.startDocument();

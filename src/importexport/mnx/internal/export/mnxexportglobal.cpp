@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -56,8 +56,8 @@ public:
 private:
     void init()
     {
-        m_measureNumber = 1;
-        m_measureNumberOffset = 0;
+        m_measureNo = 1;
+        m_measureNoOffset = 0;
         m_displayNumber = 1;
     }
 
@@ -74,19 +74,19 @@ private:
             }
         }
 
-        m_measureNumberOffset = measure->measureNumberOffset();
-        m_measureNumber += m_measureNumberOffset;
+        m_measureNoOffset = measure->noOffset();
+        m_measureNo += m_measureNoOffset;
 
         if (measure->isAnacrusis()) {
             m_displayNumber = 0;
             return;
         }
 
-        m_displayNumber = m_measureNumber++;
+        m_displayNumber = m_measureNo++;
     }
 
-    int m_measureNumber = 1;
-    int m_measureNumberOffset = 0;
+    int m_measureNo = 1;
+    int m_measureNoOffset = 0;
     int m_displayNumber = 1;
 };
 } // namespace

@@ -30,16 +30,5 @@ class MidiRemoteModule : public modularity::IModuleSetup
 public:
     std::string moduleName() const override;
     void registerExports() override;
-
-    modularity::IContextSetup* newContext(const muse::modularity::ContextPtr& ctx) const override;
-};
-
-class MidiRemoteContext : public modularity::IContextSetup
-{
-public:
-    MidiRemoteContext(const muse::modularity::ContextPtr& ctx)
-        : modularity::IContextSetup(ctx) {}
-
-    void registerExports() override;
 };
 }

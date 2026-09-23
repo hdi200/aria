@@ -42,10 +42,6 @@ Text {
         pixelSize: ui.theme.bodyFont.pixelSize
     }
 
-    onLinkActivated: function(link) {
-        Qt.openUrlExternally(link)
-    }
-
     Loader {
         id: mouseAreaLoader
         anchors.fill: parent
@@ -56,12 +52,12 @@ Text {
             cursorShape: root.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor
             hoverEnabled: true
 
-            onPressed: function(mouse) {
-                if (root.hoveredLink) {
-                    mouse.accepted = false
-                    return
-                }
+            onClicked: {
                 ui.tooltip.hide(root, true)
+
+                if (Boolean(root.hoveredLink)) {
+                    Qt.openUrlExternally(root.hoveredLink)
+                }
             }
 
             onContainsMouseChanged: {

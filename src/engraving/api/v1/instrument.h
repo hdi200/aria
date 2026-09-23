@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -286,11 +286,11 @@ public:
     /// \param pitch Pitch to find variants for.
     Q_INVOKABLE QVariantList variants(int pitch);
 
-    /// The row the given pitch appears in the percussion panel.
+    /// The row the given pitch appears in in the percussion panel.
     /// \param pitch The pitch of the note to find the row for.
     Q_INVOKABLE int panelRow(int pitch) { return drumset()->panelRow(pitch); }
 
-    /// The column the given pitch appears in the percussion panel.
+    /// The column the given pitch appears in in the percussion panel.
     /// \param pitch The pitch of the note to find the column for.
     Q_INVOKABLE int panelColumn(int pitch) { return drumset()->panelColumn(pitch); }
 

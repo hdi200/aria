@@ -27,12 +27,13 @@
 #include "imusesoundsconfiguration.h"
 
 namespace mu::musesounds {
-class MuseSoundsConfiguration : public IMuseSoundsConfiguration
+class MuseSoundsConfiguration : public IMuseSoundsConfiguration, public muse::Contextable
 {
     muse::GlobalInject<muse::IGlobalConfiguration> globalConfiguration;
 
 public:
-    MuseSoundsConfiguration() = default;
+    MuseSoundsConfiguration(const muse::modularity::ContextPtr& iocCtx)
+        : muse::Contextable(iocCtx) {}
 
     void init();
 
@@ -53,7 +54,7 @@ public:
 
     bool museSoundsCheckForUpdateTestMode() const override;
 
-    bool getSoundsTestMode() const override;
-    void setSoundsTestMode(bool enabled) override;
+private:
+    bool getSoundsTestMode() const;
 };
 }

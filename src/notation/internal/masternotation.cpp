@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -25,7 +25,6 @@
 #include <QFileInfo>
 
 #include "log.h"
-#include "realfn.h"
 #include "translation.h"
 
 #include "engraving/style/defaultstyle.h"
@@ -46,7 +45,6 @@
 
 #include "excerptnotation.h"
 #include "masternotationparts.h"
-#include "notationautomation.h"
 
 #ifdef MUE_BUILD_ENGRAVING_PLAYBACK
 #include "notationplayback.h"
@@ -85,8 +83,6 @@ MasterNotation::MasterNotation(project::INotationProject* project, const muse::m
 #else
     m_notationPlayback = std::make_shared<NotationPlaybackStub>();
 #endif
-
-    m_notationAutomation = std::make_shared<NotationAutomation>(this, m_notationChanged);
 
     m_parts->partsChanged().onNotify(this, [this]() {
         notifyAboutNotationChanged();
@@ -133,7 +129,7 @@ INotationPtr MasterNotation::notation()
     return shared_from_this();
 }
 
-void MasterNotation::initAfterSettingScore(const MasterScore* score, bool disablePlayback)
+void MasterNotation::initAfterSettingScore(const MasterScore* score)
 {
     IF_ASSERT_FAILED(score) {
         return;
@@ -147,14 +143,11 @@ void MasterNotation::initAfterSettingScore(const MasterScore* score, bool disabl
         }
     });
 
-    if (!disablePlayback) {
-        m_notationPlayback->init();
-    }
-
+    m_notationPlayback->init();
     initExcerptNotations(score->excerpts());
 }
 
-void MasterNotation::setMasterScore(mu::engraving::MasterScore* score, bool disablePlayback)
+void MasterNotation::setMasterScore(mu::engraving::MasterScore* score)
 {
     if (masterScore() == score) {
         return;
@@ -166,7 +159,7 @@ void MasterNotation::setMasterScore(mu::engraving::MasterScore* score, bool disa
 
     score->updateSwing();
 
-    initAfterSettingScore(score, disablePlayback);
+    initAfterSettingScore(score);
 }
 
 mu::engraving::MasterScore* MasterNotation::masterScore() const
@@ -238,7 +231,7 @@ static void createMeasures(MasterScore* masterScore, const ScoreCreateOptions& s
 
         // Special handling for first measure (apply pickups, timesigs, and keysigs)...
 
-        measure->setExcludeFromNumbering(scoreOptions.withPickupMeasure);
+        measure->setIrregular(scoreOptions.withPickupMeasure);
         measure->adjustToLen(scoreOptions.withPickupMeasure ? scoreOptions.pickupTimesig : scoreOptions.globalTimesig);
 
         // Add timesigs...
@@ -305,8 +298,10 @@ void MasterNotation::applyOptions(mu::engraving::MasterScore* score, const Score
         clearMeasures(score);
 
         // for templates using built-in base page style, set score page style to default (may be user-defined)
-        for (auto st : pageStyles()) {
-            if (st != Sid::pageTwosided && RealIsEqual(score->style().styleD(st), DefaultStyle::baseStyle().styleD(st))) {
+        bool isBaseWidth = (std::abs(score->style().styleD(Sid::pageWidth) - DefaultStyle::baseStyle().styleD(Sid::pageWidth)) < 0.1);
+        bool isBaseHeight = (std::abs(score->style().styleD(Sid::pageHeight) - DefaultStyle::baseStyle().styleD(Sid::pageHeight)) < 0.1);
+        if (isBaseWidth && isBaseHeight) {
+            for (auto st : pageStyles()) {
                 score->style().set(st, DefaultStyle::defaultStyle().value(st));
             }
         }
@@ -748,11 +743,6 @@ Notification MasterNotation::hasPartsChanged() const
 INotationPlaybackPtr MasterNotation::playback() const
 {
     return m_notationPlayback;
-}
-
-INotationAutomationPtr MasterNotation::automation() const
-{
-    return m_notationAutomation;
 }
 
 void MasterNotation::initNotationSoloMuteState(const INotationPtr notation)

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,6 +29,7 @@
 #include <QFileOpenEvent>
 #include <QWindow>
 #include <QMimeData>
+#include <QTimer>
 
 #include "async/async.h"
 #include "audio/common/soundfonttypes.h"
@@ -51,7 +52,10 @@ void ApplicationActionController::init()
     dispatcher()->reg(this, "quit", [this](const ActionData& args) {
         bool isAllInstances = args.count() > 0 ? args.arg<bool>(0) : true;
         muse::io::path_t installatorPath = args.count() > 1 ? args.arg<muse::io::path_t>(1) : "";
-        quit(isAllInstances, installatorPath);
+
+        QTimer::singleShot(0, [this, isAllInstances, installatorPath]() {
+            quit(isAllInstances, installatorPath);
+        });
     });
 
     dispatcher()->reg(this, "restart", [this]() {
@@ -234,24 +238,23 @@ bool ApplicationActionController::quit(bool isAllInstances, const muse::io::path
         return false;
     }
 
-    if (multiwindowsProvider()->isFirstWindow() && !installerPath.empty()) {
+    if (isAllInstances) {
+        multiwindowsProvider()->quitForAll();
+    }
+
+    if (multiwindowsProvider()->windowCount() == 1 && !installerPath.empty()) {
 #if defined(Q_OS_LINUX)
-        platformInteractive()->revealInFileBrowser(installerPath);
+        interactive()->revealInFileBrowser(installerPath);
 #else
-        platformInteractive()->openUrl(QUrl::fromLocalFile(installerPath.toQString()));
+        interactive()->openUrl(QUrl::fromLocalFile(installerPath.toQString()));
 #endif
     }
 
-    if (!multiwindowsProvider()->isFirstWindow()) {
+    if (multiwindowsProvider()->windowCount() > 1) {
         multiwindowsProvider()->notifyAboutWindowWasQuited();
     }
 
-    if (isAllInstances) {
-        multiwindowsProvider()->quitForAll();
-    } else {
-        multiwindowsProvider()->quitWindow(iocContext());
-    }
-
+    QCoreApplication::exit();
     return true;
 }
 
@@ -291,19 +294,19 @@ void ApplicationActionController::openAboutMusicXMLDialog()
 void ApplicationActionController::openOnlineHandbookPage()
 {
     std::string handbookUrl = configuration()->handbookUrl();
-    platformInteractive()->openUrl(handbookUrl);
+    interactive()->openUrl(handbookUrl);
 }
 
 void ApplicationActionController::openAskForHelpPage()
 {
     std::string askForHelpUrl = configuration()->askForHelpUrl();
-    platformInteractive()->openUrl(askForHelpUrl);
+    interactive()->openUrl(askForHelpUrl);
 }
 
 void ApplicationActionController::openAccessibilityStatementPage()
 {
     std::string accessibilityStatementUrl = configuration()->accessibilityStatementUrl();
-    platformInteractive()->openUrl(accessibilityStatementUrl);
+    interactive()->openUrl(accessibilityStatementUrl);
 }
 
 void ApplicationActionController::openPreferencesDialog()

@@ -30,16 +30,5 @@ class CloudModule : public modularity::IModuleSetup
 public:
     std::string moduleName() const override;
     void registerExports() override;
-
-    modularity::IContextSetup* newContext(const muse::modularity::ContextPtr& ctx) const override;
-};
-
-class CloudContext : public modularity::IContextSetup
-{
-public:
-    CloudContext(const muse::modularity::ContextPtr& ctx)
-        : modularity::IContextSetup(ctx) {}
-
-    void registerExports() override;
 };
 }

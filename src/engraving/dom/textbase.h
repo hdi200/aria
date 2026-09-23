@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -153,9 +153,6 @@ public:
     void endEdit();
     void startEdit();
     bool editing() const { return m_editing; }
-    bool visible() const { return m_visible; }
-    void setVisible(bool val) { m_visible = val; }
-    void toggleVisible() { setVisible(!m_visible); }
 
     CharFormat* format() { return &m_format; }
     const CharFormat* format() const { return &m_format; }
@@ -187,7 +184,6 @@ public:
     TextBlock& curLine();
 
     RectF cursorRect() const;
-    RectF cursorCanvasRect() const;
     bool movePosition(TextCursor::MoveOperation op, TextCursor::MoveMode mode = TextCursor::MoveMode::MoveAnchor, int count = 1);
     void selectWord();
     void moveCursorToEnd() { movePosition(TextCursor::MoveOperation::End); }
@@ -212,7 +208,6 @@ private:
     size_t m_selectLine = 0;           // start of selection
     size_t m_selectColumn = 0;
     bool m_editing = false;
-    bool m_visible = false;
 };
 
 //---------------------------------------------------------
@@ -241,7 +236,6 @@ public:
 
     TextFragment split(int column);
     muse::draw::Font font(const TextBase*) const;
-    double calculatedFontSize(const TextBase*) const;
     int columns() const;
     void changeFormat(FormatId id, const FormatValue& data);
 
@@ -516,11 +510,6 @@ public:
     bool hasSymbolScale() const;
     bool hasSymbolSize() const { return !hasSymbolScale(); }
 
-    double spatiumScaling() const;
-
-    double textAngle() const { return m_textAngle; }
-    void setTextAngle(double v) { m_textAngle = v; }
-
 protected:
     TextBase(const ElementType& type, EngravingItem* parent = 0, TextStyleType tid = TextStyleType::DEFAULT,
              ElementFlags = ElementFlag::NOTHING);
@@ -590,8 +579,6 @@ private:
     DirectionV m_direction = DirectionV::AUTO;
     AutoOnOff m_centerBetweenStaves = AutoOnOff::AUTO;
     bool m_anchorToEndOfPrevious = false;
-
-    double m_textAngle = 0.0;
 };
 
 inline bool isTextNavigationKey(int key, KeyboardModifiers modifiers)

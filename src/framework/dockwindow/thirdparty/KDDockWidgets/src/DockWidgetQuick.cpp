@@ -35,7 +35,7 @@ public:
     Private(DockWidgetQuick *dw, QQmlEngine *qmlengine)
         : q(dw)
         , m_visualItem(q->createItem(qmlengine,
-                                     Config::self(dw->ctx()).frameworkWidgetFactory()->dockwidgetFilename().toString()))
+                                     Config::self().frameworkWidgetFactory()->dockwidgetFilename().toString()))
         , m_qmlEngine(qmlengine)
     {
         Q_ASSERT(m_visualItem);
@@ -48,10 +48,10 @@ public:
     QQmlEngine *const m_qmlEngine;
 };
 
-DockWidgetQuick::DockWidgetQuick(int ctx, const QString &name, Options options,
+DockWidgetQuick::DockWidgetQuick(const QString &name, Options options,
                                  LayoutSaverOptions layoutSaverOptions, QQmlEngine *engine)
-    : DockWidgetBase(ctx, name, options, layoutSaverOptions)
-    , d(new Private(this, engine ? engine : Config::self(ctx).qmlEngine()))
+    : DockWidgetBase(name, options, layoutSaverOptions)
+    , d(new Private(this, engine ? engine : Config::self().qmlEngine()))
 {
     // To mimic what QtWidgets does when creating a new QWidget.
     setVisible(false);
@@ -80,7 +80,7 @@ void DockWidgetQuick::setWidget(QWidgetAdapter *widget)
 
 void DockWidgetQuick::setWidget(QQuickItem *guest)
 {
-    auto adapter = new QWidgetAdapter(m_ctx, this);
+    auto adapter = new QWidgetAdapter(this);
     adapter->setIsWrapper();
 
     // In case the user app needs to use them:

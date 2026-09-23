@@ -5,7 +5,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2021 MuseScore Limited
+# Copyright (C) 2021 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -59,25 +59,65 @@ fi
 # GET DEPENDENCIES
 ##########################################################################
 
-apt_packages_tools=(
-  # Alphabetical order please!
+apt_packages=(
+  coreutils
   curl
   desktop-file-utils # installs `desktop-file-validate` for appimagetool
+  gawk
+  git
   lcov
+  libasound2-dev
+  libcups2-dev
+  libfontconfig1-dev
+  libfreetype6-dev
+  libgcrypt20-dev
+  libgl1-mesa-dev
+  libglib2.0-dev
   libgpgme-dev # install for appimagetool
+  libjack-dev
+  libnss3-dev
+  libportmidi-dev
+  libpulse-dev
+  librsvg2-dev
+  libsndfile1-dev
+  libssl-dev
+  libtool
+  make
   p7zip-full
+  sed
+  software-properties-common # installs `add-apt-repository`
   unzip
   wget
   zsync # installs `zsyncmake` for appimagetool
   )
 
-# Qt dependencies are already installed by the "Install Qt" step
-apt_packages_deps=(
-  libasound2-dev
-  libcups2-dev
-  libsndfile1-dev
+# MuseScore compiles without these but won't run without them
+apt_packages_runtime=(
+  # Alphabetical order please!
+  libdbus-1-3
+  libegl1-mesa-dev
+  libgles2-mesa-dev
+  libodbc2
+  libpq-dev
+  libssl-dev
+  libxcomposite-dev
+  libxcursor-dev
+  libxi-dev
+  libxkbcommon-x11-0
+  libxrandr2
+  libxtst-dev
+  libdrm-dev
+  libxcb-icccm4
+  libxcb-image0
+  libxcb-keysyms1
+  libxcb-randr0
+  libxcb-render-util0
+  libxcb-xinerama0
+  libxcb-xkb-dev
+  libxkbcommon-dev
+  libopengl-dev
   libvulkan-dev
-)
+  )
 
 apt_packages_ffmpeg=(
   ffmpeg
@@ -86,17 +126,17 @@ apt_packages_ffmpeg=(
   libswscale-dev
   )
 
-if $BUILD_PIPEWIRE ; then
-  apt_packages_deps+=(
-    libdbus-1-dev
-    libudev-dev
-    )
-fi
+apt_packages_pw_deps=(
+  libdbus-1-dev
+  libudev-dev
+  )
 
+$SUDO apt-get update
 $SUDO apt-get install -y --no-install-recommends \
-  "${apt_packages_tools[@]}" \
-  "${apt_packages_deps[@]}" \
-  "${apt_packages_ffmpeg[@]}"
+  "${apt_packages[@]}" \
+  "${apt_packages_runtime[@]}" \
+  "${apt_packages_ffmpeg[@]}" \
+  "${apt_packages_pw_deps[@]}"
 
 ##########################################################################
 # GET TOOLS

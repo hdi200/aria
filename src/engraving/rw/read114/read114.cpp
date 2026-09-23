@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -859,6 +859,7 @@ static void readClef(Clef* clef, XmlReader& e, ReadContext& ctx)
 static void readTuplet(Tuplet* tuplet, XmlReader& e, ReadContext& ctx)
 {
     int bl = -1;
+    tuplet->setId(e.intAttribute("id", 0));
 
     while (e.readNextStartElement()) {
         const AsciiStringView tag(e.name());
@@ -2060,11 +2061,11 @@ static void readMeasure(Measure* m, int staffIdx, XmlReader& e, ReadContext& ctx
             // Ignore measure stretch pre 4.0
             e.skipCurrentElement();
         } else if (tag == "noOffset") {
-            m->setMeasureNumberOffset(e.readInt());
+            m->setNoOffset(e.readInt());
         } else if (tag == "measureNumberMode") {
             m->setMeasureNumberMode(MeasureNumberMode(e.readInt()));
         } else if (tag == "irregular") {
-            m->setExcludeFromNumbering(true);
+            m->setIrregular(true);
             e.skipCurrentElement();
         } else if (tag == "breakMultiMeasureRest") {
             m->setBreakMultiMeasureRest(e.readBool());
@@ -2075,13 +2076,12 @@ static void readMeasure(Measure* m, int staffIdx, XmlReader& e, ReadContext& ctx
             barLine->setBarLineType(TConv::fromXml(e.readAsciiText(), BarLineType::NORMAL));
             segment->add(barLine);
         } else if (tag == "Tuplet") {
-            int tupletId = e.intAttribute("id");
             Tuplet* tuplet = Factory::createTuplet(m);
             tuplet->setTrack(ctx.track());
             tuplet->setTick(ctx.tick());
             tuplet->setParent(m);
             readTuplet(tuplet, e, ctx);
-            ctx.addTuplet(tupletId, tuplet);
+            ctx.addTuplet(tuplet);
         } else if (tag == "startRepeat") {
             m->setRepeatStart(true);
             e.readNext();
@@ -2109,12 +2109,11 @@ static void readMeasure(Measure* m, int staffIdx, XmlReader& e, ReadContext& ctx
         } else if (tag == "slashStyle") {
             m->setStaffStemless(staffIdx, e.readInt());
         } else if (tag == "Beam") {
-            int beamId = e.intAttribute("id");
             Beam* beam = Factory::createBeam(ctx.dummy()->system());
             beam->setTrack(ctx.track());
             read400::TRead::read(beam, e, ctx);
             beam->resetExplicitParent();
-            ctx.addBeam(beamId, beam);
+            ctx.addBeam(beam);
         } else if (tag == "Segment") {
             if (segment) {
                 read400::TRead::read(segment, e, ctx);
@@ -2584,11 +2583,16 @@ static void readPart(Part* part, XmlReader& e, ReadContext& ctx)
             readText114(e, ctx, t, t);
             part->instrument()->setShortName(t->xmlText());
             delete t;
+        } else if (tag == "trackName") {
+            part->setPartName(e.readText());
         } else if (tag == "show") {
             part->setShow(e.readInt());
         } else {
             e.unknown();
         }
+    }
+    if (part->partName().isEmpty()) {
+        part->setPartName(part->instrument()->trackName());
     }
 
     if (part->instrument()->useDrumset()) {
@@ -2783,7 +2787,7 @@ muse::Ret Read114::readScoreFile(Score* score, XmlReader& e, ReadInOutData* out)
             read400::TRead::read(ks, e, ctx);
             delete ks;
         } else if (tag == "siglist") {
-            Read206::readTimeSigMap(masterScore->m_sigmap, e, ctx);
+            read400::TRead::read(masterScore->m_sigmap, e, ctx);
         } else if (tag == "programVersion") {
             masterScore->setMscoreVersion(e.readText());
         } else if (tag == "programRevision") {

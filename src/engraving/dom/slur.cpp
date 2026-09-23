@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -346,17 +346,17 @@ bool SlurSegment::isEndPointsEdited() const
 
 double SlurSegment::endWidth() const
 {
-    return style().styleAbsolute(Sid::slurEndWidth);
+    return style().styleMM(Sid::slurEndWidth);
 }
 
 double SlurSegment::midWidth() const
 {
-    return style().styleAbsolute(Sid::slurMidWidth);
+    return style().styleMM(Sid::slurMidWidth);
 }
 
 double SlurSegment::dottedWidth() const
 {
-    return style().styleAbsolute(Sid::slurDottedWidth);
+    return style().styleMM(Sid::slurDottedWidth);
 }
 
 Color SlurSegment::curColor(const rendering::PaintOptions& opt) const

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -32,26 +32,15 @@
 using namespace mu::musesounds;
 using namespace muse::modularity;
 
-static const std::string mname("musesounds_stub");
-
 std::string MuseSoundsModule::moduleName() const
 {
-    return mname;
+    return "musesounds_stub";
 }
 
 void MuseSoundsModule::registerExports()
 {
-    globalIoc()->registerExport<IMuseSoundsCheckUpdateService>(mname, new MuseSoundsCheckUpdateServiceStub());
-    globalIoc()->registerExport<IMuseSamplerCheckUpdateService>(mname, new MuseSamplerCheckUpdateServiceStub());
-}
-
-IContextSetup* MuseSoundsModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new MuseSoundsContext(ctx);
-}
-
-void MuseSoundsContext::registerExports()
-{
-    ioc()->registerExport<IMuseSoundsCheckUpdateScenario>(mname, new MuseSoundsCheckUpdateScenarioStub());
-    ioc()->registerExport<IMuseSamplerCheckUpdateScenario>(mname, new MuseSamplerCheckUpdateScenarioStub());
+    ioc()->registerExport<IMuseSoundsCheckUpdateScenario>(moduleName(), new MuseSoundsCheckUpdateScenarioStub());
+    ioc()->registerExport<IMuseSoundsCheckUpdateService>(moduleName(), new MuseSoundsCheckUpdateServiceStub());
+    ioc()->registerExport<IMuseSamplerCheckUpdateScenario>(moduleName(), new MuseSamplerCheckUpdateScenarioStub());
+    ioc()->registerExport<IMuseSamplerCheckUpdateService>(moduleName(), new MuseSamplerCheckUpdateServiceStub());
 }

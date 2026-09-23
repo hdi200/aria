@@ -192,7 +192,7 @@ QString GraphicsApiProvider::apiName(GraphicsApi api)
 
 QString GraphicsApiProvider::dataFilePath() const
 {
-    GlobalConfiguration conf;
+    GlobalConfiguration conf(modularity::globalCtx());
     return conf.userAppDataPath().toQString() + "/required_graphicsapi.dat";
 }
 

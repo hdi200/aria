@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -24,17 +24,14 @@
 #include <memory>
 #include <vector>
 
-#include <QTimer>
-
 #include "modularity/ioc.h"
 #include "async/asyncable.h"
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 #include "engraving/rendering/isinglerenderer.h"
 #include "engraving/rendering/ieditmoderenderer.h"
 
 #include "../inotationinteraction.h"
 #include "../inotationconfiguration.h"
-#include "../inotationcontextconfiguration.h"
 #include "notationscene/iselectinstrumentscenario.h"
 #include "inotationundostack.h"
 
@@ -44,7 +41,6 @@
 #include "engraving/dom/elementgroup.h"
 #include "engraving/rendering/paintoptions.h"
 #include "engraving/types/symid.h"
-#include "previewmeasure.h"
 #include "scorecallbacks.h"
 
 namespace mu::engraving {
@@ -60,11 +56,10 @@ class NotationSelectionFilter;
 class NotationInteraction : public INotationInteraction, public muse::Contextable, public muse::async::Asyncable
 {
     muse::GlobalInject<INotationConfiguration> configuration;
-    muse::GlobalInject<engraving::rendering::ISingleRenderer> engravingRenderer;
-    muse::GlobalInject<engraving::rendering::IEditModeRenderer> editModeRenderer;
-    muse::ContextInject<INotationContextConfiguration> contextConfiguration = { this };
     muse::ContextInject<ISelectInstrumentsScenario> selectInstrumentScenario = { this };
     muse::ContextInject<muse::IInteractive> interactive = { this };
+    muse::ContextInject<engraving::rendering::ISingleRenderer> engravingRenderer = { this };
+    muse::ContextInject<engraving::rendering::IEditModeRenderer> editModeRenderer = { this };
 
 public:
     NotationInteraction(Notation* notation, INotationUndoStackPtr undoStack);
@@ -80,7 +75,6 @@ public:
     void showShadowNoteForMidiPitch(const uint8_t pitch) override;
     void hideShadowNote() override;
     muse::RectF shadowNoteRect() const override;
-    muse::RectF previewMeasureRect() const override;
     muse::async::Channel</*visible*/ bool> shadowNoteChanged() const override;
 
     // Visibility
@@ -231,7 +225,6 @@ public:
     bool canAddTupletToSelectedChordRests() const override;
     void addTupletToSelectedChordRests(const TupletOptions& options) override;
     void addBeamToSelectedChordRests(BeamMode mode) override;
-    void beamSelectedRange() override;
 
     void increaseDecreaseDuration(int steps, bool stepByDots) override;
 
@@ -346,9 +339,6 @@ public:
 
     void toggleDebugShowGapRests() override;
 
-private slots:
-    void blinkTextCursor();
-
 private:
     mu::engraving::Score* score() const;
     void onScoreInited();
@@ -391,7 +381,7 @@ private:
     void notifyAboutDragChanged();
     void notifyAboutDropChanged();
     void notifyAboutSelectionChangedIfNeed();
-    void notifyAboutNotationChanged(const muse::RectF& updateRect = muse::RectF());
+    void notifyAboutNotationChanged();
     void notifyAboutTextEditingStarted();
     void notifyAboutTextEditingChanged();
     void notifyAboutTextEditingEnded(TextBase* text);
@@ -415,10 +405,6 @@ private:
 
     void startEditText(mu::engraving::TextBase* text);
     bool needEndTextEdit() const;
-    void startTextCursorBlinkTimer();
-    void stopTextCursorBlinkTimer();
-    void onTextEditingChanged();
-    void updateTextCursorVisibility();
     void pasteIntoTextEdit();
 
     mu::engraving::Page* point2page(const muse::PointF& p, bool useNearestPage = false) const;
@@ -540,7 +526,6 @@ private:
 
     INotationNoteInputPtr m_noteInput = nullptr;
 
-    PreviewMeasure m_previewMeasure;
     muse::async::Channel</*visible*/ bool> m_shadowNoteChanged;
 
     std::shared_ptr<NotationSelection> m_selection = nullptr;
@@ -579,7 +564,5 @@ private:
     HitElementContext m_hitElementContext;
 
     muse::async::Channel<ShowItemRequest> m_showItemRequested;
-
-    QTimer m_textCursorBlinkTimer;
 };
 }

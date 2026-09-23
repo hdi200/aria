@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -36,18 +36,13 @@ void NotationToolBarModel::load()
 
     muse::actions::ActionCodeList itemsCodes = {
         "parts",
-        "toggle-mixer",
-        "toggle-automation"
+        "toggle-mixer"
     };
 
     ToolBarItemList items;
     for (const ActionCode& code : itemsCodes) {
         ToolBarItem* item = makeItem(code);
-        if (!item) {
-            continue;
-        }
-
-        item->setShowTitle(!isCompactMode());
+        item->setShowTitle(true);
         item->setIsTitleBold(true);
 
         items << item;

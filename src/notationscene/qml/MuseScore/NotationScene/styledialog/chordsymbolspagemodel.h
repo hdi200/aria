@@ -22,7 +22,7 @@
 
 #pragma once
 #include "abstractstyledialogmodel.h"
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 #include "notation/inotationconfiguration.h"
 
 namespace mu::notation {

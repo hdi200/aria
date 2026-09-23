@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,7 +27,7 @@
 #include "modularity/ioc.h"
 
 #include "ui/iuiactionsregister.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 
 #include "internal/applicationuiactions.h"
 #include "internal/applicationactioncontroller.h"
@@ -42,6 +42,7 @@
 using namespace mu::appshell;
 using namespace muse;
 using namespace muse::modularity;
+using namespace muse::ui;
 using namespace muse::dock;
 
 static void appshell_init_qrc()
@@ -56,22 +57,22 @@ std::string AppShellModule::moduleName() const
 
 void AppShellModule::registerExports()
 {
-    m_applicationActionController = std::make_shared<ApplicationActionController>(globalCtx());
-    m_applicationUiActions = std::make_shared<ApplicationUiActions>(m_applicationActionController, globalCtx());
-    m_appShellConfiguration = std::make_shared<AppShellConfiguration>(globalCtx());
+    m_applicationActionController = std::make_shared<ApplicationActionController>(iocContext());
+    m_applicationUiActions = std::make_shared<ApplicationUiActions>(m_applicationActionController, iocContext());
+    m_appShellConfiguration = std::make_shared<AppShellConfiguration>(iocContext());
 
-    globalIoc()->registerExport<IAppShellConfiguration>(moduleName(), m_appShellConfiguration);
-    globalIoc()->registerExport<IStartupScenario>(moduleName(), new StartupScenario(globalCtx()));
+    ioc()->registerExport<IAppShellConfiguration>(moduleName(), m_appShellConfiguration);
+    ioc()->registerExport<IStartupScenario>(moduleName(), new StartupScenario(iocContext()));
 }
 
 void AppShellModule::resolveImports()
 {
-    auto ar = globalIoc()->resolve<ui::IUiActionsRegister>(moduleName());
+    auto ar = ioc()->resolve<muse::ui::IUiActionsRegister>(moduleName());
     if (ar) {
         ar->reg(m_applicationUiActions);
     }
 
-    auto ir = globalIoc()->resolve<interactive::IInteractiveUriRegister>(moduleName());
+    auto ir = ioc()->resolve<IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerPageUri(Uri("musescore://notation"));
         ir->registerPageUri(Uri("musescore://devtools"));

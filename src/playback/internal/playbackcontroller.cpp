@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -98,7 +98,7 @@ static std::string resolveAuxTrackTitle(aux_channel_idx_t index, const AudioOutp
 }
 
 PlaybackController::PlaybackController(const muse::modularity::ContextPtr& iocCtx)
-    : muse::Contextable(iocCtx), m_onlineSoundsController(std::make_unique<OnlineSoundsController>(iocCtx))
+    : muse::Contextable(iocCtx), m_drumsetLoader(iocCtx), m_onlineSoundsController(std::make_unique<OnlineSoundsController>(iocCtx))
 {
 }
 
@@ -624,7 +624,6 @@ void PlaybackController::togglePlay(bool showErrors)
     }
 
     interaction()->endEditElement();
-    interaction()->noteInput()->endNoteInput();
 
     if (isPlaying()) {
         pause();
@@ -650,27 +649,23 @@ void PlaybackController::togglePlay(bool showErrors)
 
 void PlaybackController::playFromSelection(bool showErrors)
 {
-    const EngravingItem* lastElementHit = selection()->lastElementHit();
-    if (selection()->isNone() && !lastElementHit) {
-        return;
-    }
-
     if (showErrors && m_onlineSoundsController->shouldShowOnlineSoundsProcessingError(isPlaying())) {
         m_onlineSoundsController->showOnlineSoundsProcessingError([this]() { playFromSelection(false /*showErrors*/); });
         return;
     }
 
-    int startTick = INT_MAX;
-    for (const EngravingItem* item : selection()->elements()) {
-        startTick = std::min(startTick, item->tick().ticks());
-    }
+    int startTick = 0;
 
-    if (startTick == INT_MAX) {
-        // Selection is none - fall back to last element hit...
-        IF_ASSERT_FAILED(lastElementHit) {
-            return;
+    if (!selection()->isNone()) {
+        startTick = INT_MAX;
+        for (const EngravingItem* item : selection()->elements()) {
+            startTick = std::min(startTick, item->tick().ticks());
         }
-        startTick = lastElementHit->tick().ticks();
+    } else {
+        // Selection is none - fall back to last element hit...
+        if (const EngravingItem* lastElementHit = selection()->lastElementHit()) {
+            startTick = lastElementHit->tick().ticks();
+        }
     }
 
     const LoopBoundaries& loop = notationPlayback()->loopBoundaries();
@@ -1271,40 +1266,6 @@ AudioOutputParams PlaybackController::trackOutputParams(const InstrumentTrackId&
     return result;
 }
 
-InstrumentTrackIdSet PlaybackController::availableInstrumentTracks() const
-{
-    InstrumentTrackIdSet result;
-
-    for (const auto& pair : m_instrumentTrackIdMap) {
-        result.insert(pair.first);
-    }
-
-    return result;
-}
-
-void PlaybackController::removeNonExistingTracks()
-{
-    for (const InstrumentTrackId& instrumentTrackId : availableInstrumentTracks()) {
-        if (instrumentTrackId == notationPlayback()->metronomeTrackId()) {
-            continue;
-        }
-
-        if (!masterNotationParts()->partExists(instrumentTrackId.partId)) {
-            removeTrack(instrumentTrackId);
-            continue;
-        }
-
-        const Part* part = masterNotationParts()->part(instrumentTrackId.partId);
-        const InstrumentTrackIdSet& idSet = part->instrumentTrackIdSet();
-
-        if (idSet.find(instrumentTrackId) == idSet.cend()) {
-            removeTrack(instrumentTrackId);
-        }
-    }
-
-    updateSoloMuteStates();
-}
-
 void PlaybackController::removeTrack(const InstrumentTrackId& instrumentTrackId)
 {
     IF_ASSERT_FAILED(notationPlayback() && playback()) {
@@ -1482,15 +1443,7 @@ void PlaybackController::setupSequenceTracks()
 
     //! HACK - ideally we would use "this" (PlaybackController) instead of m_seqAsyncReceiver for the following
     //! subscription, but we've already subscribed to onItemChanged for a different reason in setNotation...
-    partList.onItemChanged(&m_seqAsyncReceiver, [this, onAddFinished](const Part* part) {
-        for (const InstrumentTrackId& trackId : part->instrumentTrackIdSet()) {
-            auto search = m_instrumentTrackIdMap.find(trackId);
-            if (search == m_instrumentTrackIdMap.cend()) {
-                removeNonExistingTracks();
-                addTrack(trackId, onAddFinished);
-            }
-        }
-
+    partList.onItemChanged(&m_seqAsyncReceiver, [this](const Part*) {
         updateSoloMuteStates();
     });
 
@@ -1505,6 +1458,10 @@ void PlaybackController::setupSequenceTracks()
 void PlaybackController::setupSequencePlayer()
 {
     currentPlayer()->playbackPositionChanged().onReceive(this, [this](const audio::secs_t pos) {
+        if (m_isExportingAudio) {
+            return;
+        }
+
         m_currentTick = notationPlayback()->secToTick(pos);
         m_currentPlaybackPositionChanged.send(pos, m_currentTick);
 
@@ -1517,6 +1474,10 @@ void PlaybackController::setupSequencePlayer()
     });
 
     currentPlayer()->playbackStatusChanged().onReceive(this, [this](PlaybackStatus) {
+        if (m_isExportingAudio) {
+            return;
+        }
+
         m_isPlayingChanged.notify();
         onPlaybackStatusChanged();
     });

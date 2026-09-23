@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -47,14 +47,15 @@ class Painter;
 }
 
 namespace mu::notation {
-class ContinuousPanel
+class ContinuousPanel : public muse::Contextable
 {
     muse::GlobalInject<INotationConfiguration> notationConfiguration;
     muse::GlobalInject<engraving::IEngravingConfiguration> engravingConfiguration;
-    muse::GlobalInject<engraving::rendering::IScoreRenderer> scoreRender;
+    muse::ContextInject<engraving::rendering::IScoreRenderer> scoreRender = { this };
 
 public:
-    ContinuousPanel() = default;
+    ContinuousPanel(const muse::modularity::ContextPtr& iocCtx)
+        : muse::Contextable(iocCtx) {}
     ~ContinuousPanel();
 
     void setNotation(INotationPtr notation);

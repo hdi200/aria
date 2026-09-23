@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -33,10 +33,10 @@
 namespace mu::project {
 class EngravingPluginAPIHelper : public engraving::IEngravingPluginAPIHelper, public muse::Contextable
 {
-    muse::GlobalInject<INotationWritersRegister> writers;
     muse::ContextInject<context::IGlobalContext> globalContext = { this };
     muse::ContextInject<IProjectFilesController> projectFilesController = { this };
     muse::ContextInject<IExportProjectScenario> exportProjectScenario = { this };
+    muse::ContextInject<INotationWritersRegister> writers = { this };
 
 public:
     EngravingPluginAPIHelper(const muse::modularity::ContextPtr& iocCtx)

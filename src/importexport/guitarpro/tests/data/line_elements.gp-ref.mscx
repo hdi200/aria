@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -24,11 +24,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Nylon Guitar</trackName>
       <Instrument id="cavaquinho">
-        <InstrumentLabel>
-          <longName>Nylon Guitar</longName>
-          <shortName>n.guit.</shortName>
-          </InstrumentLabel>
+        <longName>Nylon Guitar</longName>
+        <shortName>n.guit.</shortName>
         <trackName></trackName>
         <transposeDiatonic>-7</transposeDiatonic>
         <transposeChromatic>-12</transposeChromatic>
@@ -58,11 +57,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Electric Guitar</trackName>
       <Instrument id="electric-guitar">
-        <InstrumentLabel>
-          <longName>Electric Guitar</longName>
-          <shortName>jz.guit.</shortName>
-          </InstrumentLabel>
+        <longName>Electric Guitar</longName>
+        <shortName>jz.guit.</shortName>
         <trackName></trackName>
         <transposeDiatonic>-7</transposeDiatonic>
         <transposeChromatic>-12</transposeChromatic>
@@ -91,11 +89,7 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Brace</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="1" span="2" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -105,11 +99,10 @@
           </StaffType>
         <defaultClef>F</defaultClef>
         </Staff>
+      <trackName>Acoustic Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Acoustic Piano</longName>
-          <shortName>pno.</shortName>
-          </InstrumentLabel>
+        <longName>Acoustic Piano</longName>
+        <shortName>pno.</shortName>
         <trackName></trackName>
         <instrumentId>keyboard.piano</instrumentId>
         <singleNoteDynamics>0</singleNoteDynamics>
@@ -137,11 +130,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Electric Guitar</trackName>
       <Instrument id="electric-guitar">
-        <InstrumentLabel>
-          <longName>Electric Guitar</longName>
-          <shortName>od.guit.</shortName>
-          </InstrumentLabel>
+        <longName>Electric Guitar</longName>
+        <shortName>od.guit.</shortName>
         <trackName></trackName>
         <transposeDiatonic>-7</transposeDiatonic>
         <transposeChromatic>-12</transposeChromatic>
@@ -600,24 +592,10 @@
             <velocity>80</velocity>
             <eid>CB_CB</eid>
             </Dynamic>
-          <StringTunings>
-            <visibleStrings></visibleStrings>
-            <StringData>
-              <frets>24</frets>
-              <string useFlat="1">23</string>
-              <string useFlat="1">28</string>
-              <string useFlat="1">33</string>
-              <string useFlat="1">38</string>
-              <string useFlat="1">43</string>
-              </StringData>
-            <eid>DB_DB</eid>
-            <style>string_tunings</style>
-            <text/>
-            </StringTunings>
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>guitarVibrato</subtype>
-              <eid>EB_EB</eid>
+              <eid>DB_DB</eid>
               </Vibrato>
             <next>
               <location>
@@ -626,10 +604,10 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>FB_FB</eid>
+            <eid>EB_EB</eid>
             <durationType>quarter</durationType>
             <Note>
-              <eid>GB_GB</eid>
+              <eid>FB_FB</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
@@ -646,7 +624,7 @@
           <Spanner type="Ottava">
             <Ottava>
               <subtype>8vb</subtype>
-              <eid>HB_HB</eid>
+              <eid>GB_GB</eid>
               </Ottava>
             <next>
               <location>
@@ -658,7 +636,7 @@
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>guitarVibratoWide</subtype>
-              <eid>IB_IB</eid>
+              <eid>HB_HB</eid>
               </Vibrato>
             <next>
               <location>
@@ -667,10 +645,10 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>JB_JB</eid>
+            <eid>IB_IB</eid>
             <durationType>quarter</durationType>
             <Note>
-              <eid>KB_KB</eid>
+              <eid>JB_JB</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
@@ -687,7 +665,7 @@
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>vibratoSawtooth</subtype>
-              <eid>LB_LB</eid>
+              <eid>KB_KB</eid>
               </Vibrato>
             <next>
               <location>
@@ -696,10 +674,10 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>MB_MB</eid>
+            <eid>LB_LB</eid>
             <durationType>quarter</durationType>
             <Note>
-              <eid>NB_NB</eid>
+              <eid>MB_MB</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
@@ -716,7 +694,7 @@
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>vibratoSawtoothWide</subtype>
-              <eid>OB_OB</eid>
+              <eid>NB_NB</eid>
               </Vibrato>
             <next>
               <location>
@@ -726,10 +704,10 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>PB_PB</eid>
+            <eid>OB_OB</eid>
             <durationType>quarter</durationType>
             <Note>
-              <eid>QB_QB</eid>
+              <eid>PB_PB</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
@@ -737,7 +715,7 @@
               </Note>
             </Chord>
           <BarLine>
-            <eid>RB_RB</eid>
+            <eid>QB_QB</eid>
             </BarLine>
           </voice>
         </Measure>
@@ -762,7 +740,7 @@
           <Spanner type="PickScrape">
             <PickScrape>
               <beginTextOffset x="0" y="0"/>
-              <eid>SB_SB</eid>
+              <eid>RB_RB</eid>
               </PickScrape>
             <next>
               <location>
@@ -771,15 +749,15 @@
               </next>
             </Spanner>
           <Beam>
-            <eid>TB_TB</eid>
+            <eid>SB_SB</eid>
             <l1>16</l1>
             <l2>16</l2>
             </Beam>
           <Chord>
-            <eid>UB_UB</eid>
+            <eid>TB_TB</eid>
             <durationType>eighth</durationType>
             <Note>
-              <eid>VB_VB</eid>
+              <eid>UB_UB</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <head>cross</head>
@@ -789,10 +767,10 @@
               </Note>
             </Chord>
           <Chord>
-            <eid>WB_WB</eid>
+            <eid>VB_VB</eid>
             <durationType>eighth</durationType>
             <Note>
-              <eid>XB_XB</eid>
+              <eid>WB_WB</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <head>cross</head>
@@ -809,13 +787,13 @@
               </prev>
             </Spanner>
           <Rest>
-            <eid>YB_YB</eid>
+            <eid>XB_XB</eid>
             <durationType>eighth</durationType>
             </Rest>
           <Spanner type="PickScrape">
             <PickScrape>
               <beginTextOffset x="0" y="0"/>
-              <eid>ZB_ZB</eid>
+              <eid>YB_YB</eid>
               </PickScrape>
             <next>
               <location>
@@ -824,10 +802,10 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>aB_aB</eid>
+            <eid>ZB_ZB</eid>
             <durationType>eighth</durationType>
             <Note>
-              <eid>bB_bB</eid>
+              <eid>aB_aB</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <head>cross</head>
@@ -844,18 +822,18 @@
               </prev>
             </Spanner>
           <Rest>
-            <eid>cB_cB</eid>
+            <eid>bB_bB</eid>
             <durationType>half</durationType>
             </Rest>
           <BarLine>
-            <eid>dB_dB</eid>
+            <eid>cB_cB</eid>
             </BarLine>
           </voice>
         </Measure>
       <Measure>
         <voice>
           <Rest>
-            <eid>eB_eB</eid>
+            <eid>dB_dB</eid>
             <durationType>measure</durationType>
             <duration>4/4</duration>
             </Rest>
@@ -866,42 +844,28 @@
       <Measure>
         <voice>
           <KeySig>
-            <eid>fB_fB</eid>
+            <eid>eB_eB</eid>
             <concertKey>0</concertKey>
             <mode>major</mode>
             </KeySig>
           <TimeSig>
-            <eid>gB_gB</eid>
+            <eid>fB_fB</eid>
             <sigN>4</sigN>
             <sigD>4</sigD>
             </TimeSig>
-          <StringTunings>
-            <visibleStrings></visibleStrings>
-            <StringData>
-              <frets>24</frets>
-              <string useFlat="1">23</string>
-              <string useFlat="1">28</string>
-              <string useFlat="1">33</string>
-              <string useFlat="1">38</string>
-              <string useFlat="1">43</string>
-              </StringData>
-            <eid>hB_hB</eid>
-            <style>string_tunings</style>
-            <text/>
-            </StringTunings>
           <Rest>
-            <eid>iB_iB</eid>
+            <eid>gB_gB</eid>
             <durationType>quarter</durationType>
             </Rest>
           <Dynamic>
             <subtype>mf</subtype>
             <velocity>80</velocity>
-            <eid>jB_jB</eid>
+            <eid>hB_hB</eid>
             </Dynamic>
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>guitarVibrato</subtype>
-              <eid>kB_kB</eid>
+              <eid>iB_iB</eid>
               </Vibrato>
             <next>
               <location>
@@ -911,14 +875,14 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>lB_lB</eid>
+            <eid>jB_jB</eid>
             <dots>1</dots>
             <durationType>half</durationType>
             <Note>
-              <eid>mB_mB</eid>
+              <eid>kB_kB</eid>
               <Spanner type="Tie">
                 <Tie>
-                  <eid>nB_nB</eid>
+                  <eid>lB_lB</eid>
                   </Tie>
                 <next>
                   <location>
@@ -935,7 +899,7 @@
             </Chord>
           <BarLine>
             <span>1</span>
-            <eid>oB_oB</eid>
+            <eid>mB_mB</eid>
             </BarLine>
           </voice>
         </Measure>
@@ -944,7 +908,7 @@
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>vibratoSawtooth</subtype>
-              <eid>pB_pB</eid>
+              <eid>nB_nB</eid>
               </Vibrato>
             <next>
               <location>
@@ -953,10 +917,10 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>qB_qB</eid>
+            <eid>oB_oB</eid>
             <durationType>eighth</durationType>
             <Note>
-              <eid>rB_rB</eid>
+              <eid>pB_pB</eid>
               <Spanner type="Tie">
                 <prev>
                   <location>
@@ -987,7 +951,7 @@
               </prev>
             </Spanner>
           <Rest>
-            <eid>sB_sB</eid>
+            <eid>qB_qB</eid>
             <durationType>eighth</durationType>
             </Rest>
           <Spanner type="HarmonicMark">
@@ -995,7 +959,7 @@
               <beginText>AH</beginText>
               <beginTextOffset x="0" y="0"/>
               <continueText>AH</continueText>
-              <eid>tB_tB</eid>
+              <eid>rB_rB</eid>
               </HarmonicMark>
             <next>
               <location>
@@ -1006,7 +970,7 @@
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>guitarVibrato</subtype>
-              <eid>uB_uB</eid>
+              <eid>sB_sB</eid>
               </Vibrato>
             <next>
               <location>
@@ -1017,7 +981,7 @@
           <Spanner type="Vibrato">
             <Vibrato>
               <subtype>vibratoSawtooth</subtype>
-              <eid>vB_vB</eid>
+              <eid>tB_tB</eid>
               </Vibrato>
             <next>
               <location>
@@ -1026,22 +990,22 @@
               </next>
             </Spanner>
           <Beam>
-            <eid>wB_wB</eid>
+            <eid>uB_uB</eid>
             <l1>42</l1>
             <l2>42</l2>
             </Beam>
           <Chord>
-            <eid>xB_xB</eid>
+            <eid>vB_vB</eid>
             <durationType>eighth</durationType>
             <Note>
-              <eid>yB_yB</eid>
+              <eid>wB_wB</eid>
               <pitch>48</pitch>
               <tpc>14</tpc>
               <fret>5</fret>
               <string>1</string>
               </Note>
             <Note>
-              <eid>zB_zB</eid>
+              <eid>xB_xB</eid>
               <pitch>76</pitch>
               <tpc>18</tpc>
               <head>diamond</head>
@@ -1076,7 +1040,7 @@
               <beginText>Fdbk</beginText>
               <beginTextOffset x="0" y="0"/>
               <continueText>Fdbk</continueText>
-              <eid>0B_0B</eid>
+              <eid>yB_yB</eid>
               </HarmonicMark>
             <next>
               <location>
@@ -1085,17 +1049,17 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>1B_1B</eid>
+            <eid>zB_zB</eid>
             <durationType>eighth</durationType>
             <Note>
-              <eid>2B_2B</eid>
+              <eid>0B_0B</eid>
               <pitch>48</pitch>
               <tpc>14</tpc>
               <fret>5</fret>
               <string>1</string>
               </Note>
             <Note>
-              <eid>3B_3B</eid>
+              <eid>1B_1B</eid>
               <pitch>76</pitch>
               <tpc>18</tpc>
               <head>diamond</head>
@@ -1112,19 +1076,19 @@
               </prev>
             </Spanner>
           <Rest>
-            <eid>4B_4B</eid>
+            <eid>2B_2B</eid>
             <durationType>half</durationType>
             </Rest>
           <BarLine>
             <span>1</span>
-            <eid>5B_5B</eid>
+            <eid>3B_3B</eid>
             </BarLine>
           </voice>
         </Measure>
       <Measure>
         <voice>
           <Rest>
-            <eid>6B_6B</eid>
+            <eid>4B_4B</eid>
             <durationType>measure</durationType>
             <duration>4/4</duration>
             </Rest>
@@ -1135,26 +1099,26 @@
       <Measure>
         <voice>
           <KeySig>
-            <eid>7B_7B</eid>
+            <eid>5B_5B</eid>
             <concertKey>0</concertKey>
             <mode>major</mode>
             </KeySig>
           <TimeSig>
-            <eid>8B_8B</eid>
+            <eid>6B_6B</eid>
             <sigN>4</sigN>
             <sigD>4</sigD>
             </TimeSig>
           <Dynamic>
             <subtype>mf</subtype>
             <velocity>80</velocity>
-            <eid>9B_9B</eid>
+            <eid>7B_7B</eid>
             </Dynamic>
           <Spanner type="HarmonicMark">
             <HarmonicMark>
               <beginText>AH</beginText>
               <beginTextOffset x="0" y="0"/>
               <continueText>AH</continueText>
-              <eid>+B_+B</eid>
+              <eid>8B_8B</eid>
               </HarmonicMark>
             <next>
               <location>
@@ -1168,7 +1132,7 @@
               <beginText>TH</beginText>
               <beginTextOffset x="0" y="0"/>
               <continueText>TH</continueText>
-              <eid>/B_/B</eid>
+              <eid>9B_9B</eid>
               </HarmonicMark>
             <next>
               <location>
@@ -1177,13 +1141,13 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>AC_AC</eid>
+            <eid>+B_+B</eid>
             <durationType>whole</durationType>
             <Note>
-              <eid>BC_BC</eid>
+              <eid>/B_/B</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
-                <eid>CC_CC</eid>
+                <eid>AC_AC</eid>
                 </Accidental>
               <pitch>58</pitch>
               <tpc>24</tpc>
@@ -1191,17 +1155,17 @@
               <string>2</string>
               </Note>
             <Note>
-              <eid>DC_DC</eid>
+              <eid>BC_BC</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
               <string>1</string>
               </Note>
             <Note>
-              <eid>EC_EC</eid>
+              <eid>CC_CC</eid>
               <Accidental>
                 <subtype>accidentalFlat</subtype>
-                <eid>FC_FC</eid>
+                <eid>DC_DC</eid>
                 </Accidental>
               <pitch>70</pitch>
               <tpc>12</tpc>
@@ -1211,7 +1175,7 @@
               <string>2</string>
               </Note>
             <Note>
-              <eid>GC_GC</eid>
+              <eid>EC_EC</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <head>diamond</head>
@@ -1221,7 +1185,7 @@
               </Note>
             </Chord>
           <BarLine>
-            <eid>HC_HC</eid>
+            <eid>FC_FC</eid>
             </BarLine>
           </voice>
         </Measure>
@@ -1239,7 +1203,7 @@
               <beginText>SH</beginText>
               <beginTextOffset x="0" y="0"/>
               <continueText>SH</continueText>
-              <eid>IC_IC</eid>
+              <eid>GC_GC</eid>
               </HarmonicMark>
             <next>
               <location>
@@ -1248,13 +1212,13 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>JC_JC</eid>
+            <eid>HC_HC</eid>
             <durationType>quarter</durationType>
             <Note>
-              <eid>KC_KC</eid>
+              <eid>IC_IC</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
-                <eid>LC_LC</eid>
+                <eid>JC_JC</eid>
                 </Accidental>
               <pitch>49</pitch>
               <tpc>21</tpc>
@@ -1262,10 +1226,10 @@
               <string>4</string>
               </Note>
             <Note>
-              <eid>MC_MC</eid>
+              <eid>KC_KC</eid>
               <Accidental>
                 <subtype>accidentalNatural</subtype>
-                <eid>NC_NC</eid>
+                <eid>LC_LC</eid>
                 </Accidental>
               <pitch>60</pitch>
               <tpc>14</tpc>
@@ -1273,10 +1237,10 @@
               <string>1</string>
               </Note>
             <Note>
-              <eid>OC_OC</eid>
+              <eid>MC_MC</eid>
               <Accidental>
                 <subtype>accidentalSharp</subtype>
-                <eid>PC_PC</eid>
+                <eid>NC_NC</eid>
                 </Accidental>
               <pitch>61</pitch>
               <tpc>21</tpc>
@@ -1286,7 +1250,7 @@
               <string>4</string>
               </Note>
             <Note>
-              <eid>QC_QC</eid>
+              <eid>OC_OC</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <head>diamond</head>
@@ -1311,7 +1275,7 @@
               </prev>
             </Spanner>
           <Rest>
-            <eid>RC_RC</eid>
+            <eid>PC_PC</eid>
             <durationType>quarter</durationType>
             </Rest>
           <Spanner type="HarmonicMark">
@@ -1319,7 +1283,7 @@
               <beginText>SH</beginText>
               <beginTextOffset x="0" y="0"/>
               <continueText>SH</continueText>
-              <eid>SC_SC</eid>
+              <eid>QC_QC</eid>
               </HarmonicMark>
             <next>
               <location>
@@ -1329,13 +1293,13 @@
               </next>
             </Spanner>
           <Chord>
-            <eid>TC_TC</eid>
+            <eid>RC_RC</eid>
             <durationType>quarter</durationType>
             <Note>
-              <eid>UC_UC</eid>
+              <eid>SC_SC</eid>
               <Accidental>
                 <subtype>accidentalNatural</subtype>
-                <eid>VC_VC</eid>
+                <eid>TC_TC</eid>
                 </Accidental>
               <pitch>60</pitch>
               <tpc>14</tpc>
@@ -1343,7 +1307,7 @@
               <string>1</string>
               </Note>
             <Note>
-              <eid>WC_WC</eid>
+              <eid>UC_UC</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <head>diamond</head>
@@ -1353,17 +1317,17 @@
               </Note>
             </Chord>
           <Chord>
-            <eid>XC_XC</eid>
+            <eid>VC_VC</eid>
             <durationType>quarter</durationType>
             <Note>
-              <eid>YC_YC</eid>
+              <eid>WC_WC</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
               <string>1</string>
               </Note>
             <Note>
-              <eid>ZC_ZC</eid>
+              <eid>XC_XC</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <head>diamond</head>
@@ -1373,24 +1337,24 @@
               </Note>
             </Chord>
           <BarLine>
-            <eid>aC_aC</eid>
+            <eid>YC_YC</eid>
             </BarLine>
           </voice>
         </Measure>
       <Measure>
         <voice>
           <Chord>
-            <eid>bC_bC</eid>
+            <eid>ZC_ZC</eid>
             <durationType>whole</durationType>
             <Note>
-              <eid>cC_cC</eid>
+              <eid>aC_aC</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
               <string>1</string>
               </Note>
             <Note>
-              <eid>dC_dC</eid>
+              <eid>bC_bC</eid>
               <pitch>72</pitch>
               <tpc>14</tpc>
               <head>diamond</head>

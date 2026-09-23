@@ -36,7 +36,9 @@ using namespace muse;
 using namespace muse::audio;
 using namespace muse::audio::synth;
 
-static const audioch_t AUDIO_CHANNELS = 2;
+static constexpr audioch_t AUDIO_CHANNELS = 2;
+static constexpr samples_t DEFAULT_BUFFER_SIZE = 1024;
+static constexpr sample_rate_t DEFAULT_SAMPLE_RATE = 44100;
 
 //TODO: add other setting: audio device etc
 static const Settings::Key AUDIO_API_KEY("audio", "io/audioApi");
@@ -46,12 +48,13 @@ static const Settings::Key AUDIO_SAMPLE_RATE_KEY("audio", "io/sampleRate");
 static const Settings::Key AUDIO_MEASURE_INPUT_LAG("audio", "io/measureInputLag");
 
 static const Settings::Key ONLINE_SOUNDS_PROCESS_IN_BACKGROUND("audio", "io/onlineSounds/processInBackground");
+static const Settings::Key USE_SOUNDFONT_LOWPASS_FILTER("audio", "synthesizer/useSoundFontLowPassFilter");
 
 static const Settings::Key USER_SOUNDFONTS_PATHS("midi", "application/paths/mySoundfonts");
 
 void AudioConfiguration::init()
 {
-    settings()->setDefaultValue(AUDIO_BUFFER_SIZE_KEY, Val(1024));
+    settings()->setDefaultValue(AUDIO_BUFFER_SIZE_KEY, Val(static_cast<int>(DEFAULT_BUFFER_SIZE)));
     settings()->valueChanged(AUDIO_BUFFER_SIZE_KEY).onReceive(nullptr, [this](const Val&) {
         m_driverBufferSizeChanged.notify();
     });
@@ -60,6 +63,8 @@ void AudioConfiguration::init()
     settings()->setDefaultValue(AUDIO_API_KEY, Val("WASAPI"));
 #elif defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
     settings()->setDefaultValue(AUDIO_API_KEY, Val("ALSA"));
+#elif defined(Q_OS_MACOS)
+    settings()->setDefaultValue(AUDIO_API_KEY, Val("CoreAudio"));
 #endif
     settings()->valueChanged(AUDIO_API_KEY).onReceive(nullptr, [this](const Val&) {
         m_currentAudioApiChanged.notify();
@@ -70,7 +75,7 @@ void AudioConfiguration::init()
         m_audioOutputDeviceIdChanged.notify();
     });
 
-    settings()->setDefaultValue(AUDIO_SAMPLE_RATE_KEY, Val(44100));
+    settings()->setDefaultValue(AUDIO_SAMPLE_RATE_KEY, Val(static_cast<int>(DEFAULT_SAMPLE_RATE)));
     settings()->setCanBeManuallyEdited(AUDIO_SAMPLE_RATE_KEY, false, Val(44100), Val(192000));
     settings()->valueChanged(AUDIO_SAMPLE_RATE_KEY).onReceive(nullptr, [this](const Val&) {
         m_driverSampleRateChanged.notify();
@@ -91,6 +96,11 @@ void AudioConfiguration::init()
     settings()->valueChanged(ONLINE_SOUNDS_PROCESS_IN_BACKGROUND).onReceive(nullptr, [this](const Val& val) {
         m_autoProcessOnlineSoundsInBackgroundChanged.send(val.toBool());
     });
+
+    settings()->setDefaultValue(USE_SOUNDFONT_LOWPASS_FILTER, Val(true));
+    settings()->valueChanged(USE_SOUNDFONT_LOWPASS_FILTER).onReceive(nullptr, [this](const Val& val) {
+        m_useSoundFontLowPassFilterChanged.send(val.toBool());
+    });
 }
 
 AudioEngineConfig AudioConfiguration::engineConfig() const
@@ -98,6 +108,7 @@ AudioEngineConfig AudioConfiguration::engineConfig() const
     AudioEngineConfig conf;
     conf.autoProcessOnlineSoundsInBackground = autoProcessOnlineSoundsInBackground();
     conf.isLazyProcessingOfOnlineSoundsEnabled = conf.autoProcessOnlineSoundsInBackground;
+    conf.useSoundFontLowPassFilter = useSoundFontLowPassFilter();
     return conf;
 }
 
@@ -176,6 +187,15 @@ async::Notification AudioConfiguration::sampleRateChanged() const
     return m_driverSampleRateChanged;
 }
 
+OutputSpec AudioConfiguration::defaultOutputSpec() const
+{
+    OutputSpec spec;
+    spec.sampleRate = DEFAULT_SAMPLE_RATE;
+    spec.samplesPerChannel = DEFAULT_BUFFER_SIZE;
+    spec.audioChannelCount = AUDIO_CHANNELS;
+    return spec;
+}
+
 OutputSpec AudioConfiguration::desiredOutputSpec() const
 {
     OutputSpec spec;
@@ -224,6 +244,23 @@ void AudioConfiguration::setAutoProcessOnlineSoundsInBackground(bool value)
 async::Channel<bool> AudioConfiguration::autoProcessOnlineSoundsInBackgroundChanged() const
 {
     return m_autoProcessOnlineSoundsInBackgroundChanged;
+}
+
+bool AudioConfiguration::useSoundFontLowPassFilter() const
+{
+    return settings()->value(USE_SOUNDFONT_LOWPASS_FILTER).toBool();
+}
+
+void AudioConfiguration::setUseSoundFontLowPassFilter(bool value)
+{
+    settings()->setSharedValue(USE_SOUNDFONT_LOWPASS_FILTER, Val(value));
+
+    onEngineConfigChanged();
+}
+
+async::Channel<bool> AudioConfiguration::useSoundFontLowPassFilterChanged() const
+{
+    return m_useSoundFontLowPassFilterChanged;
 }
 
 bool AudioConfiguration::shouldMeasureInputLag() const

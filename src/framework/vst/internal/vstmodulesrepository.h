@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MUSE_VST_VSTMODULESREPOSITORY_H
+#define MUSE_VST_VSTMODULESREPOSITORY_H
 
 #include <unordered_map>
 #include <mutex>
@@ -35,13 +36,14 @@
 #include "vsttypes.h"
 
 namespace muse::vst {
-class VstModulesRepository : public IVstModulesRepository
+class VstModulesRepository : public IVstModulesRepository, public muse::Contextable
 {
     muse::GlobalInject<muse::audio::IAudioThreadSecurer> threadSecurer;
-    muse::GlobalInject<audioplugins::IKnownAudioPluginsRegister> knownPlugins;
 
+    muse::ContextInject<audioplugins::IKnownAudioPluginsRegister> knownPlugins { this };
 public:
-    VstModulesRepository() = default;
+    VstModulesRepository(const muse::modularity::ContextPtr& ctx)
+        : muse::Contextable(ctx) {}
 
     void init();
     void deInit();
@@ -64,3 +66,5 @@ private:
     mutable std::unordered_map<audio::AudioResourceId, PluginModulePtr> m_modules;
 };
 }
+
+#endif // MUSE_VST_VSTMODULESREPOSITORY_H

@@ -39,6 +39,11 @@ using namespace muse::async;
 using namespace muse::audio;
 using namespace muse::audio::engine;
 
+Mixer::Mixer(const modularity::ContextPtr& iocCtx)
+    : muse::Contextable(iocCtx)
+{
+}
+
 Mixer::~Mixer()
 {
     ONLY_AUDIO_MAIN_OR_ENGINE_THREAD;
@@ -84,7 +89,7 @@ RetVal<MixerChannelPtr> Mixer::addChannel(const TrackId trackId, ITrackAudioInpu
         return result;
     }
 
-    MixerChannelPtr channel = std::make_shared<MixerChannel>(trackId, m_outputSpec, source, this);
+    MixerChannelPtr channel = std::make_shared<MixerChannel>(trackId, m_outputSpec, source, this, iocContext());
     std::weak_ptr<MixerChannel> channelWeakPtr = channel;
 
     m_nonMutedTrackCount++;
@@ -135,7 +140,7 @@ RetVal<MixerChannelPtr> Mixer::addAuxChannel(const TrackId trackId)
         return RetVal<MixerChannelPtr>::make_ret(Ret::Code::InternalError);
     }
 
-    MixerChannelPtr channel = std::make_shared<MixerChannel>(trackId, m_outputSpec, this);
+    MixerChannelPtr channel = std::make_shared<MixerChannel>(trackId, m_outputSpec, this, iocContext());
 
     AuxChannelInfo aux;
     aux.channel = channel;
@@ -410,6 +415,7 @@ void Mixer::setMasterOutputParams(const AudioOutputParams& params)
         fx->paramsChanged().onReceive(this, [this](const AudioFxParams& fxParams) {
             m_masterParams.fxChain.insert_or_assign(fxParams.chainOrder, fxParams);
             m_masterOutputParamsChanged.send(m_masterParams);
+            updateShouldProcessMasterFxDuringSilence();
         }, async::Asyncable::Mode::SetReplace);
     }
 
@@ -438,13 +444,9 @@ void Mixer::setMasterOutputParams(const AudioOutputParams& params)
         }
     }
 
-    m_shouldProcessMasterFxDuringSilence = std::any_of(m_masterFxProcessors.cbegin(), m_masterFxProcessors.cend(),
-                                                       [](const IFxProcessorPtr& fx) {
-        return fx->shouldProcessDuringSilence();
-    });
-
     m_masterParams = resultParams;
     m_masterOutputParamsChanged.send(resultParams);
+    updateShouldProcessMasterFxDuringSilence();
 }
 
 void Mixer::clearMasterOutputParams()
@@ -605,6 +607,17 @@ void Mixer::completeOutput(float* buffer, samples_t samplesPerChannel)
     }
 
     m_isSilence = RealIsNull(globalPeak);
+}
+
+void Mixer::updateShouldProcessMasterFxDuringSilence()
+{
+    m_shouldProcessMasterFxDuringSilence = false;
+    for (const IFxProcessorPtr& fx : m_masterFxProcessors) {
+        if (fx->shouldProcessDuringSilence()) {
+            m_shouldProcessMasterFxDuringSilence = true;
+            return;
+        }
+    }
 }
 
 void Mixer::notifyAboutAudioSignalChanges()

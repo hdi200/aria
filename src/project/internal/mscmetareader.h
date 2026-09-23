@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -37,7 +37,6 @@ class MscMetaReader : public IMscMetaReader
     muse::GlobalInject<muse::io::IFileSystem> fileSystem;
 
 public:
-    muse::RetVal<QPixmap> readThumbnail(const muse::io::path_t& filePath) const override;
     muse::RetVal<ProjectMeta> readMeta(const muse::io::path_t& filePath) const override;
     muse::RetVal<CloudProjectInfo> readCloudProjectInfo(const muse::io::path_t& filePath) const override;
 

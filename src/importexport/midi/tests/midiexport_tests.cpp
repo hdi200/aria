@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -61,7 +61,8 @@ static bool saveMidi(Score* score, const std::string_view name)
 
 static void serializeToYaml(const std::string_view midiPath, const std::string& yamlPath)
 {
-    auto yamlBuffer = io::Buffer::opened(io::IODevice::WriteOnly);
+    io::Buffer yamlBuffer;
+    ASSERT_TRUE(yamlBuffer.open(io::Buffer::WriteOnly));
     ASSERT_TRUE(SmfYamlSerializer::serialize(midiPath, &yamlBuffer));
     yamlBuffer.close();
     ASSERT_TRUE(fileSystem()->writeFile(yamlPath, yamlBuffer.data()));

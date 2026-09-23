@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -229,13 +229,12 @@ class ChangeStaffType : public UndoCommand
 
     Staff* staff = nullptr;
     StaffType staffType;
-    Fraction tick;
 
     void flip(EditData*) override;
 
 public:
-    ChangeStaffType(Staff* s, const StaffType& t, Fraction tick = Fraction(0, 1))
-        : staff(s), staffType(t), tick(tick) {}
+    ChangeStaffType(Staff* s, const StaffType& t)
+        : staff(s), staffType(t) {}
 
     UNDO_TYPE(CommandType::ChangeStaffType)
     UNDO_NAME("ChangeStaffType")

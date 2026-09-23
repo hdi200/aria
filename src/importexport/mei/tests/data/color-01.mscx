@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -28,11 +28,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="violin">
-        <InstrumentLabel>
-          <longName>Violin</longName>
-          <shortName>Vln.</shortName>
-          </InstrumentLabel>
+        <longName>Violin</longName>
+        <shortName>Vln.</shortName>
         <trackName></trackName>
         <instrumentId>strings.violin</instrumentId>
         <Channel>
@@ -448,6 +447,8 @@
           <Spanner type="Pedal">
             <Pedal>
               <endHookType>1</endHookType>
+              <continueTextPlace>auto</continueTextPlace>
+              <endTextPlace>auto</endTextPlace>
               <eid>IB_IB</eid>
               <color r="148" g="33" b="146" a="255"/>
               </Pedal>

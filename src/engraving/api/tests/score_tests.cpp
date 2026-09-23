@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -81,7 +81,7 @@ TEST_F(Engraving_ApiScoreTests, replaceInstrumentAtDomLevel)
     newInstrument.setTrackName(u"Replaced Instrument");
 
     score->startCmd(TranslatableString::untranslatable("Replace instrument test"));
-    score->undo(new ChangePart(part, new Instrument(newInstrument)));
+    score->undo(new ChangePart(part, new Instrument(newInstrument), u"Replaced Part"));
     score->endCmd();
 
     // [THEN] The part's instrument should be changed
@@ -119,7 +119,7 @@ TEST_F(Engraving_ApiScoreTests, replaceInstrumentUndo)
     newInstrument.setTrackName(u"New Instrument");
 
     score->startCmd(TranslatableString::untranslatable("Replace instrument test"));
-    score->undo(new ChangePart(part, new Instrument(newInstrument)));
+    score->undo(new ChangePart(part, new Instrument(newInstrument), u"New Part"));
     score->endCmd();
 
     // Verify it changed
@@ -158,7 +158,7 @@ TEST_F(Engraving_ApiScoreTests, replaceInstrumentRedo)
     newInstrument.setId(u"test.replaced");
 
     score->startCmd(TranslatableString::untranslatable("Replace instrument test"));
-    score->undo(new ChangePart(part, new Instrument(newInstrument)));
+    score->undo(new ChangePart(part, new Instrument(newInstrument), u"Replaced"));
     score->endCmd();
 
     EXPECT_EQ(part->instrumentId(), u"test.replaced");
@@ -374,7 +374,8 @@ TEST_F(Engraving_ApiScoreTests, setInstrumentName)
     Instrument initialInstrument;
     initialInstrument.setLongName(u"Original Name");
     part->setInstrument(initialInstrument);
-    EXPECT_EQ(part->instrument()->longName(), u"Original Name");
+    ASSERT_EQ(part->instrument()->longNames().size(), 1);
+    EXPECT_EQ(part->instrument()->longNames().front().name(), u"Original Name");
 
     // [WHEN] We set a new instrument name
     score->startCmd(TranslatableString::untranslatable("Set instrument name test"));
@@ -382,13 +383,15 @@ TEST_F(Engraving_ApiScoreTests, setInstrumentName)
     score->endCmd();
 
     // [THEN] The name should be changed
-    EXPECT_EQ(part->instrument()->longName(), u"New Name");
+    ASSERT_EQ(part->instrument()->longNames().size(), 1);
+    EXPECT_EQ(part->instrument()->longNames().front().name(), u"New Name");
 
     // [WHEN] We undo
     score->undoRedo(true, nullptr);
 
     // [THEN] The name should be back to original
-    EXPECT_EQ(part->instrument()->longName(), u"Original Name");
+    ASSERT_EQ(part->instrument()->longNames().size(), 1);
+    EXPECT_EQ(part->instrument()->longNames().front().name(), u"Original Name");
 
     delete score;
 }
@@ -410,7 +413,8 @@ TEST_F(Engraving_ApiScoreTests, setInstrumentAbbreviature)
     Instrument initialInstrument;
     initialInstrument.setShortName(u"Orig.");
     part->setInstrument(initialInstrument);
-    EXPECT_EQ(part->instrument()->shortName(), u"Orig.");
+    ASSERT_EQ(part->instrument()->shortNames().size(), 1);
+    EXPECT_EQ(part->instrument()->shortNames().front().name(), u"Orig.");
 
     // [WHEN] We set a new abbreviature
     score->startCmd(TranslatableString::untranslatable("Set instrument abbreviature test"));
@@ -418,13 +422,15 @@ TEST_F(Engraving_ApiScoreTests, setInstrumentAbbreviature)
     score->endCmd();
 
     // [THEN] The abbreviature should be changed
-    EXPECT_EQ(part->instrument()->shortName(), u"New.");
+    ASSERT_EQ(part->instrument()->shortNames().size(), 1);
+    EXPECT_EQ(part->instrument()->shortNames().front().name(), u"New.");
 
     // [WHEN] We undo
     score->undoRedo(true, nullptr);
 
     // [THEN] The abbreviature should be back to original
-    EXPECT_EQ(part->instrument()->shortName(), u"Orig.");
+    ASSERT_EQ(part->instrument()->shortNames().size(), 1);
+    EXPECT_EQ(part->instrument()->shortNames().front().name(), u"Orig.");
 
     delete score;
 }
@@ -518,7 +524,8 @@ TEST_F(Engraving_ApiScoreTests, setInstrumentNameApi)
     apiScore.setInstrumentName(apiPart, &tick, "Grand Piano");
 
     // [THEN] The long name should be changed
-    EXPECT_EQ(domPart->instrument()->longName(), u"Grand Piano");
+    ASSERT_EQ(domPart->instrument()->longNames().size(), 1);
+    EXPECT_EQ(domPart->instrument()->longNames().front().name(), u"Grand Piano");
 
     delete apiPart;
     delete domScore;

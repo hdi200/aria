@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,7 +21,6 @@
  */
 
 #pragma once
-#include <vector>
 
 #include <engraving/types/types.h>
 namespace mu::engraving {
@@ -32,7 +31,5 @@ class Score;
 
 namespace mu::iex::guitarpro::utils {
 int harmonicOvertone(mu::engraving::Note* note, float harmonicValue, int harmonicType);
-std::vector<int> standardTuningFor(int midiProgram, int stringsCount);
-bool isStandardTuning(int midiProgram, const std::vector<int>& tuning);
 mu::engraving::Chord* getLocatedChord(mu::engraving::Score* score, mu::engraving::Fraction tickFr, mu::engraving::track_idx_t track);
 } // mu::iex::guitarpro

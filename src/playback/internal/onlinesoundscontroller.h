@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,8 +29,8 @@
 
 #include "playback/iplaybackconfiguration.h"
 #include "actions/iactionsdispatcher.h"
+#include "global/iinteractive.h"
 #include "audio/main/iplayback.h"
-#include "interactive/iinteractive.h"
 
 namespace mu::playback {
 class OnlineSoundsController : public muse::actions::Actionable, public muse::async::Asyncable, public muse::Contextable

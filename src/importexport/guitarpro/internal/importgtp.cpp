@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -26,7 +26,6 @@
 
 #include "importptb.h"
 #include "internal/guitarprodrumset.h"
-#include "utils.h"
 
 #include "engraving/dom/arpeggio.h"
 #include "engraving/dom/articulation.h"
@@ -61,7 +60,6 @@
 #include "engraving/dom/stafftext.h"
 #include "engraving/dom/stafftype.h"
 #include "engraving/dom/stringdata.h"
-#include "engraving/dom/tapping.h"
 #include "engraving/dom/tempotext.h"
 #include "engraving/dom/text.h"
 #include "engraving/dom/textline.h"
@@ -69,11 +67,8 @@
 #include "engraving/dom/timesig.h"
 #include "engraving/dom/tuplet.h"
 #include "engraving/dom/volta.h"
-#include "engraving/dom/stringtunings.h"
 #include "engraving/rw/xmlwriter.h"
 #include "engraving/types/symid.h"
-
-#include "engraving/editing/editchord.h"
 
 #include "log.h"
 
@@ -522,7 +517,9 @@ void GuitarPro::setTuplet(Tuplet* tuplet, int tuple)
 
 void GuitarPro::addDynamic(Note* note, int d)
 {
-    if (d < 0) {
+    // guitar pro only allows their users to go from ppp to fff
+    static const std::array<String, 9> map_dyn { u"f", u"ppp", u"pp", u"p", u"mp", u"mf", u"f", u"ff", u"fff" };
+    if (d < 0 || static_cast<size_t>(d) >= map_dyn.size()) {
         return;
     }
     if (!note->chord()) {
@@ -538,8 +535,6 @@ void GuitarPro::addDynamic(Note* note, int d)
     }
     if (!s->findAnnotation(ElementType::DYNAMIC, note->staffIdx() * VOICES, note->staffIdx() * VOICES + VOICES - 1)) {
         Dynamic* dyn = new Dynamic(s);
-        // guitar pro only allows their users to go from ppp to fff
-        const String map_dyn[] = { u"f", u"ppp", u"pp", u"p", u"mp", u"mf", u"f", u"ff", u"fff" };
         dyn->setDynamicType(map_dyn[d]);
         dyn->setTrack(note->track());
         s->add(dyn);
@@ -1225,7 +1220,6 @@ bool GuitarPro1::read(IODevice* io)
     }
 
     m_continiousElementsBuilder->addElementsToScore();
-    addTunings();
     return true;
 }
 
@@ -1504,6 +1498,10 @@ bool GuitarPro2::read(IODevice* io)
         }
         /*int midiPort     =*/ readInt();     //  - 1;
         int midiChannel  = readInt() - 1;
+        if (midiChannel < 0 || midiChannel >= static_cast<int>(channelDefaults.size())) {
+            LOGE() << "midiChannel " << midiChannel << " out of range 0-" << channelDefaults.size();
+            return false;
+        }
         /*int midiChannel2 =*/ readInt();     // - 1;
         int frets        = readInt();
         int capo         = readInt();
@@ -1520,6 +1518,7 @@ bool GuitarPro2::read(IODevice* io)
         Instrument* instr = part->instrument();
         instr->setStringData(stringData);
         instr->setSingleNoteDynamics(false);
+        part->setPartName(name);
         part->setPlainLongName(name);
 
         //
@@ -1729,7 +1728,6 @@ bool GuitarPro2::read(IODevice* io)
     }
 
     m_continiousElementsBuilder->addElementsToScore();
-    addTunings();
     return true;
 }
 
@@ -2252,6 +2250,10 @@ bool GuitarPro3::read(IODevice* io)
         }
         int midiPort     = readInt() - 1;
         int midiChannel  = readInt() - 1;
+        if (midiChannel < 0 || midiChannel >= static_cast<int>(channelDefaults.size())) {
+            LOGE() << "midiChannel " << midiChannel << " out of range 0-" << channelDefaults.size();
+            return false;
+        }
         /*int midiChannel2 =*/ readInt();     // - 1;
         int frets        = readInt();
         int capo         = readInt();
@@ -2268,6 +2270,7 @@ bool GuitarPro3::read(IODevice* io)
         Instrument* instr = part->instrument();
         instr->setStringData(stringData);
         instr->setSingleNoteDynamics(false);
+        part->setPartName(name);
         part->setPlainLongName(name);
         //
         // determine clef
@@ -2529,7 +2532,7 @@ bool GuitarPro3::read(IODevice* io)
                         art->setSymId(SymId::guitarFadeOut);
                         art->setAnchor(ArticulationAnchor::TOP);
                         art->setPropertyFlags(Pid::ARTICULATION_ANCHOR, PropertyFlags::UNSTYLED);
-                        if (!EditChord::toggleArticulation(score, cr, art)) {
+                        if (!score->toggleArticulation(cr, art)) {
                             delete art;
                         }
                     }
@@ -2650,7 +2653,6 @@ bool GuitarPro3::read(IODevice* io)
 
     m_continiousElementsBuilder->addElementsToScore();
     m_guitarBendImporter->applyBendsToChords();
-    addTunings();
 
     return true;
 }
@@ -2724,51 +2726,6 @@ void GuitarPro::readTremoloBar(int /*track*/, Segment* /*segment*/)
         int pitch   = readInt();
         int vibrato = readUInt8();
         points.push_back(PitchValue(time, pitch, vibrato));
-    }
-}
-
-void GuitarPro::addTunings()
-{
-    const Measure* m = score->firstMeasure();
-
-    // NOTE: GP doesn't support multiple tunings on one part
-    // We're safe to just take the very first chord rest segment
-    // and check if it has any non-standard tuning
-    const Fraction& frac{ 0, 1 };
-
-    for (auto p : score->parts()) {
-        for (auto s : p->staves()) {
-            if (!s->isPrimaryStaff() || p->instrument()->useDrumset()) {
-                continue;
-            }
-
-            Segment* seg = m->findSegment(SegmentType::ChordRest, frac);
-
-            IF_ASSERT_FAILED(seg) {
-                LOGE() << "First measure MUST has a chord rest segment after import";
-                break;
-            }
-
-            const StringData sd = *p->instrument()->stringData();
-            std::vector<int> tuning(sd.strings());
-            for (size_t i = 0; i < tuning.size(); ++i) {
-                tuning[i] = sd.stringList().at(i).pitch + p->instrument()->transpose().chromatic;
-            }
-
-            if (utils::isStandardTuning(p->instrument()->channel(0)->program(), tuning)) {
-                continue;
-            }
-
-            StringTunings* tun = Factory::createStringTunings(seg);
-            tun->setStringData(sd);
-            tun->setTrack(staff2track(s->idx()));
-            tun->setParent(seg);
-            seg->add(tun);
-            // Instrument string data should be set to the standard
-            tuning = utils::standardTuningFor(p->instrument()->channel(0)->program(), (int)sd.strings());
-            StringData instrumentSD(sd.frets(), (int)tuning.size(), tuning.data());
-            p->instrument()->setStringData(instrumentSD);
-        }
     }
 }
 
@@ -2863,7 +2820,7 @@ Err importGTP(MasterScore* score, muse::io::IODevice* io, const muse::modularity
         return ptb.read();
     }
 
-    GuitarPro* gp;
+    GuitarPro* gp = nullptr;
     bool readResult = false;
     bool isVersionAbove6 = false;
     // check to see if we are dealing with a GP file via the extension
@@ -2895,6 +2852,7 @@ Err importGTP(MasterScore* score, muse::io::IODevice* io, const muse::modularity
             s = s.mid(21);
         } else {
             LOGD("unknown gtp format <%s>", ss);
+            delete gp;
             return Err::FileBadFormat;
         }
         int a = s.left(1).toInt();
@@ -2912,16 +2870,19 @@ Err importGTP(MasterScore* score, muse::io::IODevice* io, const muse::modularity
             gp = new GuitarPro5(score, version, iocCtx);
         } else {
             LOGD("unknown gtp format %d", version);
+            delete gp;
             return Err::FileBadFormat;
         }
         readResult = gp->read(io);
         gp->setTempo(0, 0);
     } else {
+        delete gp;
         return Err::FileBadFormat;
     }
     if (readResult == false) {
         LOGD("guitar pro import error====");
         // avoid another error message box
+        delete gp;
         return Err::NoError;
     }
 

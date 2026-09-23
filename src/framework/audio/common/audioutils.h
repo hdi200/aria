@@ -30,7 +30,7 @@ inline AudioResourceMeta makeReverbMeta()
 {
     AudioResourceMeta meta;
     meta.id = MUSE_REVERB_ID;
-    meta.type = AudioResourceType::NativeEffect;
+    meta.type = AudioResourceType::MusePlugin;
     meta.vendor = "Muse";
     meta.hasNativeEditorSupport = true;
 

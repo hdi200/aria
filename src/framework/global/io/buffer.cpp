@@ -22,28 +22,9 @@
 #include "buffer.h"
 
 #include <cstring>
-#include <utility>
-
-#include "global/log.h"
 
 using namespace muse;
 using namespace muse::io;
-
-Buffer Buffer::opened(const OpenMode mode, ByteArray* ba)
-{
-    Buffer buf(ba);
-    DO_ASSERT(buf.open(mode));
-
-    return buf;
-}
-
-Buffer Buffer::opened(const OpenMode mode, ByteArray&& ba)
-{
-    Buffer buf(std::move(ba));
-    DO_ASSERT(buf.open(mode));
-
-    return buf;
-}
 
 Buffer::Buffer()
 {

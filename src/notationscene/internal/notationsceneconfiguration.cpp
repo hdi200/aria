@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,10 +21,6 @@
  */
 
 #include "notationsceneconfiguration.h"
-
-#include "global/translation.h"
-
-#include "muse_framework_config.h"
 
 #include "settings.h"
 
@@ -47,7 +43,8 @@ static const Settings::Key AUTO_CLOSE_PERCUSSION_PANEL_KEY(module_name, "ui/auto
 static const Settings::Key SHOW_PERCUSSION_PANEL_SWAP_DIALOG(module_name,  "ui/showPercussionPanelPadSwapDialog");
 static const Settings::Key PERCUSSION_PANEL_MOVE_MIDI_NOTES_AND_SHORTCUTS(module_name,  "ui/percussionPanelMoveMidiNotesAndShortcuts");
 
-NotationSceneConfiguration::NotationSceneConfiguration()
+NotationSceneConfiguration::NotationSceneConfiguration(const muse::modularity::ContextPtr& ctx)
+    : Contextable(ctx)
 {
 }
 
@@ -99,6 +96,10 @@ void NotationSceneConfiguration::init()
     settings()->setDefaultValue(PERCUSSION_PANEL_MOVE_MIDI_NOTES_AND_SHORTCUTS, Val(true));
     settings()->valueChanged(PERCUSSION_PANEL_MOVE_MIDI_NOTES_AND_SHORTCUTS).onReceive(this, [this](const Val&) {
         m_percussionPanelMoveMidiNotesAndShortcutsChanged.notify();
+    });
+
+    context()->currentProjectChanged().onNotify(this, [this]() {
+        resetStyleDialogPageIndices();
     });
 }
 
@@ -230,4 +231,30 @@ void NotationSceneConfiguration::setPercussionPanelMoveMidiNotesAndShortcuts(boo
 Notification NotationSceneConfiguration::percussionPanelMoveMidiNotesAndShortcutsChanged() const
 {
     return m_percussionPanelMoveMidiNotesAndShortcutsChanged;
+}
+
+int NotationSceneConfiguration::styleDialogLastPageIndex() const
+{
+    return m_styleDialogLastPageIndex;
+}
+
+void NotationSceneConfiguration::setStyleDialogLastPageIndex(int value)
+{
+    m_styleDialogLastPageIndex = value;
+}
+
+int NotationSceneConfiguration::styleDialogLastSubPageIndex() const
+{
+    return m_styleDialogLastSubPageIndex;
+}
+
+void NotationSceneConfiguration::setStyleDialogLastSubPageIndex(int value)
+{
+    m_styleDialogLastSubPageIndex = value;
+}
+
+void NotationSceneConfiguration::resetStyleDialogPageIndices()
+{
+    setStyleDialogLastPageIndex(0);
+    setStyleDialogLastSubPageIndex(0);
 }

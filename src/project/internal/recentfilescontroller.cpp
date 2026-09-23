@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -273,13 +273,13 @@ Promise<QPixmap> RecentFilesController::thumbnail(const muse::io::path_t& filePa
                 }
             }
 
-            RetVal<QPixmap> thumbnail = mscMetaReader()->readThumbnail(filePath);
-            if (!thumbnail.ret) {
+            RetVal<ProjectMeta> rv = mscMetaReader()->readMeta(filePath);
+            if (!rv.ret) {
                 m_thumbnailCache[filePath] = CachedThumbnail();
-                (void)reject(thumbnail.ret.code(), thumbnail.ret.toString());
+                (void)reject(rv.ret.code(), rv.ret.toString());
             } else {
-                m_thumbnailCache[filePath] = CachedThumbnail { thumbnail.val, lastModified };
-                (void)resolve(thumbnail.val);
+                m_thumbnailCache[filePath] = CachedThumbnail { rv.val.thumbnail, lastModified };
+                (void)resolve(rv.val.thumbnail);
             }
         });
 #else

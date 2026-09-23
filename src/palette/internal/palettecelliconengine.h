@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,13 +35,13 @@ class Painter;
 }
 
 namespace mu::palette {
-class PaletteCellIconEngine : public QIconEngine
+class PaletteCellIconEngine : public QIconEngine, public muse::Contextable
 {
     muse::GlobalInject<IPaletteConfiguration> configuration;
-    muse::GlobalInject<engraving::rendering::ISingleRenderer> engravingRender;
+    muse::ContextInject<engraving::rendering::ISingleRenderer> engravingRender = { this };
 
 public:
-    explicit PaletteCellIconEngine(PaletteCellConstPtr cell, qreal extraMag = 1.0);
+    explicit PaletteCellIconEngine(PaletteCellConstPtr cell, const muse::modularity::ContextPtr& ctx, qreal extraMag = 1.0);
 
     QIconEngine* clone() const override;
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -47,6 +47,41 @@ using namespace mu::notation;
 using namespace mu::engraving;
 
 static const mu::engraving::Fraction DEFAULT_TICK = mu::engraving::Fraction(0, 1);
+
+static String formatInstrumentTitleOnScore(const String& instrumentName, const Trait& trait)
+{
+    // Comments for translators start with //:
+
+    if (trait.type == TraitType::Transposition && !trait.isHiddenOnScore) {
+        //: %1=name ("Horn"), %2=transposition ("C alto"). Example: "Horn in C alto"
+        return muse::qtrc("notation", "%1 in %2", "Transposing instrument displayed in the score")
+               .arg(instrumentName, trait.name);
+    }
+
+    return instrumentName; // Example: "Flute"
+}
+
+static String formatInstrumentTitleOnScore(const String& instrumentName, const Trait& trait, int instrumentNumber)
+{
+    if (instrumentNumber == 0) {
+        // Only one instance of this instrument in the score
+        return formatInstrumentTitleOnScore(instrumentName, trait);
+    }
+
+    String number = String::number(instrumentNumber);
+
+    // Comments for translators start with //:
+
+    if (trait.type == TraitType::Transposition && !trait.isHiddenOnScore) {
+        //: %1=name ("Horn"), %2=transposition ("C alto"), %3=number ("2"). Example: "Horn in C alto 2"
+        return muse::mtrc("notation", "%1 in %2 %3", "One of several transposing instruments displayed in the score")
+               .arg(instrumentName, trait.name, number);
+    }
+
+    //: %1=name ("Flute"), %2=number ("2"). Example: "Flute 2"
+    return muse::mtrc("notation", "%1 %2", "One of several instruments displayed in the score")
+           .arg(instrumentName, number);
+}
 
 NotationParts::NotationParts(IGetScore* getScore, INotationInteractionPtr interaction, INotationUndoStackPtr undoStack)
     : m_getScore(getScore), m_undoStack(undoStack), m_interaction(interaction)
@@ -118,7 +153,7 @@ bool NotationParts::staffExists(const ID& staffId) const
     return staff(staffId) != nullptr;
 }
 
-StaffConfig NotationParts::staffConfig(const ID& staffId, Fraction tick) const
+StaffConfig NotationParts::staffConfig(const ID& staffId) const
 {
     StaffConfig config;
     Staff* staff = staffModifiable(staffId);
@@ -126,7 +161,7 @@ StaffConfig NotationParts::staffConfig(const ID& staffId, Fraction tick) const
         return config;
     }
 
-    mu::engraving::StaffType* staffType = staff->staffType(tick);
+    mu::engraving::StaffType* staffType = staff->staffType(DEFAULT_TICK);
     if (!staffType) {
         return config;
     }
@@ -388,8 +423,8 @@ void NotationParts::setInstrumentName(const InstrumentKey& instrumentKey, const 
         return;
     }
 
-    String newName = String::fromQString(name);
-    if (instrument->longName() == newName) {
+    StaffNameList newNames { StaffName(name, 0) };
+    if (instrument->longNames() == newNames) {
         return;
     }
 
@@ -423,71 +458,6 @@ void NotationParts::setInstrumentAbbreviature(const InstrumentKey& instrumentKey
     startEdit(TranslatableString("undoableAction", "Set abbreviated instrument name"));
 
     mu::engraving::EditPart::setInstrumentAbbreviature(score(), part, instrumentKey.tick, abbreviature);
-
-    apply();
-
-    notifyAboutPartChanged(part);
-}
-
-void NotationParts::setInstrumentGroupNameOptions(const std::vector<InstrumentKey>& instruments, bool useCustom, const QString& name,
-                                                  const QString& shortName)
-{
-    TRACEFUNC;
-
-    startEdit(TranslatableString("undoableAction", "Set instrument custom group name"));
-
-    std::vector<Part*> changedParts;
-
-    for (const InstrumentKey& key : instruments) {
-        Part* part = partModifiable(key.partId);
-        if (!part) {
-            continue;
-        }
-
-        const mu::engraving::Instrument* instrument = part->instrument(key.tick);
-        if (!instrument) {
-            continue;
-        }
-
-        const InstrumentLabel& instrLabel = instrument->instrumentLabel();
-        if (instrLabel.useCustomGroupName() == useCustom && instrLabel.customNameLongGroup() == name
-            && instrLabel.customNameShortGroup() == shortName) {
-            continue;
-        }
-
-        mu::engraving::EditPart::setInstrumentGroupNameOptions(score(), part, key.tick, useCustom, name, shortName);
-
-        changedParts.push_back(part);
-    }
-
-    apply();
-
-    for (Part* p : changedParts) {
-        notifyAboutPartChanged(p);
-    }
-}
-
-void NotationParts::setInstrumentNumber(const InstrumentKey& instrumentKey, int v)
-{
-    TRACEFUNC;
-
-    Part* part = partModifiable(instrumentKey.partId);
-    if (!part) {
-        return;
-    }
-
-    const mu::engraving::Instrument* instrument = part->instrument(instrumentKey.tick);
-    if (!instrument) {
-        return;
-    }
-
-    if (instrument->number() == v) {
-        return;
-    }
-
-    startEdit(TranslatableString("undoableAction", "Set instrument number"));
-
-    score()->undo(new mu::engraving::ChangeInstrumentNumber(instrumentKey.tick, part, v));
 
     apply();
 
@@ -549,7 +519,8 @@ void NotationParts::setStaffVisible(const ID& staffId, bool visible)
 
     startEdit(actionName);
 
-    mu::engraving::EditPart::setStaffVisible(score(), staff, visible);
+    config.visible = visible;
+    doSetStaffConfig(staff, config);
 
     if (visible) {
         EditSystemLocks::removeSystemLocksContainingMMRests(score());
@@ -584,7 +555,7 @@ void NotationParts::setStaffType(const ID& staffId, StaffTypeId type)
     notifyAboutStaffChanged(staff);
 }
 
-void NotationParts::setStaffConfig(const ID& staffId, const StaffConfig& config, Fraction tick)
+void NotationParts::setStaffConfig(const ID& staffId, const StaffConfig& config)
 {
     TRACEFUNC;
 
@@ -599,7 +570,7 @@ void NotationParts::setStaffConfig(const ID& staffId, const StaffConfig& config,
 
     startEdit(TranslatableString("undoableAction", "Edit staff properties"));
 
-    doSetStaffConfig(staff, config, tick);
+    doSetStaffConfig(staff, config);
 
     apply();
 
@@ -727,7 +698,8 @@ void NotationParts::replaceInstrument(const InstrumentKey& instrumentKey, const 
     startEdit(TranslatableString("undoableAction", "Replace instrument"));
 
     if (isMainInstrumentForPart(instrumentKey, part)) {
-        mu::engraving::EditPart::replacePartInstrument(score(), part, newInstrument, newStaffType);
+        String newInstrumentPartName = formatInstrumentTitle(newInstrument.trackName(), newInstrument.trait());
+        mu::engraving::EditPart::replacePartInstrument(score(), part, newInstrument, newStaffType, newInstrumentPartName);
     } else {
         if (!mu::engraving::EditPart::replaceInstrumentAtTick(score(), part, instrumentKey.tick, newInstrument)) {
             rollback();
@@ -948,9 +920,9 @@ void NotationParts::doAppendStaff(Staff* staff, Part* destinationPart, bool crea
     destinationPart->instrument()->setClefType(staffLocalIndex, staff->defaultClefType());
 }
 
-void NotationParts::doSetStaffConfig(Staff* staff, const StaffConfig& config, Fraction tick)
+void NotationParts::doSetStaffConfig(Staff* staff, const StaffConfig& config)
 {
-    mu::engraving::StaffType* staffType = staff->staffType(tick);
+    mu::engraving::StaffType* staffType = staff->staffType(DEFAULT_TICK);
     if (!staffType) {
         return;
     }
@@ -959,7 +931,7 @@ void NotationParts::doSetStaffConfig(Staff* staff, const StaffConfig& config, Fr
                                                  config.hideSystemBarline, config.mergeMatchingRests,
                                                  config.reflectTranspositionInLinkedTab));
 
-    score()->undo(new mu::engraving::ChangeStaffType(staff, config.staffType, tick));
+    score()->undo(new mu::engraving::ChangeStaffType(staff, config.staffType));
 }
 
 void NotationParts::doInsertPart(Part* part, size_t index)
@@ -1165,22 +1137,23 @@ void NotationParts::insertNewParts(const PartInstrumentList& parts, const mu::en
         }
 
         Instrument instrument = Instrument::fromTemplate(&pi.instrumentTemplate);
-        const String& longN = instrument.longName();
-        const String& shortN = instrument.shortName();
-
-        InstrumentTrait trait = instrument.trait();
-        const String& transp = trait.type == TraitType::Transposition && !trait.isHiddenOnScore ? trait.name : String();
+        const StaffNameList& longNames = instrument.longNames();
+        const StaffNameList& shortNames = instrument.shortNames();
 
         Part* part = new Part(score());
         part->setSoloist(pi.isSoloist);
         part->setInstrument(instrument);
 
-        part->setLongName(muse::qtrc("notation", longN));
-        part->setShortName(muse::qtrc("notation", shortN));
-        part->setTransposition(muse::qtrc("notation", transp));
-
         int instrumentNumber = resolveNewInstrumentNumber(pi.instrumentTemplate, parts);
-        part->setNumber(instrumentNumber);
+
+        String longName = !longNames.empty() ? longNames.front().name() : String();
+        String formattedLongName = formatInstrumentTitleOnScore(longName, instrument.trait(), instrumentNumber);
+        String shortName = !shortNames.empty() ? shortNames.front().name() : String();
+        String formattedShortName = formatInstrumentTitleOnScore(shortName, instrument.trait(), instrumentNumber);
+
+        part->setPartName(formattedLongName);
+        part->setLongName(formattedLongName);
+        part->setShortName(formattedShortName);
 
         if (Excerpt* excerpt = score()->excerpt()) {
             score()->undo(new AddPartToExcerpt(excerpt, part, partIdx));

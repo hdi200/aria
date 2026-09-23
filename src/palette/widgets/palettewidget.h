@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,8 +35,7 @@
 #include "ui/iuiactionsregister.h"
 #include "ui/iuiconfiguration.h"
 #include "context/iglobalcontext.h"
-#include "interactive/iinteractive.h"
-#include "engraving/ipalettescoreprovider.h"
+#include "iinteractive.h"
 
 #include "../internal/palette.h"
 #include "../ipaletteconfiguration.h"
@@ -74,12 +73,11 @@ class PaletteWidget : public QWidget, public muse::async::Asyncable, public muse
 
     muse::GlobalInject<IPaletteConfiguration> configuration;
     muse::GlobalInject<muse::ui::IUiConfiguration> uiConfiguration;
-    muse::GlobalInject<engraving::rendering::ISingleRenderer> engravingRender;
     muse::ContextInject<muse::ui::IUiActionsRegister> actionsRegister = { this };
     muse::ContextInject<context::IGlobalContext> globalContext = { this };
+    muse::ContextInject<engraving::rendering::ISingleRenderer> engravingRender = { this };
     muse::ContextInject<muse::IInteractive> interactive = { this };
     muse::ContextInject<muse::ui::IMainWindow> mainWindow  = { this };
-    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { this };
 
 public:
     PaletteWidget(QWidget* parent = nullptr);
@@ -144,6 +142,8 @@ public:
     void setApplyingElementsDisabled(bool val);
     bool useDoubleClickForApplyingElements() const;
     void setUseDoubleClickForApplyingElements(bool val);
+    bool ignoreInputEvents() const;
+    void setIgnoreInputEvents(bool val);
 
     void applyCurrentElementToScore();
 
@@ -225,6 +225,7 @@ private:
     bool m_isReadOnly = false;
     bool m_isApplyingElementsDisabled = false;
     bool m_useDoubleClickForApplyingElements = false;
+    bool m_ignoreInputEvents = false;
     bool m_showContextMenu = true;
 
     int m_currentIdx = -1;

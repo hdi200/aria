@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -114,9 +114,9 @@ bool LayoutConfiguration::isVerticalSpreadEnabled() const
 double LayoutConfiguration::maxSystemDistance() const
 {
     if (isVerticalSpreadEnabled()) {
-        return style().styleAbsolute(Sid::maxSystemSpread);
+        return style().styleMM(Sid::maxSystemSpread);
     } else {
-        return style().styleAbsolute(Sid::maxSystemDistance);
+        return style().styleMM(Sid::maxSystemDistance);
     }
 }
 
@@ -210,15 +210,6 @@ size_t DomAccessor::nstaves() const
         return 0;
     }
     return score()->nstaves();
-}
-
-size_t DomAccessor::visibleStaffCount() const
-{
-    IF_ASSERT_FAILED(score()) {
-        return 0;
-    }
-
-    return score()->visibleStavesCount();
 }
 
 const std::vector<Staff*>& DomAccessor::staves() const

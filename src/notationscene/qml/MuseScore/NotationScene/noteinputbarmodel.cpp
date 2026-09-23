@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -88,7 +88,7 @@ void NoteInputBarModel::init()
 {
     subscribeOnChanges();
 
-    uiState()->toolConfigChanged(TOOLBAR_NAME).onNotify(this, [this]() {
+    uiConfiguration()->toolConfigChanged(TOOLBAR_NAME).onNotify(this, [this]() {
         load();
     });
 
@@ -108,7 +108,7 @@ void NoteInputBarModel::load()
 {
     MenuItemList items;
 
-    ToolConfig noteInputConfig = uiState()->toolConfig(TOOLBAR_NAME, NotationUiActions::defaultNoteInputBarConfig());
+    ToolConfig noteInputConfig = uiConfiguration()->toolConfig(TOOLBAR_NAME, NotationUiActions::defaultNoteInputBarConfig());
 
     int section = 0;
     for (const ToolConfig::Item& citem : noteInputConfig.items) {

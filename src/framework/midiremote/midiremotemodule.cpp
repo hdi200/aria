@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -24,31 +24,31 @@
 
 #include "midiremote/internal/midiremoteconfiguration.h"
 #include "midiremote/internal/midiremote.h"
-
-#include "muse_framework_config.h"
+#include "midiremote/internal/mmcdecoderfactory.h"
 
 #ifdef MUSE_MODULE_DIAGNOSTICS
 #include "diagnostics/idiagnosticspathsregister.h"
 #endif
 
 using namespace muse::midiremote;
-using namespace muse::modularity;
-
-static const std::string mname("midiremote");
 
 std::string MidiRemoteModule::moduleName() const
 {
-    return mname;
+    return "midiremote";
 }
 
 void MidiRemoteModule::registerExports()
 {
-    m_configuration = std::make_shared<MidiRemoteConfiguration>();
+    m_configuration = std::make_shared<MidiRemoteConfiguration>(iocContext());
+    m_midiRemote = std::make_shared<MidiRemote>(iocContext());
 
-    globalIoc()->registerExport<IMidiRemoteConfiguration>(mname, m_configuration);
+    ioc()->registerExport<IMidiRemoteConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IMidiRemote>(moduleName(), m_midiRemote);
+
+    globalIoc()->registerExport<IMMCDecoderFactory>(moduleName(), std::make_shared<MMCDecoderFactory>());
 
 #ifdef MUSE_MODULE_DIAGNOSTICS
-    auto pr = globalIoc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(mname);
+    auto pr = ioc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(moduleName());
     if (pr) {
         pr->reg("midiMappingUserAppDataPath", m_configuration->midiMappingUserAppDataPath());
     }
@@ -58,21 +58,5 @@ void MidiRemoteModule::registerExports()
 void MidiRemoteModule::onInit(const IApplication::RunMode&)
 {
     m_configuration->init();
-}
-
-IContextSetup* MidiRemoteModule::newContext(const ContextPtr& ctx) const
-{
-    return new MidiRemoteContext(ctx);
-}
-
-void MidiRemoteContext::registerExports()
-{
-    m_midiRemote = std::make_shared<MidiRemote>(iocContext());
-
-    ioc()->registerExport<IMidiRemote>(mname, m_midiRemote);
-}
-
-void MidiRemoteContext::onInit(const IApplication::RunMode&)
-{
     m_midiRemote->init();
 }

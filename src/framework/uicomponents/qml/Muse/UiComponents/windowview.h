@@ -26,18 +26,18 @@
 #include <QQmlParserStatus>
 #include <QQuickItem>
 #include <QQuickView>
-#include <QQmlEngine>
 
 #include "async/asyncable.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
+#include "ui/iinteractiveprovider.h"
 #include "ui/imainwindow.h"
 #include "ui/inavigationcontroller.h"
 #include "ui/iuiconfiguration.h"
 
 Q_MOC_INCLUDE(< QWindow >)
 
+class QQmlEngine;
 class QQuickCloseEvent;
 class QQuickView;
 
@@ -75,9 +75,9 @@ class WindowView : public QObject, public QQmlParserStatus, public Contextable, 
 
 protected:
     GlobalInject<ui::IUiConfiguration> uiConfiguration;
-    ContextInject<IInteractive> interactive = { this };
     ContextInject<ui::IMainWindow> mainWindow = { this };
     ContextInject<ui::INavigationController> navigationController = { this };
+    ContextInject<ui::IInteractiveProvider> interactiveProvider = { this };
 
 public:
     explicit WindowView(QQuickItem* parent = nullptr);

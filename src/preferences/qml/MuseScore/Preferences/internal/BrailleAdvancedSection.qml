@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -41,12 +41,12 @@ BaseSection {
         title: qsTrc("preferences", "Braille table for lyrics")
         columnWidth: root.columnWidth
 
-        currentIndex: indexOfValue(root.brailleTable)
+        currentIndex: control.indexOfValue(root.brailleTable)
         model: root.tables
 
-        navigationName: "BrailleTableBox"
-        navigationPanel: root.navigation
-        navigationRow: 1
+        navigation.name: "BrailleTableBox"
+        navigation.panel: root.navigation
+        navigation.row: 1
 
         onValueEdited: function(newIndex, newValue) {
             root.brailleTableChangeRequested(newValue);
@@ -57,12 +57,12 @@ BaseSection {
         title: qsTrc("preferences", "Interval direction")
         columnWidth: root.columnWidth
 
-        currentIndex: indexOfValue(root.intervalDirection)
+        currentIndex: control.indexOfValue(root.intervalDirection)
         model: root.directions
 
-        navigationName: "IntervalDirectionBox"
-        navigationPanel: root.navigation
-        navigationRow: 2
+        navigation.name: "IntervalDirectionBox"
+        navigation.panel: root.navigation
+        navigation.row: 2
 
         onValueEdited: function(newIndex, newValue) {
             root.intervalDirectionChangeRequested(newValue);

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,7 +29,6 @@
 
 #include "../editing/addremoveelement.h"
 #include "../editing/editchord.h"
-#include "../editing/editnote.h"
 
 #include "accidental.h"
 #include "arpeggio.h"
@@ -800,6 +799,9 @@ void Chord::remove(EngravingItem* e)
     case ElementType::CHORD:
     {
         auto i = std::find(m_graceNotes.begin(), m_graceNotes.end(), toChord(e));
+        IF_ASSERT_FAILED(i != m_graceNotes.end()) {
+            break;
+        }
         Chord* grace = *i;
         grace->setGraceIndex(i - m_graceNotes.begin());
         m_graceNotes.erase(i);
@@ -811,7 +813,7 @@ void Chord::remove(EngravingItem* e)
     {
         Articulation* a = toArticulation(e);
         if (!muse::remove(m_articulations, a)) {
-            LOGD("ChordRest::remove(): articulation not found");
+            LOGD("Chord::remove(): articulation not found");
         }
     }
     break;
@@ -1045,7 +1047,7 @@ void Chord::setBeamExtension(double extension)
 {
     if (m_stem) {
         double baseLength = m_stem->absoluteFromSpatium(m_stem->baseLength());
-        m_stem->setBaseLength(std::max(Spatium::fromAbsolute(baseLength + extension, spatium()), 0.0_sp));
+        m_stem->setBaseLength(std::max(Spatium::fromMM(baseLength + extension, spatium()), 0.0_sp));
         m_defaultStemLength = std::max(m_defaultStemLength + extension, m_stem->absoluteFromSpatium(m_stem->baseLength()));
     }
 }
@@ -1127,34 +1129,6 @@ bool Chord::underBeam() const
         }
     }
     return false;
-}
-
-//---------------------------------------------------------
-//   updatePercussionNotes
-//---------------------------------------------------------
-
-static void updatePercussionNotes(Chord* c, const Drumset* drumset)
-{
-    TRACEFUNC;
-    for (Chord* ch : c->graceNotes()) {
-        updatePercussionNotes(ch, drumset);
-    }
-    std::vector<Note*> lnotes(c->notes());    // we need a copy!
-    for (Note* note : lnotes) {
-        if (!drumset) {
-            note->setLine(0);
-        } else {
-            int pitch = note->pitch();
-            if (!drumset->isValid(pitch)) {
-                note->setLine(0);
-                //! NOTE May be called too often
-                //LOGW("unmapped drum note %d", pitch);
-            } else if (!note->fixed()) {
-                note->undoChangeProperty(Pid::HEAD_GROUP, drumset->noteHead(pitch));
-                note->setLine(drumset->line(pitch));
-            }
-        }
-    }
 }
 
 //---------------------------------------------------------
@@ -1545,7 +1519,7 @@ EngravingItem* Chord::drop(EditData& data)
             if (m_articulations.empty()) {
                 score()->undoAddElement(atr);
             } else {
-                EditChord::toggleArticulation(score(), this, atr);
+                score()->toggleArticulation(this, atr);
             }
         }
         return atr;
@@ -1804,7 +1778,7 @@ void Chord::updateArticulations(const std::set<SymId>& newArticulationIds, Artic
                 newArticulation->setAnchor(artic->anchor());
                 newArticulation->setPropertyFlags(Pid::ARTICULATION_ANCHOR, artic->propertyFlags(Pid::ARTICULATION_ANCHOR));
                 if (!hasArticulation(newArticulation)) {
-                    EditChord::toggleArticulation(score(), this, newArticulation);
+                    score()->toggleArticulation(this, newArticulation);
                 } else {
                     delete newArticulation;
                 }
@@ -1856,7 +1830,7 @@ void Chord::updateArticulations(const std::set<SymId>& newArticulationIds, Artic
 
     // newArtics now contains the articulations in the correct direction
     if (updateMode == ArticulationsUpdateMode::Remove) {
-        // remove articulations from _articulations that are found in newArtics
+        // remove articulations from _articulations that are found in in newArtics
         for (const SymId& id : newArtics) {
             switch (id) {
             case SymId::articAccentAbove:
@@ -1893,7 +1867,7 @@ void Chord::updateArticulations(const std::set<SymId>& newArticulationIds, Artic
                 newArticulation->setPropertyFlags(Pid::ARTICULATION_ANCHOR, PropertyFlags::UNSTYLED);
             }
             if (!hasArticulation(newArticulation)) {
-                EditChord::toggleArticulation(score(), this, newArticulation);
+                score()->toggleArticulation(this, newArticulation);
             } else {
                 delete newArticulation;
             }

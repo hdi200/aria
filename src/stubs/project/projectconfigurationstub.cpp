@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -97,6 +97,11 @@ muse::async::Channel<muse::io::path_t> ProjectConfigurationStub::userProjectsPat
 }
 
 muse::io::path_t ProjectConfigurationStub::defaultUserProjectsPath() const
+{
+    return muse::io::path_t();
+}
+
+muse::io::path_t ProjectConfigurationStub::defaultOpenProjectsPath() const
 {
     return muse::io::path_t();
 }
@@ -301,6 +306,16 @@ QUrl ProjectConfigurationStub::supportForumUrl() const
     return QUrl();
 }
 
+QUrl ProjectConfigurationStub::dotComBugReportUrl() const
+{
+    return QUrl();
+}
+
+QUrl ProjectConfigurationStub::scoreUploadingGuidelinesUrl() const
+{
+    return QUrl();
+}
+
 bool ProjectConfigurationStub::openDetailedProjectUploadedDialog() const
 {
     return false;
@@ -384,4 +399,28 @@ bool ProjectConfigurationStub::createBackupBeforeSaving() const
 
 void ProjectConfigurationStub::setCreateBackupBeforeSaving(bool)
 {
+}
+
+bool ProjectConfigurationStub::showConvertFileProcessingDialog() const
+{
+    return false;
+}
+
+void ProjectConfigurationStub::setShowConvertFileProcessingDialog(bool)
+{
+}
+
+muse::io::path_t ProjectConfigurationStub::convertedScoresPath() const
+{
+    return muse::io::path_t();
+}
+
+muse::io::path_t ProjectConfigurationStub::pendingConvertsJsonPath() const
+{
+    return muse::io::path_t();
+}
+
+std::string ProjectConfigurationStub::uniqueFileNameAddition(const muse::io::path_t&, const muse::io::path_t&, const std::string&) const
+{
+    return std::string();
 }

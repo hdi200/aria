@@ -11,8 +11,6 @@
 
 #pragma once
 
-#include <functional>
-
 #include "kddockwidgets/docks_export.h"
 
 #include <qglobal.h>
@@ -22,8 +20,7 @@ namespace Layouting {
 class Separator;
 class Widget;
 
-//typedef Separator *(*SeparatorFactoryFunc)(Layouting::Widget *parent);
-using SeparatorFactoryFunc = std::function<Separator*(Layouting::Widget *parent)>;
+typedef Separator *(*SeparatorFactoryFunc)(Layouting::Widget *parent);
 
 class DOCKS_EXPORT_FOR_UNIT_TESTS Config
 {

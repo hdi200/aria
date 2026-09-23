@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -244,10 +244,10 @@ void TracksModel::reset(const MidiOperations::Opers& opers,
                 if (!instr->trackName.isEmpty()) {
                     return instr->trackName;
                 }
-                if (instr->instrumentName.longName().empty()) {
+                if (instr->longNames.empty()) {
                     return instr->id;
                 }
-                return instr->instrumentName.longName();
+                return instr->longNames.front().name();
             }
         };
         _columns.push_back(std::unique_ptr<Column>(new MsInstrument(_trackOpers)));

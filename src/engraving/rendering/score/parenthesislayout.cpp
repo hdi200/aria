@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -37,7 +37,7 @@
 using namespace mu::engraving;
 using namespace mu::engraving::rendering::score;
 
-static constexpr Spatium MAX_MID_THICKNESS = 0.2_sp;
+static constexpr double maxMidPointThicknessSpRatio = 0.2;
 
 void ParenthesisLayout::layoutParentheses(const EngravingItem* parent, const LayoutContext& ctx)
 {
@@ -138,6 +138,7 @@ void ParenthesisLayout::layoutParentheses(Parenthesis* leftParen, Parenthesis* r
     // to the left (relative to the segment) in order to centre the item: (b  ) -> ( b )
     const double itemWidth = parentWidth;
     double parenPadding = computeInternalParenthesisPadding(leftParen, rightParen);
+    parenPadding *= (leftParen->ldata()->mag() + rightParen->ldata()->mag()) / 2;
 
     if (itemWidth >= parenPadding) {
         return;
@@ -270,7 +271,7 @@ void ParenthesisLayout::createPathAndShape(Parenthesis* item, Parenthesis::Layou
     const double height = ldata->height;
     const double xPos = ldata->pos().x();
     const double mag = ldata->mag();
-    const double maxMidPointThickness = MAX_MID_THICKNESS.toAbsolute(spatium);
+    const double maxMidPointThickness = maxMidPointThicknessSpRatio * spatium;
     const double midPointThickness = std::min(ldata->midPointThickness.value(), maxMidPointThickness);
 
     const double heightInSpatium = height / spatium;
@@ -313,8 +314,8 @@ void ParenthesisLayout::createPathAndShape(Parenthesis* item, Parenthesis::Layou
 
     PointF startPoint = PointF();
     double midThickness = 2 * midPointThickness;
-    int nbShapes = round(5.0 * heightInSpatium);
-    nbShapes = std::clamp(nbShapes, 20, 50);
+    int nbShapes = round(2.0 * heightInSpatium);
+    nbShapes = std::clamp(nbShapes, 3, 10);
     PointF bezier1mid = bezier1for - PointF(midPointThickness * direction, 0.0);
     PointF bezier2mid = bezier2for - PointF(midPointThickness * direction, 0.0);
     const CubicBezier b(startPoint, bezier1mid, bezier2mid, endNormalised);
@@ -552,7 +553,9 @@ Shape ParenthesisLayout::getParentShape(const EngravingItem* parent)
         return !s.item() || s.item()->isParenthesis()
                || (s.item()->isLaissezVibSegment() && isChord)
                || (s.item()->isHook() && isChord)
-               || (s.item()->isStem() && isChord);
+               || (s.item()->isStem() && isChord)
+               || (s.item()->isArpeggio() && isChord)
+               || (s.item()->isChordBracket() && isChord);
     });
 
     return parentShape;

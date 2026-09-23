@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2024 MuseScore Limited
+# Copyright (C) 2024 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -87,7 +87,6 @@ option(MUE_BUILD_IMPEXP_BB_MODULE "Build importexport bb module" ON)
 option(MUE_BUILD_IMPEXP_BWW_MODULE "Build importexport bww module" ON)
 option(MUE_BUILD_IMPEXP_CAPELLA_MODULE "Build importexport capella module" ON)
 option(MUE_BUILD_IMPEXP_MIDI_MODULE "Build importexport midi module" ON)
-option(MUE_BUILD_IMPEXP_MLSCORE_MODULE "Build importexport mlscore module" OFF)
 option(MUE_BUILD_IMPEXP_MNX_MODULE "Build importexport mnx module" ON)
 option(MUE_BUILD_IMPEXP_MUSEDATA_MODULE "Build importexport musedata module" ON)
 option(MUE_BUILD_IMPEXP_MUSICXML_MODULE "Build importexport musicxml module" ON)
@@ -96,7 +95,7 @@ option(MUE_BUILD_IMPEXP_AUDIOEXPORT_MODULE "Build importexport audioexport modul
 option(MUE_BUILD_IMPEXP_IMAGESEXPORT_MODULE "Build importexport imagesexport module" ON)
 option(MUE_BUILD_IMPEXP_GUITARPRO_MODULE "Build importexport guitarpro module" ON)
 option(MUE_BUILD_IMPEXP_MEI_MODULE "Build importexport mei module" ON)
-option(MUE_BUILD_IMPEXP_VIDEOEXPORT_MODULE "Build importexport videoexport module" OFF)
+option(MUE_BUILD_IMPEXP_VIDEOEXPORT_MODULE "Build importexport videoexport module" ON)
 option(MUE_BUILD_IMPEXP_TABLEDIT_MODULE "Build importexport tabledit module" ON)
 option(MUE_BUILD_IMPEXP_LYRICS_MODULE "Build importexport lyrics module" ON)
 
@@ -140,12 +139,10 @@ option(MUE_DOWNLOAD_SOUNDFONT "Download the latest soundfont version as part of 
 # === Pack ===
 option(MUE_RUN_LRELEASE "Generate .qm files" ON)
 option(MUE_INSTALL_SOUNDFONT "Install sound font" ON)
-option(MUE_RUN_WINDEPLOYQT "Run windeployqt" ON)
+option(MUE_RUN_WINDEPLOYQT "Run windeployqt" OFF)
 
 # === Tests ===
 set(MUE_VTEST_MSCORE_REF_BIN "${CMAKE_CURRENT_LIST_DIR}/../MU_ORIGIN/MuseScore/build.debug/install/${INSTALL_SUBDIR}/mscore" CACHE PATH "Path to mscore ref bin")
-set(APP_WORKSPACE_CONFIG_FILE "${CMAKE_CURRENT_LIST_DIR}/src/app/configs/workspaces.cfg")
-set(APP_BUILTIN_WORKSPACES_DIR "${CMAKE_CURRENT_LIST_DIR}/share/workspaces")
 
 # === Compile ===
 set(MUE_COMPILE_MACOS_PRECOMPILED_DEPS_PATH "" CACHE PATH "Path to precompiled dependencies (macOS only; optional: if not specified, some libraries will be used from the system and others will be built from source)")
@@ -223,8 +220,6 @@ include(SetupQt6)
 if (MUE_DOWNLOAD_SOUNDFONT)
     include(DownloadSoundFont)
 endif(MUE_DOWNLOAD_SOUNDFONT)
-
-include(SetupDependencies)
 
 ###########################################
 # Add source tree

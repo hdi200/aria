@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -44,7 +44,7 @@ using namespace mu::engraving;
 Ret DiagnosticDrawProvider::generateDrawData(const muse::io::path_t& dirOrFile, const muse::io::path_t& outDirOrFile, const GenOpt& opt)
 {
     LOGI() << "scoresDir: " << dirOrFile << ", outDir: " << outDirOrFile;
-    DrawDataGenerator g;
+    DrawDataGenerator g(iocContext());
 
     if (io::FileInfo(dirOrFile).entryType() == io::EntryType::File) {
         return g.processFile(dirOrFile, outDirOrFile, opt);

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -37,11 +37,7 @@
         <eid>C_C</eid>
         <StaffType group="pitched">
           </StaffType>
-        <BracketItem>
-          <type>Brace</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="1" span="2" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -49,11 +45,10 @@
         <StaffType group="pitched">
           </StaffType>
         </Staff>
+      <trackName>Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName><font size="12"/>Piano</longName>
-          <shortName><font size="12"/>Pno.</shortName>
-          </InstrumentLabel>
+        <longName><font size="12"/>Piano</longName>
+        <shortName><font size="12"/>Pno.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -104,8 +99,9 @@
             </TimeSig>
           <Spanner type="Pedal">
             <Pedal>
-              <continueText>&lt;font size=&quot;11&quot;/&gt;</continueText>
               <endHookHeight>1.5</endHookHeight>
+              <continueText>&lt;font size=&quot;11&quot;/&gt;</continueText>
+              <endTextPlace>auto</endTextPlace>
               <eid>I_I</eid>
               </Pedal>
             <next>

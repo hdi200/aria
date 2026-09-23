@@ -36,6 +36,7 @@ enum class OpenMode {
 
 enum class ScanMode {
     FilesInCurrentDir,
+    FoldersInCurrentDir,
     FilesAndFoldersInCurrentDir,
     FilesInCurrentDirAndSubdirs
 };

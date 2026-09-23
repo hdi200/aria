@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -431,6 +431,16 @@ void PaletteWidget::setUseDoubleClickForApplyingElements(bool val)
     m_useDoubleClickForApplyingElements = val;
 }
 
+bool PaletteWidget::ignoreInputEvents() const
+{
+    return m_ignoreInputEvents;
+}
+
+void PaletteWidget::setIgnoreInputEvents(bool val)
+{
+    m_ignoreInputEvents = val;
+}
+
 void PaletteWidget::applyCurrentElementToScore()
 {
     applyElementAtIndex(m_currentIdx);
@@ -559,7 +569,7 @@ QRect PaletteWidget::rectForCellAt(int idx) const
 
 QPixmap PaletteWidget::pixmapForCellAt(int paletteIdx) const
 {
-    qreal _spatium = paletteScoreProvider()->paletteScore()->style().spatium();
+    qreal _spatium = gpaletteScore->style().spatium();
     qreal magS     = configuration()->paletteSpatium() * mag() * paletteScaling();
     qreal mag      = magS / _spatium;
 
@@ -653,6 +663,10 @@ QSize PaletteWidget::sizeHint() const
 bool PaletteWidget::event(QEvent* ev)
 {
     if (!m_palette) {
+        return false;
+    }
+
+    if (m_ignoreInputEvents && ev->isInputEvent()) {
         return false;
     }
 
@@ -851,7 +865,7 @@ void PaletteWidget::dropEvent(QDropEvent* event)
         QList<QUrl> ul = event->mimeData()->urls();
         QUrl u = ul.front();
         if (u.scheme() == "file") {
-            auto image = std::make_shared<Image>(paletteScoreProvider()->paletteScore()->dummy());
+            auto image = std::make_shared<Image>(gpaletteScore->dummy());
             QString filePath(u.toLocalFile());
             image->loadFromFile(filePath);
             element = image;
@@ -867,11 +881,11 @@ void PaletteWidget::dropEvent(QDropEvent* event)
         ElementType type = EngravingItem::readType(xml, &dragOffset, &duration);
 
         if (type == ElementType::SYMBOL) {
-            auto symbol = std::make_shared<Symbol>(paletteScoreProvider()->paletteScore()->dummy());
+            auto symbol = std::make_shared<Symbol>(gpaletteScore->dummy());
             rw::RWRegister::reader()->readItem(symbol.get(), xml);
             element = symbol;
         } else {
-            element = std::shared_ptr<EngravingItem>(Factory::createItem(type, paletteScoreProvider()->paletteScore()->dummy()));
+            element = std::shared_ptr<EngravingItem>(Factory::createItem(type, gpaletteScore->dummy()));
             if (element) {
                 rw::RWRegister::reader()->readItem(element.get(), xml);
                 element->setTrack(0);
@@ -929,11 +943,10 @@ void PaletteWidget::resizeEvent(QResizeEvent* e)
 
 void PaletteWidget::paintEvent(QPaintEvent* /*event*/)
 {
-    auto paletteScore = paletteScoreProvider()->paletteScore();
-    qreal _spatium = paletteScore->style().spatium();
+    qreal _spatium = gpaletteScore->style().spatium();
     qreal magS     = configuration()->paletteSpatium() * mag() * paletteScaling();
     qreal mag      = magS / _spatium;
-    paletteScore->style().setSpatium(paletteScore->style().defaultSpatium());
+    gpaletteScore->style().setSpatium(gpaletteScore->style().defaultSpatium());
 
     muse::draw::Painter painter(this, "palette");
     painter.setAntialiasing(true);

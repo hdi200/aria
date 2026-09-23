@@ -19,7 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#pragma once
+#ifndef MUSE_ACCESSIBILITY_ACCESSIBILITYCONFIGURATIONMOCK_H
+#define MUSE_ACCESSIBILITY_ACCESSIBILITYCONFIGURATIONMOCK_H
 
 #include <gmock/gmock.h>
 
@@ -29,7 +30,9 @@ namespace muse::accessibility {
 class AccessibilityConfigurationMock : public IAccessibilityConfiguration
 {
 public:
-
-    MOCK_METHOD(bool, isAccessibleActive, (), (const, override));
+    MOCK_METHOD(bool, enabled, (), (const, override));
+    MOCK_METHOD(bool, active, (), (const, override));
 };
 }
+
+#endif // MUSE_ACCESSIBILITY_ACCESSIBILITYCONFIGURATIONMOCK_H

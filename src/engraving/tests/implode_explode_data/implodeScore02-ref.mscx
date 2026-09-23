@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
     <Style>
-      <windsNameByGroup>0</windsNameByGroup>
-      <vocalsNameByGroup>0</vocalsNameByGroup>
       <lyricsMinBottomDistance>4</lyricsMinBottomDistance>
       <maskBarlinesForText>0</maskBarlinesForText>
       <dividerLeftAlignToSystemBarline>0</dividerLeftAlignToSystemBarline>
@@ -47,11 +45,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano</longName>
-          <shortName>Pno.</shortName>
-          </InstrumentLabel>
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -101,11 +98,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Flute</trackName>
       <Instrument id="flute">
-        <InstrumentLabel>
-          <longName>Flute</longName>
-          <shortName>Fl.</shortName>
-          </InstrumentLabel>
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
         <trackName>Flute</trackName>
         <minPitchP>59</minPitchP>
         <maxPitchP>98</maxPitchP>
@@ -154,11 +150,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>B♭ Trumpet</trackName>
       <Instrument id="bb-trumpet">
-        <InstrumentLabel>
-          <longName>B♭ Trumpet</longName>
-          <shortName>B♭ Tpt.</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Trumpet</longName>
+        <shortName>B♭ Tpt.</shortName>
         <trackName>B♭ Trumpet</trackName>
         <minPitchP>52</minPitchP>
         <maxPitchP>85</maxPitchP>
@@ -215,11 +210,10 @@
           </StaffType>
         <defaultClef>F</defaultClef>
         </Staff>
+      <trackName>Tenor Trombone</trackName>
       <Instrument id="tenor-trombone">
-        <InstrumentLabel>
-          <longName>Tenor Trombone</longName>
-          <shortName>T. Tbn.</shortName>
-          </InstrumentLabel>
+        <longName>Tenor Trombone</longName>
+        <shortName>T. Tbn.</shortName>
         <trackName>Tenor Trombone</trackName>
         <minPitchP>40</minPitchP>
         <maxPitchP>74</maxPitchP>

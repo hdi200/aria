@@ -29,9 +29,9 @@
 #include "uicomponents/qml/Muse/UiComponents/qmllistproperty.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
 #include "workspace/iworkspacemanager.h"
-#include "ui/iuistate.h"
+#include "ui/iuiconfiguration.h"
+#include "ui/iinteractiveprovider.h"
 #include "idockwindowprovider.h"
 
 #include "idockwindow.h"
@@ -62,8 +62,8 @@ class DockWindow : public QQuickItem, public IDockWindow, public muse::Contextab
 
     QML_ELEMENT
 
-    ContextInject<ui::IUiState> uiState = { this };
-    ContextInject<IInteractive> interactive = { this };
+    GlobalInject<ui::IUiConfiguration> uiConfiguration;
+    ContextInject<ui::IInteractiveProvider> interactiveProvider = { this };
     ContextInject<workspace::IWorkspaceManager> workspaceManager = { this };
     ContextInject<IDockWindowProvider> dockWindowProvider = { this };
 
@@ -124,9 +124,10 @@ private:
 
     void handleUnknownDock(const DockPageView* page, DockBase* unknownDock);
 
-    QByteArray windowState() const;
-    void saveWindowGeometry();
     void restoreGeometry();
+
+    QByteArray windowState() const;
+
     void savePageState(const QString& pageName);
     void restorePageState(const DockPageView* page);
 
@@ -143,7 +144,6 @@ private:
 
     QList<DockToolBarView*> topLevelToolBars(const DockPageView* page) const;
 
-    int m_ctx = 0;
     KDDockWidgets::MainWindowBase* m_mainWindow = nullptr;
     DockPageView* m_currentPage = nullptr;
     uicomponents::QmlListProperty<DockToolBarView> m_toolBars;

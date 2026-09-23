@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -79,11 +79,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Flute</trackName>
       <Instrument id="flute">
-        <InstrumentLabel>
-          <longName>Flute</longName>
-          <shortName>Fl.</shortName>
-          </InstrumentLabel>
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
         <trackName>Flute</trackName>
         <minPitchP>59</minPitchP>
         <maxPitchP>98</maxPitchP>
@@ -121,6 +120,8 @@
           <Spanner type="Pedal">
             <Pedal>
               <endHookType>1</endHookType>
+              <continueTextPlace>auto</continueTextPlace>
+              <endTextPlace>auto</endTextPlace>
               <eid>I_I</eid>
               </Pedal>
             <next>
@@ -508,6 +509,8 @@
           <Spanner type="Pedal">
             <Pedal>
               <endHookType>1</endHookType>
+              <continueTextPlace>auto</continueTextPlace>
+              <endTextPlace>auto</endTextPlace>
               <eid>DB_DB</eid>
               </Pedal>
             <next>
@@ -878,11 +881,10 @@
             <name>stdNormal</name>
             </StaffType>
           </Staff>
+        <trackName>Flute</trackName>
         <Instrument id="flute">
-          <InstrumentLabel>
-            <longName>Flute</longName>
-            <shortName>Fl.</shortName>
-            </InstrumentLabel>
+          <longName>Flute</longName>
+          <shortName>Fl.</shortName>
           <trackName>Flute</trackName>
           <minPitchP>59</minPitchP>
           <maxPitchP>98</maxPitchP>
@@ -929,6 +931,8 @@
             <Spanner type="Pedal">
               <Pedal>
                 <endHookType>1</endHookType>
+                <continueTextPlace>auto</continueTextPlace>
+                <endTextPlace>auto</endTextPlace>
                 <eid>BC_BC</eid>
                 <linkedTo>I_I</linkedTo>
                 </Pedal>
@@ -1368,6 +1372,8 @@
             <Spanner type="Pedal">
               <Pedal>
                 <endHookType>1</endHookType>
+                <continueTextPlace>auto</continueTextPlace>
+                <endTextPlace>auto</endTextPlace>
                 <eid>8C_8C</eid>
                 <linkedTo>DB_DB</linkedTo>
                 </Pedal>

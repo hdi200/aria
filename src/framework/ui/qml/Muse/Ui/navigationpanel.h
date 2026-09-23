@@ -44,7 +44,6 @@ class NavigationPanel : public AbstractNavigation, public INavigationPanel
 
 public:
     explicit NavigationPanel(QObject* parent = nullptr);
-    explicit NavigationPanel(const muse::modularity::ContextPtr& iocCtx, QObject* parent = nullptr);
     ~NavigationPanel() override;
 
     //! NOTE Please sync with INavigationPanel::Direction

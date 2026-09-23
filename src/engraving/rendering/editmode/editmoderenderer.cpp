@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -262,7 +262,8 @@ void EditModeRenderer::drawTextBase(const TextBase* item, muse::draw::Painter* p
     pen.setJoinStyle(PenJoinStyle::MiterJoin);
     painter->setPen(pen);
 
-    if (cursor->visible()) {
+    // Don't draw cursor if there is a selection
+    if (!cursor->hasSelection()) {
         painter->drawRect(cursor->cursorRect());
     }
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,7 +35,7 @@ static const QString FIRST_GROUP_ID("FIRST_GROUP_ID");
 static const QString INSTRUMENT_TEMPLATE_KEY("instrumentTemplate");
 
 InstrumentListModel::InstrumentListModel(QObject* parent)
-    : QAbstractListModel(parent), m_selection(new ItemMultiSelectionModel(this))
+    : QAbstractListModel(parent), muse::Contextable(muse::iocCtxForQmlObject(this)), m_selection(new ItemMultiSelectionModel(this))
 {
     connect(m_selection, &ItemMultiSelectionModel::selectionChanged, this,
             [this](const QItemSelection& selected, const QItemSelection& deselected) {

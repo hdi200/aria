@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -38,11 +38,10 @@
         <StaffType group="pitched">
           </StaffType>
         </Staff>
+      <trackName>Guitar</trackName>
       <Instrument id="guitar-steel">
-        <InstrumentLabel>
-          <longName><font size="12"/>Guitar</longName>
-          <shortName><font size="12"/>Guit.</shortName>
-          </InstrumentLabel>
+        <longName><font size="12"/>Guitar</longName>
+        <shortName><font size="12"/>Guit.</shortName>
         <trackName>Guitar</trackName>
         <minPitchP>40</minPitchP>
         <maxPitchP>83</maxPitchP>

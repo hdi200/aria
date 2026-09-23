@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -24,11 +24,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Acoustic Guitar 1</trackName>
       <Instrument id="grand-piano">
-        <InstrumentLabel>
-          <longName>Acoustic Guitar 1</longName>
-          <shortName>S-Gt</shortName>
-          </InstrumentLabel>
+        <longName>Acoustic Guitar 1</longName>
+        <shortName>S-Gt</shortName>
         <trackName></trackName>
         <transposeDiatonic>-7</transposeDiatonic>
         <transposeChromatic>-12</transposeChromatic>
@@ -36,10 +35,10 @@
         <singleNoteDynamics>0</singleNoteDynamics>
         <StringData>
           <frets>24</frets>
-          <string>52</string>
-          <string>57</string>
-          <string>62</string>
-          <string>67</string>
+          <string>76</string>
+          <string>69</string>
+          <string>74</string>
+          <string>79</string>
           <string>71</string>
           <string>76</string>
           </StringData>
@@ -97,29 +96,14 @@
             <eid>M_M</eid>
             <text><sym>metNoteQuarterUp</sym> = 115</text>
             </Tempo>
-          <StringTunings>
-            <visibleStrings></visibleStrings>
-            <StringData>
-              <frets>24</frets>
-              <string>76</string>
-              <string>69</string>
-              <string>74</string>
-              <string>79</string>
-              <string>71</string>
-              <string>76</string>
-              </StringData>
-            <eid>N_N</eid>
-            <style>string_tunings</style>
-            <text/>
-            </StringTunings>
           <Chord>
-            <eid>O_O</eid>
+            <eid>N_N</eid>
             <durationType>half</durationType>
             <Note>
-              <eid>P_P</eid>
+              <eid>O_O</eid>
               <Accidental>
                 <subtype>accidentalNatural</subtype>
-                <eid>Q_Q</eid>
+                <eid>P_P</eid>
                 </Accidental>
               <pitch>65</pitch>
               <tpc>13</tpc>
@@ -128,7 +112,7 @@
               </Note>
             </Chord>
           <Rest>
-            <eid>R_R</eid>
+            <eid>Q_Q</eid>
             <durationType>half</durationType>
             </Rest>
           </voice>

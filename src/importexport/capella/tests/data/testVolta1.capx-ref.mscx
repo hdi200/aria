@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -33,11 +33,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName></trackName>
       <Instrument>
-        <InstrumentLabel>
-          <longName>Guitar</longName>
-          <shortName>Gtr.</shortName>
-          </InstrumentLabel>
+        <longName>Guitar</longName>
+        <shortName>Gtr.</shortName>
         <trackName></trackName>
         <Channel>
           <program value="24"/>

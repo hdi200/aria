@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -25,11 +25,11 @@
 #include <vector>
 
 #include "global/containers.h"
+#include "global/types/string.h"
 
 #include "clef.h"
 #include "interval.h"
 #include "notifier.h"
-#include "stafflabel.h"
 #include "stringdata.h"
 
 #include "../compat/midi/midicoreevent.h"
@@ -42,6 +42,32 @@ class MasterScore;
 class Part;
 class StringData;
 class Synthesizer;
+
+//---------------------------------------------------------
+//   StaffName
+//---------------------------------------------------------
+
+class StaffName
+{
+public:
+    StaffName() = default;
+    StaffName(const String& xmlText, int pos = 0);
+
+    String toPlainText() const;
+
+    bool operator==(const StaffName&) const;
+    String toString() const;
+    int pos() const { return m_pos; }
+    void setPos(int p) { m_pos = p; }
+    String name() const { return m_name; }
+    void setName(const String& n) { m_name = n; }
+
+private:
+    String m_name;       // html string
+    int m_pos = 0;       // even number -> between staves
+};
+
+using StaffNameList = std::vector<StaffName>;
 
 //---------------------------------------------------------
 //   NamedEventList
@@ -285,7 +311,6 @@ public:
     const String& soundId() const { return m_soundId; }
     void setSoundId(const String& id) { m_soundId = id; }
     String family() const;
-    String group() const;
     void setId(const String& id) { m_id = id; }
     void setMinPitchP(int v) { m_minPitchP = v; }
     void setMaxPitchP(int v) { m_maxPitchP = v; }
@@ -327,25 +352,24 @@ public:
     void setStringData(const StringData& d) { m_stringData.set(d); }
     bool hasStrings() const { return m_stringData.strings() > 0; }
 
-    void setLongName(const String& f) { m_instrumentLabel.setLongName(f); }
-    void setShortName(const String& f) { m_instrumentLabel.setShortName(f); }
-    void setInstrumentName(const InstrumentLabel& n) { m_instrumentLabel = n; }
-    const String& longName() const { return m_instrumentLabel.longName(); }
-    const String& shortName() const { return m_instrumentLabel.shortName(); }
-    const InstrumentLabel& instrumentLabel() const { return m_instrumentLabel; }
-    InstrumentLabel& instrumentLabel() { return m_instrumentLabel; }
+    void setLongName(const String& f);
+    void setShortName(const String& f);
 
-    int number() const { return m_instrumentLabel.number(); }
-    void setNumber(int v) { return m_instrumentLabel.setNumber(v); }
-
-    const String& transposition() const { return m_instrumentLabel.transposition(); }
-    void setTransposition(const String& s) { m_instrumentLabel.setTransposition(s); }
+    void addLongName(const StaffName& f);
+    void addShortName(const StaffName& f);
 
     int minPitchP() const;
     int maxPitchP() const;
     int minPitchA() const;
     int maxPitchA() const;
     String musicXmlId() const;
+
+    const StaffNameList& longNames() const;
+    const StaffNameList& shortNames() const;
+    void setLongNames(const StaffNameList& l);
+    void setShortNames(const StaffNameList& l);
+    void appendLongName(const StaffName& n);
+    void appendShortName(const StaffName& n);
 
     String trackName() const;
     void setTrackName(const String& s);
@@ -377,8 +401,8 @@ public:
 
 private:
 
-    InstrumentLabel m_instrumentLabel;
-
+    StaffNameList m_longNames;
+    StaffNameList m_shortNames;
     String m_trackName;
     String m_id;
     String m_soundId;
@@ -403,9 +427,6 @@ private:
 
     Trait m_trait;
     bool m_isPrimary = false;
-
-    mutable String m_familyCache;
-    mutable String m_groupCache;
 
     GlissandoStyle m_glissandoStyle = GlissandoStyle::CHROMATIC;
 };

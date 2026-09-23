@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,13 +22,11 @@
 
 #pragma once
 
-#include "ui/view/widgetdialog.h"
-
 #include "ui_editstyle.h"
 
 #include "modularity/ioc.h"
 #include "context/iglobalcontext.h"
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 #include "ui/iuiconfiguration.h"
 #include "ui/iuiengine.h"
 #include "engraving/iengravingfontsprovider.h"
@@ -40,7 +38,7 @@
 class QQuickView;
 
 namespace mu::notation {
-class EditStyle : public muse::ui::WidgetDialog, private Ui::EditStyleBase
+class EditStyle : public QDialog, private Ui::EditStyleBase, public muse::Contextable
 {
     Q_OBJECT
 
@@ -58,14 +56,12 @@ class EditStyle : public muse::ui::WidgetDialog, private Ui::EditStyleBase
 public:
     EditStyle(QWidget* = nullptr);
 
-    void classBegin() override;
-
     QString currentPageCode() const;
     QString currentSubPageCode() const;
 
 public slots:
-    void accept() override;
-    void reject() override;
+    void accept();
+    void reject();
 
     void setCurrentPageCode(const QString& code);
     void setCurrentSubPageCode(const QString& code);
@@ -77,10 +73,10 @@ signals:
     void currentSubPageChanged();
 
 private:
-    void showEvent(QShowEvent*) override;
-    void hideEvent(QHideEvent*) override;
-    void changeEvent(QEvent*) override;
-    void keyPressEvent(QKeyEvent* event) override;
+    void showEvent(QShowEvent*);
+    void hideEvent(QHideEvent*);
+    void changeEvent(QEvent*);
+    void keyPressEvent(QKeyEvent* event);
 
     void retranslate();
     void setHeaderFooterMacroInfoText();

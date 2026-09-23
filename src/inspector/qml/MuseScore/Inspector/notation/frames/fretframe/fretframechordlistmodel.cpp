@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -116,7 +116,7 @@ void FretFrameChordListModel::setChordVisible(int index, bool visible)
     item->setIsVisible(visible);
 
     notation->undoStack()->commitChanges();
-    notation->notationChanged().send(muse::RectF());
+    notation->notationChanged().notify();
 }
 
 void FretFrameChordListModel::moveSelectionUp()
@@ -138,7 +138,7 @@ void FretFrameChordListModel::moveSelectionUp()
     saveOrder();
 
     notation->undoStack()->commitChanges();
-    notation->notationChanged().send(muse::RectF());
+    notation->notationChanged().notify();
 }
 
 void FretFrameChordListModel::moveSelectionDown()
@@ -160,7 +160,7 @@ void FretFrameChordListModel::moveSelectionDown()
     saveOrder();
 
     notation->undoStack()->commitChanges();
-    notation->notationChanged().send(muse::RectF());
+    notation->notationChanged().notify();
 }
 
 QItemSelectionModel* FretFrameChordListModel::selectionModel() const

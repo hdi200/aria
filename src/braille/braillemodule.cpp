@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -38,50 +38,32 @@ using namespace mu::engraving;
 using namespace mu::notation;
 using namespace mu::project;
 
-static const std::string mname("braille");
-
 std::string BrailleModule::moduleName() const
 {
-    return mname;
-}
-
-void BrailleModule::registerExports()
-{
-    m_brailleConfiguration = std::make_shared<BrailleConfiguration>();
-
-    globalIoc()->registerExport<IBrailleConfiguration>(mname, m_brailleConfiguration);
+    return "braille";
 }
 
 void BrailleModule::resolveImports()
 {
-    auto writers = globalIoc()->resolve<INotationWritersRegister>(mname);
+    auto writers = ioc()->resolve<INotationWritersRegister>(moduleName());
     if (writers) {
         writers->reg({ "brf" }, std::make_shared<BrailleWriter>());
     }
 }
 
-void BrailleModule::onInit(const IApplication::RunMode&)
+void BrailleModule::registerExports()
 {
-    m_brailleConfiguration->init();
-}
-
-muse::modularity::IContextSetup* BrailleModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new BrailleModuleContext(ctx);
-}
-
-// Context
-
-void BrailleModuleContext::registerExports()
-{
+    m_brailleConfiguration = std::make_shared<BrailleConfiguration>();
     m_brailleConverter = std::make_shared<BrailleConverter>();
     m_notationBraille = std::make_shared<NotationBraille>(iocContext());
 
-    ioc()->registerExport<IBrailleConverter>(mname, m_brailleConverter);
-    ioc()->registerExport<INotationBraille>(mname, m_notationBraille);
+    ioc()->registerExport<IBrailleConfiguration>(moduleName(), m_brailleConfiguration);
+    ioc()->registerExport<IBrailleConverter>(moduleName(), m_brailleConverter);
+    ioc()->registerExport<INotationBraille>(moduleName(), m_notationBraille);
 }
 
-void BrailleModuleContext::onInit(const muse::IApplication::RunMode&)
+void BrailleModule::onInit(const IApplication::RunMode&)
 {
+    m_brailleConfiguration->init();
     m_notationBraille->init();
 }

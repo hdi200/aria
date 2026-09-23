@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -37,9 +37,7 @@
 #include "measure.h"
 #include "score.h"
 #include "staff.h"
-#include "system.h"
 #include "stringtunings.h"
-#include "textbase.h"
 
 #include "log.h"
 
@@ -68,6 +66,7 @@ Part::Part(Score* s)
 
 void Part::initFromInstrTemplate(const InstrumentTemplate* t)
 {
+    m_partName = !t->longNames.empty() ? t->longNames.front().name() : t->trackName;
     setInstrument(Instrument::fromTemplate(t));
 }
 
@@ -156,18 +155,6 @@ size_t Part::nstaves() const
     return m_staves.size();
 }
 
-size_t Part::visibleStavesCount() const
-{
-    size_t result = 0;
-    for (const Staff* staff : m_staves) {
-        if (staff->show()) {
-            ++result;
-        }
-    }
-
-    return result;
-}
-
 const std::vector<Staff*>& Part::staves() const
 {
     return m_staves;
@@ -196,6 +183,20 @@ void Part::appendStaff(Staff* staff)
 void Part::clearStaves()
 {
     m_staves.clear();
+}
+
+//---------------------------------------------------------
+//   setLongNames
+//---------------------------------------------------------
+
+void Part::setLongNames(const StaffNameList& name, const Fraction& tick)
+{
+    instrument(tick)->setLongNames(name);
+}
+
+void Part::setShortNames(const StaffNameList& name, const Fraction& tick)
+{
+    instrument(tick)->setShortNames(name);
 }
 
 //---------------------------------------------------------
@@ -473,11 +474,8 @@ void Part::addStringTunings(StringTunings* stringTunings)
 
 void Part::removeStringTunings(StringTunings* stringTunings)
 {
-    int tick = stringTunings->segment()->tick().ticks();
-    auto it = m_stringTunings.find(tick);
-
-    if (it != m_stringTunings.end() && it->second == stringTunings) {
-        m_stringTunings.erase(it);
+    if (m_stringTunings[stringTunings->segment()->tick().ticks()] == stringTunings) {
+        m_stringTunings.erase(stringTunings->segment()->tick().ticks());
     }
 }
 
@@ -496,7 +494,8 @@ String Part::instrumentId(const Fraction& tick) const
 
 String Part::longName(const Fraction& tick) const
 {
-    return instrument(tick)->longName();
+    const StaffNameList& nl = longNames(tick);
+    return nl.empty() ? String() : nl.front().name();
 }
 
 //---------------------------------------------------------
@@ -514,25 +513,26 @@ String Part::instrumentName(const Fraction& tick) const
 
 String Part::shortName(const Fraction& tick) const
 {
-    return instrument(tick)->shortName();
+    const StaffNameList& nl = shortNames(tick);
+    return nl.empty() ? String() : nl.front().name();
 }
 
 //---------------------------------------------------------
 //   setLongName
 //---------------------------------------------------------
 
-void Part::setLongName(const String& s, const Fraction& tick)
+void Part::setLongName(const String& s)
 {
-    instrument(tick)->setLongName(s);
+    instrument()->setLongName(s);
 }
 
 //---------------------------------------------------------
 //   setShortName
 //---------------------------------------------------------
 
-void Part::setShortName(const String& s, const Fraction& tick)
+void Part::setShortName(const String& s)
 {
-    instrument(tick)->setShortName(s);
+    instrument()->setShortName(s);
 }
 
 //---------------------------------------------------------
@@ -555,26 +555,6 @@ void Part::setShortNameAll(const String& s)
     for (auto instrument : m_instruments) {
         instrument.second->setShortName(s);
     }
-}
-
-int Part::number(const Fraction& tick) const
-{
-    return instrument(tick)->number();
-}
-
-void Part::setNumber(int v, const Fraction& tick)
-{
-    instrument(tick)->setNumber(v);
-}
-
-String Part::transposition(const Fraction& tick) const
-{
-    return instrument(tick)->transposition();
-}
-
-void Part::setTransposition(const String& s, const Fraction& tick)
-{
-    instrument(tick)->setTransposition(s);
 }
 
 //---------------------------------------------------------
@@ -776,11 +756,8 @@ void Part::addHarpDiagram(HarpPedalDiagram* harpDiagram)
 
 void Part::removeHarpDiagram(HarpPedalDiagram* harpDiagram)
 {
-    int tick = harpDiagram->segment()->tick().ticks();
-    auto it = harpDiagrams.find(tick);
-
-    if (it != harpDiagrams.end() && it->second == harpDiagram) {
-        harpDiagrams.erase(it);
+    if (harpDiagrams[harpDiagram->segment()->tick().ticks()] == harpDiagram) {
+        harpDiagrams.erase(harpDiagram->segment()->tick().ticks());
     }
 }
 
@@ -850,44 +827,6 @@ Fraction Part::currentHarpDiagramTick(const Fraction& tick) const
     }
     --i;
     return Fraction::fromTicks(i->first);
-}
-
-String Part::partName() const
-{
-    const Instrument* i = instrument();
-    String fullName = i->longName();
-
-    const String& transp = i->transposition();
-    if (!transp.empty()) {
-        //: For instrument transposition, e.g. Horn in F
-        fullName += u" " + muse::mtrc("notation", "in") + u" " + transp;
-    }
-
-    int n = number();
-    if (n != 0) {
-        fullName += u" " + String::number(n);
-    }
-
-    return fullName;
-}
-
-String Part::trackNameForSave() const
-{
-    if (!m_loadedTrackName.empty() && m_loadedTrackNameInstrumentId == instrumentId()) {
-        return m_loadedTrackName;
-    }
-
-    // Part views created in this session take their name from the full score's part.
-    const Part* master = masterPart();
-    if (master && master != this) {
-        return master->trackNameForSave();
-    }
-
-    // New or re-instrumented parts: MuseScore 4.7 names these after the instrument
-    // template's plain-text track name. partName() is instrument-name XML, so it must
-    // not be written as-is.
-    const String& instrumentTrackName = instrument()->trackName();
-    return instrumentTrackName.empty() ? TextBase::unEscape(partName()) : instrumentTrackName;
 }
 
 bool Part::isVisible() const

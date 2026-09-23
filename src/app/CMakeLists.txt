@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2021-2024 MuseScore Limited
+# Copyright (C) 2021-2024 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -70,7 +70,7 @@ elseif(OS_IS_MAC)
     set(MACOSX_BUNDLE_BUNDLE_VERSION ${CMAKE_BUILD_NUMBER})
     set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 1999-2026 MuseScore Limited. Published under the GNU General Public License version 3.")
 
-    set(CMAKE_INSTALL_RPATH ${QT_INSTALL_LIBS})
+    set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${QT_INSTALL_LIBS};@loader_path/../Frameworks")
     if (MUE_COMPILE_MACOS_PRECOMPILED_DEPS_PATH)
         list(PREPEND CMAKE_INSTALL_RPATH "${MUE_COMPILE_MACOS_PRECOMPILED_DEPS_PATH}/lib")
     endif()
@@ -123,14 +123,13 @@ add_to_link_if_exists(muse::actions)
 add_to_link_if_exists(muse::audio)
 add_to_link_if_exists(muse::audioplugins)
 add_to_link_if_exists(muse::autobot)
-add_to_link_if_exists(muse::automation)
 add_to_link_if_exists(muse::cloud)
 add_to_link_if_exists(muse::diagnostics)
 add_to_link_if_exists(muse::dockwindow)
 add_to_link_if_exists(muse::extensions)
-add_to_link_if_exists(muse::interactive)
 add_to_link_if_exists(muse::languages)
 add_to_link_if_exists(muse::learn)
+add_to_link_if_exists(muse::media)
 add_to_link_if_exists(muse::midi)
 add_to_link_if_exists(muse::midiremote)
 add_to_link_if_exists(muse::mpe)
@@ -338,12 +337,6 @@ if (OS_IS_WIN)
         install(FILES ${SNDFILE_DLL} DESTINATION bin)
     endif()
 
-    # Install ssl
-    install(FILES
-            ${DEPENDENCIES_LIB_DIR}/libcrypto-1_1-x64.dll
-            ${DEPENDENCIES_LIB_DIR}/libssl-1_1-x64.dll
-            DESTINATION bin)
-
     if (WIN_PORTABLE)
         # deploy the files and directory structure needed for the PortableApps.com format
         install(DIRECTORY ${PROJECT_SOURCE_DIR}/buildscripts/packaging/Windows/PortableApps/App DESTINATION ${CMAKE_INSTALL_PREFIX}/../..)
@@ -407,7 +400,7 @@ elseif(OS_IS_MAC)
             ${PROJECT_SOURCE_DIR}/fonts/petaluma/PetalumaText.otf
             ${PROJECT_SOURCE_DIR}/fonts/finalemaestro/FinaleMaestroText-Regular.otf
             ${PROJECT_SOURCE_DIR}/fonts/finalebroadway/FinaleBroadwayText.otf
-            DESTINATION ${MUSE_APP_INSTALL_RESOURCES_LOCATION}/fonts
+            DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}fonts
     )
 
     qt_generate_deploy_qml_app_script(

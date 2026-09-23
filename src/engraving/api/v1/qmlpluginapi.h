@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -137,7 +137,7 @@ class PluginAPI : public QQuickItem, public muse::extensions::apiv1::IPluginApiV
 private:
     muse::ContextInject<muse::actions::IActionsDispatcher> actionsDispatcher = { this };
     muse::ContextInject<mu::context::IGlobalContext> context = { this };
-    muse::GlobalInject<muse::IApplication> application;
+    muse::ContextInject<muse::IApplication> application = { this };
     muse::ContextInject<mu::engraving::IEngravingPluginAPIHelper> helper = { this };
 
 public:
@@ -514,7 +514,6 @@ signals:
 public:
     /// \cond MS_INTERNAL
     PluginAPI(QQuickItem* parent = 0);
-    PluginAPI(const muse::modularity::ContextPtr& ctx);
 
     static void registerQmlTypes();
 

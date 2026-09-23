@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -78,9 +78,9 @@ void MarkerLayout::doLayoutMarker(Marker* item, TextBase::LayoutData* ldata, Lay
 
     if (!avoidBarline) {
         if (startRepeat) {
-            blWidth = item->absoluteFromSpatium(-ctx.conf().styleS(Sid::endBarWidth));
+            blWidth = -ctx.conf().styleS(Sid::endBarWidth).toMM(item->spatium());
         } else if (endRepeat) {
-            blWidth = item->absoluteFromSpatium(ctx.conf().styleS(Sid::endBarWidth));
+            blWidth = ctx.conf().styleS(Sid::endBarWidth).toMM(item->spatium());
         } else if (((measure->system() && measure->isFirstInSystem()) || (measure->prev() && !measure->prev()->isMeasure())) && !rightMarker) {
             // Start of score
             const BarLine* bl =  measure->startBarLine();

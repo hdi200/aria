@@ -21,6 +21,9 @@
  */
 #pragma once
 
+#include "async/promise.h"
+#include "types/ret.h"
+
 #include "modularity/imoduleinterface.h"
 
 namespace mu::musesounds {

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -149,34 +149,8 @@ Item {
                 width: 86
                 height: 24
 
-                contentItem: Item {
-                    property string text: ""
-                    property alias labelItem: labelItem
-
-                    StyledTextLabel {
-                        id: labelItem
-
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: dropIconItem.left
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 6
-
-                        horizontalAlignment: Text.AlignLeft
-                        text: parent.text
-                    }
-
-                    StyledIconLabel {
-                        id: dropIconItem
-
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.right: parent.right
-                        anchors.rightMargin: 4
-
-                        iconCode: IconCode.SMALL_ARROW_DOWN
-                    }
-                }
+                label.anchors.leftMargin: 8
+                dropIcon.anchors.rightMargin: 4
 
                 visible: traitsBox.count > 1
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -152,7 +152,7 @@ static QString getClass(const mu::engraving::EngravingItem* e)
 
 class SvgPaintEnginePrivate
 {
-    muse::GlobalInject<muse::IApplication> application;
+    muse::Inject<muse::IApplication> application = { nullptr };
 
 public:
     SvgPaintEnginePrivate()
@@ -1018,7 +1018,7 @@ int SvgGenerator::metric(QPaintDevice::PaintDeviceMetric metric) const
     case QPaintDevice::PdmDevicePixelRatioScaled:
         return 1;
     default:
-        LOGW("SvgGenerator::metric(), unhandled metric %d\n", metric);
+        LOGD("SvgGenerator::metric(), unhandled metric %d\n", metric);
         break;
     }
     return 0;

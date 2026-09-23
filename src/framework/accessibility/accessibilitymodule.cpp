@@ -25,7 +25,6 @@
 
 #include "internal/accessibilitycontroller.h"
 #include "internal/accessibilityconfiguration.h"
-#include "internal/accessibilitycontextconfiguration.h"
 #include "internal/qaccessibleinterfaceregister.h"
 
 #include "global/api/iapiregister.h"
@@ -34,24 +33,24 @@
 using namespace muse::accessibility;
 using namespace muse::modularity;
 
-static const std::string mname("accessibility");
-
 std::string AccessibilityModule::moduleName() const
 {
-    return mname;
+    return "accessibility";
 }
 
 void AccessibilityModule::registerExports()
 {
-    m_configuration = std::make_shared<AccessibilityConfiguration>();
+    m_configuration = std::make_shared<AccessibilityConfiguration>(iocContext());
+    m_controller = std::make_shared<AccessibilityController>(iocContext());
 
-    globalIoc()->registerExport<IAccessibilityConfiguration>(mname, m_configuration);
-    globalIoc()->registerExport<IQAccessibleInterfaceRegister>(mname, new QAccessibleInterfaceRegister());
+    ioc()->registerExport<IAccessibilityConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IAccessibilityController>(moduleName(), m_controller);
+    ioc()->registerExport<IQAccessibleInterfaceRegister>(moduleName(), new QAccessibleInterfaceRegister());
 }
 
 void AccessibilityModule::resolveImports()
 {
-    auto accr = globalIoc()->resolve<IQAccessibleInterfaceRegister>(mname);
+    auto accr = ioc()->resolve<IQAccessibleInterfaceRegister>(moduleName());
     if (accr) {
 #ifndef Q_OS_LINUX // https://github.com/musescore/MuseScore/pull/32258#issuecomment-3972545361
         accr->registerInterfaceGetter("QQuickWindow", AccessibilityController::accessibleInterface);
@@ -64,39 +63,18 @@ void AccessibilityModule::registerApi()
 {
     using namespace muse::api;
 
-    auto api = globalIoc()->resolve<IApiRegister>(mname);
+    auto api = ioc()->resolve<IApiRegister>(moduleName());
     if (api) {
-        api->regApiCreator(mname, "MuseInternal.Accessibility", new ApiCreator<api::AccessibilityApi>());
+        api->regApiCreator(moduleName(), "MuseInternal.Accessibility", new ApiCreator<api::AccessibilityApi>());
     }
+}
+
+void AccessibilityModule::onPreInit(const IApplication::RunMode&)
+{
+    m_controller->setAccesibilityEnabled(true);
 }
 
 void AccessibilityModule::onInit(const IApplication::RunMode&)
 {
     m_configuration->init();
-}
-
-IContextSetup* AccessibilityModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new AccessibilityContext(ctx);
-}
-
-// Context
-void AccessibilityContext::registerExports()
-{
-    //! FIXME AccessibilityController has a global component and a contextual component.
-    // It probably needs to be split into two separate classes.
-    m_controller = std::make_shared<AccessibilityController>(iocContext());
-    ioc()->registerExport<IAccessibilityController>(mname, m_controller);
-
-    ioc()->registerExport<IAccessibilityContextConfiguration>(mname, new AccessibilityContextConfiguration(iocContext()));
-}
-
-void AccessibilityContext::onPreInit(const IApplication::RunMode&)
-{
-    m_controller->setAccessibilityEnabled(true);
-}
-
-void AccessibilityContext::onDeinit()
-{
-    m_controller->deinit();
 }

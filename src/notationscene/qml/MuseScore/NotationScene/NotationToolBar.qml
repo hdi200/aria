@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -26,16 +26,10 @@ import Muse.UiComponents
 import MuseScore.NotationScene
 
 StyledToolBarView {
-    property alias isCompactMode: toolBarModel.isCompactMode
-
     navigationPanel.name: "NotationToolBar"
     navigationPanel.accessible.name: qsTrc("notation", "Notation toolbar")
 
     spacing: 2
 
-    NotationToolBarModel {
-        id: toolBarModel
-    }
-
-    model: toolBarModel
+    model: NotationToolBarModel { }
 }

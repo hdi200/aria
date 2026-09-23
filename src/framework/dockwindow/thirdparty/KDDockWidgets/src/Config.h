@@ -55,7 +55,7 @@ class DOCKS_EXPORT Config
 {
 public:
     ///@brief returns the singleton Config instance
-    static Config &self(int ctx);
+    static Config &self();
 
     ///@brief destructor, called at shutdown
     ~Config();
@@ -268,11 +268,8 @@ public:
 #endif
 
 private:
-
-    friend class ContextData;
-
     Q_DISABLE_COPY(Config)
-    Config(int ctx);
+    Config();
     class Private;
     Private *const d;
 };

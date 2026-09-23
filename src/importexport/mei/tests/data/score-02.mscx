@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -27,17 +27,12 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>1</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="1" col="0" visible="1"/>
         </Staff>
+      <trackName></trackName>
       <Instrument id="soprano">
-        <InstrumentLabel>
-          <longName>Soprano</longName>
-          <shortName>S.</shortName>
-          </InstrumentLabel>
+        <longName>Soprano</longName>
+        <shortName>S.</shortName>
         <trackName></trackName>
         <instrumentId>voice.soprano</instrumentId>
         <Channel>
@@ -50,16 +45,8 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>9</bracketSpan>
-          <level>0</level>
-          </BracketItem>
-        <BracketItem>
-          <type>Brace</type>
-          <bracketSpan>2</bracketSpan>
-          <level>1</level>
-          </BracketItem>
+        <bracket type="0" span="9" col="0" visible="1"/>
+        <bracket type="1" span="2" col="1" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -69,11 +56,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName></trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano</longName>
-          <shortName>Pno.</shortName>
-          </InstrumentLabel>
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
         <trackName></trackName>
         <instrumentId>keyboard.piano</instrumentId>
         <Channel>
@@ -86,11 +72,7 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Square</type>
-          <bracketSpan>3</bracketSpan>
-          <level>1</level>
-          </BracketItem>
+        <bracket type="2" span="3" col="1" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -107,11 +89,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName></trackName>
       <Instrument id="organ">
-        <InstrumentLabel>
-          <longName>Organ</longName>
-          <shortName>Org.</shortName>
-          </InstrumentLabel>
+        <longName>Organ</longName>
+        <shortName>Org.</shortName>
         <trackName></trackName>
         <instrumentId>keyboard.organ</instrumentId>
         <Channel>
@@ -124,11 +105,7 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Line</type>
-          <bracketSpan>3</bracketSpan>
-          <level>1</level>
-          </BracketItem>
+        <bracket type="3" span="3" col="1" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -145,11 +122,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName></trackName>
       <Instrument id="organ">
-        <InstrumentLabel>
-          <longName>Organ</longName>
-          <shortName>Org.</shortName>
-          </InstrumentLabel>
+        <longName>Organ</longName>
+        <shortName>Org.</shortName>
         <trackName></trackName>
         <instrumentId>keyboard.organ</instrumentId>
         <Channel>
@@ -163,11 +139,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="timpani">
-        <InstrumentLabel>
-          <longName>Timpani</longName>
-          <shortName>Timp.</shortName>
-          </InstrumentLabel>
+        <longName>Timpani</longName>
+        <shortName>Timp.</shortName>
         <trackName></trackName>
         <instrumentId>drum.timpani</instrumentId>
         <Channel>
@@ -180,17 +155,12 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="2" col="0" visible="1"/>
         </Staff>
+      <trackName></trackName>
       <Instrument id="violin">
-        <InstrumentLabel>
-          <longName>Violin</longName>
-          <shortName>Vln.</shortName>
-          </InstrumentLabel>
+        <longName>Violin</longName>
+        <shortName>Vln.</shortName>
         <trackName></trackName>
         <instrumentId>strings.violin</instrumentId>
         <Channel>
@@ -204,11 +174,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="violoncello">
-        <InstrumentLabel>
-          <longName>Violoncello</longName>
-          <shortName>Vc.</shortName>
-          </InstrumentLabel>
+        <longName>Violoncello</longName>
+        <shortName>Vc.</shortName>
         <trackName></trackName>
         <instrumentId>strings.cello</instrumentId>
         <Channel>

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -126,16 +126,19 @@ void SetSoloist::redo(EditData*)
 //   ChangePart
 //---------------------------------------------------------
 
-ChangePart::ChangePart(Part* _part, Instrument* i)
+ChangePart::ChangePart(Part* _part, Instrument* i, const String& s)
 {
     instrument = i;
     part       = _part;
+    partName   = s;
 }
 
 void ChangePart::flip(EditData*)
 {
     Instrument* oi = part->instrument(); //tick?
+    String s      = part->partName();
     part->setInstrument(instrument);
+    part->setPartName(partName);
 
     part->updateHarmonyChannels(false);
 
@@ -149,6 +152,7 @@ void ChangePart::flip(EditData*)
 
     score->setLayoutAll();
 
+    partName   = s;
     instrument = oi;
 }
 
@@ -162,16 +166,16 @@ void ChangePart::cleanup(bool)
 //   ChangeInstrumentLong
 //---------------------------------------------------------
 
-ChangeInstrumentLong::ChangeInstrumentLong(const Fraction& _tick, Part* p, const String& t)
-    : part(p), tick(_tick), longName(t)
+ChangeInstrumentLong::ChangeInstrumentLong(const Fraction& _tick, Part* p, const StaffNameList& t)
+    : part(p), tick(_tick), text(t)
 {
 }
 
 void ChangeInstrumentLong::flip(EditData*)
 {
-    String s = part->longName(tick);
-    part->setLongName(longName, tick);
-    longName = s;
+    StaffNameList s = part->longNames(tick);
+    part->setLongNames(text, tick);
+    text = s;
     part->score()->setLayoutAll();
 }
 
@@ -179,58 +183,16 @@ void ChangeInstrumentLong::flip(EditData*)
 //   ChangeInstrumentShort
 //---------------------------------------------------------
 
-ChangeInstrumentShort::ChangeInstrumentShort(const Fraction& _tick, Part* p, const String& t)
-    : part(p), tick(_tick), shortName(t)
+ChangeInstrumentShort::ChangeInstrumentShort(const Fraction& _tick, Part* p, const StaffNameList& t)
+    : part(p), tick(_tick), text(t)
 {
 }
 
 void ChangeInstrumentShort::flip(EditData*)
 {
-    String s = part->shortName(tick);
-    part->setShortName(shortName, tick);
-    shortName = s;
-    part->score()->setLayoutAll();
-}
-
-//---------------------------------------------------------
-//   ChangeInstrumentLong
-//---------------------------------------------------------
-
-ChangeInstrumentGroupOptions::ChangeInstrumentGroupOptions(const Fraction& _tick, Part* p, bool useCustom, const String& longName,
-                                                           const String& shortName)
-    : part(p), tick(_tick), useCustom(useCustom), longName(longName), shortName(shortName)
-{
-}
-
-void ChangeInstrumentGroupOptions::flip(EditData*)
-{
-    InstrumentLabel& label = part->instrument(tick)->instrumentLabel();
-
-    bool curUseCustom = label.useCustomGroupName();
-    const String& curLong = label.customNameLongGroup();
-    const String& curShort = label.customNameShortGroup();
-
-    label.setUseCustomGroupName(useCustom);
-    label.setCustomNameLongGroup(longName);
-    label.setCustomNameShortGroup(shortName);
-
-    useCustom = curUseCustom;
-    longName = curLong;
-    shortName = curShort;
-
-    part->score()->setLayoutAll();
-}
-
-ChangeInstrumentNumber::ChangeInstrumentNumber(const Fraction& _tick, Part* p, int v)
-    : part(p), tick(_tick), number(v)
-{
-}
-
-void ChangeInstrumentNumber::flip(EditData*)
-{
-    int v = part->number(tick);
-    part->setNumber(number, tick);
-    number = v;
+    StaffNameList s = part->shortNames(tick);
+    part->setShortNames(text, tick);
+    text = s;
     part->score()->setLayoutAll();
 }
 
@@ -342,13 +304,15 @@ static InstrumentChange* findInstrumentChange(Score* score, const Part* part, co
 }
 
 void EditPart::replacePartInstrument(Score* score, Part* part, const Instrument& newInstrument,
-                                     const StaffType* newStaffType)
+                                     const StaffType* newStaffType, const String& partName)
 {
     if (!score || !part) {
         return;
     }
 
-    score->undo(new ChangePart(part, new Instrument(newInstrument)));
+    // Change the part's instrument and name
+    String newPartName = partName.isEmpty() ? newInstrument.trackName() : partName;
+    score->undo(new ChangePart(part, new Instrument(newInstrument), newPartName));
 
     // Update clefs and staff type for all staves in the part
     for (staff_idx_t staffIdx = 0; staffIdx < part->nstaves(); ++staffIdx) {
@@ -435,7 +399,7 @@ void EditPart::setInstrumentName(Score* score, Part* part, const Fraction& tick,
         return;
     }
 
-    score->undo(new ChangeInstrumentLong(tick, part, name));
+    score->undo(new ChangeInstrumentLong(tick, part, { StaffName(name, 0) }));
 }
 
 void EditPart::setInstrumentAbbreviature(Score* score, Part* part, const Fraction& tick, const String& abbreviature)
@@ -444,17 +408,7 @@ void EditPart::setInstrumentAbbreviature(Score* score, Part* part, const Fractio
         return;
     }
 
-    score->undo(new ChangeInstrumentShort(tick, part, abbreviature));
-}
-
-void EditPart::setInstrumentGroupNameOptions(Score* score, Part* part, const Fraction& tick, bool useCustom, const String& longName,
-                                             const String& shortName)
-{
-    if (!score || !part) {
-        return;
-    }
-
-    score->undo(new ChangeInstrumentGroupOptions(tick, part, useCustom, longName, shortName));
+    score->undo(new ChangeInstrumentShort(tick, part, { StaffName(abbreviature, 0) }));
 }
 
 void EditPart::setStaffType(Score* score, Staff* staff, StaffTypes typeId)

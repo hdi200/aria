@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -63,9 +63,9 @@ void MidiModule::registerExports()
     m_midiInPort = std::make_shared<DummyMidiInPort>();
     #endif
 
-    globalIoc()->registerExport<IMidiConfiguration>(moduleName(), m_configuration);
-    globalIoc()->registerExport<IMidiOutPort>(moduleName(), m_midiOutPort);
-    globalIoc()->registerExport<IMidiInPort>(moduleName(), m_midiInPort);
+    ioc()->registerExport<IMidiConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IMidiOutPort>(moduleName(), m_midiOutPort);
+    ioc()->registerExport<IMidiInPort>(moduleName(), m_midiInPort);
 }
 
 void MidiModule::onInit(const IApplication::RunMode& mode)

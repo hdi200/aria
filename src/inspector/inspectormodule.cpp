@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -25,27 +25,20 @@
 #include "qml/MuseScore/Inspector/internal/inspectorpopupcontroller.h"
 
 using namespace mu::inspector;
-using namespace muse::modularity;
-
-static const std::string mname("inspector");
 
 std::string InspectorModule::moduleName() const
 {
-    return mname;
+    return "inspector";
 }
 
-IContextSetup* InspectorModule::newContext(const ContextPtr& ctx) const
-{
-    return new InspectorContext(ctx);
-}
-
-void InspectorContext::registerExports()
+void InspectorModule::registerExports()
 {
     m_popupController = std::make_shared<InspectorPopupController>(iocContext());
-    ioc()->registerExport<IInspectorPopupController>(mname, m_popupController);
+
+    ioc()->registerExport<IInspectorPopupController>(moduleName(), m_popupController);
 }
 
-void InspectorContext::onInit(const muse::IApplication::RunMode&)
+void InspectorModule::onInit(const muse::IApplication::RunMode&)
 {
     m_popupController->init();
 }

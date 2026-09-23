@@ -32,12 +32,11 @@ class QuickView : public QQuickView
 {
     Q_OBJECT
 public:
-    explicit QuickView(int ctx, QQmlEngine *qmlEngine, FloatingWindow *floatingWindow)
+    explicit QuickView(QQmlEngine *qmlEngine, FloatingWindow *floatingWindow)
         : QQuickView(qmlEngine, nullptr)
-        , m_ctx(ctx)
         , m_floatingWindow(floatingWindow)
     {
-        if (Config::self(ctx).internalFlags() & Config::InternalFlag_UseTransparentFloatingWindow)
+        if (Config::self().internalFlags() & Config::InternalFlag_UseTransparentFloatingWindow)
             setColor(QColor(Qt::transparent));
 
         updateSize();
@@ -94,14 +93,13 @@ public:
     bool nativeEvent(const QByteArray &eventType, void *message, Qt5Qt6Compat::qintptr *result) override
     {
         // To enable aero snap we need to tell Windows where's our custom title bar
-        if (!m_floatingWindow->beingDeleted() && WidgetResizeHandler::handleWindowsNativeEvent(m_ctx, m_floatingWindow, eventType, message, result))
+        if (!m_floatingWindow->beingDeleted() && WidgetResizeHandler::handleWindowsNativeEvent(m_floatingWindow, eventType, message, result))
             return true;
 
         return QWindow::nativeEvent(eventType, message, result);
     }
 #endif
 private:
-    const int m_ctx = 0;
     FloatingWindow *const m_floatingWindow;
 };
 
@@ -110,16 +108,16 @@ QuickView::~QuickView() = default;
 }
 
 
-FloatingWindowQuick::FloatingWindowQuick(int ctx, MainWindowBase *parent)
-    : FloatingWindow(ctx, QRect(), parent)
-    , m_quickWindow(new QuickView(ctx, Config::self(ctx).qmlEngine(), this))
+FloatingWindowQuick::FloatingWindowQuick(MainWindowBase *parent)
+    : FloatingWindow(QRect(), parent)
+    , m_quickWindow(new QuickView(Config::self().qmlEngine(), this))
 {
     init();
 }
 
-FloatingWindowQuick::FloatingWindowQuick(int ctx, Frame *frame, QRect suggestedGeometry, MainWindowBase *parent)
-    : FloatingWindow(ctx, frame, QRect(), parent)
-    , m_quickWindow(new QuickView(ctx, Config::self(ctx).qmlEngine(), this))
+FloatingWindowQuick::FloatingWindowQuick(Frame *frame, QRect suggestedGeometry, MainWindowBase *parent)
+    : FloatingWindow(frame, QRect(), parent)
+    , m_quickWindow(new QuickView(Config::self().qmlEngine(), this))
 {
     init();
     // For QtQuick we need to set the suggested geometry only after we have the QWindow
@@ -199,12 +197,12 @@ void FloatingWindowQuick::init()
     }
 
     QWidgetAdapter::setParent(m_quickWindow->contentItem());
-    WidgetResizeHandler::setupWindow(m_ctx, m_quickWindow);
+    WidgetResizeHandler::setupWindow(m_quickWindow);
     m_quickWindow->installEventFilter(this); // for window resizing
     maybeCreateResizeHandler();
 
     m_visualItem = createItem(m_quickWindow->engine(),
-                              Config::self(m_ctx).frameworkWidgetFactory()->floatingWindowFilename().toString());
+                              Config::self().frameworkWidgetFactory()->floatingWindowFilename().toString());
     Q_ASSERT(m_visualItem);
 
     // Ensure our window size is never smaller than our min-size

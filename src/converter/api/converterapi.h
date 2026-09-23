@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -26,8 +26,8 @@
 #include "global/async/asyncable.h"
 
 #include "modularity/ioc.h"
+#include "global/iinteractive.h"
 #include "global/io/ifilesystem.h"
-#include "interactive/iinteractive.h"
 #include "../iconvertercontroller.h"
 
 namespace mu::converter::api {
@@ -36,8 +36,8 @@ class ConverterApi : public muse::api::ApiObject, public muse::async::Asyncable
     Q_OBJECT
 
     muse::GlobalInject<muse::io::IFileSystem> fileSystem;
-    muse::ContextInject<IConverterController> converter = { this };
     muse::ContextInject<muse::IInteractive> interactive = { this };
+    muse::ContextInject<IConverterController> converter = { this };
 
 public:
     explicit ConverterApi(muse::api::IApiEngine* e);

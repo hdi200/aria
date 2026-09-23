@@ -27,7 +27,6 @@
 #include "thirdparty/KDDockWidgets/src/private/quick/MainWindowQuick_p.h"
 #include "thirdparty/KDDockWidgets/src/private/DockRegistry_p.h"
 #include "thirdparty/KDDockWidgets/src/Config.h"
-#include "thirdparty/KDDockWidgets/src/ContextData.h"
 
 #include "global/async/async.h"
 
@@ -68,11 +67,15 @@ static KDDockWidgets::Location locationToKLocation(Location location)
     return KDDockWidgets::Location_None;
 }
 
-static void clearRegistry(int ctx)
+static void clearRegistry()
 {
     TRACEFUNC;
 
-    auto registry = KDDockWidgets::DockRegistry::self(ctx);
+#ifdef MUSE_MULTICONTEXT_WIP
+    return;
+#endif
+
+    auto registry = KDDockWidgets::DockRegistry::self();
 
     registry->clear();
 
@@ -130,12 +133,14 @@ void DockWindow::componentComplete()
 
     QQuickItem::componentComplete();
 
-    m_ctx = iocContext()->id;
+    QString name = "mainWindow";
+#ifdef MUSE_MULTICONTEXT_WIP
+    if (iocContext()) {
+        name += "_" + QString::number(iocContext()->id);
+    }
+#endif
 
-    static const QString name = "mainWindow";
-
-    m_mainWindow = new KDDockWidgets::MainWindowQuick(m_ctx,
-                                                      name,
+    m_mainWindow = new KDDockWidgets::MainWindowQuick(name,
                                                       KDDockWidgets::MainWindowOption_None,
                                                       this);
 
@@ -175,12 +180,16 @@ void DockWindow::onQuit()
         return;
     }
 
-    savePageState(m_currentPage->objectName());
     m_reloadCurrentPageAllowed = false;
 
-    clearRegistry(m_ctx);
+    uiConfiguration()->setPageState(m_currentPage->objectName(), windowState());
 
-    saveWindowGeometry();
+    clearRegistry();
+
+    /// NOTE: The state of all dock widgets is also saved here,
+    /// since the library does not provide the ability to save
+    /// and restore only the application geometry.
+    uiConfiguration()->setWindowGeometry(windowState());
 }
 
 QString DockWindow::currentPageUri() const
@@ -205,12 +214,12 @@ QQuickWindow* DockWindow::windowProperty() const
 
 void DockWindow::init()
 {
-    clearRegistry(m_ctx);
+    clearRegistry();
     restoreGeometry();
 
     dockWindowProvider()->init(this);
 
-    uiState()->windowGeometryChanged().onNotify(this, [this]() {
+    uiConfiguration()->windowGeometryChanged().onNotify(this, [this]() {
         reloadCurrentPage();
     });
 
@@ -236,9 +245,9 @@ void DockWindow::loadPage(const QString& uri, const QVariantMap& params)
 
     if (!isFirstOpening) {
         const QString pageName = m_currentPage->objectName();
-        uiState()->pageState(pageName).notification.disconnect(this);
+        uiConfiguration()->pageState(pageName).notification.disconnect(this);
         savePageState(pageName);
-        clearRegistry(m_ctx);
+        clearRegistry();
         m_currentPage->setVisible(false);
         m_currentPage->deinit();
     }
@@ -330,7 +339,7 @@ void DockWindow::restoreDefaultLayout()
     //! HACK: notify about upcoming change of current URI
     //! so that all subscribers of this channel finish their work.
     //! For example, our popups and tooltips will close.
-    interactive()->currentUriAboutToBeChanged().notify();
+    interactiveProvider()->currentUriAboutToBeChanged().notify();
 
     if (m_currentPage) {
         for (DockBase* dock : m_currentPage->allDocks()) {
@@ -340,10 +349,10 @@ void DockWindow::restoreDefaultLayout()
 
     m_reloadCurrentPageAllowed = false;
     for (const DockPageView* page : m_pages.list()) {
-        uiState()->setPageState(page->objectName(), QByteArray());
+        uiConfiguration()->setPageState(page->objectName(), QByteArray());
     }
 
-    uiState()->setWindowGeometry(QByteArray());
+    uiConfiguration()->setWindowGeometry(QByteArray());
     m_reloadCurrentPageAllowed = true;
 
     reloadCurrentPage();
@@ -429,7 +438,7 @@ void DockWindow::alignTopLevelToolBars(const DockPageView* page)
     int centralToolBarsWidth = 0;
     int rightToolBarsWidth = 0;
 
-    int separatorThickness = KDDockWidgets::Config::self(m_ctx).separatorThickness();
+    int separatorThickness = KDDockWidgets::Config::self().separatorThickness();
 
     for (DockToolBarView* toolBar : topToolBars) {
         if (toolBar->floating() || !toolBar->isVisible()) {
@@ -506,7 +515,7 @@ void DockWindow::registerDock(DockBase* dock)
         return;
     }
 
-    auto registry = KDDockWidgets::DockRegistry::self(m_ctx);
+    auto registry = KDDockWidgets::DockRegistry::self();
     auto dockWidget = dock->dockWidget();
 
     if (!registry->containsDockWidget(dockWidget->uniqueName())) {
@@ -581,28 +590,15 @@ bool DockWindow::doLoadPage(const QString& uri, const QVariantMap& params)
     return true;
 }
 
-void DockWindow::saveWindowGeometry()
-{
-    //! NOTE We save only if one window or the last one is open
-    if (KDDockWidgets::ContextData::contextCount() > 1) {
-        return;
-    }
-
-    /// NOTE: The state of all dock widgets is also saved here,
-    /// since the library does not provide the ability to save
-    /// and restore only the application geometry.
-    uiState()->setWindowGeometry(windowState());
-}
-
 void DockWindow::restoreGeometry()
 {
     TRACEFUNC;
 
-    if (uiState()->windowGeometry().isEmpty()) {
+    if (uiConfiguration()->windowGeometry().isEmpty()) {
         return;
     }
 
-    if (restoreLayout(uiState()->windowGeometry())) {
+    if (restoreLayout(uiConfiguration()->windowGeometry())) {
         m_hasGeometryBeenRestored = true;
     } else {
         LOGE() << "Could not restore the window geometry!";
@@ -612,13 +608,9 @@ void DockWindow::restoreGeometry()
 void DockWindow::savePageState(const QString& pageName)
 {
     TRACEFUNC;
-    //! NOTE We save only if one window or the last one is open
-    if (KDDockWidgets::ContextData::contextCount() > 1) {
-        return;
-    }
 
     m_reloadCurrentPageAllowed = false;
-    uiState()->setPageState(pageName, windowState());
+    uiConfiguration()->setPageState(pageName, windowState());
     m_reloadCurrentPageAllowed = true;
 }
 
@@ -628,7 +620,7 @@ void DockWindow::restorePageState(const DockPageView* page)
 
     const QString& pageName = page->objectName();
 
-    ValNt<QByteArray> pageStateValNt = uiState()->pageState(pageName);
+    ValNt<QByteArray> pageStateValNt = uiConfiguration()->pageState(pageName);
     const bool layoutIsEmpty = pageStateValNt.val.isEmpty();
 
     QSet<DockBase*> unknownDocks;
@@ -674,7 +666,7 @@ bool DockWindow::restoreLayout(const QByteArray& layout, bool restoreRelativeToM
     auto option = restoreRelativeToMainWindow ? KDDockWidgets::RestoreOption_RelativeToMainWindow
                   : KDDockWidgets::RestoreOption_None;
 
-    KDDockWidgets::LayoutSaver layoutSaver(m_ctx, option);
+    KDDockWidgets::LayoutSaver layoutSaver(option);
     return layoutSaver.restoreLayout(layout);
 }
 
@@ -704,7 +696,7 @@ QByteArray DockWindow::windowState() const
 {
     TRACEFUNC;
 
-    KDDockWidgets::LayoutSaver layoutSaver(m_ctx, KDDockWidgets::RestoreOption_None);
+    KDDockWidgets::LayoutSaver layoutSaver;
     return layoutSaver.serializeLayout();
 }
 
@@ -716,7 +708,7 @@ void DockWindow::reloadCurrentPage()
 
     TRACEFUNC;
 
-    clearRegistry(m_ctx);
+    clearRegistry();
 
     for (DockBase* dock : m_currentPage->allDocks()) {
         dock->deinit();

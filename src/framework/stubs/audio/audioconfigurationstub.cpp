@@ -95,6 +95,11 @@ async::Notification AudioConfigurationStub::sampleRateChanged() const
     return async::Notification();
 }
 
+OutputSpec AudioConfigurationStub::defaultOutputSpec() const
+{
+    return OutputSpec();
+}
+
 OutputSpec AudioConfigurationStub::desiredOutputSpec() const
 {
     return OutputSpec();
@@ -130,6 +135,20 @@ void AudioConfigurationStub::setAutoProcessOnlineSoundsInBackground(bool)
 }
 
 async::Channel<bool> AudioConfigurationStub::autoProcessOnlineSoundsInBackgroundChanged() const
+{
+    return {};
+}
+
+bool AudioConfigurationStub::useSoundFontLowPassFilter() const
+{
+    return false;
+}
+
+void AudioConfigurationStub::setUseSoundFontLowPassFilter(bool)
+{
+}
+
+async::Channel<bool> AudioConfigurationStub::useSoundFontLowPassFilterChanged() const
 {
     return {};
 }

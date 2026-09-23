@@ -30,7 +30,7 @@
 #include "async/asyncable.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 #include "extensions/iextensioninstaller.h"
 #include "extensions/iextensionsconfiguration.h"
 #include "extensions/iextensionsprovider.h"
@@ -45,9 +45,9 @@ class ExtensionsListModel : public QAbstractListModel, public QQmlParserStatus, 
     QML_ELEMENT
 
     GlobalInject<IExtensionsConfiguration> configuration;
-    ContextInject<IExtensionInstaller> installer = { this };
-    ContextInject<IExtensionsProvider> provider = { this };
     ContextInject<IInteractive> interactive = { this };
+    ContextInject<IExtensionsProvider> provider = { this };
+    ContextInject<IExtensionInstaller> installer = { this };
     ContextInject<shortcuts::IShortcutsRegister> shortcutsRegister = { this };
 
 public:

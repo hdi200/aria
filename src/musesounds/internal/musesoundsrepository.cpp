@@ -25,6 +25,7 @@
 #include "serialization/json.h"
 
 #include <QBuffer>
+#include <QUrlQuery>
 
 using namespace mu::musesounds;
 using namespace muse;
@@ -42,72 +43,59 @@ static std::string platformMuseSoundsAppName()
 static muse::UriQuery correctThumbnailSize(const UriQuery& uri)
 {
     String uriStr = String::fromStdString(uri.toString());
-    uriStr.replace(u"/library-images/", u"/cdn-cgi/image/w=240,q=80,f=webp/library-images/");
+
+    // Thumbnails can live under different CDN folders (library-images, bundle-images,
+    // platform-subscription-images, etc.), so resize by host rather than a fixed folder name
+    static const String host(u"muse-cdn.com/");
+    const size_t hostIdx = uriStr.indexOf(host);
+    if (hostIdx != muse::nidx) {
+        uriStr.insert(hostIdx + host.size(), u"cdn-cgi/image/w=240,q=80,f=webp/");
+    }
+
     return UriQuery(uriStr.toStdString());
 }
 
-static QByteArray soundsRequestJson()
+static QUrl soundsRequestUrl(const QUrl& baseUrl)
 {
     QLocale locale = QLocale();
     String localeStr = locale.bcp47Name() + "-" + QLocale::territoryToCode(locale.territory());
 
-    String query = String(
-        R"(query MyQuery {
-          product_pages_configuration {
-            museScoreStudioPageSections {
-              ... on ProductPageSectionDynamic {
-                title(locale: {locale: "%1"})
-                productCards {
-                  ... on ProductCardRegular {
-                    iconImageUrl
-                    product(locale: {locale: "%1"}) {
-                      ... on ProductLibrary {
-                        code
-                        title
-                        subtitle
-                        compatibleWith {
-                          museSoundManager
-                          museHub
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        })").arg(localeStr);
+    JsonObject variables;
+    variables["locale"] = localeStr;
 
-    JsonObject json;
-    json["query"] = query;
+    QUrlQuery query;
+    query.addQueryItem("pqId", "musescore-studio-sounds-page-v1");
+    query.addQueryItem("variables",
+                       QString::fromUtf8(JsonDocument(variables).toJson(JsonDocument::Format::Compact).toQByteArray()));
 
-    return JsonDocument(json).toJson(JsonDocument::Format::Compact).toQByteArray();
+    QUrl url = baseUrl;
+    url.setQuery(query);
+
+    return url;
 }
 
 void MuseSoundsRepository::init()
 {
     TRACEFUNC;
 
-    QUrl url = QUrl(QString::fromStdString(configuration()->soundsUri().toString()));
-    QByteArray jsonData = soundsRequestJson();
+    QUrl url = soundsRequestUrl(QUrl(QString::fromStdString(configuration()->soundsUri().toString())));
     RequestHeaders headers = configuration()->headers();
 
-    auto device = std::make_shared<QBuffer>();
-    device->setData(jsonData);
     auto receivedData = std::make_shared<QBuffer>();
 
-    m_networkManager = networkManagerCreator()->makeNetworkManager();
-    RetVal<Progress> progress = m_networkManager->post(url, device, receivedData, headers);
+    if (!m_networkManager) {
+        m_networkManager = networkManagerCreator()->makeNetworkManager();
+    }
+
+    RetVal<Progress> progress = m_networkManager->get(url, receivedData, headers);
     if (!progress.ret) {
         LOGE() << progress.ret.toString();
-        m_networkManager = nullptr;
         return;
     }
 
     progress.val.finished().onReceive(this, [this, receivedData](const muse::ProgressResult& res) {
         if (!res.ret) {
             LOGE() << res.ret.toString();
-            m_networkManager = nullptr;
             return;
         }
 
@@ -124,7 +112,6 @@ void MuseSoundsRepository::init()
 
         m_soundsСatalogs = result.val;
         m_soundsСatalogsChanged.notify();
-        m_networkManager = nullptr;
     });
 }
 
@@ -175,8 +162,12 @@ SoundCatalogueInfoList MuseSoundsRepository::parseSounds(const JsonDocument& sou
             }
 
             JsonObject compatibleWithObj = productObj.value("compatibleWith").toObject();
-            if (!compatibleWithObj.empty() && compatibleWithObj.contains(museSoundsAppName)
-                && !compatibleWithObj.value(museSoundsAppName).toBool()) {
+            if (compatibleWithObj.empty()) {
+                // Products without compatibleWith info are only manageable through MuseHub
+                if (museSoundsAppName != "museHub") {
+                    continue;
+                }
+            } else if (compatibleWithObj.contains(museSoundsAppName) && !compatibleWithObj.value(museSoundsAppName).toBool()) {
                 continue;
             }
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -27,8 +27,10 @@
       <chordSymbolAFontSize>22</chordSymbolAFontSize>
       <chordSymbolBFontFace>Palatino,serif</chordSymbolBFontFace>
       <chordSymbolBFontSize>22</chordSymbolBFontSize>
+      <romanNumeralFontFace>Palatino,serif</romanNumeralFontFace>
       <nashvilleNumberFontFace>Palatino,serif</nashvilleNumberFontFace>
       <nashvilleNumberFontSize>22</nashvilleNumberFontSize>
+      <fretFrets>5</fretFrets>
       <smallNoteMag>0.75</smallNoteMag>
       <graceNoteMag>0.6</graceNoteMag>
       <concertPitch>1</concertPitch>
@@ -62,8 +64,6 @@
       <shortInstrumentFontSize>22</shortInstrumentFontSize>
       <partInstrumentFontFace>Palatino,serif</partInstrumentFontFace>
       <partInstrumentFontSize>22</partInstrumentFontSize>
-      <groupBracketFontFace>Palatino,serif</groupBracketFontFace>
-      <groupBracketFontSize>22</groupBracketFontSize>
       <expressionFontFace>Palatino,serif</expressionFontFace>
       <expressionFontSize>22</expressionFontSize>
       <tempoFontFace>Palatino,serif</tempoFontFace>
@@ -159,11 +159,7 @@ Arranged by [Arranger]</metaTag>
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Brace</type>
-          <bracketSpan>2</bracketSpan>
-          <level>1</level>
-          </BracketItem>
+        <bracket type="1" span="2" col="1" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -172,11 +168,10 @@ Arranged by [Arranger]</metaTag>
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano</longName>
-          <shortName>Pno.</shortName>
-          </InstrumentLabel>
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

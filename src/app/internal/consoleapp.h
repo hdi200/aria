@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,7 +27,7 @@
 #include <memory>
 #include <map>
 
-#include "global/internal/consoleapplication.h"
+#include "global/internal/baseapplication.h"
 #include "../cmdoptions.h"
 
 #include "global/globalmodule.h"
@@ -38,6 +38,7 @@
 #include "converter/iconvertercontroller.h"
 #include "engraving/devtools/drawdata/idiagnosticdrawprovider.h"
 #include "autobot/iautobot.h"
+#include "audioplugins/iregisteraudiopluginsscenario.h"
 
 #include "ui/iuiconfiguration.h"
 #include "notation/inotationconfiguration.h"
@@ -51,7 +52,7 @@
 #include "importexport/musicxml/imusicxmlconfiguration.h"
 
 namespace mu::app {
-class MuseScoreConsoleApp : public muse::ConsoleApplication
+class ConsoleApp : public muse::BaseApplication, public std::enable_shared_from_this<ConsoleApp>
 {
     muse::GlobalInject<muse::ui::IUiConfiguration> uiConfiguration;
     muse::GlobalInject<notation::INotationConfiguration> notationConfiguration;
@@ -62,20 +63,48 @@ class MuseScoreConsoleApp : public muse::ConsoleApplication
     muse::GlobalInject<iex::videoexport::IVideoExportConfiguration> videoExportConfiguration;
     muse::GlobalInject<iex::guitarpro::IGuitarProConfiguration> guitarProConfiguration;
     muse::GlobalInject<iex::musicxml::IMusicXmlConfiguration> musicXmlConfiguration;
-    muse::GlobalInject<engraving::IDiagnosticDrawProvider> diagnosticDrawProvider;
+
+    muse::ContextInject<converter::IConverterController> converter = { this };
+    muse::ContextInject<engraving::IDiagnosticDrawProvider> diagnosticDrawProvider = { this };
+    muse::ContextInject<muse::autobot::IAutobot> autobot = { this };
+    muse::ContextInject<muse::audioplugins::IRegisterAudioPluginsScenario> registerAudioPluginsScenario = { this };
+    muse::ContextInject<playback::ISoundProfilesRepository> soundProfilesRepository = { this };
 
 public:
-    MuseScoreConsoleApp(const std::shared_ptr<MuseScoreCmdOptions>& options);
+    ConsoleApp(const CmdOptions& options, const muse::modularity::ContextPtr& ctx);
 
-    void showSplash() override;
+    void addModule(muse::modularity::IModuleSetup* module);
+
+    void setup() override;
+    void finish() override;
+
+    muse::modularity::ContextPtr setupNewContext() override;
+    int contextCount() const override;
+    std::vector<muse::modularity::ContextPtr> contexts() const override;
 
 private:
-    void applyCommandLineOptions(const std::shared_ptr<muse::CmdOptions>& options) override;
-    void doStartupScenario(const muse::modularity::ContextPtr& ctxId) override;
-    int processConverter(const MuseScoreCmdOptions::ConverterTask& task, const muse::modularity::ContextPtr& ctx);
-    int processDiagnostic(const MuseScoreCmdOptions::Diagnostic& task, const muse::modularity::ContextPtr& ctx);
-    int processAudioPluginRegistration(const MuseScoreCmdOptions::AudioPluginRegistration& task, const muse::modularity::ContextPtr& ctx);
-    void processAutobot(const MuseScoreCmdOptions::Autobot& task, const muse::modularity::ContextPtr& ctx);
+    void applyCommandLineOptions(const CmdOptions& options, muse::IApplication::RunMode runMode);
+    int processConverter(const CmdOptions::ConverterTask& task);
+    int processDiagnostic(const CmdOptions::Diagnostic& task);
+    int processAudioPluginRegistration(const CmdOptions::AudioPluginRegistration& task);
+    void processAutobot(const CmdOptions::Autobot& task);
+
+    std::vector<muse::modularity::IContextSetup*>& contextSetups(const muse::modularity::ContextPtr& ctx);
+
+    CmdOptions m_options;
+
+    //! NOTE Separately to initialize logger and profiler as early as possible
+    muse::GlobalModule m_globalModule;
+
+    std::vector<muse::modularity::IModuleSetup*> m_modules;
+    muse::modularity::ContextPtr m_context;
+
+    struct Context {
+        muse::modularity::ContextPtr ctx;
+        std::vector<muse::modularity::IContextSetup*> setups;
+    };
+
+    std::vector<Context> m_contexts;
 };
 }
 

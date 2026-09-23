@@ -41,17 +41,17 @@ namespace muse::audio::engine {
 class Mixer;
 class EnginePlayback : public IEnginePlayback, public Contextable, public async::Asyncable
 {
-    GlobalInject<synth::ISynthResolver> synthResolver;
-    GlobalInject<fx::IFxResolver> fxResolver;
     GlobalInject<IAudioEngineConfiguration> configuration;
+    ContextInject<synth::ISynthResolver> synthResolver = { this };
+    ContextInject<fx::IFxResolver> fxResolver = { this };
     ContextInject<IAudioEngine> audioEngine = { this };
 
 public:
-    EnginePlayback(const muse::modularity::ContextPtr& iocCtx)
+    EnginePlayback(const muse::modularity::ContextPtr& iocCtx = nullptr)
         : Contextable(iocCtx) {}
 
-    void init() override;
-    void deinit() override;
+    void init();
+    void deinit();
 
     // 1. Add Sequence
     TrackSequenceId addSequence() override;
@@ -121,7 +121,8 @@ public:
     RetVal<AudioSignalChanges> signalChanges(const TrackSequenceId sequenceId, const TrackId trackId) const override;
     RetVal<AudioSignalChanges> masterSignalChanges() const override;
 
-    async::Promise<Ret> saveSoundTrack(const TrackSequenceId sequenceId, io::IODevice& dstDevice, const SoundTrackFormat& format) override;
+    async::Promise<Ret> saveSoundTrack(const TrackSequenceId sequenceId, const io::path_t& destination,
+                                       const SoundTrackFormat& format) override;
     void abortSavingAllSoundTracks() override;
     SaveSoundTrackProgress saveSoundTrackProgressChanged(const TrackSequenceId sequenceId) const override;
 
@@ -136,7 +137,7 @@ private:
     void listenInputProcessing(ITrackSequencePtr s, std::function<void(const Ret&)> completed);
     size_t tracksBeingProcessedCount(const ITrackSequencePtr s) const;
 
-    Ret doSaveSoundTrack(const TrackSequenceId sequenceId, io::IODevice& dstDevice, const SoundTrackFormat& format);
+    Ret doSaveSoundTrack(const TrackSequenceId sequenceId, const io::path_t& destination, const SoundTrackFormat& format);
 
     async::Channel<TrackSequenceId, TrackId> m_trackAdded;
     async::Channel<TrackSequenceId, TrackId> m_trackRemoved;

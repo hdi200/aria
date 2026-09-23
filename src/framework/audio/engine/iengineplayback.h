@@ -23,13 +23,10 @@
 
 #include "global/modularity/imoduleinterface.h"
 #include "global/types/retval.h"
+#include "global/io/path.h"
 #include "global/async/promise.h"
 
 #include "audio/common/audiotypes.h"
-
-namespace muse::io {
-class IODevice;
-}
 
 namespace muse::audio::engine {
 class IEnginePlayback : MODULE_CONTEXT_INTERFACE
@@ -37,9 +34,6 @@ class IEnginePlayback : MODULE_CONTEXT_INTERFACE
     INTERFACE_ID(IEnginePlayback)
 public:
     virtual ~IEnginePlayback() = default;
-
-    virtual void init() = 0;
-    virtual void deinit() = 0;
 
     // 1. Add Sequence
     virtual TrackSequenceId addSequence() = 0;
@@ -108,7 +102,7 @@ public:
     virtual RetVal<AudioSignalChanges> signalChanges(const TrackSequenceId sequenceId, const TrackId trackId) const = 0;
     virtual RetVal<AudioSignalChanges> masterSignalChanges() const = 0;
 
-    virtual async::Promise<Ret> saveSoundTrack(const TrackSequenceId sequenceId, io::IODevice& dstDevice,
+    virtual async::Promise<Ret> saveSoundTrack(const TrackSequenceId sequenceId, const io::path_t& destination,
                                                const SoundTrackFormat& format) = 0;
     virtual void abortSavingAllSoundTracks() = 0;
 

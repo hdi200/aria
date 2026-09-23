@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,7 +27,6 @@
 
 #include "modularity/ioc.h"
 #include "engraving/iengravingfontsprovider.h"
-#include "engraving/ipalettescoreprovider.h"
 #include "context/iglobalcontext.h"
 
 namespace mu::palette {
@@ -42,7 +41,6 @@ class SymbolDialog : public QWidget, Ui::SymbolDialogBase, public muse::Contexta
     Q_OBJECT
     muse::GlobalInject<engraving::IEngravingFontsProvider> engravingFonts;
     muse::ContextInject<mu::context::IGlobalContext> globalContext = { this };
-    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { this };
 
 public:
     SymbolDialog(const QString&, QWidget* parent = 0);

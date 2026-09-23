@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -48,7 +48,6 @@ public:
     virtual void showShadowNoteForMidiPitch(const uint8_t pitch) = 0;
     virtual void hideShadowNote() = 0;
     virtual muse::RectF shadowNoteRect() const = 0;
-    virtual muse::RectF previewMeasureRect() const = 0;
     virtual muse::async::Channel</*visible*/ bool> shadowNoteChanged() const = 0;
 
     // Visibility
@@ -216,7 +215,6 @@ public:
     virtual bool canAddTupletToSelectedChordRests() const = 0;
     virtual void addTupletToSelectedChordRests(const TupletOptions& options) = 0;
     virtual void addBeamToSelectedChordRests(BeamMode mode) = 0;
-    virtual void beamSelectedRange() = 0;
 
     virtual void increaseDecreaseDuration(int steps, bool stepByDots) = 0;
 

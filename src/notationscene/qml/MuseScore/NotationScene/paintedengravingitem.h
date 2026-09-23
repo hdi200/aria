@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -31,7 +31,7 @@
 #include "engraving/dom/engravingitem.h"
 
 namespace mu::notation {
-class PaintedEngravingItem : public QQuickPaintedItem
+class PaintedEngravingItem : public QQuickPaintedItem, public muse::Contextable
 {
     Q_OBJECT
 
@@ -43,7 +43,7 @@ class PaintedEngravingItem : public QQuickPaintedItem
     QML_ELEMENT
 
     muse::GlobalInject<engraving::IEngravingConfiguration> configuration;
-    muse::GlobalInject<engraving::rendering::ISingleRenderer> renderer;
+    muse::ContextInject<engraving::rendering::ISingleRenderer> renderer = { this };
 
 public:
     explicit PaintedEngravingItem(QQuickItem* parent = nullptr);

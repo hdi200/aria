@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -31,7 +31,7 @@ class EngravingItem;
 }
 
 namespace mu::engraving::rendering {
-class ISingleRenderer : MODULE_GLOBAL_INTERFACE
+class ISingleRenderer : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(ISingleRenderer)
 

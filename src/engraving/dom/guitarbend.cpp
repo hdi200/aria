@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,7 +22,6 @@
 
 #include "../editing/editdata.h"
 #include "../editing/elementeditdata.h"
-#include "../editing/editnote.h"
 #include "../editing/transpose.h"
 
 #include "accidental.h"
@@ -47,7 +46,6 @@ namespace mu::engraving {
 GuitarBend::GuitarBend(EngravingItem* parent)
     : SLine(ElementType::GUITAR_BEND, parent, ElementFlag::MOVABLE)
 {
-    setAnchor(Anchor::NOTE);
 }
 
 GuitarBend::GuitarBend(const GuitarBend& g)
@@ -164,10 +162,10 @@ void GuitarBend::setEndNotePitch(int pitch, int quarterToneOffset)
     int targetTpc2 = Transpose::transposeTpc(targetTpc1, interval, true);
 
     auto doChangeEndNotePitch = [&]() {
-        EditNote::undoChangePitch(score(), note, pitch, targetTpc1, targetTpc2);
+        score()->undoChangePitch(note, pitch, targetTpc1, targetTpc2);
         Note* tiedNote = note->tieFor() ? note->tieFor()->endNote() : nullptr;
         while (tiedNote) {
-            EditNote::undoChangePitch(score(), tiedNote, pitch, targetTpc1, targetTpc2);
+            score()->undoChangePitch(tiedNote, pitch, targetTpc1, targetTpc2);
             tiedNote = tiedNote->tieFor() ? tiedNote->tieFor()->endNote() : nullptr;
         }
     };
@@ -186,10 +184,10 @@ void GuitarBend::setEndNotePitch(int pitch, int quarterToneOffset)
         if (Accidental::isMicrotonal(accidentalType)) {
             doChangeEndNotePitch();
             linkedNoteOnNotationStaff->updateLine();
-            EditNote::changeAccidental(score(), linkedNoteOnNotationStaff, accidentalType);
+            score()->changeAccidental(linkedNoteOnNotationStaff, accidentalType);
         } else {
             linkedNoteOnNotationStaff->updateLine();
-            EditNote::changeAccidental(score(), linkedNoteOnNotationStaff, accidentalType);
+            score()->changeAccidental(linkedNoteOnNotationStaff, accidentalType);
             doChangeEndNotePitch();
         }
     } else {
@@ -291,7 +289,7 @@ Note* GuitarBend::createEndNote(Note* startNote, GuitarBendType bendType)
         endSegment = score->setNoteRest(endSegment, track, noteVal, duration);
         Chord* endChord = endSegment ? toChord(endSegment->element(track)) : nullptr;
         endNote = endChord ? endChord->upNote() : nullptr;
-    } else { // isChord
+    } else if (item->isChord()) {
         Chord* chord = toChord(item);
         endNote = score->addNote(chord, noteVal);
     }
@@ -411,8 +409,6 @@ bool GuitarBend::setProperty(Pid propertyId, const PropertyValue& v)
 PropertyValue GuitarBend::propertyDefault(Pid id) const
 {
     switch (id) {
-    case Pid::ANCHOR:
-        return static_cast<int>(Anchor::NOTE);
     case Pid::DIRECTION:
         return DirectionV::AUTO;
     case Pid::BEND_SHOW_HOLD_LINE:
@@ -831,13 +827,13 @@ double GuitarBend::lineWidth() const
 {
     if (isDive()) {
         return (staffType() && staffType()->isTabStaff())
-               ? style().styleAbsolute(Sid::guitarDiveLineWidthTab)
-               : style().styleAbsolute(Sid::guitarDiveLineWidth);
+               ? style().styleMM(Sid::guitarDiveLineWidthTab)
+               : style().styleMM(Sid::guitarDiveLineWidth);
     }
 
     return (staffType() && staffType()->isTabStaff())
-           ? style().styleAbsolute(Sid::guitarBendLineWidthTab)
-           : style().styleAbsolute(Sid::guitarBendLineWidth);
+           ? style().styleMM(Sid::guitarBendLineWidthTab)
+           : style().styleMM(Sid::guitarBendLineWidth);
 }
 
 /****************************************
@@ -1107,7 +1103,6 @@ void GuitarBend::setTargetTimeFactor(float f)
 GuitarBendHold::GuitarBendHold(GuitarBend* parent)
     : SLine(ElementType::GUITAR_BEND_HOLD, parent, ElementFlag::MOVABLE)
 {
-    resetProperty(Pid::ANCHOR);
     resetProperty(Pid::LINE_STYLE);
 }
 
@@ -1127,8 +1122,6 @@ LineSegment* GuitarBendHold::createLineSegment(System* parent)
 PropertyValue GuitarBendHold::propertyDefault(Pid id) const
 {
     switch (id) {
-    case Pid::ANCHOR:
-        return static_cast<int>(Anchor::NOTE);
     case Pid::LINE_STYLE:
         return LineType::DASHED;
     default:
@@ -1152,7 +1145,7 @@ Note* GuitarBendHold::endNote() const
 
 double GuitarBendHold::lineWidth() const
 {
-    return style().styleAbsolute(parent() && toGuitarBend(parent())->isDive() ? Sid::guitarDiveLineWidthTab : Sid::guitarBendLineWidthTab);
+    return style().styleMM(parent() && toGuitarBend(parent())->isDive() ? Sid::guitarDiveLineWidthTab : Sid::guitarBendLineWidthTab);
 }
 
 /****************************************

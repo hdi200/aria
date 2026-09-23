@@ -40,7 +40,6 @@
 #include "engraving/dom/spanner.h"
 #include "engraving/dom/staff.h"
 #include "engraving/dom/stafftext.h"
-#include "engraving/dom/tapping.h"
 #include "engraving/dom/tempotext.h"
 #include "engraving/dom/text.h"
 #include "engraving/dom/tie.h"
@@ -50,10 +49,7 @@
 #include "engraving/dom/tuplet.h"
 #include "engraving/dom/volta.h"
 #include "engraving/dom/capo.h"
-#include "engraving/dom/stringtunings.h"
 #include "engraving/types/symid.h"
-
-#include "engraving/editing/editchord.h"
 
 #include "../utils.h"
 #include "../guitarprodrumset.h"
@@ -202,8 +198,6 @@ static void setPitchByOttavaType(mu::engraving::Note* note, mu::engraving::Ottav
     note->setPitch(clampPitch(note->pitch() - ottavaDefault[int(type)].shift, true));
 }
 
-static std::unordered_map<uint64_t, mu::engraving::StringData> stringDatas;
-
 GPConverter::GPConverter(Score* score, std::unique_ptr<GPDomModel>&& gpDom, const muse::modularity::ContextPtr& iocCtx)
     : muse::Contextable(iocCtx), _score(score), _gpDom(std::move(gpDom))
 {
@@ -347,7 +341,6 @@ void GPConverter::convert(const std::vector<std::unique_ptr<GPMasterBar> >& mast
 
     addFermatas();
     addContinuousSlideHammerOn();
-    addTuning();
 }
 
 void GPConverter::convertMasterBar(const GPMasterBar* mB, Context ctx)
@@ -1064,7 +1057,6 @@ void GPConverter::setUpGPScore(const GPScore* gpscore)
 
 void GPConverter::setUpTracks(const std::map<int, std::unique_ptr<GPTrack> >& tracks)
 {
-    stringDatas.clear();
     for (const auto& track : tracks) {
         setUpTrack(track.second);
     }
@@ -1080,6 +1072,7 @@ void GPConverter::setUpTrack(const std::unique_ptr<GPTrack>& tR)
     Part* part = new Part(_score);
     part->setPlainLongName(tR->name());
     part->setPlainShortName(tR->shortName());
+    part->setPartName(tR->name());
     part->setId(idx);
 
     _score->appendPart(part);
@@ -1101,10 +1094,6 @@ void GPConverter::setUpTrack(const std::unique_ptr<GPTrack>& tR)
 
     int pan_val = static_cast<int>(std::lround(tR->rse().pan * 127));
     part->instrument()->channel(0)->setPan(std::clamp(pan_val, 0, 127));
-
-    Instrument* instr = part->instrument();
-    instr->setSingleNoteDynamics(false);
-    instr->setTranspose(tR->transpose());
 
     if (midiChannel == PERC_CHANNEL) {
         String drumInstrName = tR->instrument();
@@ -1137,46 +1126,54 @@ void GPConverter::setUpTrack(const std::unique_ptr<GPTrack>& tR)
             part->instrument()->setDrumset(drumset::gpDrumset);
         }
         staff->setStaffType(Fraction(0, 1), *StaffType::preset(type));
-    } else {
-        auto staffProperties = tR->staffProperties();
+    }
 
-        int capoFret = staffProperties.capoFret;
+    std::vector<int> standartTuning = { 40, 45, 50, 55, 59, 64 };
+    Instrument* instr = part->instrument();
+
+    if (!tR->staffProperty().empty()) {
+        auto staffProperty = tR->staffProperty();
+
+        int capoFret = staffProperty[0].capoFret;
 
         part->setCapoFret(capoFret);
         m_capoParams.insert_or_assign(part->id().toUint64(), capoFret);
-        auto tuning = staffProperties.tuning;
-        bool usePresetTable = staffProperties.ignoreFlats;
+        auto tunning = staffProperty[0].tunning;
+        bool usePresetTable = staffProperty[0].ignoreFlats;
 
         std::array<uint64_t, 3> flatPresets{ 0x3f3a36312c27, 0x3c37332e2924, 0x3f3a36312c25 };
 
         uint64_t k = 0;
-        for (size_t i = 0; i < tuning.size(); ++i) {
-            k |= (uint64_t)tuning[i] << 8 * i;
+        for (size_t i = 0; i < tunning.size(); ++i) {
+            k |= (uint64_t)tunning[i] << 8 * i;
         }
         bool useFlats
-            = usePresetTable ? std::find(flatPresets.begin(), flatPresets.end(), k) != flatPresets.end() : staffProperties.useFlats;
-        auto fretCount = staffProperties.fretCount;
+            = usePresetTable ? std::find(flatPresets.begin(), flatPresets.end(), k) != flatPresets.end() : staffProperty[0].useFlats;
+        auto fretCount = staffProperty[0].fretCount;
 
-        if (tuning.empty()) {
-            tuning = utils::standardTuningFor(25, 6); // 6 string guitar
+        if (tunning.empty()) {
+            tunning = standartTuning;
         }
 
         int transpose = tR->transpose();
-        for (auto& t : tuning) {
+        for (auto& t : tunning) {
             t -= transpose;
         }
 
-        StringData stringData = StringData(fretCount, static_cast<int>(tuning.size()), tuning.data(), useFlats);
-        stringDatas.insert_or_assign(part->id().toUint64(), stringData);
-        // We're using Tuning String for non-standard string data
-        // Instrument string data should be set to the standard
-        tuning = utils::standardTuningFor(programm, (int)tuning.size());
-        for (auto& t : tuning) {
-            t -= tR->transpose();
-        }
-        stringData = StringData(fretCount, static_cast<int>(tuning.size()), tuning.data());
+        StringData stringData = StringData(fretCount, static_cast<int>(tunning.size()), tunning.data(), useFlats);
+        instr->setStringData(stringData);
+    } else if (!instr->useDrumset()) {
+        StringData stringData = StringData(24, static_cast<int>(standartTuning.size()), standartTuning.data());
         instr->setStringData(stringData);
     }
+
+    instr->setSingleNoteDynamics(false);
+
+    // this code sets score lyrics from the first processed track.
+//    if (_score->OffLyrics.isEmpty())
+//        _score->OffLyrics = tR->lyrics();
+
+    instr->setTranspose(tR->transpose());
 }
 
 void GPConverter::collectTempoMap(const GPMasterTracks* mTr)
@@ -1816,7 +1813,7 @@ void GPConverter::addOrnament(const GPNote* gpnote, Note* note)
 
     Articulation* art = mu::engraving::Factory::createArticulation(_score->dummy()->chord());
     art->setSymId(scoreOrnament(gpnote->ornament()));
-    if (!EditChord::toggleArticulation(_score, note, art)) {
+    if (!_score->toggleArticulation(note, art)) {
         delete art;
     }
 }
@@ -2093,18 +2090,9 @@ void GPConverter::setPitch(Note* note, const GPNote::MidiPitch& midiPitch)
         //       instead.
         pitch = note->part()->instrument()->channel(0)->program();
     } else {
-        if (stringDatas.empty()) {
-            pitch = note->part()->instrument()->stringData()->getPitch(musescoreString, midiPitch.fret + note->part()->capoFret(),
-                                                                       nullptr) + note->part()->instrument()->transpose().chromatic;
-        } else {
-            if (const auto sd = stringDatas.find(note->part()->id().toUint64()); sd != stringDatas.end()) {
-                pitch = sd->second.getPitch(musescoreString, midiPitch.fret + note->part()->capoFret(),
-                                            nullptr) + note->part()->instrument()->transpose().chromatic;
-            } else {
-                pitch = note->part()->instrument()->stringData()->getPitch(musescoreString, midiPitch.fret + note->part()->capoFret(),
-                                                                           nullptr) + note->part()->instrument()->transpose().chromatic;
-            }
-        }
+        pitch
+            = note->part()->instrument()->stringData()->getPitch(musescoreString, midiPitch.fret + note->part()->capoFret(),
+                                                                 nullptr) + note->part()->instrument()->transpose().chromatic;
     }
 
     pitch = std::clamp(pitch, 0, 127);
@@ -2136,10 +2124,28 @@ void GPConverter::setPitch(Note* note, const GPNote::MidiPitch& midiPitch)
 
 void GPConverter::setTpc(Note* note, int accidental)
 {
-    if (0 == accidental || accidental == GPNote::invalidAccidental) {
+    std::map<int, int> toneToTpc = {
+        { 0,  14 },
+        { 1,  21 },
+        { 2,  16 },
+        { 3,  11 },
+        { 4,  18 },
+        { 5,  13 },
+        { 6,  20 },
+        { 7,  15 },
+        { 8,  22 },
+        { 9,  17 },
+        { 10, 24 },
+        { 11, 19 },
+    };
+
+    if (note->staff()->capo({ 0, 1 }).fretPosition != 0 || accidental == GPNote::invalidAccidental) {
         note->setTpcFromPitch();
     } else {
-        note->setTpcFromPitch(accidental < 0 ? Prefer::FLATS : Prefer::SHARPS);
+        int tone = (note->pitch() - accidental + 12) % 12;
+        int tpc = toneToTpc[tone] + accidental * 7;
+        note->setTpc1(tpc);
+        note->setTpc2(tpc);
     }
 }
 
@@ -2674,7 +2680,7 @@ void GPConverter::addFadding(const GPBeat* beat, ChordRest* cr)
 
     Articulation* art = mu::engraving::Factory::createArticulation(_score->dummy()->chord());
     art->setSymId(scoreFadding(beat->fadding()));
-    if (!EditChord::toggleArticulation(_score, toChord(cr)->upNote(), art)) {
+    if (!_score->toggleArticulation(toChord(cr)->upNote(), art)) {
         delete art;
     }
 }
@@ -2704,7 +2710,7 @@ void GPConverter::addPickStroke(const GPBeat* beat, ChordRest* cr)
 
     Articulation* art = mu::engraving::Factory::createArticulation(_score->dummy()->chord());
     art->setSymId(scorePickStroke(beat->pickStroke()));
-    if (!EditChord::toggleArticulation(_score, toChord(cr)->upNote(), art)) {
+    if (!_score->toggleArticulation(toChord(cr)->upNote(), art)) {
         delete art;
     }
 }
@@ -2751,7 +2757,7 @@ void GPConverter::addWah(const GPBeat* beat, ChordRest* cr)
 
     Articulation* art = Factory::createArticulation(_score->dummy()->chord());
     art->setSymId(scoreWah(beat->wah()));
-    if (!EditChord::toggleArticulation(_score, toChord(cr)->upNote(), art)) {
+    if (!_score->toggleArticulation(toChord(cr)->upNote(), art)) {
         delete art;
     }
 }
@@ -2772,7 +2778,7 @@ void GPConverter::addGolpe(const GPBeat* beat, ChordRest* cr)
         art->setAnchor(ArticulationAnchor::BOTTOM);
     }
 
-    if (!EditChord::toggleArticulation(_score, toChord(cr)->upNote(), art)) {
+    if (!_score->toggleArticulation(toChord(cr)->upNote(), art)) {
         delete art;
     }
 }
@@ -2969,51 +2975,6 @@ void GPConverter::setBeamMode(const GPBeat* beat, ChordRest* cr, Measure* measur
 
     cr->setBeamMode(m_previousBeamMode);
     m_previousBeamMode = beamMode;
-}
-
-void GPConverter::addTuning()
-{
-    const Measure* m = _score->firstMeasure();
-
-    // NOTE: GP doesn't support multiple tunings on one part
-    // We're safe to just take the very first chord rest segment
-    // and check if it has any non-standard tuning
-    const Fraction& f{ 0, 1 };
-
-    for (auto p : _score->parts()) {
-        for (auto s : p->staves()) {
-            if (!s->isPrimaryStaff()) {
-                continue;
-            }
-
-            Segment* seg = m->findSegment(SegmentType::ChordRest, f);
-
-            IF_ASSERT_FAILED(seg) {
-                LOGE() << "First measure MUST has a chord rest segment after import";
-                return;
-            }
-
-            if (stringDatas.find(p->id().toUint64()) == stringDatas.end()) {
-                continue;
-            }
-
-            const StringData sd = stringDatas.at(p->id().toUint64());
-            std::vector<int> tuning(sd.strings());
-            for (size_t i = 0; i < tuning.size(); ++i) {
-                tuning[i] = sd.stringList().at(i).pitch + p->instrument()->transpose().chromatic;
-            }
-
-            if (utils::isStandardTuning(p->instrument()->channel(0)->program(), tuning)) {
-                continue;
-            }
-
-            StringTunings* tun = Factory::createStringTunings(seg);
-            tun->setStringData(sd);
-            tun->setTrack(staff2track(s->idx()));
-            tun->setParent(seg);
-            seg->add(tun);
-        }
-    }
 }
 
 void GPConverter::addCapos()

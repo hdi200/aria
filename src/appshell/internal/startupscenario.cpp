@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -108,7 +108,7 @@ void StartupScenario::runOnSplashScreen()
 {
     TRACEFUNC;
 
-    if (!multiwindowsProvider()->isFirstWindow()) {
+    if (multiwindowsProvider()->windowCount() != 1) {
         registerAudioPlugins();
         return;
     }
@@ -135,12 +135,7 @@ void StartupScenario::registerAudioPlugins()
     //! which leads to automatic exit from the application.
     //! (Thanks to the splashscreen, but this is not an obvious detail)
     qApp->setQuitLockEnabled(false);
-
-    Ret ret = registerAudioPluginsScenario()->updatePluginsRegistry();
-    if (!ret) {
-        LOGE() << ret.toString();
-    }
-
+    registerAudioPluginsScenario()->updatePluginsRegistry();
     qApp->setQuitLockEnabled(true);
 }
 
@@ -148,24 +143,39 @@ void StartupScenario::runAfterSplashScreen()
 {
     TRACEFUNC;
 
+#ifdef MUSE_MULTICONTEXT_WIP
+    interactive()->open(HOME_URI);
+    return;
+#endif
+
     if (m_startupCompleted) {
         return;
     }
 
-    m_startupCompleted = true;
-
-    StartupModeType modeType = StartupModeType::StartEmpty;
-    if (multiwindowsProvider()->isFirstWindow() && sessionsManager()->hasProjectsForRestore()) {
+    StartupModeType modeType = resolveStartupModeType();
+    if (multiwindowsProvider()->windowCount() == 1 && sessionsManager()->hasProjectsForRestore()) {
         modeType = StartupModeType::Recovery;
-    } else {
-        modeType = resolveStartupModeType();
     }
 
-    const Uri& startupUri = startupPageUri(modeType);
-    auto promise = interactive()->open(startupUri);
-    promise.onResolve(this, [this, modeType](const Val&) {
+    muse::async::Channel<Uri> opened = interactive()->opened();
+    opened.onReceive(this, [this, opened, modeType](const Uri&) {
+        static bool once = false;
+        if (once) {
+            return;
+        }
+        once = true;
+
         onStartupPageOpened(modeType);
+
+        async::Async::call(this, [this, opened]() {
+            muse::async::Channel<Uri> mut = opened;
+            mut.disconnect(this);
+            m_startupCompleted = true;
+        });
     });
+
+    const Uri& startupUri = startupPageUri(modeType);
+    interactive()->open(startupUri);
 }
 
 bool StartupScenario::startupCompleted() const
@@ -293,7 +303,7 @@ bool StartupScenario::shouldShowWelcomeDialog(StartupModeType modeType) const
         return false;
     }
 
-    if (!multiwindowsProvider()->isFirstWindow()) {
+    if (multiwindowsProvider()->windowCount() != 1) {
         return false;
     }
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -148,7 +148,7 @@ PointF HarmonyLayout::calculateBoundingRect(const Harmony* item, Harmony::Layout
 
         if (alignToFretDiagram) {
             double nutLineWidth = fd->ldata()->nutLineWidth;
-            newPosY = yy - ctx.conf().styleAbsolute(Sid::harmonyFretDist) - nutLineWidth;
+            newPosY = yy - ctx.conf().styleMM(Sid::harmonyFretDist) - nutLineWidth;
         } else {
             newPosY = ypos;
         }
@@ -461,13 +461,13 @@ void HarmonyLayout::render(Harmony* item, Harmony::LayoutData* ldata, const Layo
         harmonyCtx.setx(0);
         harmonyCtx.sety(topCapHeight);
 
-        double lineY = harmonyCtx.y() - item->absoluteFromSpatium(ctx.conf().style().styleS(Sid::polychordDividerSpacing))
-                       - item->absoluteFromSpatium(ctx.conf().style().styleS(Sid::polychordDividerThickness)) / 2;
+        double lineY = harmonyCtx.y() - ctx.conf().style().styleS(Sid::polychordDividerSpacing).toMM(item->spatium())
+                       - ctx.conf().style().styleS(Sid::polychordDividerThickness).toMM(item->spatium()) / 2;
         LineF line = LineF(PointF(0.0, lineY), PointF(0.0, lineY));
         ldata->polychordDividerLines.mut_value().push_back(line);
 
-        harmonyCtx.movey(item->absoluteFromSpatium(-ctx.conf().style().styleS(Sid::polychordDividerSpacing)) * 2.0);
-        harmonyCtx.movey(item->absoluteFromSpatium(-ctx.conf().style().styleS(Sid::polychordDividerThickness)));
+        harmonyCtx.movey(-ctx.conf().style().styleS(Sid::polychordDividerSpacing).toMM(item->spatium()) * 2.0);
+        harmonyCtx.movey(-ctx.conf().style().styleS(Sid::polychordDividerThickness).toMM(item->spatium()));
     }
 
     // Align polychords

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -29,6 +29,7 @@
       <chordSymbolAFontSize>8.8</chordSymbolAFontSize>
       <chordSymbolBFontFace>Times</chordSymbolBFontFace>
       <chordSymbolBFontSize>8.8</chordSymbolBFontSize>
+      <romanNumeralFontFace>Times</romanNumeralFontFace>
       <nashvilleNumberFontFace>Times</nashvilleNumberFontFace>
       <nashvilleNumberFontSize>8.8</nashvilleNumberFontSize>
       <smallNoteMag>0.65</smallNoteMag>
@@ -61,8 +62,6 @@
       <shortInstrumentFontSize>8.8</shortInstrumentFontSize>
       <partInstrumentFontFace>Times</partInstrumentFontFace>
       <partInstrumentFontSize>8.8</partInstrumentFontSize>
-      <groupBracketFontFace>Times</groupBracketFontFace>
-      <groupBracketFontSize>8.8</groupBracketFontSize>
       <expressionFontFace>Times</expressionFontFace>
       <expressionFontSize>8.8</expressionFontSize>
       <tempoFontFace>Times</tempoFontFace>
@@ -164,18 +163,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="2" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>A</trackName>
       <Instrument id="violin">
-        <InstrumentLabel>
-          <longName>A</longName>
-          <shortName>A</shortName>
-          </InstrumentLabel>
+        <longName>A</longName>
+        <shortName>A</shortName>
         <trackName>Violin</trackName>
         <minPitchP>55</minPitchP>
         <maxPitchP>103</maxPitchP>
@@ -249,11 +243,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>B</trackName>
       <Instrument id="violin">
-        <InstrumentLabel>
-          <longName>B</longName>
-          <shortName>B</shortName>
-          </InstrumentLabel>
+        <longName>B</longName>
+        <shortName>B</shortName>
         <trackName>Violin</trackName>
         <minPitchP>55</minPitchP>
         <maxPitchP>103</maxPitchP>
@@ -326,18 +319,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="2" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>A</trackName>
       <Instrument id="viola">
-        <InstrumentLabel>
-          <longName>A</longName>
-          <shortName>A</shortName>
-          </InstrumentLabel>
+        <longName>A</longName>
+        <shortName>A</shortName>
         <trackName>Viola</trackName>
         <minPitchP>48</minPitchP>
         <maxPitchP>93</maxPitchP>
@@ -412,11 +400,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>B</trackName>
       <Instrument id="viola">
-        <InstrumentLabel>
-          <longName>B</longName>
-          <shortName>B</shortName>
-          </InstrumentLabel>
+        <longName>B</longName>
+        <shortName>B</shortName>
         <trackName>Viola</trackName>
         <minPitchP>48</minPitchP>
         <maxPitchP>93</maxPitchP>
@@ -490,18 +477,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>3</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="3" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>A</trackName>
       <Instrument id="viola">
-        <InstrumentLabel>
-          <longName>A</longName>
-          <shortName>A</shortName>
-          </InstrumentLabel>
+        <longName>A</longName>
+        <shortName>A</shortName>
         <trackName>Viola</trackName>
         <minPitchP>48</minPitchP>
         <maxPitchP>93</maxPitchP>
@@ -577,11 +559,10 @@
           </StaffType>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>Cello  B</trackName>
       <Instrument id="violoncello">
-        <InstrumentLabel>
-          <longName>Cello  B</longName>
-          <shortName>Cello  B</shortName>
-          </InstrumentLabel>
+        <longName>Cello  B</longName>
+        <shortName>Cello  B</shortName>
         <trackName>Cello  B</trackName>
         <minPitchP>36</minPitchP>
         <maxPitchP>90</maxPitchP>
@@ -656,11 +637,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>C</trackName>
       <Instrument id="viola">
-        <InstrumentLabel>
-          <longName>C</longName>
-          <shortName>C</shortName>
-          </InstrumentLabel>
+        <longName>C</longName>
+        <shortName>C</shortName>
         <trackName>Viola</trackName>
         <minPitchP>48</minPitchP>
         <maxPitchP>93</maxPitchP>
@@ -734,18 +714,13 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="2" col="0" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
+      <trackName>A</trackName>
       <Instrument id="bass">
-        <InstrumentLabel>
-          <longName>A</longName>
-          <shortName>A</shortName>
-          </InstrumentLabel>
+        <longName>A</longName>
+        <shortName>A</shortName>
         <trackName>Bass</trackName>
         <minPitchP>38</minPitchP>
         <maxPitchP>62</maxPitchP>
@@ -810,11 +785,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>C</trackName>
       <Instrument id="bass">
-        <InstrumentLabel>
-          <longName>C</longName>
-          <shortName>C</shortName>
-          </InstrumentLabel>
+        <longName>C</longName>
+        <shortName>C</shortName>
         <trackName>Bass</trackName>
         <minPitchP>38</minPitchP>
         <maxPitchP>62</maxPitchP>
@@ -879,11 +853,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano</longName>
-          <shortName>Piano</shortName>
-          </InstrumentLabel>
+        <longName>Piano</longName>
+        <shortName>Piano</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

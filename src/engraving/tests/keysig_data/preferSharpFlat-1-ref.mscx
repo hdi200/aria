@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -30,12 +30,11 @@
         <defaultConcertClef>G8va</defaultConcertClef>
         <defaultTransposingClef>G</defaultTransposingClef>
         </Staff>
+      <trackName>D♭ Piccolo</trackName>
       <preferSharpFlat>flats</preferSharpFlat>
       <Instrument id="db-piccolo">
-        <InstrumentLabel>
-          <longName>D♭ Piccolo</longName>
-          <shortName>D♭ Picc.</shortName>
-          </InstrumentLabel>
+        <longName>D♭ Piccolo</longName>
+        <shortName>D♭ Picc.</shortName>
         <trackName>D♭ Piccolo</trackName>
         <minPitchP>75</minPitchP>
         <maxPitchP>109</maxPitchP>

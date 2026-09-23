@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -75,11 +75,11 @@ class PercussionPanelModel : public QObject, public muse::Contextable, public mu
     muse::GlobalInject<INotationSceneConfiguration> configuration;
     muse::GlobalInject<INotationConfiguration> notationConfiguration;
     muse::GlobalInject<engraving::IEngravingConfiguration> engravingConfiguration;
-    muse::GlobalInject<muse::musesampler::IMuseSamplerInfo> museSampler;
-    muse::GlobalInject<IInstrumentsRepository> instrumentsRepository;
     muse::ContextInject<mu::context::IGlobalContext> globalContext = { this };
     muse::ContextInject<muse::actions::IActionsDispatcher> dispatcher = { this };
     muse::ContextInject<mu::playback::IPlaybackController> playbackController = { this };
+    muse::ContextInject<muse::musesampler::IMuseSamplerInfo> museSampler = { this };
+    muse::ContextInject<IInstrumentsRepository> instrumentsRepository = { this };
 
 public:
     explicit PercussionPanelModel(QObject* parent = nullptr);

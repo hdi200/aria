@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -27,17 +27,12 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>3</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="3" col="0" visible="1"/>
         </Staff>
+      <trackName></trackName>
       <Instrument id="soprano">
-        <InstrumentLabel>
-          <longName>Soprano</longName>
-          <shortName>S.</shortName>
-          </InstrumentLabel>
+        <longName>Soprano</longName>
+        <shortName>S.</shortName>
         <trackName></trackName>
         <instrumentId>voice.soprano</instrumentId>
         <Channel>
@@ -52,11 +47,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="alto">
-        <InstrumentLabel>
-          <longName>Alto</longName>
-          <shortName>A.</shortName>
-          </InstrumentLabel>
+        <longName>Alto</longName>
+        <shortName>A.</shortName>
         <trackName></trackName>
         <instrumentId>voice.alto</instrumentId>
         <Channel>
@@ -71,11 +65,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="bass">
-        <InstrumentLabel>
-          <longName>Bass</longName>
-          <shortName>B.</shortName>
-          </InstrumentLabel>
+        <longName>Bass</longName>
+        <shortName>B.</shortName>
         <trackName></trackName>
         <instrumentId>voice.bass</instrumentId>
         <Channel>

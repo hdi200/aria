@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2022 MuseScore Limited
+ * Copyright (C) 2022 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,16 +20,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MU_APPSHELL_NEWINSTANCELOADINSCREENVIEW_H
+#define MU_APPSHELL_NEWINSTANCELOADINSCREENVIEW_H
 
 #include <QWidget>
+
+#include "modularity/ioc.h"
+#include "ui/iuiconfiguration.h"
+#include "languages/ilanguagesservice.h"
 
 class QSvgRenderer;
 
 namespace mu::appshell {
-class NewInstanceLoadingScreenView : public QWidget
+class NewInstanceLoadingScreenView : public QWidget, public muse::Contextable
 {
     Q_OBJECT
+
+    muse::GlobalInject<muse::ui::IUiConfiguration> uiConfiguration;
+    muse::GlobalInject<muse::languages::ILanguagesService> languagesService;
 
 public:
     explicit NewInstanceLoadingScreenView(bool forNewScore, const QString& openingFileName, QWidget* parent = nullptr);
@@ -43,3 +51,5 @@ private:
     QSize m_dialogSize;
 };
 }
+
+#endif // MU_APPSHELL_NEWINSTANCELOADINSCREENVIEW_H

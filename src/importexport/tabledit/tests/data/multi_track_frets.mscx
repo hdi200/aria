@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -55,10 +55,9 @@
           <useNumbers>1</useNumbers>
           </StaffType>
         </Staff>
+      <trackName>Guitar</trackName>
       <Instrument id="guitar-steel">
-        <InstrumentLabel>
-          <longName>Guitar</longName>
-          </InstrumentLabel>
+        <longName>Guitar</longName>
         <trackName></trackName>
         <instrumentId>pluck.guitar.acoustic</instrumentId>
         <StringData>
@@ -109,10 +108,9 @@
           <useNumbers>1</useNumbers>
           </StaffType>
         </Staff>
+      <trackName>Guitar (5 str)</trackName>
       <Instrument id="cavaquinho">
-        <InstrumentLabel>
-          <longName>Guitar (5 str)</longName>
-          </InstrumentLabel>
+        <longName>Guitar (5 str)</longName>
         <trackName></trackName>
         <instrumentId>pluck.guitar</instrumentId>
         <StringData>
@@ -163,10 +161,9 @@
           <useNumbers>1</useNumbers>
           </StaffType>
         </Staff>
+      <trackName>Bass</trackName>
       <Instrument id="bass">
-        <InstrumentLabel>
-          <longName>Bass</longName>
-          </InstrumentLabel>
+        <longName>Bass</longName>
         <trackName></trackName>
         <instrumentId>voice.bass</instrumentId>
         <StringData>

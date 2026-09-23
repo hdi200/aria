@@ -4,7 +4,7 @@
 # MuseScore
 # Music Composition & Notation
 #
-# Copyright (C) 2024 MuseScore Limited
+# Copyright (C) 2024 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -77,7 +77,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND SCORE_RENDER_QT_TARGET_ROOT)
     endif()
 endif()
 
-set(REMOTE_ROOT_URL https://raw.githubusercontent.com/musescore/muse_deps/main)
+set(REMOTE_ROOT_URL https://raw.githubusercontent.com/musescore/muse_deps/legacy)
 set(remote_url ${REMOTE_ROOT_URL}/harfbuzz/12.3.0)
 set(local_path ${PROJECT_BINARY_DIR}/_deps/harfbuzz)
 if (NOT EXISTS ${local_path}/harfbuzz.cmake)

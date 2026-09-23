@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -38,8 +38,8 @@ class InstrumentsOnScoreListModel : public muse::uicomponents::SelectableItemLis
 
     QML_ELEMENT
 
-    muse::GlobalInject<notation::IInstrumentsRepository> repository;
     muse::ContextInject<context::IGlobalContext> context = { this };
+    muse::ContextInject<notation::IInstrumentsRepository> repository = { this };
 
 public:
     InstrumentsOnScoreListModel(QObject* parent = nullptr);

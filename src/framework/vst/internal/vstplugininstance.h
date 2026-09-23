@@ -40,13 +40,14 @@
 
 namespace muse::vst {
 class VstPluginProvider;
-class VstPluginInstance : public IVstPluginInstance, public async::Asyncable
+class VstPluginInstance : public IVstPluginInstance, public async::Asyncable, public muse::Contextable
 {
     muse::GlobalInject<muse::audio::IAudioThreadSecurer> threadSecurer;
-    muse::GlobalInject<IVstModulesRepository> modulesRepo;
+
+    muse::ContextInject<IVstModulesRepository> modulesRepo = { this };
 
 public:
-    VstPluginInstance(const muse::audio::AudioResourceId& resourceId);
+    VstPluginInstance(const muse::audio::AudioResourceId& resourceId, const modularity::ContextPtr& iocCtx);
     ~VstPluginInstance() override;
 
     const muse::audio::AudioResourceId& resourceId() const override;
@@ -58,8 +59,6 @@ public:
     PluginControllerPtr controller() const override;
     PluginComponentPtr component() const override;
     PluginMidiMappingPtr midiMapping() const override;
-
-    bool isAbleForInput() const;
 
     void updatePluginConfig(const muse::audio::AudioUnitConfig& config) override;
     void refreshConfig() override;
@@ -74,15 +73,15 @@ public:
     async::Channel<muse::audio::AudioUnitConfig> pluginSettingsChanged() const override;
 
 private:
+    void syncControllerToComponentState();
     void rescanParams();
-    void stateBufferFromString(VstMemoryStream& buffer, char* strData, const size_t strSize) const;
+    void setPluginConfig(const muse::audio::AudioUnitConfig& config);
 
     VstPluginInstanceId m_id = 0;
     muse::audio::AudioResourceId m_resourceId;
 
     PluginModulePtr m_module = nullptr;
     std::unique_ptr<VstPluginProvider> m_pluginProvider;
-    ClassInfo m_classInfo;
 
     Steinberg::FUnknownPtr<VstComponentHandler> m_componentHandlerPtr = nullptr;
 
@@ -92,6 +91,8 @@ private:
 
     std::atomic_bool m_isLoaded = false;
     async::Notification m_loadingCompleted;
+
+    std::thread::id m_mainThreadId;
 
     mutable std::mutex m_mutex;
 };

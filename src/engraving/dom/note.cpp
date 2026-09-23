@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -33,7 +33,6 @@
 
 #include "../editing/addremoveelement.h"
 #include "../editing/editchord.h"
-#include "../editing/editnote.h"
 #include "../editing/transpose.h"
 #include "types/typesconv.h"
 #include "iengravingfont.h"
@@ -1836,7 +1835,7 @@ EngravingItem* Note::drop(EditData& data)
         return e;
 
     case ElementType::ACCIDENTAL:
-        EditNote::changeAccidental(score(), this, toAccidental(e)->accidentalType());
+        score()->changeAccidental(this, toAccidental(e)->accidentalType());
         break;
 
     case ElementType::BEND:
@@ -2076,7 +2075,7 @@ EngravingItem* Note::drop(EditData& data)
         NoteVal nval;
         nval.pitch = n->pitch();
         nval.headGroup = n->headGroup();
-        ChordRest* cr = nullptr;
+        const ChordRest* cr = nullptr;
         if (data.modifiers & ShiftModifier) {
             // add note to chord
             score()->addNote(ch, nval);
@@ -2222,7 +2221,7 @@ void Note::updateAccidental(AccidentalState* as)
         } else {
             AccidentalType accType = Accidental::value2MicrotonalSubtype(tpc2alter(tpc()), quarterToneOffset());
             updateLine();
-            EditNote::changeAccidental(score(), this, accType);
+            score()->changeAccidental(this, accType);
         }
     }
 
@@ -2928,7 +2927,7 @@ void Note::normalizeLeftDragDelta(Segment* seg, EditData& ed, NoteEditData* ned)
     } else {
         Measure* measure = seg->measure();
 
-        double minDist = style().styleAbsolute(Sid::barNoteDistance);
+        double minDist = style().styleMM(Sid::barNoteDistance);
 
         double diff = (ed.pos.x()) - (measure->pageX() + minDist);
 
@@ -3432,19 +3431,30 @@ String Note::accessibleInfo() const
 
 String Note::screenReaderInfo() const
 {
-    const Instrument* instrument = part()->instrument(chord()->tick());
-    String duration = chord()->durationUserName();
-    Measure* m = chord()->measure();
+    const Part* part = this->part();
+    if (!part) {
+        return String(); // part is nullptr on Linux after an instrument is deleted.
+    }
+
+    const Fraction tick = this->tick();
+    const Chord* chord = this->chord();
+    const Instrument* instrument = part->instrument(tick);
+
+    IF_ASSERT_FAILED(chord && instrument) {
+        return String();
+    }
+
+    String duration = chord->durationUserName();
+    Measure* m = chord->measure();
     bool voices = m ? m->hasVoices(staffIdx()) : false;
     String voice = voices ? muse::mtrc("engraving", "Voice: %1").arg(track() % VOICES + 1) : u"";
     String pitchName;
     String pitchOutOfRangeWarning;
-    const Drumset* drumset = instrument->drumset();
     if (fixed() && headGroup() == NoteHeadGroup::HEAD_SLASH) {
-        pitchName = chord()->noStem() ? muse::mtrc("engraving", "Beat slash") : muse::mtrc("engraving", "Rhythm slash");
-    } else if (staff()->isDrumStaff(tick()) && drumset) {
-        pitchName = drumset->translatedName(pitch());
-    } else if (staff()->isTabStaff(tick())) {
+        pitchName = chord->noStem() ? muse::mtrc("engraving", "Beat slash") : muse::mtrc("engraving", "Rhythm slash");
+    } else if (const Drumset* d = instrument->drumset(); d&& instrument->useDrumset()) {
+        pitchName = d->translatedName(m_pitch);
+    } else if (const Staff* staff = this->staff(); staff&& staff->isTabStaff(tick)) {
         pitchName = muse::mtrc("engraving", "%1; String: %2; Fret: %3")
                     .arg(tpcUserName(true, true), String::number(string() + 1), String::number(fret()));
     } else {
@@ -3452,24 +3462,24 @@ String Note::screenReaderInfo() const
                     ? tpcUserName(true, true)
                     //: head as in note head. %1 is head type (circle, cross, etc.). %2 is pitch (e.g. Db4).
                     : muse::mtrc("engraving", "%1 head %2").arg(translatedSubtypeUserName()).arg(tpcUserName(true));
-        if (chord()->staffMove() < 0) {
+        if (chord->staffMove() < 0) {
             duration += u"; " + muse::mtrc("engraving", "Cross-staff above");
-        } else if (chord()->staffMove() > 0) {
+        } else if (chord->staffMove() > 0) {
             duration += u"; " + muse::mtrc("engraving", "Cross-staff below");
         }
 
-        if (pitch() < instrument->minPitchP()) {
+        if (m_pitch < instrument->minPitchP()) {
             pitchOutOfRangeWarning = u" " + muse::mtrc("engraving", "too low");
-        } else if (pitch() > instrument->maxPitchP()) {
+        } else if (m_pitch > instrument->maxPitchP()) {
             pitchOutOfRangeWarning = u" " + muse::mtrc("engraving", "too high");
-        } else if (pitch() < instrument->minPitchA()) {
+        } else if (m_pitch < instrument->minPitchA()) {
             pitchOutOfRangeWarning = u" " + muse::mtrc("engraving", "too low for amateurs");
-        } else if (pitch() > instrument->maxPitchA()) {
+        } else if (m_pitch > instrument->maxPitchA()) {
             pitchOutOfRangeWarning = u" " + muse::mtrc("engraving", "too high for amateurs");
         }
     }
     return String(u"%1 %2 %3%4%5").arg(noteTypeUserName(), pitchName, duration, pitchOutOfRangeWarning,
-                                       (chord()->isGrace() ? u"" : String(u"; %1").arg(voice)));
+                                       (chord->isGrace() ? u"" : String(u"; %1").arg(voice)));
 }
 
 //---------------------------------------------------------
@@ -3536,6 +3546,16 @@ NoteVal Note::noteVal() const
     nval.headGroup = headGroup();
 
     return nval;
+}
+
+//---------------------------------------------------------
+//   qmlDotsCount
+//    returns number of dots for plugins
+//---------------------------------------------------------
+
+int Note::qmlDotsCount()
+{
+    return static_cast<int>(m_dots.size());
 }
 
 //---------------------------------------------------------
@@ -3954,7 +3974,7 @@ AccidentalType Note::accidentalType() const
 void Note::setAccidentalType(AccidentalType type)
 {
     if (score()) {
-        EditNote::changeAccidental(score(), this, type);
+        score()->changeAccidental(this, type);
     }
 }
 
@@ -4211,7 +4231,7 @@ bool Note::transposeDiatonic(int interval, bool keepAlterations, bool useDoubleA
     newPitch = clampPitch(newPitch, true);
 
     // store new data
-    EditNote::undoChangePitch(score(), this, newPitch, newTpc1, newTpc2);
+    score()->undoChangePitch(this, newPitch, newTpc1, newTpc2);
     return true;
 }
 
@@ -4232,7 +4252,7 @@ bool Note::transpose(Interval interval, bool useDoubleSharpsFlats)
             ntpc2 = Transpose::transposeTpc(tpc2(), interval, useDoubleSharpsFlats);
         }
     }
-    EditNote::undoChangePitch(score(), this, npitch, ntpc1, ntpc2);
+    score()->undoChangePitch(this, npitch, ntpc1, ntpc2);
     return true;
 }
 }

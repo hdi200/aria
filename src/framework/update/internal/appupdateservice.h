@@ -40,7 +40,7 @@ class AppUpdateService : public IAppUpdateService, public Contextable, public as
     GlobalInject<ISystemInfo> systemInfo;
     GlobalInject<IUpdateConfiguration> configuration;
     GlobalInject<network::INetworkManagerCreator> networkManagerCreator;
-    GlobalInject<IApplication> application;
+    ContextInject<IApplication> application = { this };
 
 public:
     AppUpdateService(const modularity::ContextPtr& iocCtx)

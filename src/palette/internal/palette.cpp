@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -131,7 +131,7 @@ PaletteCellPtr Palette::insertActionIcon(size_t idx, ActionIconType type, Action
 {
     const muse::ui::UiAction& action = actionsRegister()->action(code);
     QString name = !action.description.isEmpty() ? action.description.qTranslated() : action.title.qTranslatedWithoutMnemonic();
-    auto icon = std::make_shared<ActionIcon>(paletteScoreProvider()->paletteScore()->dummy());
+    auto icon = std::make_shared<ActionIcon>(gpaletteScore->dummy());
     icon->setActionType(type);
     icon->setAction(code, static_cast<char16_t>(action.iconCode));
 
@@ -166,7 +166,7 @@ PaletteCellPtr Palette::appendActionIcon(ActionIconType type, ActionCode code, d
 {
     const muse::ui::UiAction& action = actionsRegister()->action(code);
     const QString name = !action.description.isEmpty() ? action.description.str : action.title.raw().str;
-    auto icon = std::make_shared<ActionIcon>(paletteScoreProvider()->paletteScore()->dummy());
+    auto icon = std::make_shared<ActionIcon>(gpaletteScore->dummy());
     icon->setActionType(type);
     icon->setAction(code, static_cast<char16_t>(action.iconCode));
 
@@ -345,7 +345,7 @@ bool Palette::read(XmlReader& e, bool pasteMode)
     }
 
     PaletteCompat::removeOldItemsIfNeeded(*this);
-    PaletteCompat::addNewItemsIfNeeded(*this, paletteScoreProvider()->paletteScore());
+    PaletteCompat::addNewItemsIfNeeded(*this, gpaletteScore);
 
     return true;
 }
@@ -457,7 +457,7 @@ bool Palette::readFromFile(const QString& p)
             QString version = e.attribute("version");
             QStringList sl = version.split('.');
             int mscVersion = sl[0].toInt() * 100 + sl[1].toInt();
-            paletteScoreProvider()->paletteScore()->setMscVersion(mscVersion);
+            gpaletteScore->setMscVersion(mscVersion);
 
             while (e.readNextStartElement()) {
                 if (e.name() == "Palette") {
@@ -488,14 +488,14 @@ bool Palette::writeToFile(const QString& p) const
         path += ".mpal";
     }
 
-    auto zipBuf = Buffer::opened(IODevice::WriteOnly);
-    ZipWriter f(&zipBuf);
+    ZipWriter f(path);
     if (f.hasError()) {
         showWritingPaletteError(path);
         return false;
     }
 
-    auto cbuf = Buffer::opened(IODevice::ReadWrite);
+    Buffer cbuf;
+    cbuf.open(IODevice::ReadWrite);
     XmlWriter xml(&cbuf);
     xml.startDocument();
     xml.startElement("container");
@@ -520,7 +520,8 @@ bool Palette::writeToFile(const QString& p) const
         f.addFile(ipath, ip->buffer());
     }
     {
-        Buffer cbuf1 = Buffer::opened(IODevice::ReadWrite);
+        Buffer cbuf1;
+        cbuf1.open(IODevice::ReadWrite);
         XmlWriter xml1(&cbuf1);
         xml1.startDocument();
         xml1.startElement("museScore", { { "version", Constants::MSC_VERSION_STR } });
@@ -532,11 +533,6 @@ bool Palette::writeToFile(const QString& p) const
     }
     f.close();
     if (f.hasError()) {
-        showWritingPaletteError(path);
-        return false;
-    }
-
-    if (!File::writeFile(path, zipBuf.data())) {
         showWritingPaletteError(path);
         return false;
     }

@@ -34,9 +34,9 @@ using namespace muse::dock;
 class DockToolBarView::DraggableArea : public KDDockWidgets::QWidgetAdapter, public KDDockWidgets::Draggable
 {
 public:
-    DraggableArea(int ctx)
-        : KDDockWidgets::QWidgetAdapter(ctx)
-        , KDDockWidgets::Draggable(ctx, this)
+    DraggableArea()
+        : KDDockWidgets::QWidgetAdapter(),
+        KDDockWidgets::Draggable(this)
     {
     }
 
@@ -48,14 +48,14 @@ public:
 
         KDDockWidgets::FloatingWindow* floatingWindow = m_dockWidget->floatingWindow();
         if (floatingWindow) {
-            return std::unique_ptr<KDDockWidgets::WindowBeingDragged>(new KDDockWidgets::WindowBeingDragged(m_ctx, floatingWindow, this));
+            return std::unique_ptr<KDDockWidgets::WindowBeingDragged>(new KDDockWidgets::WindowBeingDragged(floatingWindow, this));
         }
 
         m_dockWidget->setFloating(true);
         floatingWindow = m_dockWidget->floatingWindow();
 
         auto draggable = static_cast<KDDockWidgets::Draggable*>(this);
-        return std::unique_ptr<KDDockWidgets::WindowBeingDragged>(new KDDockWidgets::WindowBeingDragged(m_ctx, floatingWindow, draggable));
+        return std::unique_ptr<KDDockWidgets::WindowBeingDragged>(new KDDockWidgets::WindowBeingDragged(floatingWindow, draggable));
     }
 
     KDDockWidgets::DockWidgetBase* singleDockWidget() const override
@@ -108,9 +108,10 @@ private:
     QQuickItem* m_mouseArea = nullptr;
 };
 
-//! NOTE: parent (MouseArea) will be set later
 DockToolBarView::DockToolBarView(QQuickItem* parent)
-    : DockBase(DockType::ToolBar, parent)
+    : DockBase(DockType::ToolBar, parent),
+    //! NOTE: parent (MouseArea) will be set later
+    m_draggableArea(new DraggableArea())
 {
     setLocation(Location::Top);
 }
@@ -159,7 +160,6 @@ void DockToolBarView::componentComplete()
 {
     DockBase::componentComplete();
 
-    m_draggableArea = new DraggableArea(iocContext()->id);
     m_draggableArea->setDockWidget(dockWidget());
 }
 

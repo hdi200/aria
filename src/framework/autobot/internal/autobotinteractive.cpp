@@ -214,24 +214,39 @@ RetVal<bool> AutobotInteractive::isCurrentUriDialog() const
     return m_real->isCurrentUriDialog();
 }
 
-async::Notification AutobotInteractive::currentUriAboutToBeChanged() const
-{
-    return m_real->currentUriAboutToBeChanged();
-}
-
 std::vector<Uri> AutobotInteractive::stack() const
 {
     return m_real->stack();
 }
 
-QWindow* AutobotInteractive::topWindow() const
+Ret AutobotInteractive::openUrl(const std::string& url) const
 {
-    return m_real->topWindow();
+    return m_real->openUrl(url);
 }
 
-bool AutobotInteractive::topWindowIsWidget() const
+Ret AutobotInteractive::openUrl(const QUrl& url) const
 {
-    return m_real->topWindowIsWidget();
+    return m_real->openUrl(url);
+}
+
+Ret AutobotInteractive::isAppExists(const std::string& appIdentifier) const
+{
+    return m_real->isAppExists(appIdentifier);
+}
+
+Ret AutobotInteractive::canOpenApp(const UriQuery& uri) const
+{
+    return m_real->canOpenApp(uri);
+}
+
+async::Promise<Ret> AutobotInteractive::openApp(const UriQuery& uri) const
+{
+    return m_real->openApp(uri);
+}
+
+Ret AutobotInteractive::revealInFileBrowser(const io::path_t& filePath) const
+{
+    return m_real->revealInFileBrowser(filePath);
 }
 
 io::path_t AutobotInteractive::selectedFilePath() const

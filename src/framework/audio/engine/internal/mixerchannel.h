@@ -33,14 +33,15 @@
 
 namespace muse::audio::engine {
 class IGetPlaybackPosition;
-class MixerChannel : public ITrackAudioOutput, public async::Asyncable
+class MixerChannel : public ITrackAudioOutput, public Contextable, public async::Asyncable
 {
-    GlobalInject<fx::IFxResolver> fxResolver;
+    ContextInject<fx::IFxResolver> fxResolver = { this };
 
 public:
     explicit MixerChannel(const TrackId trackId, const OutputSpec& outputSpec, IAudioSourcePtr source,
-                          const IGetPlaybackPosition* getPlaybackPosition);
-    explicit MixerChannel(const TrackId trackId, const OutputSpec& outputSpec, const IGetPlaybackPosition* getPlaybackPosition);
+                          const IGetPlaybackPosition* getPlaybackPosition, const modularity::ContextPtr& iocCtx);
+    explicit MixerChannel(const TrackId trackId, const OutputSpec& outputSpec, const IGetPlaybackPosition* getPlaybackPosition,
+                          const modularity::ContextPtr& iocCtx);
 
     TrackId trackId() const;
     IAudioSourcePtr source() const;
@@ -71,6 +72,8 @@ public:
 
 private:
     void completeOutput(float* buffer, unsigned int samplesCount);
+
+    void updateShouldProcessDuringSilence();
 
     TrackId m_trackId = -1;
 

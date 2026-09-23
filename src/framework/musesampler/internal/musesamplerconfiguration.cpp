@@ -65,7 +65,7 @@ muse::io::path_t MuseSamplerConfiguration::defaultLibraryPath() const
 
 muse::Version MuseSamplerConfiguration::minSupportedVersion() const
 {
-    return Version(0, 105, 0);
+    return Version(0, 101, 0);
 }
 
 bool MuseSamplerConfiguration::shouldShowBuildNumber() const

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2022 MuseScore Limited
+ * Copyright (C) 2022 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,8 +27,7 @@
 #include "modularity/ioc.h"
 #include "iprojectconfiguration.h"
 #include "iprojectfilescontroller.h"
-#include "interactive/iinteractive.h"
-#include "interactive/iplatforminteractive.h"
+#include "global/iinteractive.h"
 
 #include "cloud/musescorecom/imusescorecomservice.h"
 #include "cloud/audiocom/iaudiocomservice.h"
@@ -37,11 +36,10 @@ namespace mu::project {
 class OpenSaveProjectScenario : public IOpenSaveProjectScenario, public muse::Contextable
 {
     muse::GlobalInject<IProjectConfiguration> configuration;
-    muse::GlobalInject<muse::cloud::IMuseScoreComService> museScoreComService;
-    muse::GlobalInject<muse::cloud::IAudioComService> audioComService;
-    muse::GlobalInject<muse::IPlatformInteractive> platformInteractive;
     muse::ContextInject<IProjectFilesController> projectFilesController = { this };
     muse::ContextInject<muse::IInteractive> interactive = { this };
+    muse::ContextInject<muse::cloud::IMuseScoreComService> museScoreComService = { this };
+    muse::ContextInject<muse::cloud::IAudioComService> audioComService = { this };
 
 public:
     OpenSaveProjectScenario(const muse::modularity::ContextPtr& iocCtx)

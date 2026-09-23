@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -311,9 +311,9 @@ void ChangeStaff::flip(EditData*)
 
 void ChangeStaffType::flip(EditData*)
 {
-    StaffType oldStaffType = *staff->staffType(tick);
+    StaffType oldStaffType = *staff->staffType(Fraction(0, 1));        // TODO
 
-    staff->setStaffType(tick, staffType);
+    staff->setStaffType(Fraction(0, 1), staffType);
 
     bool invisibleChanged = oldStaffType.invisible() != staffType.invisible();
     bool fromTabToStandard = oldStaffType.isTabStaff() && !staffType.isTabStaff();
@@ -324,7 +324,7 @@ void ChangeStaffType::flip(EditData*)
     if (invisibleChanged) {
         staff_idx_t staffIdx = staff->idx();
         for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure()) {
-            m->staffLines(staffIdx)->setVisible(!staff->isLinesInvisible(tick));
+            m->staffLines(staffIdx)->setVisible(!staff->isLinesInvisible(Fraction(0, 1)));
         }
     }
 

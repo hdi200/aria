@@ -20,35 +20,31 @@ using namespace KDDockWidgets;
 class Draggable::Private
 {
 public:
-    explicit Private(int _ctx, QWidgetOrQuick *_thisWidget, bool _enabled)
-        : ctx(_ctx)
-        , thisWidget(_thisWidget)
+    explicit Private(QWidgetOrQuick *_thisWidget, bool _enabled)
+        : thisWidget(_thisWidget)
         , enabled(_enabled)
     {
         Q_ASSERT(thisWidget);
     }
 
-    const int ctx = 0;
     QPointer<WidgetResizeHandler> widgetResizeHandler;
     QWidgetOrQuick *const thisWidget;
     const bool enabled;
 };
 
-Draggable::Draggable(int ctx, QWidgetOrQuick *thisWidget, bool enabled)
-    : d(new Private(ctx, thisWidget, enabled))
+Draggable::Draggable(QWidgetOrQuick *thisWidget, bool enabled)
+    : d(new Private(thisWidget, enabled))
 {
     if (thisWidget && d->enabled)
-        DragController::instance(ctx)->registerDraggable(this);
+        DragController::instance()->registerDraggable(this);
 }
 
 Draggable::~Draggable()
 {
     if (d->thisWidget && d->enabled)
-        DragController::instance(ctx())->unregisterDraggable(this);
+        DragController::instance()->unregisterDraggable(this);
     delete d;
 }
-
-int Draggable::ctx() const { return d->ctx; }
 
 QWidgetOrQuick *Draggable::asWidget() const
 {

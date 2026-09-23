@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -28,7 +28,7 @@
 #include "global/async/asyncable.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
+#include "global/iinteractive.h"
 #include "iapplication.h"
 #include "iworkspacemanager.h"
 
@@ -44,7 +44,7 @@ class WorkspaceListModel : public QAbstractListModel, public Contextable, public
     QML_ELEMENT
 
     ContextInject<IInteractive> interactive = { this };
-    GlobalInject<IApplication> application;
+    ContextInject<IApplication> application = { this };
     ContextInject<IWorkspaceManager> workspacesManager = { this };
 
 public:

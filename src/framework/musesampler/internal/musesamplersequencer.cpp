@@ -22,6 +22,8 @@
 
 #include "musesamplersequencer.h"
 
+#include <algorithm>
+
 #include "apitypes.h"
 
 using namespace muse;
@@ -107,6 +109,7 @@ static const std::unordered_map<ArticulationType, ms_NoteArticulation2> ARTICULA
     { ArticulationType::SingingVibrate, ms_NoteArticulation2_SingingVibrate },
     { ArticulationType::Swing, ms_NoteArticulation2_HandbellSwing },
     { ArticulationType::Echo, ms_NoteArticulation2_Echo },
+    { ArticulationType::Breath, ms_NoteArticulation2_BreathMark },
 };
 
 static const std::unordered_map<ArticulationType, ms_NoteHead> NOTEHEAD_TYPES {
@@ -452,7 +455,8 @@ void MuseSamplerSequencer::addPitchBends(const mpe::NoteEvent& noteEvent, long l
         pitchBend.event_id = noteEventId;
         pitchBend._start_us = startUs;
         pitchBend._duration_us = durationUs;
-        pitchBend._offset_cents = pitchLevelToCents(pitchOffset);
+        const int rawCents = pitchLevelToCents(pitchOffset);
+        pitchBend._offset_cents = std::clamp(rawCents, -MAX_PITCH_BEND_RANGE_CENTS, MAX_PITCH_BEND_RANGE_CENTS);
         pitchBend._type = PitchBend_Bezier;
         m_samplerLib->addPitchBend(m_sampler, track, pitchBend);
     };

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -43,6 +43,7 @@ public:
 
     virtual muse::DateTime birthTime() const = 0;
     virtual muse::DateTime lastModified() const = 0;
+    virtual bool isNewlyCreated() const = 0;
 };
 
 using IFileInfoProviderPtr = std::shared_ptr<IFileInfoProvider>;

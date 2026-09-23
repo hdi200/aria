@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -55,8 +55,7 @@ void EngravingItemPreviewPainter::paintPreview(std::shared_ptr<engraving::render
 
     painter->translate(params.xoffset * params.spatium, params.yoffset * params.spatium); // additional offset for element only
 
-    const Score* score = element->score()->paletteScore() ? element->score()->paletteScore() : element->score();
-    const double sizeRatio = params.spatium / score->style().spatium();
+    const double sizeRatio = params.spatium / gpaletteScore->style().spatium();
     painter->scale(sizeRatio, sizeRatio); // scale coordinates so element is drawn at correct size
 
     // calculate bbox

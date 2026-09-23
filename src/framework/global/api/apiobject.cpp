@@ -21,12 +21,10 @@
  */
 #include "apiobject.h"
 
-#include "global/modularity/ioc.h"
-
 using namespace muse::api;
 
 ApiObject::ApiObject(IApiEngine* e)
-    : Contextable(e ? e->iocContext() : muse::modularity::globalCtx()), m_engine(e)
+    : Contextable(e->iocContext()), m_engine(e)
 {
 }
 

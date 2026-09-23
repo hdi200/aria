@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -30,29 +30,22 @@ using namespace mu::context;
 using namespace muse::modularity;
 using namespace muse::shortcuts;
 
-static const std::string mname("context");
-
 std::string ContextModule::moduleName() const
 {
-    return mname;
+    return "context";
 }
 
-IContextSetup* ContextModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new ContextModuleContext(ctx);
-}
-
-void ContextModuleContext::registerExports()
+void ContextModule::registerExports()
 {
     m_globalContext = std::make_shared<GlobalContext>();
     m_uicontextResolver = std::make_shared<UiContextResolver>(iocContext());
 
-    ioc()->registerExport<IGlobalContext>(mname, m_globalContext);
-    ioc()->registerExport<IUiContextResolver>(mname, m_uicontextResolver);
-    ioc()->registerExport<IShortcutContextPriority>(mname, new ShortcutContextPriority());
+    ioc()->registerExport<IGlobalContext>(moduleName(), m_globalContext);
+    ioc()->registerExport<IUiContextResolver>(moduleName(), m_uicontextResolver);
+    ioc()->registerExport<IShortcutContextPriority>(moduleName(), new ShortcutContextPriority());
 }
 
-void ContextModuleContext::onInit(const muse::IApplication::RunMode& mode)
+void ContextModule::onInit(const muse::IApplication::RunMode& mode)
 {
     if (mode != muse::IApplication::RunMode::GuiApp) {
         return;
@@ -61,7 +54,7 @@ void ContextModuleContext::onInit(const muse::IApplication::RunMode& mode)
     m_uicontextResolver->init();
 }
 
-void ContextModuleContext::onDeinit()
+void ContextModule::onDeinit()
 {
     m_globalContext->setCurrentProject(nullptr);
 }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,14 +23,11 @@
 #ifndef __KEYEDIT_H__
 #define __KEYEDIT_H__
 
-#include "ui/view/widgetdialog.h"
-
 #include "ui_keyedit.h"
 
 #include "modularity/ioc.h"
 #include "ipaletteconfiguration.h"
 #include "internal/ipaletteprovider.h"
-#include "engraving/ipalettescoreprovider.h"
 
 namespace mu::palette {
 class PaletteWidget;
@@ -44,10 +41,9 @@ class KeyEditor : public QWidget, Ui::KeyEdit, public muse::Contextable
 
     muse::GlobalInject<IPaletteConfiguration> configuration;
     muse::ContextInject<IPaletteProvider> paletteProvider = { this };
-    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { this };
 
 public:
-    KeyEditor(QWidget* parent = nullptr);
+    KeyEditor(QWidget* parent = 0);
 
     bool dirty() const { return m_dirty; }
     void save();
@@ -71,24 +67,6 @@ private:
 };
 
 static const int KEYEDIT_ACC_ZERO_POINT = 3;
-
-class KeyEditorDialog : public muse::ui::WidgetDialog
-{
-    Q_OBJECT
-
-    Q_PROPERTY(bool showKeyPalette READ showKeyPalette WRITE setShowKeyPalette)
-
-public:
-    KeyEditorDialog(QWidget* parent = nullptr);
-
-    void classBegin() override;
-
-    bool showKeyPalette() const;
-    void setShowKeyPalette(bool showKeyPalette);
-
-private:
-    KeyEditor* m_keyEditor = nullptr;
-};
 }
 
 #endif

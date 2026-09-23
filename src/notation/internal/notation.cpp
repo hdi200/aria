@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -50,7 +50,7 @@ Notation::Notation(MasterNotation* master, const muse::modularity::ContextPtr& i
     : muse::Contextable(iocCtx)
     , m_masterNotation(master)
 {
-    m_painting = std::make_shared<NotationPainting>(this);
+    m_painting = std::make_shared<NotationPainting>(this, iocCtx);
     m_viewState = std::make_shared<NotationViewState>(this, iocCtx);
     m_soloMuteState = std::make_shared<NotationSoloMuteState>();
     m_undoStack = std::make_shared<NotationUndoStack>(this, m_notationChanged);
@@ -114,11 +114,6 @@ Notation::~Notation()
     //! NOTE: The master score will be deleted later from ~EngravingProject()
     //! Its excerpts will be deleted directly in ~MasterScore()
     m_score = nullptr;
-}
-
-const muse::modularity::ContextPtr& Notation::iocContext() const
-{
-    return muse::Contextable::iocContext();
 }
 
 mu::project::INotationProject* Notation::project() const
@@ -258,9 +253,9 @@ bool Notation::isMaster() const
     return m_score->isMaster();
 }
 
-void Notation::notifyAboutNotationChanged(const muse::RectF& updateRect)
+void Notation::notifyAboutNotationChanged()
 {
-    m_notationChanged.send(updateRect);
+    m_notationChanged.notify();
 }
 
 void Notation::setViewMode(const ViewMode& viewMode)
@@ -318,7 +313,7 @@ INotationStylePtr Notation::style() const
     return m_style;
 }
 
-muse::async::Channel<muse::RectF> Notation::notationChanged() const
+muse::async::Notification Notation::notationChanged() const
 {
     return m_notationChanged;
 }

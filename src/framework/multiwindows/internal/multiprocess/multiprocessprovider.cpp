@@ -60,8 +60,14 @@ MultiProcessProvider::~MultiProcessProvider()
     delete m_ipcChannel;
 }
 
-void MultiProcessProvider::initOnGlobal()
+void MultiProcessProvider::init()
 {
+    dispatcher()->reg(this, "multiwindows-dev-show-info", [this]() {
+        if (!interactive()->isOpened(DEV_SHOW_INFO_URI.uri()).val) {
+            interactive()->open(DEV_SHOW_INFO_URI);
+        }
+    });
+
     m_ipcChannel = new IpcChannel();
     m_selfID = m_ipcChannel->selfID().toStdString();
     LOGI() << "our instance id is: " << m_selfID;
@@ -70,15 +76,6 @@ void MultiProcessProvider::initOnGlobal()
     m_ipcChannel->instancesChanged().onNotify(this, [this]() { m_instancesChanged.notify(); });
 
     m_ipcChannel->connect();
-}
-
-void MultiProcessProvider::initOnContext()
-{
-    dispatcher()->reg(this, "multiwindows-dev-show-info", [this]() {
-        if (!interactive()->isOpened(DEV_SHOW_INFO_URI.uri()).val) {
-            interactive()->open(DEV_SHOW_INFO_URI);
-        }
-    });
 }
 
 bool MultiProcessProvider::isInited() const
@@ -427,14 +424,9 @@ async::Channel<std::string> MultiProcessProvider::resourceChanged()
     return m_resourceChanged;
 }
 
-size_t MultiProcessProvider::windowCount() const
+int MultiProcessProvider::windowCount() const
 {
     return m_ipcChannel ? m_ipcChannel->instances().size() : 1;
-}
-
-bool MultiProcessProvider::isFirstWindow() const
-{
-    return windowCount() <= 1;
 }
 
 const std::string& MultiProcessProvider::selfID() const
@@ -481,14 +473,6 @@ void MultiProcessProvider::quitForAll()
     }
 
     m_ipcChannel->broadcast(METHOD_QUIT);
-
-    // current
-    quitWindow(nullptr);
-}
-
-void MultiProcessProvider::quitWindow(const modularity::ContextPtr&)
-{
-    QCoreApplication::exit();
 }
 
 void MultiProcessProvider::quitAllAndRestartLast()

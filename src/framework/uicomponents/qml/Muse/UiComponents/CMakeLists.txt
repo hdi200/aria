@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2025 MuseScore Limited
+# Copyright (C) 2025 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -62,8 +62,6 @@ qt_add_qml_module(muse_uicomponents_qml
         menuitem.h
         menuview.cpp
         menuview.h
-        polylineplot.cpp
-        polylineplot.h
         popupview.cpp
         popupview.h
         qmllistproperty.cpp
@@ -110,7 +108,6 @@ qt_add_qml_module(muse_uicomponents_qml
         FlatToggleButton.qml
         FocusableControl.qml
         FocusableItem.qml
-        FontDropdown.qml
         GradientRectangle.qml
         GridViewSectional.qml
         IncrementalPropertyControl.qml
@@ -188,14 +185,14 @@ fixup_qml_module_dependencies(muse_uicomponents_qml)
 
 if (OS_IS_MAC)
     target_sources(muse_uicomponents_qml PRIVATE
-        internal/platform/macos/macoschildwindowcontroller.mm
-        internal/platform/macos/macoschildwindowcontroller.h
+        internal/platform/macos/macoswindowlevelcontroller.mm
+        internal/platform/macos/macoswindowlevelcontroller.h
         internal/platform/macos/macospopupviewclosecontroller.mm
         internal/platform/macos/macospopupviewclosecontroller.h
         )
 
     set_source_files_properties(
-        internal/platform/macos/macoschildwindowcontroller.mm
+        internal/platform/macos/macoswindowlevelcontroller.mm
         internal/platform/macos/macospopupviewclosecontroller.mm
         PROPERTIES
         SKIP_UNITY_BUILD_INCLUSION ON

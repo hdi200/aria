@@ -19,23 +19,33 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#pragma once
+#ifndef MUSE_ACCESSIBILITY_ACCESSIBILITYCONFIGURATION_H
+#define MUSE_ACCESSIBILITY_ACCESSIBILITYCONFIGURATION_H
 
 #include "../iaccessibilityconfiguration.h"
 
+#include "modularity/ioc.h"
+#include "ui/inavigationcontroller.h"
+
 namespace muse::accessibility {
-class AccessibilityConfiguration : public IAccessibilityConfiguration
+class AccessibilityConfiguration : public IAccessibilityConfiguration, public Contextable
 {
+    ContextInject<ui::INavigationController> navigationController { this };
+
 public:
-    AccessibilityConfiguration() = default;
+    AccessibilityConfiguration(const modularity::ContextPtr& ctx)
+        : Contextable(ctx) {}
 
     ~AccessibilityConfiguration() override;
 
     void init();
 
-    bool isAccessibleActive() const override;
+    bool enabled() const override;
+    bool active() const override;
 
 private:
     bool m_inited = false;
 };
 }
+
+#endif // MUSE_ACCESSIBILITY_ACCESSIBILITYCONFIGURATION_H

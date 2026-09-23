@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -44,7 +44,7 @@ private:
     mu::engraving::Score* score() const;
 
     mu::engraving::RehearsalMark* rehearsalMark(const muse::String& name) const;
-    mu::engraving::Page* page(const size_t pageIndex) const;
+    mu::engraving::Page* page(const int pageIndex) const;
 
     std::vector<EngravingItem*> allScoreElements() const;
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -268,7 +268,7 @@ bool WinWindowsController::processMouseMove(HWND hWnd, LPARAM lParam, qintptr* r
     long x = GET_X_LPARAM(lParam);
     long y = GET_Y_LPARAM(lParam);
 
-    double scaleFactor = uiContextConfiguration()->guiScaling();
+    double scaleFactor = uiConfiguration()->guiScaling();
     QRect moveAreaRect = mainWindowTitleBarMoveArea();
     int moveAreaHeight = static_cast<int>(moveAreaRect.height() * scaleFactor);
     int moveAreaWidth = static_cast<int>(moveAreaRect.width() * scaleFactor);

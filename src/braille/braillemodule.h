@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,26 +35,12 @@ class BrailleModule : public muse::modularity::IModuleSetup
 {
 public:
     std::string moduleName() const override;
-    void registerExports() override;
     void resolveImports() override;
+    void registerExports() override;
     void onInit(const muse::IApplication::RunMode& mode) override;
-
-    muse::modularity::IContextSetup* newContext(const muse::modularity::ContextPtr& ctx) const override;
 
 private:
     std::shared_ptr<engraving::BrailleConfiguration> m_brailleConfiguration;
-};
-
-class BrailleModuleContext : public muse::modularity::IContextSetup
-{
-public:
-    BrailleModuleContext(const muse::modularity::ContextPtr& ctx)
-        : muse::modularity::IContextSetup(ctx) {}
-
-    void registerExports() override;
-    void onInit(const muse::IApplication::RunMode& mode) override;
-
-private:
     std::shared_ptr<engraving::BrailleConverter> m_brailleConverter;
     std::shared_ptr<engraving::NotationBraille> m_notationBraille;
 };

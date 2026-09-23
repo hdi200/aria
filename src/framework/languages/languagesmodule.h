@@ -36,7 +36,6 @@ public:
 
     void registerExports() override;
     void onPreInit(const IApplication::RunMode& mode) override;
-    void onInit(const IApplication::RunMode&) override;
 
 private:
     std::shared_ptr<LanguagesConfiguration> m_languagesConfiguration;

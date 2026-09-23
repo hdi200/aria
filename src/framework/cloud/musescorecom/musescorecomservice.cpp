@@ -23,11 +23,16 @@
 #include "musescorecomservice.h"
 
 #include <QBuffer>
+#include <QFile>
+#include <QFileInfo>
 #include <QHttpMultiPart>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMimeDatabase>
+#include <QMimeType>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 
 #include "clouderrors.h"
 
@@ -50,6 +55,13 @@ static const QUrl MUSESCORECOM_SCORE_DOWNLOAD_API_URL(MUSESCORECOM_API_ROOT_URL 
 static const QUrl MUSESCORECOM_SCORE_DOWNLOAD_SHARED_API_URL(MUSESCORECOM_API_ROOT_URL + "/score/download-shared");
 static const QUrl MUSESCORECOM_UPLOAD_SCORE_API_URL(MUSESCORECOM_API_ROOT_URL + "/score/upload");
 static const QUrl MUSESCORECOM_UPLOAD_AUDIO_API_URL(MUSESCORECOM_API_ROOT_URL + "/score/audio");
+
+//! TODO: not an API endpoint, replace with the real URL once known
+static const QUrl MUSESCORECOM_CONVERT_CONFIG_URL("");
+static const QUrl MUSESCORECOM_CONVERT_UPLOAD_API_URL(MUSESCORECOM_API_ROOT_URL + "/score/convert");
+static const QUrl MUSESCORECOM_CONVERT_QUEUE_API_URL(MUSESCORECOM_API_ROOT_URL + "/score/convert/queue");
+static const QUrl MUSESCORECOM_CONVERT_MSCZ_API_URL(MUSESCORECOM_API_ROOT_URL + "/score/mscz");
+static const QUrl MUSESCORECOM_REVIEW_API_URL(MUSESCORECOM_API_ROOT_URL + "/score/review");
 
 static const QString MUSESCORE_TEXT_LOGO("https://musescore.com/static/public/musescore/img/logo/musescore-logo.svg");
 
@@ -247,12 +259,278 @@ static QHttpMultiPartPtr makeMultiPartForAudioUpload(QIODevice* audioData, const
     return multiPart;
 }
 
+static QString convertTypeToApiString(ConvertType type)
+{
+    switch (type) {
+    case ConvertType::Omr: return "omr";
+    case ConvertType::Audio2Score: return "audio2score";
+    }
+
+    return QString();
+}
+
+static ConvertType convertTypeFromApiString(const QString& str)
+{
+    if (str == "omr") {
+        return ConvertType::Omr;
+    }
+
+    if (str == "audio2score") {
+        return ConvertType::Audio2Score;
+    }
+
+    LOGW() << "Unknown convert type: \"" << str << "\", falling back to Omr";
+    return ConvertType::Omr;
+}
+
+static ConvertStatus convertStatusFromApiString(const QString& str)
+{
+    if (str == "processing") {
+        return ConvertStatus::Processing;
+    } else if (str == "awaiting_review") {
+        return ConvertStatus::AwaitingReview;
+    } else if (str == "done") {
+        return ConvertStatus::Done;
+    } else if (str == "failed") {
+        return ConvertStatus::Failed;
+    }
+
+    return ConvertStatus::Unknown;
+}
+
+static ConvertErrorCode convertErrorCodeFromApiString(const QString& str)
+{
+    if (str == "unsupported_format") {
+        return ConvertErrorCode::UnsupportedFormat;
+    } else if (str == "file_too_large") {
+        return ConvertErrorCode::FileTooLarge;
+    } else if (str == "too_many_files") {
+        return ConvertErrorCode::TooManyFiles;
+    } else if (str == "rate_limited") {
+        return ConvertErrorCode::RateLimited;
+    } else if (str == "mscz_not_ready") {
+        return ConvertErrorCode::MsczNotReady;
+    } else if (str == "meta_locked") {
+        return ConvertErrorCode::MetaLocked;
+    } else if (str == "no_need_review") {
+        return ConvertErrorCode::NoNeedReview;
+    } else if (str == "search_required") {
+        return ConvertErrorCode::SearchRequired;
+    } else if (str == "invalid_input") {
+        return ConvertErrorCode::InvalidInput;
+    } else if (str == "invalid_file_type") {
+        return ConvertErrorCode::InvalidFileType;
+    } else if (str == "invalid_format") {
+        return ConvertErrorCode::InvalidFormat;
+    } else if (str == "file_processing_error") {
+        return ConvertErrorCode::FileProcessingError;
+    } else if (str == "model_execution_error") {
+        return ConvertErrorCode::ModelExecutionError;
+    } else if (str == "conversion_error") {
+        return ConvertErrorCode::ConversionError;
+    } else if (str == "resource_not_found") {
+        return ConvertErrorCode::ResourceNotFound;
+    } else if (str == "internal_server_error") {
+        return ConvertErrorCode::InternalServerError;
+    }
+
+    return ConvertErrorCode::Unknown;
+}
+
+static void appendServerErrorCode(Ret& ret, const QByteArray& data)
+{
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        return;
+    }
+
+    QString errorCodeStr = doc.object().value("error_code").toString();
+    if (errorCodeStr.isEmpty()) {
+        return;
+    }
+
+    ret.setData(CONVERT_ERROR_CODE_KEY, convertErrorCodeFromApiString(errorCodeStr));
+}
+
+static RetVal<ConvertResult> parseConvertResult(const QByteArray& data)
+{
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        return RetVal<ConvertResult>::make_ret((int)Ret::Code::InternalError, err.errorString().toStdString());
+    }
+
+    QJsonObject obj = doc.object();
+
+    ConvertResult result;
+    result.id = obj.value("id").toInt();
+    result.type = convertTypeFromApiString(obj.value("type").toString());
+    result.status = convertStatusFromApiString(obj.value("status").toString());
+
+    return RetVal<ConvertResult>::make_ok(result);
+}
+
+static RetVal<ConvertQueueList> parseConvertQueueList(const QByteArray& data)
+{
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        return RetVal<ConvertQueueList>::make_ret((int)Ret::Code::InternalError, err.errorString().toStdString());
+    }
+
+    QJsonArray items = doc.object().value("items").toArray();
+
+    ConvertQueueList result;
+    result.reserve(items.size());
+
+    for (const QJsonValue& itemVal : items) {
+        QJsonObject itemObj = itemVal.toObject();
+
+        ConvertQueueItem item;
+        item.id = itemObj.value("id").toInt();
+        item.type = convertTypeFromApiString(itemObj.value("type").toString());
+        item.status = convertStatusFromApiString(itemObj.value("status").toString());
+        item.filename = itemObj.value("filename").toString();
+        item.link = itemObj.value("link").toString();
+        item.scoreId = itemObj.value("score_id").toInt();
+        item.createdAt = QDateTime::fromSecsSinceEpoch(itemObj.value("created_at").toInteger());
+        item.updatedAt = QDateTime::fromSecsSinceEpoch(itemObj.value("updated_at").toInteger());
+        item.errorCode = convertErrorCodeFromApiString(itemObj.value("error_code").toString());
+
+        result.push_back(item);
+    }
+
+    return RetVal<ConvertQueueList>::make_ok(result);
+}
+
+static RetVal<SignedMsczUrl> parseSignedMsczUrl(const QByteArray& data)
+{
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        return RetVal<SignedMsczUrl>::make_ret((int)Ret::Code::InternalError, err.errorString().toStdString());
+    }
+
+    QJsonObject obj = doc.object();
+
+    SignedMsczUrl result;
+    result.id = obj.value("id").toInt();
+    result.type = convertTypeFromApiString(obj.value("type").toString());
+    result.url = QUrl(obj.value("url").toString());
+    result.expiresInSeconds = obj.value("expires_in").toInt();
+
+    return RetVal<SignedMsczUrl>::make_ok(result);
+}
+
+static RetVal<ConvertConfig> parseConvertConfig(const QByteArray& data)
+{
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        return RetVal<ConvertConfig>::make_ret((int)Ret::Code::InternalError, err.errorString().toStdString());
+    }
+
+    QJsonObject omrObj = doc.object().value("omr").toObject();
+    QJsonObject audio2scoreObj = doc.object().value("audio2score").toObject();
+
+    ConvertConfig result;
+
+    result.omr.maxFileSizeBytes = omrObj.value("max_file_size_bytes").toInteger();
+    result.omr.maxPages = omrObj.value("max_pages").toInt();
+    result.omr.maxImages = omrObj.value("max_images").toInt();
+
+    //! NOTE: server sends MIME types (e.g. "image/jpeg"), client only checks extensions;
+    //! resolve to the real extensions they cover
+    QMimeDatabase mimeDb;
+    for (const QJsonValue& mimeType : omrObj.value("allowed_mime_types").toArray()) {
+        QString mimeTypeStr = mimeType.toString();
+        QStringList suffixes = mimeDb.mimeTypeForName(mimeTypeStr).suffixes();
+        if (suffixes.isEmpty()) {
+            result.omr.allowedExtensions.push_back(mimeTypeStr.section('/', -1));
+            continue;
+        }
+
+        result.omr.allowedExtensions.append(suffixes);
+    }
+
+    result.audio2score.maxFileSizeBytes = audio2scoreObj.value("max_file_size_bytes").toInteger();
+    result.audio2score.maxFiles = audio2scoreObj.value("max_files").toInt();
+    for (const QJsonValue& extension : audio2scoreObj.value("allowed_extensions").toArray()) {
+        result.audio2score.allowedExtensions.push_back(extension.toString());
+    }
+    result.audio2score.maxLinkLength = audio2scoreObj.value("max_link_length").toInt();
+    for (const QJsonValue& source : audio2scoreObj.value("allowed_link_sources").toArray()) {
+        result.audio2score.allowedLinkSources.push_back(source.toString());
+    }
+
+    return RetVal<ConvertConfig>::make_ok(result);
+}
+
+static QString sanitizeContentDispositionFilename(const QString& fileName)
+{
+    QString sanitized = fileName;
+    sanitized.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+    sanitized.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    sanitized.remove(QRegularExpression("[\\r\\n]"));
+    return sanitized;
+}
+
+using ConvertFileList = std::vector<std::shared_ptr<QFile> >;
+
+static QHttpMultiPartPtr makeMultiPartForConvertUpload(ConvertType type, const ConvertFileList& files, const QString& link)
+{
+    auto multiPart = std::make_shared<QHttpMultiPart>(QHttpMultiPart::FormDataType);
+
+    QHttpPart typePart;
+    typePart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"type\""));
+    typePart.setBody(convertTypeToApiString(type).toUtf8());
+    multiPart->append(typePart);
+
+    if (!link.isEmpty()) {
+        QHttpPart linkPart;
+        linkPart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"link\""));
+        linkPart.setBody(link.toUtf8());
+        multiPart->append(linkPart);
+    }
+
+    for (const std::shared_ptr<QFile>& file : files) {
+        QHttpPart filePart;
+        filePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("application/octet-stream"));
+        QString contentDisposition
+            = QString("form-data; name=\"files[]\"; filename=\"%1\"").arg(sanitizeContentDispositionFilename(QFileInfo(*file).fileName()));
+        filePart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant(contentDisposition));
+        filePart.setBodyDevice(file.get());
+        multiPart->append(filePart);
+    }
+
+    return multiPart;
+}
+
+static QByteArray makeReviewRequestBody(int id, ReviewRating review, const QString& reason)
+{
+    QJsonObject obj;
+    obj["id"] = id;
+    obj["review"] = int(review);
+
+    if (review == ReviewRating::Bad && !reason.isEmpty()) {
+        obj["reason"] = reason;
+    }
+
+    return QJsonDocument(obj).toJson(QJsonDocument::Compact);
+}
+
 MuseScoreComService::MuseScoreComService(const modularity::ContextPtr& iocCtx, QObject* parent)
     : AbstractCloudService(iocCtx, parent)
 {
 }
 
 IAuthorizationServicePtr MuseScoreComService::authorization()
+{
+    return shared_from_this();
+}
+
+IMuseScoreComConvertServicePtr MuseScoreComService::convert()
 {
     return shared_from_this();
 }
@@ -675,5 +953,265 @@ Promise<Ret> MuseScoreComService::doUploadAudio(DevicePtr audioData, const QStri
         });
 
         return Promise<Ret>::dummy_result();
+    });
+}
+
+RequestHeaders MuseScoreComService::convertHeaders() const
+{
+    RequestHeaders headers = defaultHeaders();
+    headers.rawHeaders["Accept"] = "application/json";
+
+    return headers;
+}
+
+Promise<RetVal<ConvertConfig> > MuseScoreComService::fetchConfig()
+{
+    return Promise<RetVal<ConvertConfig> >([this](auto resolve, auto) {
+        if (m_cachedConfig.has_value()) {
+            (void)resolve(RetVal<ConvertConfig>::make_ok(m_cachedConfig.value()));
+            return Promise<RetVal<ConvertConfig> >::dummy_result();
+        }
+
+        auto receivedData = std::make_shared<QBuffer>();
+        RetVal<Progress> progress = m_networkManager->get(MUSESCORECOM_CONVERT_CONFIG_URL, receivedData, convertHeaders());
+        if (!progress.ret) {
+            return resolve(RetVal<ConvertConfig>::make_ret(progress.ret));
+        }
+
+        progress.val.finished().onReceive(this, [this, receivedData, resolve](const ProgressResult& res) {
+            if (!res.ret) {
+                printServerReply(*receivedData);
+                Ret ret = uploadingDownloadingRetFromRawRet(res.ret);
+                appendServerErrorCode(ret, receivedData->data());
+                (void)resolve(RetVal<ConvertConfig>::make_ret(ret));
+                return;
+            }
+
+            RetVal<ConvertConfig> config = parseConvertConfig(receivedData->data());
+            if (config.ret) {
+                m_cachedConfig = config.val;
+            }
+            (void)resolve(config);
+        });
+
+        return Promise<RetVal<ConvertConfig> >::dummy_result();
+    });
+}
+
+ProgressPtr MuseScoreComService::upload(const ConvertInput& input)
+{
+    ProgressPtr progress = std::make_shared<Progress>();
+    progress->start();
+
+    executeAsyncRequest([this, input, progress]() {
+        return doUpload(input, progress);
+    }).onResolve(this, [progress](const Ret& ret) {
+        if (progress->isStarted()) {
+            progress->finish(ret);
+        }
+    });
+
+    return progress;
+}
+
+Promise<Ret> MuseScoreComService::doUpload(const ConvertInput& input, ProgressPtr progress)
+{
+    TRACEFUNC;
+
+    return make_promise<Ret>([this, input, progress](auto resolve, auto) {
+        RetVal<QUrl> uploadUrl = prepareUrlForRequest(MUSESCORECOM_CONVERT_UPLOAD_API_URL);
+        if (!uploadUrl.ret) {
+            return resolve(uploadUrl.ret);
+        }
+
+        const ConvertType type = convertTypeOf(input);
+        const QString link = convertLinkOf(input);
+
+        ConvertFileList files;
+        for (const io::path_t& path : convertPathsOf(input)) {
+            auto file = std::make_shared<QFile>(path.toQString());
+            if (!file->open(QIODevice::ReadOnly)) {
+                return resolve(make_ret(Err::InvalidData));
+            }
+
+            if (file->size() > MAX_CONVERT_FILE_SIZE_BYTES) {
+                Ret ret = make_ret(Err::Status422_ValidationFailed);
+                ret.setData(CONVERT_ERROR_CODE_KEY, ConvertErrorCode::FileTooLarge);
+                return resolve(ret);
+            }
+
+            files.push_back(file);
+        }
+
+        auto multiPart = makeMultiPartForConvertUpload(type, files, link);
+        auto receivedData = std::make_shared<QBuffer>();
+
+        RetVal<Progress> uploadProgress = m_networkManager->post(uploadUrl.val, multiPart, receivedData, convertHeaders());
+        if (!uploadProgress.ret) {
+            return resolve(uploadProgress.ret);
+        }
+
+        uploadProgress.val.progressChanged().onReceive(this, [progress](int64_t current, int64_t total, const std::string& msg) {
+            progress->progress(current, total, msg);
+        });
+
+        //! NOTE: files must stay alive (and open) until the request finishes,
+        //! since multiPart's file parts hold raw pointers into them
+        uploadProgress.val.finished().onReceive(this, [this, files, receivedData, resolve, progress](const ProgressResult& res) {
+            if (!res.ret) {
+                printServerReply(*receivedData);
+                Ret ret = uploadingDownloadingRetFromRawRet(res.ret);
+                appendServerErrorCode(ret, receivedData->data());
+                (void)resolve(ret);
+                return;
+            }
+
+            RetVal<ConvertResult> result = parseConvertResult(receivedData->data());
+            if (!result.ret) {
+                (void)resolve(result.ret);
+                return;
+            }
+
+            ValMap map;
+            map["id"] = Val(result.val.id);
+            map["type"] = Val(convertTypeToApiString(result.val.type));
+            map["status"] = Val(int(result.val.status));
+
+            progress->finish(RetVal<Val>::make_ok(Val(map)));
+            (void)resolve(make_ok());
+        });
+
+        return Promise<Ret>::dummy_result();
+    });
+}
+
+ProgressPtr MuseScoreComService::downloadConvertedScore(const SignedMsczUrl& urlInfo, DevicePtr scoreData)
+{
+    TRACEFUNC;
+
+    ProgressPtr progress = std::make_shared<Progress>();
+    progress->start();
+
+    IF_ASSERT_FAILED(urlInfo.isValid()) {
+        progress->finish(make_ret(Err::InvalidData));
+        return progress;
+    }
+
+    //! NOTE: urlInfo.url is already a signed URL, so it must be
+    //! requested as-is, without going through prepareUrlForRequest
+    RetVal<Progress> getProgress = m_networkManager->get(urlInfo.url, scoreData, convertHeaders());
+    if (!getProgress.ret) {
+        progress->finish(getProgress.ret);
+        return progress;
+    }
+
+    getProgress.val.progressChanged().onReceive(this, [progress](int64_t current, int64_t total, const std::string& msg) {
+        progress->progress(current, total, msg);
+    });
+
+    getProgress.val.finished().onReceive(this, [this, progress](const ProgressResult& res) {
+        progress->finish(uploadingDownloadingRetFromRawRet(res.ret));
+    });
+
+    return progress;
+}
+
+Promise<RetVal<ConvertQueueList> > MuseScoreComService::fetchQueue()
+{
+    return Promise<RetVal<ConvertQueueList> >([this](auto resolve, auto) {
+        RetVal<QUrl> queueUrl = prepareUrlForRequest(MUSESCORECOM_CONVERT_QUEUE_API_URL);
+        if (!queueUrl.ret) {
+            return resolve(RetVal<ConvertQueueList>::make_ret(queueUrl.ret));
+        }
+
+        auto receivedData = std::make_shared<QBuffer>();
+        RetVal<Progress> progress = m_networkManager->get(queueUrl.val, receivedData, convertHeaders());
+        if (!progress.ret) {
+            return resolve(RetVal<ConvertQueueList>::make_ret(progress.ret));
+        }
+
+        progress.val.finished().onReceive(this, [this, receivedData, resolve](const ProgressResult& res) {
+            if (!res.ret) {
+                printServerReply(*receivedData);
+                Ret ret = uploadingDownloadingRetFromRawRet(res.ret);
+                appendServerErrorCode(ret, receivedData->data());
+                (void)resolve(RetVal<ConvertQueueList>::make_ret(ret));
+                return;
+            }
+
+            (void)resolve(parseConvertQueueList(receivedData->data()));
+        });
+
+        return Promise<RetVal<ConvertQueueList> >::dummy_result();
+    });
+}
+
+Promise<RetVal<SignedMsczUrl> > MuseScoreComService::fetchMsczUrl(ConvertType type, int id)
+{
+    return Promise<RetVal<SignedMsczUrl> >([this, type, id](auto resolve, auto) {
+        QVariantMap params;
+        params["id"] = id;
+        params["type"] = convertTypeToApiString(type);
+
+        RetVal<QUrl> msczUrl = prepareUrlForRequest(MUSESCORECOM_CONVERT_MSCZ_API_URL, params);
+        if (!msczUrl.ret) {
+            return resolve(RetVal<SignedMsczUrl>::make_ret(msczUrl.ret));
+        }
+
+        auto receivedData = std::make_shared<QBuffer>();
+        RetVal<Progress> progress = m_networkManager->get(msczUrl.val, receivedData, convertHeaders());
+        if (!progress.ret) {
+            return resolve(RetVal<SignedMsczUrl>::make_ret(progress.ret));
+        }
+
+        progress.val.finished().onReceive(this, [this, receivedData, resolve](const ProgressResult& res) {
+            if (!res.ret) {
+                printServerReply(*receivedData);
+                Ret ret = uploadingDownloadingRetFromRawRet(res.ret);
+                appendServerErrorCode(ret, receivedData->data());
+                (void)resolve(RetVal<SignedMsczUrl>::make_ret(ret));
+                return;
+            }
+
+            (void)resolve(parseSignedMsczUrl(receivedData->data()));
+        });
+
+        return Promise<RetVal<SignedMsczUrl> >::dummy_result();
+    });
+}
+
+Promise<RetVal<ConvertResult> > MuseScoreComService::submitReview(int id, ReviewRating review, const QString& reason)
+{
+    return Promise<RetVal<ConvertResult> >([this, id, review, reason](auto resolve, auto) {
+        RetVal<QUrl> url = prepareUrlForRequest(MUSESCORECOM_REVIEW_API_URL);
+        if (!url.ret) {
+            return resolve(RetVal<ConvertResult>::make_ret(url.ret));
+        }
+
+        auto bodyDevice = std::make_shared<QBuffer>();
+        bodyDevice->setData(makeReviewRequestBody(id, review, reason));
+
+        RequestHeaders headers = convertHeaders();
+        headers.rawHeaders["Content-Type"] = "application/json";
+
+        auto receivedData = std::make_shared<QBuffer>();
+        RetVal<Progress> progress = m_networkManager->post(url.val, DevicePtr(bodyDevice), receivedData, headers);
+        if (!progress.ret) {
+            return resolve(RetVal<ConvertResult>::make_ret(progress.ret));
+        }
+
+        progress.val.finished().onReceive(this, [this, receivedData, resolve](const ProgressResult& res) {
+            if (!res.ret) {
+                printServerReply(*receivedData);
+                Ret ret = uploadingDownloadingRetFromRawRet(res.ret);
+                appendServerErrorCode(ret, receivedData->data());
+                (void)resolve(RetVal<ConvertResult>::make_ret(ret));
+                return;
+            }
+
+            (void)resolve(parseConvertResult(receivedData->data()));
+        });
+
+        return Promise<RetVal<ConvertResult> >::dummy_result();
     });
 }

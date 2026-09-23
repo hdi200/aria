@@ -46,9 +46,9 @@ import zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-DEFAULT_RESAVE = REPO / "build-aria-compat-host" / "score_render_resave"
+DEFAULT_RESAVE = REPO / "build-aria-475-host" / "score_render_resave"
 DEFAULT_MSCORE = Path("/Applications/MuseScore 4.app/Contents/MacOS/mscore")
-DEFAULT_OUT = REPO / "build-aria-compat-host" / "roundtrip"
+DEFAULT_OUT = REPO / "build-aria-475-host" / "roundtrip"
 DEFAULT_CORPUS = [
     REPO / "vtest" / "scores",
     REPO / "MuseReaderiOS" / "MuseReaderiOS" / "Resources" / "ScoreTemplates.bundle",

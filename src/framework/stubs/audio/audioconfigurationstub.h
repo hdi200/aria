@@ -48,6 +48,7 @@ public:
     void setSampleRate(unsigned int sampleRate) override;
     async::Notification sampleRateChanged() const override;
 
+    OutputSpec defaultOutputSpec() const override;
     OutputSpec desiredOutputSpec() const override;
 
     // synthesizers
@@ -59,6 +60,10 @@ public:
     bool autoProcessOnlineSoundsInBackground() const override;
     void setAutoProcessOnlineSoundsInBackground(bool process) override;
     async::Channel<bool> autoProcessOnlineSoundsInBackgroundChanged() const override;
+
+    bool useSoundFontLowPassFilter() const override;
+    void setUseSoundFontLowPassFilter(bool value) override;
+    async::Channel<bool> useSoundFontLowPassFilterChanged() const override;
 
     bool shouldMeasureInputLag() const override;
 };

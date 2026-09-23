@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -34,6 +34,7 @@
 #include "containers.h"
 
 #include "editing/addremoveelement.h"
+#include "editing/editchord.h"
 #include "editing/mscoreview.h"
 #include "editing/splitjoinmeasure.h"
 #include "editing/transpose.h"
@@ -62,6 +63,7 @@
 #include "glissando.h"
 #include "gradualtempochange.h"
 #include "guitarbend.h"
+#include "fret.h"
 #include "harmony.h"
 #include "imageStore.h"
 #include "instrchange.h"
@@ -119,6 +121,7 @@ using namespace muse;
 using namespace mu::engraving;
 
 namespace mu::engraving {
+MasterScore* gpaletteScore;                 ///< system score, used for palettes etc.
 std::set<Score*> Score::validScores;
 
 bool noSeq           = false;
@@ -337,14 +340,14 @@ Score* Score::clone()
     return excerpt->excerptScore();
 }
 
-Score* Score::paletteScore() const
+Score* Score::paletteScore()
 {
-    return paletteScoreProvider() ? paletteScoreProvider()->paletteScore() : nullptr;
+    return gpaletteScore;
 }
 
 bool Score::isPaletteScore() const
 {
-    return this == paletteScore();
+    return this == gpaletteScore;
 }
 
 static void onBracketItemDestruction(const Score* score, const BracketItem* item)
@@ -640,7 +643,7 @@ void Score::rebuildTempoAndTimeSigMaps(Measure* measure, std::optional<BeatsPerS
         // prevMeasure() doesn't return MM rest so we don't handle it here
 
         if (pm && (!mTicks.identical(pm->ticks()) || !m->timesig().identical(pm->timesig()))) {
-            sigmap()->add(m->tick().ticks(), SigEvent(mTicks, m->timesig(), m->measureNumber()));
+            sigmap()->add(m->tick().ticks(), SigEvent(mTicks, m->timesig(), m->no()));
         }
     }
 }
@@ -1062,20 +1065,13 @@ std::vector<System*> Score::searchSystem(const PointF& pos, const System* prefer
 Measure* Score::searchMeasure(const PointF& p, const System* preferredSystem, double spacingFactor, double preferredSpacingFactor) const
 {
     std::vector<System*> systems = searchSystem(p, preferredSystem, spacingFactor, preferredSpacingFactor);
-    Measure* lastMeasure = nullptr;
     for (System* system : systems) {
         double x = p.x() - system->canvasPos().x();
         for (MeasureBase* mb : system->measures()) {
-            if (mb->isMeasure()) {
-                if (x < (mb->x() + mb->ldata()->bbox().width())) {
-                    return toMeasure(mb);
-                }
-                lastMeasure = toMeasure(mb);
+            if (mb->isMeasure() && (x < (mb->x() + mb->ldata()->bbox().width()))) {
+                return toMeasure(mb);
             }
         }
-    }
-    if (lastMeasure) {
-        return lastMeasure;
     }
     return 0;
 }
@@ -1207,7 +1203,6 @@ bool Score::getPosition(Position* pos, const PointF& p, voice_idx_t voice) const
     double x         = pppp.x();
     Segment* segment = 0;
     pos->segment     = 0;
-    pos->beyondScore = false;
 
     // int track = pos->staffIdx * VOICES + voice;
     track_idx_t track = pos->staffIdx * VOICES;
@@ -1220,19 +1215,19 @@ bool Score::getPosition(Position* pos, const PointF& p, voice_idx_t voice) const
         Segment* ns = getNextValidInputSegment(segment->next(SegmentType::ChordRest), track, voice);
 
         double x1 = segment->x();
-        if (!ns) {
-            if (measure == score()->lastMeasure() && x > measure->ldata()->bbox().width()) {
-                x = measure->ldata()->bbox().width() + score()->style().spatium();
-                pos->beyondScore = true;
-            } else {
-                x = x1;
-            }
+        double x2;
+        double d;
+        if (ns) {
+            x2    = ns->x();
+            d     = x2 - x1;
+        } else {
+            x2    = measure->ldata()->bbox().width();
+            d     = (x2 - x1) * 2.0;
+            x     = x1;
             pos->segment = segment;
             break;
         }
 
-        double x2 = ns->x();
-        double d = x2 - x1;
         if (x < (x1 + d * .5)) {
             x = x1;
             pos->segment = segment;
@@ -1268,7 +1263,7 @@ bool Score::getPosition(Position* pos, const PointF& p, voice_idx_t voice) const
         }
     } else {
         int minLine   = absStep(MIN_PITCH);
-        ClefType clef = s->clef(segment->tick());
+        ClefType clef = s->clef(pos->segment->tick());
         minLine       = relStep(minLine, clef);
         int maxLine   = absStep(MAX_PITCH);
         maxLine       = relStep(maxLine, clef);
@@ -1575,6 +1570,7 @@ void Score::removeElement(EngravingItem* element)
 
         system->removeMeasure(mb);
 
+        // See also InsertRemoveMeasures::removeMeasures()
         if (element->isBox() && system->measures().empty()) {
             Page* page = system->page();
             if (page) {
@@ -1602,7 +1598,6 @@ void Score::removeElement(EngravingItem* element)
                 }
             }
         }
-//            setLayout(mb->tick());
         return;
     }
 
@@ -3116,10 +3111,6 @@ void Score::padToggle(Pad p, bool toggleForSelectionOnly)
                         }
                     }
 
-                    if (m_is.beyondScore()) {
-                        appendMeasures(1);
-                        m_is.moveToNextInputPos();
-                    }
                     ChordRest* cr = m_is.cr();
                     Chord* chord = nullptr;
 
@@ -3129,6 +3120,7 @@ void Score::padToggle(Pad p, bool toggleForSelectionOnly)
 
                     for (const NoteVal& nval : m_is.notes()) {
                         if (chord && chord->findNote(nval.pitch)) {
+                            m_is.moveToNextInputPos();
                             continue;
                         }
 
@@ -3556,7 +3548,7 @@ void Score::selectRange(EngravingItem* e, staff_idx_t staffIdx)
     if (e->isMeasure()) {
         Measure* m = toMeasure(e)->coveringMMRestOrThis();
         Segment* startSegment = m->first(SegmentType::ChordRest);
-        Segment* endSegment = m->last();
+        Segment* endSegment = m == lastMeasureMM() ? nullptr : m->last();
         Fraction tick = m->tick();
         Fraction etick = tick + m->ticks();
 
@@ -4407,7 +4399,7 @@ void Score::appendPart(const InstrumentTemplate* t)
 void Score::appendMeasures(int n)
 {
     InsertMeasureOptions options;
-    options.createMeasureRests = false;
+    options.createEmptyMeasures = false;
 
     for (int i = 0; i < n; ++i) {
         insertMeasure(ElementType::MEASURE, nullptr, options);
@@ -5250,9 +5242,9 @@ String Score::nextRehearsalMarkText(RehearsalMark* previous, RehearsalMark* curr
         int n = previousText.toInt(&ok);
         if (!ok) {
             return fallback;
-        } else if (current && n == previous->segment()->measure()->measureNumber() + 1) {
+        } else if (current && n == previous->segment()->measure()->no() + 1) {
             // use measure number
-            n = current->segment()->measure()->measureNumber() + 1;
+            n = current->segment()->measure()->no() + 1;
             return String::number(n);
         } else {
             // use number sequence
@@ -5287,6 +5279,18 @@ void Score::changeSelectedElementsVoice(voice_idx_t voice)
 
         return true;
     };
+
+    // Track groups of parentheses to recreate in new chord
+    struct MovedParenGroup {
+        Chord* dstChord = nullptr;
+        bool generated = false;
+        bool leftVisible = true;
+        bool rightVisible = true;
+        PointF leftOffset = PointF();
+        PointF rightOffset = PointF();
+        std::vector<Note*> notes;
+    };
+    std::map<const NoteParenthesisInfo*, MovedParenGroup> movedParenGroups;
 
     std::vector<EngravingItem*> newElements;
     std::vector<EngravingItem*> oel = selection().elements();       // make copy
@@ -5451,6 +5455,28 @@ void Score::changeSelectedElementsVoice(voice_idx_t voice)
                 }
             }
 
+            // Move paren to corresponding group in new chord
+            if (!chord->noteParentheses().empty()) {
+                const NoteParenthesisInfo* noteParenInfo = chord->findNoteParenthesisInfo(note);
+                if (noteParenInfo) {
+                    Parenthesis* leftParen = noteParenInfo->leftParen();
+                    Parenthesis* rightParen = noteParenInfo->rightParen();
+                    DO_ASSERT(leftParen && rightParen);
+                    if (leftParen && rightParen) {
+                        bool generated = leftParen->generated();
+                        MovedParenGroup& movedGroup = movedParenGroups[noteParenInfo];
+                        movedGroup.dstChord = dstChord;
+                        movedGroup.generated = generated;
+                        movedGroup.notes.push_back(newNote);
+                        movedGroup.leftOffset = leftParen->offset();
+                        movedGroup.rightOffset = rightParen->offset();
+                        movedGroup.leftVisible = leftParen->visible();
+                        movedGroup.rightVisible = rightParen->visible();
+                        EditChord::removeChordParentheses(chord, { note }, /*addToLinked*/ true, generated);
+                    }
+                }
+            }
+
             // remove original note
             if (notes > 1) {
                 score->undoRemoveElement(note);
@@ -5474,6 +5500,9 @@ void Score::changeSelectedElementsVoice(voice_idx_t voice)
                 }
                 // move articulations
                 for (Articulation* artic : chord->articulations()) {
+                    if (dstChord->hasArticulation(artic)) {
+                        continue;
+                    }
                     score->undoChangeParent(artic, dstChord, dstChord->staffIdx());
                 }
                 // create rest to leave behind
@@ -5526,6 +5555,29 @@ void Score::changeSelectedElementsVoice(voice_idx_t voice)
             e->undoChangeProperty(Pid::VOICE_ASSIGNMENT, VoiceAssignment::CURRENT_VOICE_ONLY);
             newElements.push_back(e);
         }
+    }
+
+    // Recreate parenthesis groups
+    for (auto& pair : movedParenGroups) {
+        MovedParenGroup& movedGroup = pair.second;
+        IF_ASSERT_FAILED(!movedGroup.notes.empty()) {
+            continue;
+        }
+
+        EditChord::addChordParentheses(movedGroup.dstChord, movedGroup.notes, /*addToLinked*/ true, movedGroup.generated);
+
+        const NoteParenthesisInfo* info = movedGroup.notes.front()->parenthesisInfo();
+        Parenthesis* leftParen = info ? info->leftParen() : nullptr;
+        Parenthesis* rightParen = info ? info->rightParen() : nullptr;
+
+        IF_ASSERT_FAILED(info && leftParen && rightParen) {
+            continue;
+        }
+
+        leftParen->undoSetVisible(movedGroup.leftVisible);
+        rightParen->undoSetVisible(movedGroup.rightVisible);
+        leftParen->undoChangeProperty(Pid::OFFSET, movedGroup.leftOffset);
+        rightParen->undoChangeProperty(Pid::OFFSET, movedGroup.rightOffset);
     }
 
     if (!newElements.empty()) {
@@ -6112,6 +6164,11 @@ void Score::updateCapo(bool ignoreNotationUpdate /* = false */)
         for (EngravingItem* e : s->annotations()) {
             if (e->isHarmony()) {
                 toHarmony(e)->realizedHarmony().setDirty(true);
+            } else if (e->isFretDiagram()) {
+                Harmony* harmony = toFretDiagram(e)->harmony();
+                if (harmony) {
+                    harmony->realizedHarmony().setDirty(true);
+                }
             }
 
             if (!e->isCapo()) {

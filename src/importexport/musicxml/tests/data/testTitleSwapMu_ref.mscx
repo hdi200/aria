@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -25,6 +25,7 @@
       <chordSymbolAFontSize>11.9365</chordSymbolAFontSize>
       <chordSymbolBFontFace>Plantin MT Std</chordSymbolBFontFace>
       <chordSymbolBFontSize>11.9365</chordSymbolBFontSize>
+      <romanNumeralFontFace>Plantin MT Std</romanNumeralFontFace>
       <nashvilleNumberFontFace>Plantin MT Std</nashvilleNumberFontFace>
       <nashvilleNumberFontSize>11.9365</nashvilleNumberFontSize>
       <slurEndWidth>0.07</slurEndWidth>
@@ -55,8 +56,6 @@
       <shortInstrumentFontSize>11.9365</shortInstrumentFontSize>
       <partInstrumentFontFace>Plantin MT Std</partInstrumentFontFace>
       <partInstrumentFontSize>11.9365</partInstrumentFontSize>
-      <groupBracketFontFace>Plantin MT Std</groupBracketFontFace>
-      <groupBracketFontSize>11.9365</groupBracketFontSize>
       <expressionFontFace>Plantin MT Std</expressionFontFace>
       <expressionFontSize>11.9365</expressionFontSize>
       <tempoFontFace>Plantin MT Std</tempoFontFace>
@@ -152,11 +151,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Soprano/Tenor</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Soprano/Tenor</longName>
-          <shortName>S./T.</shortName>
-          </InstrumentLabel>
+        <longName>Soprano/Tenor</longName>
+        <shortName>S./T.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -219,11 +217,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Alto</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Alto</longName>
-          <shortName>A.</shortName>
-          </InstrumentLabel>
+        <longName>Alto</longName>
+        <shortName>A.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -286,11 +283,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Bass</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Bass</longName>
-          <shortName>B.</shortName>
-          </InstrumentLabel>
+        <longName>Bass</longName>
+        <shortName>B.</shortName>
         <trackName>Piano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -353,11 +349,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Piano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Piano</longName>
-          <shortName>Pno.</shortName>
-          </InstrumentLabel>
+        <longName>Piano</longName>
+        <shortName>Pno.</shortName>
         <trackName>Piano (2)</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

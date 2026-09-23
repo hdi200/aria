@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -42,8 +42,8 @@ class NewScoreModel : public QObject, public muse::Contextable
 
     muse::GlobalInject<IProjectConfiguration> configuration;
     muse::GlobalInject<IProjectCreator> notationCreator;
-    muse::GlobalInject<notation::IInstrumentsRepository> instrumentsRepository;
     muse::ContextInject<context::IGlobalContext> globalContext = { this };
+    muse::ContextInject<notation::IInstrumentsRepository> instrumentsRepository = { this };
 
 public:
     explicit NewScoreModel(QObject* parent = nullptr);

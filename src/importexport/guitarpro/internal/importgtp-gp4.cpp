@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,7 +21,6 @@
  */
 
 #include "importgtp.h"
-#include "utils.h"
 
 #include "engraving/dom/arpeggio.h"
 #include "engraving/dom/articulation.h"
@@ -50,10 +49,7 @@
 #include "engraving/dom/tie.h"
 #include "engraving/dom/tremolosinglechord.h"
 #include "engraving/dom/tuplet.h"
-#include "engraving/dom/stringtunings.h"
 #include "engraving/types/symid.h"
-
-#include "engraving/editing/editchord.h"
 
 #include "guitarprodrumset.h"
 
@@ -247,7 +243,7 @@ GuitarPro::ReadNoteResult GuitarPro4::readNote(int string, int staffIdx, Note* n
     if (noteBits & NOTE_SFORZATO) {             // 0x40
         Articulation* art = Factory::createArticulation(note->score()->dummy()->chord());
         art->setSymId(SymId::articAccentAbove);
-        if (!EditChord::toggleArticulation(note->score(), note, art)) {
+        if (!note->score()->toggleArticulation(note, art)) {
             delete art;
         }
     }
@@ -727,6 +723,11 @@ bool GuitarPro4::read(IODevice* io)
         }
         int midiPort     = readInt() - 1;
         int midiChannel  = readInt() - 1;
+        if (midiChannel < 0 || midiChannel >= static_cast<int>(channelDefaults.size())) {
+            LOGE() << "midiChannel " << midiChannel << " out of range 0-" << channelDefaults.size();
+            return false;
+        }
+
         /*int midiChannel2 =*/ readInt();     // - 1;
         int frets        = readInt();
 
@@ -744,14 +745,14 @@ bool GuitarPro4::read(IODevice* io)
         Instrument* instr = part->instrument();
         instr->setStringData(stringData);
         instr->setSingleNoteDynamics(false);
+        part->setPartName(name);
         part->setPlainLongName(name);
-
-        int patch = channelDefaults[midiChannel].patch;
 
         //
         // determine clef
         //
         Staff* staff = score->staff(i);
+        int patch = channelDefaults[midiChannel].patch;
         ClefType clefId = ClefType::G;
         if (midiChannel == GP_DEFAULT_PERCUSSION_CHANNEL) {
             clefId = ClefType::PERC;
@@ -1195,7 +1196,6 @@ bool GuitarPro4::read(IODevice* io)
 
     m_continiousElementsBuilder->addElementsToScore();
     m_guitarBendImporter->applyBendsToChords();
-    addTunings();
 
     return true;
 }

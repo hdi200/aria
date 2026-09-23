@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -39,12 +39,11 @@ std::vector<INotationWriter::UnitType> ExportProjectScenario::supportedUnitTypes
         return {};
     }
 
-    auto writer = writers()->writer(exportType.suffixes.front().toStdString());
-    if (!writer) {
-        return {};
+    if (auto writer = writers()->writer(exportType.suffixes.front().toStdString())) {
+        return writer->supportedUnitTypes();
     }
 
-    return writer->supportedUnitTypes();
+    return {};
 }
 
 RetVal<muse::io::path_t> ExportProjectScenario::askExportPath(const INotationPtrList& notations, const ExportType& exportType,
@@ -147,7 +146,7 @@ bool ExportProjectScenario::exportScores(notation::INotationPtrList notations, c
     size_t currentFileNum = 0;
 
     if (writerProgress) {
-        showExportProgress(isAudioExport(suffix));
+        showExportProgress(isAudioFileSuffix(suffix));
         m_exportProgress.start();
 
         writerProgress->progressChanged().onReceive(this, [this, &currentFileNum, fileCount](int64_t current, int64_t total,
@@ -404,24 +403,9 @@ Ret ExportProjectScenario::doExportLoop(const muse::io::path_t& scorePath, std::
     }
 
     while (true) {
-        //! NOTE Most writers stream to the destination device (file on disk).
-        //! But there is one atypical case:
-        //! Export score to unpacked directory - creates a directory and writes files to it
-
-        // Remove previous file because we need to know whether
-        // exportFunction writes at scorePath
-        Ret ret = fileSystem()->remove(scorePath);
-        if (!ret) {
-            if (askForRetry(filename)) {
-                continue;
-            } else {
-                return make_ret(Ret::Code::Cancel);
-            }
-        }
-
-        FileStream outputFile(scorePath);
+        io::FileStream outputFile(scorePath);
         outputFile.setMeta("file_path", scorePath.toStdString());
-        if (!outputFile.open(IODevice::WriteOnly)) {
+        if (!outputFile.open(FileStream::WriteOnly)) {
             if (askForRetry(filename)) {
                 continue;
             } else {
@@ -429,14 +413,19 @@ Ret ExportProjectScenario::doExportLoop(const muse::io::path_t& scorePath, std::
             }
         }
 
-        ret = exportFunction(outputFile);
+        Ret ret = exportFunction(outputFile);
         outputFile.close();
 
-        if (!ret) {
+        if (!ret || outputFile.hasError()) {
             if (ret.code() == static_cast<int>(Ret::Code::Cancel)) {
-                const bool isFileMode = fileSystem()->exists(scorePath);
-                if (isFileMode) {
-                    fileSystem()->remove(scorePath);
+                // On Windows, remove() may fail immediately after close()
+                // because the file lock has not been released yet
+                for (int i = 0; i < 10; ++i) {
+                    if (fileSystem()->remove(scorePath)) {
+                        return ret;
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
 
                 return ret;
@@ -464,7 +453,7 @@ void ExportProjectScenario::showExportProgress(bool isAudioExport) const
 
 void ExportProjectScenario::openFolder(const muse::io::path_t& path) const
 {
-    Ret ret = platformInteractive()->revealInFileBrowser(path.toQString());
+    Ret ret = interactive()->revealInFileBrowser(path.toQString());
 
     if (!ret) {
         LOGE() << "Could not open folder: " << path.toQString();

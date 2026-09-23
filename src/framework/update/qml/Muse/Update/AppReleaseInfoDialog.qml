@@ -30,7 +30,6 @@ import "internal"
 StyledDialogView {
     id: root
 
-    property string appName: ""
     property alias notes: view.notes
     property alias previousReleasesNotes: view.previousReleasesNotes
 
@@ -79,7 +78,7 @@ StyledDialogView {
             StyledTextLabel {
                 id: releaseTitleLabel
 
-                text: qsTrc("update", "A new version of %1 is available!").arg(root.appName)
+                text: qsTrc("update", "A new version of MuseScore Studio is available!")
                 font: ui.theme.headerBoldFont
             }
 

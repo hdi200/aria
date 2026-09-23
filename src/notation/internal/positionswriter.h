@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,7 +35,7 @@ class Score;
 }
 
 namespace mu::notation {
-class PositionsWriter : public project::INotationWriter
+class PositionsWriter : public project::INotationWriter, public muse::Contextable
 {
     muse::GlobalInject<iex::imagesexport::IImagesExportConfiguration> imagesExportConfiguration;
 
@@ -45,8 +45,8 @@ public:
         MEASURE
     };
 
-    explicit PositionsWriter() = default;
-    explicit PositionsWriter(ElementType elementType);
+    explicit PositionsWriter(const muse::modularity::ContextPtr& ctx);
+    explicit PositionsWriter(ElementType elementType, const muse::modularity::ContextPtr& ctx);
 
     std::vector<UnitType> supportedUnitTypes() const override;
     bool supportsUnitType(UnitType unitType) const override;

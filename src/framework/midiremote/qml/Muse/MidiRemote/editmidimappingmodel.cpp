@@ -34,9 +34,7 @@ EditMidiMappingModel::EditMidiMappingModel(QObject* parent)
 
 EditMidiMappingModel::~EditMidiMappingModel()
 {
-    if (m_loaded) {
-        midiRemote()->setIsSettingMode(false);
-    }
+    midiRemote()->setIsSettingMode(false);
 }
 
 void EditMidiMappingModel::load(int originType, int originValue)
@@ -52,15 +50,13 @@ void EditMidiMappingModel::load(int originType, int originValue)
 
     m_event = RemoteEvent(static_cast<RemoteEventType>(originType), originValue);
     emit mappingTitleChanged(mappingTitle());
-
-    m_loaded = true;
 }
 
 QString EditMidiMappingModel::mappingTitle() const
 {
     MidiDeviceID currentMidiInDeviceId = midiInPort()->deviceID();
     if (currentMidiInDeviceId.empty() || !m_event.isValid()) {
-        return muse::qtrc("global", "Waiting…");
+        return muse::qtrc("shortcuts", "Waiting…");
     }
 
     return deviceName(currentMidiInDeviceId) + " > " + m_event.name().toQString();

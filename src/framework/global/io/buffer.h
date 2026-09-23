@@ -19,20 +19,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef MUSE_IO_BUFFER_H
+#define MUSE_IO_BUFFER_H
 
-#pragma once
-
+#include "../types/bytearray.h"
 #include "iodevice.h"
-
-#include "global/types/bytearray.h"
 
 namespace muse::io {
 class Buffer : public IODevice
 {
 public:
-    static Buffer opened(OpenMode, ByteArray* = nullptr);
-    static Buffer opened(OpenMode, ByteArray&&);
-
     Buffer();
     Buffer(size_t size);
     Buffer(const uint8_t* data, size_t size);
@@ -55,3 +51,5 @@ private:
     ByteArray m_ba;
 };
 }
+
+#endif // MUSE_IO_BUFFER_H

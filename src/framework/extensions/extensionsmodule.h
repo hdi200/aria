@@ -27,6 +27,8 @@
 #include "modularity/imodulesetup.h"
 
 namespace muse::extensions {
+class ExtensionsProvider;
+class ExtensionsActionController;
 class ExtensionsConfiguration;
 class ExtensionsExecPointsRegister;
 class ExtensionsModule : public modularity::IModuleSetup
@@ -44,11 +46,10 @@ public:
 private:
 
     std::shared_ptr<ExtensionsConfiguration> m_configuration;
+    std::shared_ptr<ExtensionsProvider> m_provider;
     std::shared_ptr<ExtensionsExecPointsRegister> m_execPointsRegister;
 };
 
-class ExtensionsProvider;
-class ExtensionsActionController;
 class ExtensionsContext : public modularity::IContextSetup
 {
 public:
@@ -60,6 +61,5 @@ public:
 
 private:
     std::shared_ptr<ExtensionsActionController> m_actionController;
-    std::shared_ptr<ExtensionsProvider> m_provider;
 };
 }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -183,7 +183,7 @@ static bool doesClefBreakTie(const Staff* staff)
             } else if (seg->segmentType() == SegmentType::Clef && seg->element(strack)) {
                 if (currentTie) {
                     LOGD() << "Clef breaks tie; measure number (from 1):"
-                           << seg->measure()->measureNumber() + 1
+                           << seg->measure()->no() + 1
                            << ", staff index (from 0):" << staff->idx();
                     return true;
                 }

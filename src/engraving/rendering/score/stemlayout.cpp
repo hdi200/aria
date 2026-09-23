@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -425,8 +425,8 @@ int StemLayout::calcMinStemLength(Chord* item, const LayoutContext& ctx)
         // so we need to multiply it by 2 to get the actual height
         int buzzRollMultiplier = item->tremoloSingleChord()->isBuzzRoll() ? 2 : 1;
         minStemLength += ceil(item->tremoloSingleChord()->minHeight() / item->intrinsicMag() * 4.0 * buzzRollMultiplier);
-        int outSidePadding = style.styleAbsolute(Sid::tremoloOutSidePadding) / spatium * 4.0;
-        int noteSidePadding = style.styleAbsolute(Sid::tremoloNoteSidePadding) / spatium * 4.0;
+        int outSidePadding = style.styleMM(Sid::tremoloOutSidePadding).val() / spatium * 4.0;
+        int noteSidePadding = style.styleMM(Sid::tremoloNoteSidePadding).val() / spatium * 4.0;
 
         int outsideStaffOffset = 0;
         if (!staff->isTabStaff(item->tick())) {

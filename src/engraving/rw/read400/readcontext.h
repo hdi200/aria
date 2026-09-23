@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -137,10 +137,10 @@ public:
     void setCurrentMeasureIndex(int idx) { _curMeasureIdx = idx; }
     int currentMeasureIndex() const { return _curMeasureIdx; }
 
-    void addBeam(int beamId, Beam* s);
+    void addBeam(Beam* s);
     Beam* findBeam(int id) const { return muse::value(_beams, id, nullptr); }
 
-    void addTuplet(int tupletId, Tuplet* s);
+    void addTuplet(Tuplet* s);
     Tuplet* findTuplet(int id) const { return muse::value(_tuplets, id, nullptr); }
     std::unordered_map<int, Tuplet*>& tuplets() { return _tuplets; }
     void checkTuplets();

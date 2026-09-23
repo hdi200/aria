@@ -36,7 +36,7 @@ FlatButton {
     width: Boolean(itemData) ? implicitWidth : 32
     height: Boolean(itemData) ? implicitHeight : 32
 
-    accentButton: Boolean(itemData) && (itemData.checked || menuLoader.isMenuOpened)
+    accentButton: !transparent && Boolean(itemData) && (itemData.checked || menuLoader.isMenuOpened)
 
     text: Boolean(itemData) && itemData.showTitle ? itemData.title : ""
 
@@ -50,7 +50,7 @@ FlatButton {
     toolTipShortcut: Boolean(itemData) ? itemData.shortcuts : ""
 
     orientation: Qt.Horizontal
-    transparent: !accentButton && Boolean(itemData) ? itemData.isTransparent : false
+    transparent: Boolean(itemData) ? itemData.isTransparent : false
 
     enabled: Boolean(itemData) ? itemData.enabled : false
 

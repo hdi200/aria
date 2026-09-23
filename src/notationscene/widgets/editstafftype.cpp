@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -47,7 +47,9 @@ using namespace muse::ui;
 mu::engraving::NoteHeadScheme noteHeadSchemes[] = {
     mu::engraving::NoteHeadScheme::HEAD_NORMAL,
     mu::engraving::NoteHeadScheme::HEAD_PITCHNAME,
+    mu::engraving::NoteHeadScheme::HEAD_PITCHNAME_NO_ACCIDENTALS,
     mu::engraving::NoteHeadScheme::HEAD_PITCHNAME_GERMAN,
+    mu::engraving::NoteHeadScheme::HEAD_PITCHNAME_GERMAN_NO_ACCIDENTALS,
     mu::engraving::NoteHeadScheme::HEAD_SOLFEGE,
     mu::engraving::NoteHeadScheme::HEAD_SOLFEGE_FIXED,
     mu::engraving::NoteHeadScheme::HEAD_SHAPE_NOTE_4,
@@ -60,8 +62,8 @@ mu::engraving::NoteHeadScheme noteHeadSchemes[] = {
 //   EditStaffType
 //---------------------------------------------------------
 
-EditStaffType::EditStaffType(const muse::modularity::ContextPtr& ctx, QWidget* parent)
-    : QDialog(parent), muse::Contextable(ctx)
+EditStaffType::EditStaffType(QWidget* parent)
+    : QDialog(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setObjectName("EditStaffType");
     setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -191,7 +193,7 @@ void EditStaffType::setInstrument(const Instrument& instrument)
         if ((t.group() == mu::engraving::StaffGroup::STANDARD && bStandard)
             || (t.group() == mu::engraving::StaffGroup::PERCUSSION && bPerc)
             || (t.group() == mu::engraving::StaffGroup::TAB && bTab && t.lines() <= instrument.stringData()->frettedStrings())) {
-            templateCombo->addItem(t.staffTypeName(), idx);
+            templateCombo->addItem(t.name(), idx);
         }
         idx++;
     }
@@ -310,7 +312,7 @@ void EditStaffType::setValues()
     stack->setCurrentIndex(i);
     groupName->setText(TConv::translatedUserName(group));
 
-    name->setText(staffType.staffTypeName());
+    name->setText(staffType.name());
     lines->setValue(staffType.lines());
     lineDistance->setValue(staffType.lineDistance().val());
     genClef->setChecked(staffType.genClef());
@@ -509,6 +511,7 @@ void EditStaffType::tabStemThroughToggled(bool checked)
 
 void EditStaffType::setFromDlg()
 {
+    staffType.setName(name->text());
     staffType.setLines(lines->value());
     staffType.setLineDistance(mu::engraving::Spatium(lineDistance->value()));
     staffType.setGenClef(genClef->isChecked());
@@ -739,7 +742,7 @@ QString EditStaffType::createUniqueStaffTypeName(mu::engraving::StaffGroup group
         }
         bool found = false;
         for (const mu::engraving::StaffType& st : mu::engraving::StaffType::presets()) {
-            if (st.staffTypeName() == sn) {
+            if (st.name() == sn) {
                 found = true;
                 break;
             }

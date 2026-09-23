@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -302,7 +302,8 @@ Ret BackendApi::exportScorePngs(const INotationPtr notation, BackendJsonWriter& 
     bool result = true;
     for (size_t i = 0; i < notationPages.size(); ++i) {
         ByteArray pngData;
-        auto pngDevice = Buffer::opened(IODevice::ReadWrite, &pngData);
+        Buffer pngDevice(&pngData);
+        pngDevice.open(IODevice::ReadWrite);
 
         INotationWriter::Options options = {
             { INotationWriter::OptionKey::PAGE_NUMBER, Val(static_cast<int>(i)) },
@@ -344,7 +345,8 @@ Ret BackendApi::exportScoreSvgs(const INotationPtr notation, const muse::io::pat
     bool result = true;
     for (size_t i = 0; i < notationPages.size(); ++i) {
         ByteArray svgData;
-        auto svgDevice = Buffer::opened(IODevice::ReadWrite, &svgData);
+        Buffer svgDevice(&svgData);
+        svgDevice.open(IODevice::ReadWrite);
 
         INotationWriter::Options options {
             { INotationWriter::OptionKey::PAGE_NUMBER, Val(static_cast<int>(i)) },
@@ -484,7 +486,8 @@ RetVal<QByteArray> BackendApi::processWriter(const std::string& writerName, cons
     }
 
     ByteArray data;
-    auto device = Buffer::opened(IODevice::ReadWrite, &data);
+    Buffer device(&data);
+    device.open(IODevice::ReadWrite);
 
     Ret writeRet = writer->write(notation, device);
     if (!writeRet) {
@@ -511,7 +514,8 @@ RetVal<QByteArray> BackendApi::processWriter(const std::string& writerName, cons
     }
 
     ByteArray data;
-    auto device = Buffer::opened(IODevice::ReadWrite, &data);
+    Buffer device(&data);
+    device.open(IODevice::ReadWrite);
 
     Ret writeRet = writer->writeList(notations, device, options);
     if (!writeRet) {

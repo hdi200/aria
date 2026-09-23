@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -53,7 +53,6 @@
 #include "horizontalspacing.h"
 #include "tremololayout.h"
 #include "slurtielayout.h"
-#include "systemheaderlayout.h"
 
 #include "log.h"
 
@@ -240,9 +239,9 @@ void ScoreHorizontalViewLayout::layoutLinear(LayoutContext& ctx)
     }
 
     const double lm = ctx.state().page()->lm();
-    const double tm = ctx.state().page()->tm() + ctx.conf().styleAbsolute(Sid::staffUpperBorder);
+    const double tm = ctx.state().page()->tm() + ctx.conf().styleMM(Sid::staffUpperBorder);
     const double rm = ctx.state().page()->rm();
-    const double bm = ctx.state().page()->bm() + ctx.conf().styleAbsolute(Sid::staffLowerBorder);
+    const double bm = ctx.state().page()->bm() + ctx.conf().styleMM(Sid::staffLowerBorder);
 
     layoutSystemLockIndicators(system);
 
@@ -279,9 +278,9 @@ void ScoreHorizontalViewLayout::collectLinearSystem(LayoutContext& ctx)
     }
 
     System* system = ctx.mutDom().systems().front();
-    SystemHeaderLayout::setInstrumentNames(system, ctx, /* longNames */ true);
+    SystemLayout::setInstrumentNames(system, ctx, /* longNames */ true);
 
-    double targetSystemWidth = ctx.dom().nmeasures() * ctx.conf().styleAbsolute(Sid::minMeasureWidth);
+    double targetSystemWidth = ctx.dom().nmeasures() * ctx.conf().styleMM(Sid::minMeasureWidth).val();
     system->setWidth(targetSystemWidth);
 
     double curSystemWidth = 0.0;
@@ -417,7 +416,7 @@ void ScoreHorizontalViewLayout::layoutSegmentsWithDuration(Measure* m, const std
     Segment* current = findFirstEnabledSegment(m);
 
     auto [spacing, width] = computeCellWidth(current, visibleParts);
-    currentXPos = m->style().styleAbsolute(Sid::barNoteDistance);
+    currentXPos = m->style().styleMM(Sid::barNoteDistance);
     current->mutldata()->setPosX(currentXPos);
     current->setWidth(width);
     current->setSpacing(spacing);

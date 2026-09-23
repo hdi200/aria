@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -56,6 +56,13 @@ struct ClefTypeList;
 
 namespace mu::iex::mei {
 class UIDRegister;
+
+struct ControlElementPosition {
+    engraving::Measure* measure = nullptr;
+    engraving::Fraction tick;
+    int track = 0;
+    engraving::ChordRest* chordRest = nullptr;
+};
 
 enum GraceReading {
     GraceNone = 0,
@@ -188,8 +195,8 @@ private:
     engraving::EngravingItem* addToChordRest(const libmei::Element& meiElement, engraving::Measure* measure,
                                              engraving::Chord* chord = nullptr);
     std::string xmlIdFrom(std::string dataURI);
-    engraving::ChordRest* findStart(const libmei::Element& meiElement, engraving::Measure* measure);
-    engraving::ChordRest* findEnd(pugi::xml_node controlNode, const engraving::ChordRest* startChordRest);
+    ControlElementPosition findStart(const libmei::Element& meiElement, engraving::Measure* measure);
+    ControlElementPosition findEnd(pugi::xml_node controlNode, engraving::Spanner* spanner);
     engraving::Note* findStartNote(const libmei::Element& meiElement);
     engraving::Note* findEndNote(pugi::xml_node controlNode);
     const std::vector<engraving::ChordRest*> findPlistChordRests(pugi::xml_node controlNode);

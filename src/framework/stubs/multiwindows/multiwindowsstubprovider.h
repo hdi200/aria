@@ -29,8 +29,7 @@ class MultiWindowsStubProvider : public IMultiWindowsProvider
 public:
     MultiWindowsStubProvider() = default;
 
-    size_t windowCount() const override { return 1; }
-    bool isFirstWindow() const override { return true; }
+    int windowCount() const override { return 1; }
 
     // Project opening
     bool isProjectAlreadyOpened(const io::path_t& projectPath) const override;
@@ -54,10 +53,9 @@ public:
     void notifyAboutResourceChanged(const std::string& name) override;
     async::Channel<std::string> resourceChanged() override;
 
-    // Quit
+    // Quit for all
     void notifyAboutWindowWasQuited() override;
     void quitForAll() override;
-    void quitWindow(const modularity::ContextPtr& ctx) override;
     void quitAllAndRestartLast() override;
     void quitAllAndRunInstallation(const io::path_t& installerPath) override;
 };

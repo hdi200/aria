@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2024 MuseScore Limited
+# Copyright (C) 2024 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -27,10 +27,6 @@ find_program(COMPILER_CACHE_PROGRAM NAMES ccache sccache buildcache)
 if (NOT COMPILER_CACHE_PROGRAM)
     message(STATUS "No compiler cache program found")
     return()
-endif()
-
-if (CC_IS_MSVC)
-    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 endif()
 
 if (CMAKE_GENERATOR MATCHES "Make" OR CMAKE_GENERATOR MATCHES "Ninja")

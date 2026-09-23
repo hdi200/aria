@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -104,7 +104,7 @@ void ScorePageViewLayout::initLayoutContext(const Score* score, LayoutContext& c
         state.setNextMeasure(nextMeasure);
 
         if (!state.nextMeasure()->prevMeasure()) {
-            state.setMeasureNumber(0);
+            state.setMeasureNo(0);
             state.setTick(Fraction(0, 1));
         } else {
             const MeasureBase* mb = state.nextMeasure()->prev();
@@ -116,10 +116,10 @@ void ScorePageViewLayout::initLayoutContext(const Score* score, LayoutContext& c
             // TODO: also use mb in else clause here?
             // probably not, only actual measures have meaningful numbers
             if (layoutBreak && layoutBreak->startWithMeasureOne()) {
-                state.setMeasureNumber(0);
+                state.setMeasureNo(0);
             } else {
-                state.setMeasureNumber(state.nextMeasure()->prevMeasure()->measureNumber()                      // will be adjusted later with respect
-                                       + (state.nextMeasure()->prevMeasure()->excludeFromNumbering() ? 0 : 1)); // to the user-defined offset.
+                state.setMeasureNo(state.nextMeasure()->prevMeasure()->no()                             // will be adjusted later with respect
+                                   + (state.nextMeasure()->prevMeasure()->irregular() ? 0 : 1));          // to the user-defined offset.
             }
             state.setTick(ctx.state().nextMeasure()->tick());
         }
@@ -254,10 +254,29 @@ void ScorePageViewLayout::layoutFinished(Score* score, LayoutContext& ctx)
 
     score->systems().insert(score->systems().end(), state.systemList().begin(), state.systemList().end());
 
+    /* If the headers/footers involve page count, we need to re-calculate them. This needs to
+     * be done after laying out all pages, so that the total number of pages will be known: */
     if (state.mustRecomputeHeadersFooters()) {
-        for (const auto& page : ctx.mutDom().pages()) {
-            HeaderFooterLayout::layoutHeaderFooter(ctx, page);
-        }
+        doLayoutHeadersFooters(ctx);
         state.setMustRecomputeHeadersFooters(false);
+    }
+}
+
+void ScorePageViewLayout::layoutHeadersFooters(LayoutContext& ctx)
+{
+    TRACEFUNC;
+
+    LAYOUT_CALL_CLEAR();
+    LAYOUT_CALL();
+
+    doLayoutHeadersFooters(ctx);
+
+    LAYOUT_CALL_PRINT();
+}
+
+void ScorePageViewLayout::doLayoutHeadersFooters(LayoutContext& ctx)
+{
+    for (const auto& page : ctx.dom().pages()) {
+        HeaderFooterLayout::layoutHeaderFooter(ctx, page);
     }
 }

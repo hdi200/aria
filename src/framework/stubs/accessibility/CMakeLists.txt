@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2026 MuseScore Limited
+# Copyright (C) 2026 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -23,6 +23,7 @@ muse_create_module(muse_accessibility ALIAS muse::accessibility STUB)
 target_sources(muse_accessibility PRIVATE
     accessibilitystubmodule.cpp
     accessibilitystubmodule.h
+    accessibilityconfigurationstub.cpp
     accessibilityconfigurationstub.h
     accessibilitycontrollerstub.cpp
     accessibilitycontrollerstub.h

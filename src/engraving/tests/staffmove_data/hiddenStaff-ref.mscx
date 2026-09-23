@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
     <Style>
-      <windsNameByGroup>0</windsNameByGroup>
-      <vocalsNameByGroup>0</vocalsNameByGroup>
       <maskBarlinesForText>0</maskBarlinesForText>
       <dividerLeftAlignToSystemBarline>0</dividerLeftAlignToSystemBarline>
       <dividerRightAlignToSystemBarline>0</dividerRightAlignToSystemBarline>
@@ -90,16 +88,8 @@
           <name>stdNormal</name>
           </StaffType>
         <isStaffVisible>0</isStaffVisible>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>2</bracketSpan>
-          <level>0</level>
-          </BracketItem>
-        <BracketItem>
-          <type>Square</type>
-          <bracketSpan>2</bracketSpan>
-          <level>2</level>
-          </BracketItem>
+        <bracket type="0" span="2" col="0" visible="1"/>
+        <bracket type="2" span="2" col="2" visible="1"/>
         <barLineSpan>1</barLineSpan>
         </Staff>
       <Staff>
@@ -108,11 +98,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Flute</trackName>
       <Instrument id="flute">
-        <InstrumentLabel>
-          <longName>Flute</longName>
-          <shortName>Fl.</shortName>
-          </InstrumentLabel>
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
         <trackName>Flute</trackName>
         <minPitchP>59</minPitchP>
         <maxPitchP>98</maxPitchP>

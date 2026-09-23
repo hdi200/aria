@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -31,8 +31,7 @@
 #include "async/asyncable.h"
 #include "ui/imainwindow.h"
 #include "languages/ilanguagesservice.h"
-#include "interactive/iinteractive.h"
-#include "interactive/iplatforminteractive.h"
+#include "iinteractive.h"
 #include "iappshellconfiguration.h"
 #include "multiwindows/imultiwindowsprovider.h"
 #include "project/iprojectfilescontroller.h"
@@ -54,9 +53,6 @@ class ApplicationActionController : public QObject, public muse::Contextable, pu
     muse::GlobalInject<muse::mi::IMultiWindowsProvider> multiwindowsProvider;
     muse::GlobalInject<IAppShellConfiguration> configuration;
     muse::GlobalInject<muse::languages::ILanguagesService> languagesService;
-    muse::GlobalInject<muse::IApplication> application;
-    muse::GlobalInject<muse::IPlatformInteractive> platformInteractive;
-    muse::ContextInject<muse::extensions::IExtensionInstaller> extensionInstaller = { this };
     muse::ContextInject<muse::ui::IUiActionsRegister> actionsRegister = { this };
     muse::ContextInject<muse::actions::IActionsDispatcher> dispatcher = { this };
     muse::ContextInject<muse::ui::IMainWindow> mainWindow = { this };
@@ -64,6 +60,8 @@ class ApplicationActionController : public QObject, public muse::Contextable, pu
     muse::ContextInject<project::IProjectFilesController> projectFilesController = { this };
     muse::ContextInject<muse::audio::ISoundFontController> soundFontController = { this };
     muse::ContextInject<IStartupScenario> startupScenario = { this };
+    muse::ContextInject<muse::IApplication> application = { this };
+    muse::ContextInject<muse::extensions::IExtensionInstaller> extensionInstaller = { this };
     muse::ContextInject<context::IGlobalContext> globalContext = { this };
     muse::ContextInject<context::IUiContextResolver> uiContextResolver = { this };
 

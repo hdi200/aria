@@ -29,8 +29,7 @@
 #include "internal/uiengine.h"
 #include "internal/mainwindow.h"
 #include "internal/uiconfiguration.h"
-#include "internal/uicontextconfiguration.h"
-#include "internal/uistate.h"
+#include "internal/interactiveuriregister.h"
 #include "internal/uiactionsregister.h"
 #include "internal/navigationcontroller.h"
 #include "internal/navigationuiactions.h"
@@ -54,7 +53,8 @@
 #include "global/api/iapiregister.h"
 #include "api/navigationapi.h"
 #include "api/keyboardapi.h"
-#include "api/themeapi.h"
+
+#include "dev/testdialog.h"
 
 #include "muse_framework_config.h"
 
@@ -72,40 +72,72 @@ std::string UiModule::moduleName() const
 
 void UiModule::registerExports()
 {
-    m_configuration = std::make_shared<UiConfiguration>();
-
-    //! NOTE At the moment, UiTheme is also QProxyStyle
-    //! Inside the theme, QApplication::setStyle(this) is calling and the QStyleSheetStyle becomes as parent.
-    //! So, the UiTheme will be deleted when will deleted the application (as a child of QStyleSheetStyle).
-    m_theme = new api::ThemeApi(nullptr);
+    m_uiengine = std::make_shared<UiEngine>(iocContext());
+    m_configuration = std::make_shared<UiConfiguration>(iocContext());
+    m_keyNavigationController = std::make_shared<NavigationController>(iocContext());
+    m_keyNavigationUiActions = std::make_shared<NavigationUiActions>();
 
     #ifdef Q_OS_MAC
     m_platformTheme = std::make_shared<MacOSPlatformTheme>();
+    m_windowsController = std::make_shared<WindowsController>();
     #elif defined(Q_OS_WIN)
     m_platformTheme = std::make_shared<WindowsPlatformTheme>();
+    m_windowsController = std::make_shared<WinWindowsController>(iocContext());
     #elif defined(Q_OS_LINUX)
     m_platformTheme = std::make_shared<LinuxPlatformTheme>();
+    m_windowsController = std::make_shared<WindowsController>();
     #else
+    m_windowsController = std::make_shared<WindowsController>();
     m_platformTheme = std::make_shared<StubPlatformTheme>();
     #endif
 
-    globalIoc()->registerExport<IUiConfiguration>(moduleName(), m_configuration);
-    globalIoc()->registerExport<IPlatformTheme>(moduleName(), m_platformTheme);
+    ioc()->registerExport<IUiConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IUiEngine>(moduleName(), m_uiengine);
+    ioc()->registerExport<IInteractiveProvider>(moduleName(), m_uiengine->interactiveProvider());
+    ioc()->registerExport<IInteractiveUriRegister>(moduleName(), new InteractiveUriRegister());
+    ioc()->registerExport<IPlatformTheme>(moduleName(), m_platformTheme);
+    ioc()->registerExport<INavigationController>(moduleName(), m_keyNavigationController);
+    ioc()->registerExport<IDragController>(moduleName(), new DragController());
+    ioc()->registerExport<IWindowsController>(moduleName(), m_windowsController);
+
+#ifndef MUSE_MULTICONTEXT_WIP
+    m_uiactionsRegister = std::make_shared<UiActionsRegister>(nullptr);
+    ioc()->registerExport<IUiActionsRegister>(module_name, m_uiactionsRegister);
+#else
+    // For the transition period
+    ioc()->registerExport<IUiActionsRegister>(module_name, new UiActionsRegister(nullptr));
+    ioc()->registerExport<IMainWindow>(module_name, new MainWindow());
+#endif
 }
 
 void UiModule::resolveImports()
 {
+    auto ar = ioc()->resolve<IUiActionsRegister>(moduleName());
+    if (ar) {
+        ar->reg(m_keyNavigationUiActions);
+    }
+
+    auto ir = ioc()->resolve<IInteractiveUriRegister>(moduleName());
+    if (ir) {
+        ir->registerQmlUri(Uri("muse://interactive/standard"), "Muse.Ui.Dialogs", "StandardDialog");
+        ir->registerQmlUri(Uri("muse://interactive/progress"), "Muse.Ui.Dialogs", "ProgressDialog");
+        ir->registerQmlUri(Uri("muse://interactive/selectfile"), "Muse.Ui.Dialogs", "FileDialog");
+        ir->registerQmlUri(Uri("muse://interactive/selectdir"), "Muse.Ui.Dialogs", "FolderDialog");
+
+        ir->registerWidgetUri<TestDialog>(Uri("muse://devtools/interactive/testdialog"));
+        ir->registerQmlUri(Uri("muse://devtools/interactive/sample"), "Muse.Ui.Dialogs", "SampleDialog");
+    }
 }
 
 void UiModule::registerApi()
 {
     using namespace muse::api;
 
-    auto api = globalIoc()->resolve<IApiRegister>(moduleName());
+    auto api = ioc()->resolve<IApiRegister>(moduleName());
     if (api) {
         api->regApiCreator(moduleName(), "MuseInternal.Navigation", new ApiCreator<muse::api::NavigationApi>());
         api->regApiCreator(moduleName(), "MuseInternal.Keyboard", new ApiCreator<muse::api::KeyboardApi>());
-        api->regApiSingltone(moduleName(), "MuseApi.Theme", m_theme);
+        api->regApiSingltone(moduleName(), "MuseApi.Theme", m_uiengine->theme());
 
         qmlRegisterUncreatableMetaObject(IconCode::staticMetaObject, "MuseApi.Controls", 1, 0, "IconCode",
                                          "Not creatable as it is an enum type");
@@ -126,6 +158,8 @@ void UiModule::onInit(const IApplication::RunMode& mode)
     if (QFontDatabase::addApplicationFont(":/ui/data/MusescoreIcon.ttf") == -1) {
         LOGE() << "Unable load icon font: `:/ui/data/MusescoreIcon.ttf`";
     }
+
+    m_keyNavigationController->init();
 }
 
 void UiModule::onAllInited(const IApplication::RunMode& mode)
@@ -134,7 +168,19 @@ void UiModule::onAllInited(const IApplication::RunMode& mode)
         return;
     }
 
-    m_theme->init();
+    //! NOTE Some of the settings are taken from the workspace,
+    //! we need to be sure that the workspaces are initialized.
+    //! So, we loads these settings on onStartApp
+    m_configuration->load();
+
+    m_uiengine->init();
+
+#ifndef MUSE_MULTICONTEXT_WIP
+    //! NOTE UIActions are collected from many modules, and these modules determine the state of their UIActions.
+    //! All modules need to be initialized in order to get the correct state of UIActions.
+    //! So, we do init on onStartApp
+    m_uiactionsRegister->init();
+#endif
 }
 
 void UiModule::onDeinit()
@@ -151,69 +197,23 @@ IContextSetup* UiModule::newContext(const muse::modularity::ContextPtr& ctx) con
 
 void UiModuleContext::registerExports()
 {
-    m_uistate = std::make_shared<UiState>(iocContext());
-    m_uiengine = std::make_shared<UiEngine>(iocContext());
+#ifdef MUSE_MULTICONTEXT_WIP
     m_uiactionsRegister = std::make_shared<UiActionsRegister>(iocContext());
-    m_keyNavigationController = std::make_shared<NavigationController>(iocContext());
 
-    #ifdef Q_OS_MAC
-    m_windowsController = std::make_shared<WindowsController>();
-    #elif defined(Q_OS_WIN)
-    m_windowsController = std::make_shared<WinWindowsController>(iocContext());
-    #elif defined(Q_OS_LINUX)
-    m_windowsController = std::make_shared<WindowsController>();
-    #else
-    m_windowsController = std::make_shared<WindowsController>();
-    #endif
+    // For the transition period
+    auto gloablUiactionsRegister = muse::modularity::globalIoc()->resolve<IUiActionsRegister>(module_name);
+    ioc()->registerExport<IUiActionsRegister>(module_name, gloablUiactionsRegister);
+#endif
 
-    ioc()->registerExport<IUiContextConfiguration>(module_name, new UiContextConfiguration(iocContext()));
-    ioc()->registerExport<IUiState>(module_name, m_uistate);
-    ioc()->registerExport<IUiEngine>(module_name, m_uiengine);
-    ioc()->registerExport<IUiActionsRegister>(module_name, m_uiactionsRegister);
-    ioc()->registerExport<INavigationController>(module_name, m_keyNavigationController);
-    ioc()->registerExport<IDragController>(module_name, new DragController());
-    ioc()->registerExport<IWindowsController>(module_name, m_windowsController);
     ioc()->registerExport<IMainWindow>(module_name, new MainWindow());
-}
-
-void UiModuleContext::resolveImports()
-{
-    auto ar = ioc()->resolve<IUiActionsRegister>(module_name);
-    if (ar) {
-        ar->reg(std::make_shared<NavigationUiActions>());
-    }
-}
-
-void UiModuleContext::onInit(const IApplication::RunMode& mode)
-{
-    if (mode != IApplication::RunMode::GuiApp) {
-        return;
-    }
-
-    m_keyNavigationController->init();
 }
 
 void UiModuleContext::onAllInited(const IApplication::RunMode&)
 {
-    //! NOTE Some of the settings are taken from the workspace,
-    //! we need to be sure that the workspaces are initialized.
-    //! So, we loads these settings on onStartApp
-    m_uistate->init();
-
+#ifdef MUSE_MULTICONTEXT_WIP
     //! NOTE UIActions are collected from many modules, and these modules determine the state of their UIActions.
     //! All modules need to be initialized in order to get the correct state of UIActions.
     //! So, we do init on onStartApp
     m_uiactionsRegister->init();
-
-    auto api = globalIoc()->resolve<api::IApiRegister>(module_name);
-    if (api) {
-        auto obj = api->createApi("MuseApi.Theme", nullptr);
-        api::ThemeApi* theme = dynamic_cast<api::ThemeApi*>(obj.first);
-        assert(theme);
-        if (theme) {
-            m_uiengine->setTheme(theme);
-        }
-    }
-
-    m_uiengine->init();
+#endif
 }

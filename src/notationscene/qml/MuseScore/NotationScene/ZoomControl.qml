@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,7 +21,6 @@
  */
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Window
 
 import Muse.Ui
 import Muse.UiComponents
@@ -127,7 +126,7 @@ RowLayout {
         accessible.name: qsTrc("notation", "Zoom menu")
 
         menuModel: root.availableZoomList
-        menuAnchorItem: root.Window.window ? root.Window.window.contentItem : null
+        menuAnchorItem: ui.rootItem
         onHandleMenuItem: function(itemId) {
             root.changeZoomRequested(itemId)
         }

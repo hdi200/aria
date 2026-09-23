@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -51,7 +51,6 @@ void InstrumentSettingsModel::load(const QVariant& instrument)
 
     m_instrumentName = part->instrument()->nameAsPlainText();
     m_instrumentAbbreviature = part->instrument()->abbreviatureAsPlainText();
-    m_number = part->instrument()->number();
     m_hideWhenEmpty = static_cast<int>(part->hideWhenEmpty());
     m_hideStavesWhenIndividuallyEmpty = part->hideStavesWhenIndividuallyEmpty();
     m_hasMultipleStaves = part->nstaves() > 1;
@@ -74,11 +73,6 @@ QString InstrumentSettingsModel::instrumentName() const
 QString InstrumentSettingsModel::abbreviature() const
 {
     return m_instrumentAbbreviature;
-}
-
-int InstrumentSettingsModel::number() const
-{
-    return m_number;
 }
 
 int InstrumentSettingsModel::hideWhenEmpty() const
@@ -119,17 +113,6 @@ void InstrumentSettingsModel::setAbbreviature(const QString& abbreviature)
 
     m_instrumentAbbreviature = abbreviature;
     notationParts()->setInstrumentAbbreviature(m_instrumentKey, abbreviature);
-}
-
-void InstrumentSettingsModel::setNumber(int v)
-{
-    if (m_number == v || !notationParts()) {
-        return;
-    }
-
-    m_number = v;
-    notationParts()->setInstrumentNumber(m_instrumentKey, v);
-    emit dataChanged();
 }
 
 void InstrumentSettingsModel::setHideWhenEmpty(int value)

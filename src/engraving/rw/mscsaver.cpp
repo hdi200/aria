@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,11 +22,6 @@
 #include "mscsaver.h"
 
 #include "global/io/buffer.h"
-#include "muse_framework_config.h"
-
-#ifdef MUSE_THREADS_SUPPORT
-#include <future>
-#endif
 
 #include "dom/masterscore.h"
 #include "dom/excerpt.h"
@@ -60,7 +55,8 @@ bool MscSaver::writeMscz(MasterScore* score, MscWriter& mscWriter, bool createTh
         //! NOTE The style is writing to a separate file only for the master score.
         //! At the moment, the style for the parts is still writing to the score file.
         ByteArray styleData;
-        auto styleBuf = Buffer::opened(IODevice::WriteOnly, &styleData);
+        Buffer styleBuf(&styleData);
+        styleBuf.open(IODevice::WriteOnly);
         score->style().write(&styleBuf);
         mscWriter.writeStyleFile(styleData);
     }
@@ -74,9 +70,10 @@ bool MscSaver::writeMscz(MasterScore* score, MscWriter& mscWriter, bool createTh
     // Write MasterScore
     {
         ByteArray scoreData;
-        auto scoreBuf = Buffer::opened(IODevice::ReadWrite, &scoreData);
+        Buffer scoreBuf(&scoreData);
+        scoreBuf.open(IODevice::ReadWrite);
 
-        RWRegister::writer()->writeScore(score, &scoreBuf, &masterWriteOutData);
+        RWRegister::writer(score->iocContext())->writeScore(score, &scoreBuf, &masterWriteOutData);
 
         mscWriter.writeScoreFile(scoreData);
     }
@@ -86,62 +83,38 @@ bool MscSaver::writeMscz(MasterScore* score, MscWriter& mscWriter, bool createTh
         if (!ctx || !ctx->shouldWriteRange()) {
             const std::vector<Excerpt*>& excerpts = score->excerpts();
 
-            struct ExcerptData {
-                String fileName;
-                ByteArray styleData;
-                ByteArray scoreData;
-            };
+            for (size_t excerptIndex = 0; excerptIndex < excerpts.size(); ++excerptIndex) {
+                Excerpt* excerpt = excerpts.at(excerptIndex);
 
-            auto serializeExcerpt = [masterWriteOutData, score](Excerpt* excerpt, size_t excerptIndex) -> ExcerptData {
                 Score* partScore = excerpt->excerptScore();
                 IF_ASSERT_FAILED(partScore && partScore != score) {
-                    return ExcerptData();
+                    continue;
                 }
 
                 excerpt->updateFileName(excerptIndex);
 
-                ExcerptData data;
-                data.fileName = excerpt->fileName();
+                // Write excerpt style
+                {
+                    ByteArray excerptStyleData;
+                    Buffer styleStyleBuf(&excerptStyleData);
+                    styleStyleBuf.open(IODevice::WriteOnly);
+                    partScore->style().write(&styleStyleBuf);
 
-                auto styleBuf = Buffer::opened(IODevice::WriteOnly, &data.styleData);
-                partScore->style().write(&styleBuf);
+                    mscWriter.addExcerptStyleFile(excerpt->fileName(), excerptStyleData);
+                }
 
-                WriteInOutData writeOutData = masterWriteOutData;
-                auto scoreBuf = Buffer::opened(IODevice::ReadWrite, &data.scoreData);
-                RWRegister::writer()->writeScore(partScore, &scoreBuf, &writeOutData);
+                // Write excerpt
+                {
+                    ByteArray excerptData;
+                    Buffer excerptBuf(&excerptData);
+                    excerptBuf.open(IODevice::ReadWrite);
 
-                return data;
-            };
+                    RWRegister::writer(partScore->iocContext())->writeScore(
+                        excerpt->excerptScore(), &excerptBuf, &masterWriteOutData);
 
-#ifdef MUSE_THREADS_SUPPORT
-            // Parallelize excerpt serialization (CPU-bound, independent per excerpt)
-            std::vector<std::future<ExcerptData> > futures;
-            futures.reserve(excerpts.size());
-
-            for (size_t excerptIndex = 0; excerptIndex < excerpts.size(); ++excerptIndex) {
-                Excerpt* excerpt = excerpts.at(excerptIndex);
-
-                futures.push_back(std::async(std::launch::async, [serializeExcerpt, excerpt, excerptIndex]() {
-                    return serializeExcerpt(excerpt, excerptIndex);
-                }));
+                    mscWriter.addExcerptFile(excerpt->fileName(), excerptData);
+                }
             }
-
-            // Wait for all serializations to complete, then write to mscWriter sequentially
-            // (MscWriter is not thread-safe)
-            for (auto& future : futures) {
-                ExcerptData data = future.get();
-                mscWriter.addExcerptStyleFile(data.fileName, data.styleData);
-                mscWriter.addExcerptFile(data.fileName, data.scoreData);
-            }
-#else
-            for (size_t excerptIndex = 0; excerptIndex < excerpts.size(); ++excerptIndex) {
-                Excerpt* excerpt = excerpts.at(excerptIndex);
-
-                ExcerptData data = serializeExcerpt(excerpt, excerptIndex);
-                mscWriter.addExcerptStyleFile(data.fileName, data.styleData);
-                mscWriter.addExcerptFile(data.fileName, data.scoreData);
-            }
-#endif
         }
     }
 
@@ -150,7 +123,8 @@ bool MscSaver::writeMscz(MasterScore* score, MscWriter& mscWriter, bool createTh
         ChordList* chordList = score->chordList();
         if (chordList->customChordList() && !chordList->empty()) {
             ByteArray chlData;
-            auto chlBuf = Buffer::opened(IODevice::WriteOnly, &chlData);
+            Buffer chlBuf(&chlData);
+            chlBuf.open(IODevice::WriteOnly);
             chordList->write(&chlBuf);
             mscWriter.writeChordListFile(chlData);
         }
@@ -173,7 +147,8 @@ bool MscSaver::writeMscz(MasterScore* score, MscWriter& mscWriter, bool createTh
             auto pixmap = score->createThumbnail();
 
             ByteArray ba;
-            auto b = Buffer::opened(IODevice::WriteOnly, &ba);
+            Buffer b(&ba);
+            b.open(IODevice::WriteOnly);
             imageProvider()->saveAsPng(pixmap, &b);
             mscWriter.writeThumbnailFile(ba);
         }
@@ -201,21 +176,34 @@ bool MscSaver::exportPart(Score* partScore, MscWriter& mscWriter)
     // Write excerpt style as main
     {
         ByteArray excerptStyleData;
-        auto styleStyleBuf = Buffer::opened(IODevice::WriteOnly, &excerptStyleData);
+        Buffer styleStyleBuf(&excerptStyleData);
+        styleStyleBuf.open(IODevice::WriteOnly);
         partScore->style().write(&styleStyleBuf);
 
         mscWriter.writeStyleFile(excerptStyleData);
     }
 
+    // Add the master score's metaTags to the part
+    const std::map<String, String> partTags = partScore->metaTags();
+    std::map<String, String> effectiveTags = partScore->masterScore()->metaTags();
+    for (const auto& [key, val] : partTags) {
+        effectiveTags.insert_or_assign(key, val);
+    }
+    partScore->setMetaTags(effectiveTags);
+
     // Write excerpt as main score
     {
         ByteArray excerptData;
-        auto excerptBuf = Buffer::opened(IODevice::WriteOnly, &excerptData);
+        Buffer excerptBuf(&excerptData);
+        excerptBuf.open(IODevice::WriteOnly);
 
-        rw::RWRegister::writer()->writeScore(partScore, &excerptBuf);
+        rw::RWRegister::writer(partScore->iocContext())->writeScore(partScore, &excerptBuf);
 
         mscWriter.writeScoreFile(excerptData);
     }
+
+    // restore in-memory part score's metaTags
+    partScore->setMetaTags(partTags);
 
     // Write thumbnail
     {
@@ -223,7 +211,8 @@ bool MscSaver::exportPart(Score* partScore, MscWriter& mscWriter)
             auto pixmap = partScore->createThumbnail();
 
             ByteArray ba;
-            auto b = Buffer::opened(IODevice::WriteOnly, &ba);
+            Buffer b(&ba);
+            b.open(IODevice::WriteOnly);
             imageProvider()->saveAsPng(pixmap, &b);
             mscWriter.writeThumbnailFile(ba);
         }

@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MUSE_EXTENSIONS_EXTENSIONSPROVIDER_H
+#define MUSE_EXTENSIONS_EXTENSIONSPROVIDER_H
 
 #include "global/async/asyncable.h"
 
@@ -28,7 +28,7 @@
 #include "../iextensionsconfiguration.h"
 #include "../iextensionsprovider.h"
 #include "../iextensionsexecpointsregister.h"
-#include "interactive/iinteractive.h"
+#include "global/iinteractive.h"
 #include "io/ifilesystem.h"
 
 namespace muse::extensions {
@@ -36,7 +36,7 @@ class ExtensionsProvider : public IExtensionsProvider, public Contextable, publi
 {
     GlobalInject<IExtensionsConfiguration> configuration;
     GlobalInject<io::IFileSystem> fileSystem;
-    GlobalInject<IExtensionsExecPointsRegister> execPointsRegister;
+    ContextInject<IExtensionsExecPointsRegister> execPointsRegister = { this };
     ContextInject<IInteractive> interactive = { this };
 
 public:
@@ -72,3 +72,5 @@ private:
     async::Channel<Manifest> m_manifestChanged;
 };
 }
+
+#endif // MUSE_EXTENSIONS_EXTENSIONSPROVIDER_H

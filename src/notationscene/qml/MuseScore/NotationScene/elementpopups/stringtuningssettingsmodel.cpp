@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -303,8 +303,6 @@ void StringTuningsSettingsModel::updateStrings()
 {
     const QVariantList presets = this->presets();
     QString currentPreset = this->currentPreset();
-    const auto& tick = m_item->tick();
-    const auto transpose  = m_item->part()->instrument(tick)->transpose().chromatic;
 
     m_strings.clear();
 
@@ -320,7 +318,7 @@ void StringTuningsSettingsModel::updateStrings()
                 item->blockSignals(true);
                 item->setShow(true);
                 item->setNumber(QString::number(i + 1));
-                item->setValue(valueList[valueIndex].toInt() - transpose);
+                item->setValue(valueList[valueIndex].toInt());
                 item->setUseFlat(useFlats);
                 item->blockSignals(false);
 

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -48,9 +48,9 @@ BaseSection {
         currentIndex: indexOfValue(root.inputDeviceId)
         columnWidth: root.columnWidth
 
-        navigationName: "MidiInputBox"
-        navigationPanel: root.navigation
-        navigationRow: 1
+        navigation.name: "MidiInputBox"
+        navigation.panel: root.navigation
+        navigation.row: 1
 
         onValueEdited: function(newIndex, newValue) {
             root.inputDeviceIdChangeRequested(newValue)
@@ -64,9 +64,9 @@ BaseSection {
         currentIndex: indexOfValue(root.outputDeviceId)
         columnWidth: root.columnWidth
 
-        navigationName: "MidiOutputBox"
-        navigationPanel: root.navigation
-        navigationRow: 2
+        navigation.name: "MidiOutputBox"
+        navigation.panel: root.navigation
+        navigation.row: 2
 
         onValueEdited: function(newIndex, newValue) {
             root.outputDeviceIdChangeRequested(newValue)

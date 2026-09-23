@@ -29,17 +29,18 @@
 #include "../iaudiopluginsconfiguration.h"
 
 namespace muse::audioplugins {
-class KnownAudioPluginsRegister : public IKnownAudioPluginsRegister
+class KnownAudioPluginsRegister : public IKnownAudioPluginsRegister, public Contextable
 {
+public:
     GlobalInject<IAudioPluginsConfiguration> configuration;
     GlobalInject<io::IFileSystem> fileSystem;
 
-    friend class AudioPlugins_KnownAudioPluginsRegisterTest;
-
 public:
-    KnownAudioPluginsRegister() = default;
+    KnownAudioPluginsRegister(const modularity::ContextPtr& iocCtx)
+        : Contextable(iocCtx) {}
 
     Ret load() override;
+    Ret clear() override;
 
     AudioPluginInfoList pluginInfoList(PluginInfoAccepted accepted = PluginInfoAccepted()) const override;
     muse::async::Notification pluginInfoListChanged() const override;

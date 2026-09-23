@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -45,17 +45,12 @@ using namespace muse::ui;
 static const int ITEM_ACCESSIBLE_TITLE_ROLE = Qt::UserRole + 1;
 
 MeasurePropertiesDialog::MeasurePropertiesDialog(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
+    : QDialog(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setObjectName("MeasureProperties");
     setupUi(this);
     setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-    qApp->installEventFilter(this);
-}
-
-void MeasurePropertiesDialog::componentComplete()
-{
     m_notation = context()->currentNotation();
     initMeasure();
 
@@ -78,6 +73,8 @@ void MeasurePropertiesDialog::componentComplete()
 
     //! NOTE: It is necessary for the correct start of navigation in the dialog
     setFocus();
+
+    qApp->installEventFilter(this);
 }
 
 void MeasurePropertiesDialog::initMeasure()
@@ -135,7 +132,7 @@ void MeasurePropertiesDialog::gotoNextMeasure()
     }
     nextButton->setEnabled(getNextMeasure(m_measure));
     previousButton->setEnabled(getPrevMeasure(m_measure));
-    m_notation->notationChanged().send(muse::RectF());
+    m_notation->notationChanged().notify();
 }
 
 //---------------------------------------------------------
@@ -150,7 +147,7 @@ void MeasurePropertiesDialog::gotoPreviousMeasure()
     }
     nextButton->setEnabled(getNextMeasure(m_measure));
     previousButton->setEnabled(getPrevMeasure(m_measure));
-    m_notation->notationChanged().send(muse::RectF());
+    m_notation->notationChanged().notify();
 }
 
 bool MeasurePropertiesDialog::eventFilter(QObject* obj, QEvent* event)
@@ -178,7 +175,7 @@ void MeasurePropertiesDialog::setMeasure(mu::engraving::Measure* measure)
     nextButton->setEnabled(m_measure->nextMeasure() != 0);
     previousButton->setEnabled(m_measure->prevMeasure() != 0);
 
-    setWindowTitle(muse::qtrc("notation/measureproperties", "Properties for measure %1").arg(m_measure->measureNumber() + 1));
+    setWindowTitle(muse::qtrc("notation/measureproperties", "Properties for measure %1").arg(m_measure->no() + 1));
     m_notation->interaction()->clearSelection();
     m_notation->interaction()->select({ m_measure }, mu::engraving::SelectType::ADD, 0);
 
@@ -191,7 +188,7 @@ void MeasurePropertiesDialog::setMeasure(mu::engraving::Measure* measure)
     nominalZ->setNum(m_measure->timesig().numerator());
     nominalN->setNum(m_measure->timesig().denominator());
 
-    excludeFromNumbering->setChecked(m_measure->excludeFromNumbering());
+    irregular->setChecked(m_measure->irregular());
     breakMultiMeasureRest->setChecked(m_measure->breakMultiMeasureRest());
     int n  = m_measure->repeatCount();
     count->setValue(n);
@@ -201,7 +198,7 @@ void MeasurePropertiesDialog::setMeasure(mu::engraving::Measure* measure)
     labelCount->setVisible(enableCount);
     layoutStretch->setValue(m_measure->userStretch());
     measureNumberMode->setCurrentIndex(int(m_measure->measureNumberMode()));
-    measureNumberOffset->setValue(m_measure->measureNumberOffset());
+    measureNumberOffset->setValue(m_measure->noOffset());
 
     mu::engraving::Score* score = m_measure->score();
     size_t rows = score->nstaves();
@@ -287,6 +284,15 @@ mu::engraving::Fraction MeasurePropertiesDialog::len() const
 }
 
 //---------------------------------------------------------
+//   isIrregular
+//---------------------------------------------------------
+
+bool MeasurePropertiesDialog::isIrregular() const
+{
+    return irregular->isChecked();
+}
+
+//---------------------------------------------------------
 //   repeatCount
 //---------------------------------------------------------
 
@@ -322,8 +328,8 @@ void MeasurePropertiesDialog::apply()
     m_measure->undoChangeProperty(mu::engraving::Pid::BREAK_MMR, breakMultiMeasureRest->isChecked());
     m_measure->undoChangeProperty(mu::engraving::Pid::USER_STRETCH, layoutStretch->value());
     m_measure->undoChangeProperty(mu::engraving::Pid::MEASURE_NUMBER_MODE, measureNumberMode->currentIndex());
-    m_measure->undoChangeProperty(mu::engraving::Pid::MEASURE_NUMBER_OFFSET, measureNumberOffset->value());
-    m_measure->undoChangeProperty(mu::engraving::Pid::EXCLUDE_FROM_NUMBERING, excludeFromNumbering->isChecked());
+    m_measure->undoChangeProperty(mu::engraving::Pid::NO_OFFSET, measureNumberOffset->value());
+    m_measure->undoChangeProperty(mu::engraving::Pid::IRREGULAR, isIrregular());
 
     if (m_measure->ticks() != len()) {
         mu::engraving::ScoreRange range;
@@ -337,7 +343,7 @@ void MeasurePropertiesDialog::apply()
     m_notation->undoStack()->commitChanges();
 
     m_notation->interaction()->select({ m_measure }, mu::engraving::SelectType::SINGLE, 0);
-    m_notation->notationChanged().send(muse::RectF());
+    m_notation->notationChanged().notify();
 }
 
 void MeasurePropertiesDialog::showEvent(QShowEvent* event)

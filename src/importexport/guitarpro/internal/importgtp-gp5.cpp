@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -61,9 +61,6 @@
 #include "engraving/dom/tuplet.h"
 #include "engraving/dom/volta.h"
 #include "engraving/types/symid.h"
-#include "engraving/dom/stringtunings.h"
-
-#include "engraving/editing/editchord.h"
 
 #include "guitarprodrumset.h"
 #include "utils.h"
@@ -91,7 +88,6 @@ static TremoloType tremoloType(int division)
     return TremoloType::INVALID_TREMOLO;
 }
 
-static std::unordered_map<uint64_t, mu::engraving::StringData> stringDatas;
 //---------------------------------------------------------
 //   readInfo
 //---------------------------------------------------------
@@ -543,7 +539,6 @@ bool GuitarPro5::readMixChange(Measure* measure)
 
 bool GuitarPro5::readTracks()
 {
-    stringDatas.clear();
     for (size_t i = 0; i < staves; ++i) {
         int tuning[GP_MAX_STRING_NUMBER];
         Staff* staff = score->staff(i);
@@ -571,6 +566,10 @@ bool GuitarPro5::readTracks()
         }
         int midiPort     = readInt() - 1;
         int midiChannel  = readInt() - 1;
+        if (midiChannel < 0 || midiChannel >= static_cast<int>(channelDefaults.size())) {
+            LOGE() << "midiChannel " << midiChannel << " out of range 0-" << channelDefaults.size();
+            return false;
+        }
         /*int midiChannel2 =*/ readInt();       // -1
 
         int frets        = readInt();
@@ -594,8 +593,8 @@ bool GuitarPro5::readTracks()
         Instrument* instr = part->instrument();
         instr->setStringData(stringData);
         instr->setSingleNoteDynamics(false);
+        part->setPartName(name);
         part->setPlainLongName(name);
-        stringDatas.insert_or_assign(part->id().toUint64(), stringData);
 
         //
         // determine clef
@@ -975,51 +974,6 @@ bool GuitarPro5::read(IODevice* io)
         return false;
     }
     readMeasures(tempo);
-    const Measure* m = score->firstMeasure();
-
-    // NOTE: GP doesn't support multiple tunings on one part
-    // We're safe to just take the very first chord rest segment
-    // and check if it has any non-standard tuning
-    const Fraction& frac{ 0, 1 };
-
-    for (auto p : score->parts()) {
-        for (auto s : p->staves()) {
-            if (!s->isPrimaryStaff() || p->instrument()->useDrumset()) {
-                continue;
-            }
-
-            Segment* seg = m->findSegment(SegmentType::ChordRest, frac);
-
-            IF_ASSERT_FAILED(seg) {
-                LOGE() << "First measure MUST has a chord rest segment after import";
-                return false;
-            }
-
-            if (stringDatas.find(p->id().toUint64()) == stringDatas.end()) {
-                continue;
-            }
-            StringData sd = stringDatas.at(p->id().toUint64());
-
-            std::vector<int> tuningPitches(sd.strings());
-            for (size_t i = 0; i < tuningPitches.size(); ++i) {
-                tuningPitches[i] = sd.stringList().at(i).pitch + p->instrument()->transpose().chromatic;
-            }
-
-            if (utils::isStandardTuning(p->instrument()->channel(0)->program(), tuningPitches)) {
-                continue;
-            }
-
-            StringTunings* tun = Factory::createStringTunings(seg);
-            tun->setStringData(sd);
-            tun->setTrack(staff2track(s->idx()));
-            tun->setParent(seg);
-            seg->add(tun);
-
-            auto tuning = utils::standardTuningFor(p->instrument()->channel(0)->program(), (int)sd.strings());
-            sd = StringData(sd.frets(), (int)tuning.size(), tuning.data());
-            p->instrument()->setStringData(sd);
-        }
-    }
     for (auto n : slideList) {
         auto segment = n->chord()->segment();
         auto measure = segment->measure();
@@ -1490,7 +1444,7 @@ GuitarPro::ReadNoteResult GuitarPro5::readNote(int string, Note* note)
     if (noteBits & NOTE_MARCATO) {
         Articulation* art = Factory::createArticulation(note->score()->dummy()->chord());
         art->setSymId(SymId::articMarcatoAbove);
-        if (!EditChord::toggleArticulation(note->score(), note, art)) {
+        if (!note->score()->toggleArticulation(note, art)) {
             delete art;
         }
     }
@@ -1499,7 +1453,7 @@ GuitarPro::ReadNoteResult GuitarPro5::readNote(int string, Note* note)
         Articulation* art = Factory::createArticulation(note->score()->dummy()->chord());
         art->setSymId(SymId::articAccentAbove);
         note->add(art);
-        if (!EditChord::toggleArticulation(note->score(), note, art)) {
+        if (!note->score()->toggleArticulation(note, art)) {
             delete art;
         }
     }

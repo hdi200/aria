@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -29,10 +29,8 @@
         </Staff>
       <trackName>Flute</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Flute</longName>
-          <shortName>Fl.</shortName>
-          </InstrumentLabel>
+        <longName>Flute</longName>
+        <shortName>Fl.</shortName>
         <trackName>Flute</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -96,10 +94,8 @@
       <trackName>Clarinet in B♭</trackName>
       <preferSharpFlat>none</preferSharpFlat>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Clarinet in B♭</longName>
-          <shortName>B♭ Cl.</shortName>
-          </InstrumentLabel>
+        <longName>Clarinet in B♭</longName>
+        <shortName>B♭ Cl.</shortName>
         <trackName>Clarinet in B♭</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -165,10 +161,8 @@
       <trackName>Clarinet in A</trackName>
       <preferSharpFlat>none</preferSharpFlat>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Clarinet in A</longName>
-          <shortName>A Cl.</shortName>
-          </InstrumentLabel>
+        <longName>Clarinet in A</longName>
+        <shortName>A Cl.</shortName>
         <trackName>Clarinet in A</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -233,10 +227,8 @@
         </Staff>
       <trackName>Alto Sax</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Alto Sax</longName>
-          <shortName>A. Sx.</shortName>
-          </InstrumentLabel>
+        <longName>Alto Sax</longName>
+        <shortName>A. Sx.</shortName>
         <trackName>Alto Sax</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

@@ -125,7 +125,7 @@
 #include "global/globalmodule.h"
 #include "global/iapplication.h"
 #include "global/types/translatablestring.h"
-#include "global/tests/mocks/applicationstub.h"
+#include "score_render_application_stub.h"
 #include "io/buffer.h"
 #include "log.h"
 #include "importexport/musicxml/internal/import/importmusicxml.h"

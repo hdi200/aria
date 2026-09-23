@@ -50,7 +50,7 @@ using namespace muse::network;
 namespace muse::update {
 class AppUpdateServiceTests : public ::testing::Test, public ::async::Asyncable
 {
-    muse::GlobalInject<muse::IApplication> application;
+    muse::Inject<muse::IApplication> application = { nullptr };
 
 public:
     void SetUp() override
@@ -86,7 +86,7 @@ public:
         .WillOnce(Return(checkForAppUpdateUrl));
 
         QString releasesNotes = "{"
-                                "\"tag_name\": \"v1000.0\","
+                                "\"tag_name\": \"v5.0\","
                                 "\"assets\": ["
                                 "{ \"name\": \"MuseScore.dmg\", \"browser_download_url\": \"blabla\" },"
                                 "{ \"name\": \"MuseScore.msi\", \"browser_download_url\": \"blabla\" },"

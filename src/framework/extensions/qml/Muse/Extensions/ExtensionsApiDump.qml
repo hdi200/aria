@@ -85,7 +85,7 @@ Rectangle {
         clip: true
         model: apiModel
 
-        section.property: "group"
+        section.property: "groupRole"
         section.delegate: Rectangle {
             id: sectionDelegate
             required property string section
@@ -105,7 +105,7 @@ Rectangle {
         delegate: ListItemBlank {
             id: itemDelegate
 
-            required property string itemData
+            required property string data
 
             anchors.left: parent ? parent.left : undefined
             anchors.right: parent ? parent.right : undefined
@@ -117,7 +117,7 @@ Rectangle {
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignLeft
                 font.family: "Consolas"
-                text: itemDelegate.itemData
+                text: itemDelegate.data
             }
         }
     }

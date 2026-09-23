@@ -26,7 +26,7 @@
 #include <qqmlintegration.h>
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 
 namespace muse::uicomponents {
 class FilePickerModel : public QObject, public muse::Contextable

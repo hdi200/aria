@@ -30,25 +30,14 @@
 using namespace muse::workspace;
 using namespace muse::modularity;
 
-static const std::string mname("workspace_stub");
-
 std::string WorkspaceModule::moduleName() const
 {
-    return mname;
+    return "workspace_stub";
 }
 
 void WorkspaceModule::registerExports()
 {
-    globalIoc()->registerExport<IWorkspaceConfiguration>(mname, new WorkspaceConfigurationStub());
-}
-
-IContextSetup* WorkspaceModule::newContext(const muse::modularity::ContextPtr& ctx) const
-{
-    return new WorkspaceContext(ctx);
-}
-
-void WorkspaceContext::registerExports()
-{
-    ioc()->registerExport<IWorkspaceManager>(mname, new WorkspaceManagerStub());
-    ioc()->registerExport<IWorkspacesDataProvider>(mname, new WorkspacesDataProviderStub());
+    ioc()->registerExport<IWorkspaceConfiguration>(moduleName(), new WorkspaceConfigurationStub());
+    ioc()->registerExport<IWorkspaceManager>(moduleName(), new WorkspaceManagerStub());
+    ioc()->registerExport<IWorkspacesDataProvider>(moduleName(), new WorkspacesDataProviderStub());
 }

@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2022 MuseScore Limited
+# Copyright (C) 2022 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -23,8 +23,8 @@ include(GetPlatformInfo)
 if (OS_IS_MAC)
     # See also SetupIconComposerIcon.cmake
 
-    install(FILES MsczIcon/MS4_MsczIcon.icns RENAME MsczIcon.icns DESTINATION ${MUSE_APP_INSTALL_RESOURCES_LOCATION})
-    install(FILES MscxIcon/MS4_MscxIcon.icns RENAME MscxIcon.icns DESTINATION ${MUSE_APP_INSTALL_RESOURCES_LOCATION})
+    install(FILES MsczIcon/MS4_MsczIcon.icns RENAME MsczIcon.icns DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME})
+    install(FILES MscxIcon/MS4_MscxIcon.icns RENAME MscxIcon.icns DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME})
 
 elseif(OS_IS_WIN)
     # See also windows_icons.rc

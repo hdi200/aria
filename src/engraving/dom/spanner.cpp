@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -286,13 +286,9 @@ void SpannerSegment::setSelected(bool f)
 void SpannerSegment::setVisible(bool f)
 {
     if (m_spanner) {
-        for (SpannerSegment* ss : m_spanner->spannerSegments()) {
-            ss->EngravingItem::setVisible(f);
-        }
         m_spanner->setVisible(f);
-    } else {
-        EngravingItem::setVisible(f);
     }
+    EngravingItem::setVisible(f);
 }
 
 //---------------------------------------------------------
@@ -302,13 +298,9 @@ void SpannerSegment::setVisible(bool f)
 void SpannerSegment::setColor(const Color& col)
 {
     if (m_spanner) {
-        for (SpannerSegment* ss : m_spanner->spannerSegments()) {
-            ss->m_color = col;
-        }
-        m_spanner->m_color = col;
-    } else {
-        m_color = col;
+        m_spanner->setColor(col);
     }
+    EngravingItem::setColor(col);
 }
 
 //---------------------------------------------------------
@@ -1233,9 +1225,9 @@ void Spanner::setAutoplace(bool f)
 void Spanner::setColor(const Color& col)
 {
     for (SpannerSegment* ss : spannerSegments()) {
-        ss->setColor(col);
+        ss->EngravingItem::setColor(col);
     }
-    m_color = col;
+    EngravingItem::setColor(col);
 }
 
 //---------------------------------------------------------
@@ -1398,7 +1390,12 @@ void Spanner::setTick(const Fraction& v)
 
 void Spanner::setTick2(const Fraction& f)
 {
-    setTicks(f - m_tick);
+    Fraction ticks = f - m_tick;
+    IF_ASSERT_FAILED(f >= m_tick) {
+        ticks = m_tick - f;
+        m_tick = f;
+    }
+    setTicks(ticks);
 }
 
 //---------------------------------------------------------

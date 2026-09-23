@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -24,10 +24,9 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Bells</trackName>
       <Instrument id="xylomarimba">
-        <InstrumentLabel>
-          <longName>Bells</longName>
-          </InstrumentLabel>
+        <longName>Bells</longName>
         <trackName></trackName>
         <instrumentId>pitched-percussion.xylomarimba</instrumentId>
         <singleNoteDynamics>0</singleNoteDynamics>

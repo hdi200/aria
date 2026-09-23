@@ -34,8 +34,8 @@ class ExtensionsUiActions : public ui::IUiActionsModule, public Contextable, pub
     ContextInject<extensions::IExtensionsProvider> provider = { this };
 
 public:
-    ExtensionsUiActions(const modularity::ContextPtr& ctx)
-        : Contextable(ctx) {}
+    ExtensionsUiActions(const modularity::ContextPtr& iocCtx)
+        : Contextable(iocCtx) {}
 
     const ui::UiActionList& actionsList() const override;
 

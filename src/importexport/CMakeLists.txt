@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2026 MuseScore Limited
+# Copyright (C) 2026 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -48,9 +48,6 @@ if (MUE_BUILD_IMPEXP_MIDI_MODULE)
     add_subdirectory(midi)
 else()
     add_subdirectory(../stubs/importexport/midi stubs/midi)
-endif()
-if (MUE_BUILD_IMPEXP_MLSCORE_MODULE)
-    add_subdirectory(mlscore)
 endif()
 if (MUE_BUILD_IMPEXP_MNX_MODULE)
     add_subdirectory(mnx)

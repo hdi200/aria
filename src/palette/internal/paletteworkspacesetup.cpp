@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -43,7 +43,8 @@ static const AsciiStringView PALETTE_XML_TAG("PaletteBox");
 PaletteTreePtr PaletteWorkspaceSetup::readPalette(const ByteArray& data, const muse::modularity::ContextPtr& iocCtx)
 {
     ByteArray ba = ByteArray::fromRawData(data.constData(), data.size());
-    auto buf = Buffer::opened(IODevice::ReadOnly, &ba);
+    Buffer buf(&ba);
+    buf.open(IODevice::ReadOnly);
     mu::engraving::XmlReader reader(&buf);
 
     while (!reader.atEnd()) {
@@ -59,7 +60,7 @@ PaletteTreePtr PaletteWorkspaceSetup::readPalette(const ByteArray& data, const m
                 // Versioning workspace palette files started in 4.7. All unversioned files should be treated like 4.6 files
                 mscVersion = 460;
             }
-            paletteScoreProvider()->paletteScore()->setMscVersion(mscVersion);
+            engraving::gpaletteScore->setMscVersion(mscVersion);
 
             PaletteTreePtr tree = std::make_shared<PaletteTree>();
             tree->read(reader, false, iocCtx);
@@ -72,7 +73,8 @@ PaletteTreePtr PaletteWorkspaceSetup::readPalette(const ByteArray& data, const m
 
 void PaletteWorkspaceSetup::writePalette(const PaletteTreePtr& tree, QByteArray& data)
 {
-    auto buf = Buffer::opened(IODevice::WriteOnly);
+    Buffer buf;
+    buf.open(IODevice::WriteOnly);
     mu::engraving::XmlWriter writer(&buf);
     tree->write(writer, false);
     writer.flush();
@@ -111,8 +113,8 @@ void PaletteWorkspaceSetup::setup()
         }
         paletteProvider()->setUserPaletteTree(tree);
 
-        if (paletteScoreProvider()->paletteScore()->mscVersion() < engraving::Constants::MSC_VERSION) {
-            LOGD() << "Workspace file found with palette file version " << paletteScoreProvider()->paletteScore()->mscVersion() <<
+        if (engraving::gpaletteScore->mscVersion() < engraving::Constants::MSC_VERSION) {
+            LOGD() << "Workspace file found with palette file version " << engraving::gpaletteScore->mscVersion() <<
                 ". Migrating palette file to " << engraving::Constants::MSC_VERSION;
             saveData();
         }

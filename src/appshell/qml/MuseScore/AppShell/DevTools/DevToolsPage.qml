@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,6 +27,7 @@ import QtQuick
 import Muse.Ui
 import Muse.UiComponents
 import Muse.Dock
+import MuseScore.Project
 
 DockPage {
     id: root
@@ -41,9 +42,9 @@ DockPage {
         case "interactive": root.central = interactiveComp; break
         case "crashhandler": root.central = crashhandlerComp; break
         case "corruptscore": root.central = corruptScoreComp; break
+        case "convertfiletoscore": root.central = convertFileToScoreComp; break
         case "mpe": root.central = mpeComponent; break
         case "extensions": root.central = extensionsComp; break
-        case "musesounds": root.central = musesoundsComp; break
         case "navigation": root.central = keynavComp; break
         }
     }
@@ -74,8 +75,8 @@ DockPage {
                         { "name": "interactive", "title": "Interactive" },
                         { "name": "crashhandler", "title": "Crash handler" },
                         { "name": "corruptscore", "title": "Corrupt score" },
+                        { "name": "convertfiletoscore", "title": "Convert file to score" },
                         { "name": "mpe", "title": "MPE" },
-                        { "name": "musesounds", "title": "MuseSounds" },
                         { "name": "extensions", "title": "Extensions" },
                         { "name": "navigation", "title": "KeyNav" }
                     ]
@@ -121,15 +122,15 @@ DockPage {
     }
 
     Component {
-        id: mpeComponent
+        id: convertFileToScoreComp
 
-        ArticulationsProfileEditorView {}
+        ConvertFileToScoreDevTools {}
     }
 
     Component {
-        id: musesoundsComp
+        id: mpeComponent
 
-        MuseSoundsDevTools {}
+        ArticulationsProfileEditorView {}
     }
 
     Component {

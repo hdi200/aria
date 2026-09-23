@@ -25,7 +25,7 @@
 #include "global/modularity/ioc.h"
 #include "global/iprocess.h"
 #include "global/iglobalconfiguration.h"
-#include "interactive/iinteractive.h"
+#include "global/iinteractive.h"
 #include "global/async/asyncable.h"
 
 #include "../iregisteraudiopluginsscenario.h"
@@ -39,9 +39,9 @@ class RegisterAudioPluginsScenario : public IRegisterAudioPluginsScenario, publi
 public:
     GlobalInject<IGlobalConfiguration> globalConfiguration;
     GlobalInject<IProcess> process;
-    GlobalInject<IKnownAudioPluginsRegister> knownPluginsRegister;
-    GlobalInject<IAudioPluginsScannerRegister> scannerRegister;
-    GlobalInject<IAudioPluginMetaReaderRegister> metaReaderRegister;
+    ContextInject<IKnownAudioPluginsRegister> knownPluginsRegister = { this };
+    ContextInject<IAudioPluginsScannerRegister> scannerRegister = { this };
+    ContextInject<IAudioPluginMetaReaderRegister> metaReaderRegister = { this };
     ContextInject<IInteractive> interactive = { this };
 
 public:
@@ -52,8 +52,10 @@ public:
 
     PluginScanResult scanPlugins() const override;
 
-    Ret updatePluginsRegistry() override;
-    void registerNewPlugins(const io::paths_t& pluginPaths) override;
+    void updatePluginsRegistry() override;
+    void rescanAllPlugins() override;
+
+    Ret registerNewPlugins(const io::paths_t& pluginPaths) override;
     Ret unregisterRemovedPlugins(const audio::AudioResourceIdList& pluginIds) override;
 
     Ret registerPlugin(const io::path_t& pluginPath) override;

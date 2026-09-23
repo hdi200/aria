@@ -80,7 +80,7 @@ TEST_F(Audio_RpcPackerTests, AudioResourceMeta)
 {
     AudioResourceMeta origin;
     origin.id = "1234";
-    origin.type = AudioResourceType::NativeEffect;
+    origin.type = AudioResourceType::MusePlugin;
     origin.vendor = "muse";
     origin.attributes.insert({ u"key", u"val" });
     origin.hasNativeEditorSupport = true;
@@ -259,12 +259,16 @@ TEST_F(Audio_RpcPackerTests, SoundTrackFormat)
     origin.outputSpec.audioChannelCount = 2;
     origin.bitRate = 196;
     origin.sampleFormat = AudioSampleFormat::Float32;
+    origin.leadingSilenceDuration = 3000000;
+    origin.trailingSilenceDuration = 5000000;
 
     KNOWN_FIELDS(origin,
                  origin.type,
                  origin.outputSpec,
                  origin.bitRate,
-                 origin.sampleFormat);
+                 origin.sampleFormat,
+                 origin.leadingSilenceDuration,
+                 origin.trailingSilenceDuration);
 
     ByteArray data = rpc::RpcPacker::pack(origin);
 

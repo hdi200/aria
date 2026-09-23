@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -49,12 +49,12 @@ enum class P_TYPE : unsigned char {
     STRING,
 
     // Geometry
-    POINT,              // point units, value saved as absolute or spatium depending on EngravingItem->sizeIsSpatiumDependent()
+    POINT,              // point units, value saved as mm or spatium depending on EngravingItem->sizeIsSpatiumDependent()
     SIZE,
     DRAW_PATH,
     SCALE,
     SPATIUM,
-    ABSOLUTE,
+    MILLIMETRE,
     PAIR_REAL,
 
     // Draw
@@ -130,9 +130,6 @@ enum class P_TYPE : unsigned char {
     MEASURE_NUMBER_PLACEMENT,
     CAPO_TRANSPOSE_MODE,
 
-    INSTRUMENT_NAMES_ALIGN,
-    INSTRUMENT_NAMES_FORMAT,
-
     // Other
     GROUPS,
 };
@@ -187,6 +184,9 @@ public:
 
     PropertyValue(const Spatium& v)
         : m_type(P_TYPE::SPATIUM), m_data(make_data<Spatium>(v)) {}
+
+    PropertyValue(const Millimetre& v)
+        : m_type(P_TYPE::MILLIMETRE), m_data(make_data<Millimetre>(v)) {}
 
     // Draw
     PropertyValue(SymId v)
@@ -364,13 +364,6 @@ public:
 
     PropertyValue(const CapoParams::TransposeMode& v)
         : m_type(P_TYPE::CAPO_TRANSPOSE_MODE), m_data(make_data<CapoParams::TransposeMode>(v)) {}
-
-    PropertyValue(const InstrumentNamesAlign& v)
-        : m_type(P_TYPE::INSTRUMENT_NAMES_ALIGN), m_data(make_data<InstrumentNamesAlign>(v)) {}
-
-    PropertyValue(const InstrumentNamesFormat& v)
-        : m_type(P_TYPE::INSTRUMENT_NAMES_FORMAT), m_data(make_data<InstrumentNamesFormat>(v)) {}
-
     bool isValid() const;
 
     P_TYPE type() const;
@@ -439,10 +432,19 @@ public:
                 }
             }
 
+            //! HACK Temporary hack for real to Millimetre
+            if constexpr (std::is_same<T, Millimetre>::value) {
+                if (P_TYPE::REAL == m_type) {
+                    Arg<double>* mrv = get<double>();
+                    assert(mrv);
+                    return mrv ? Millimetre(mrv->v) : Millimetre();
+                }
+            }
+
             //! HACK Temporary hack for Spatium to real
             if constexpr (std::is_same<T, double>::value) {
-                if (P_TYPE::ABSOLUTE == m_type) {
-                    return value<double>();
+                if (P_TYPE::MILLIMETRE == m_type) {
+                    return value<Millimetre>().val();
                 }
             }
 

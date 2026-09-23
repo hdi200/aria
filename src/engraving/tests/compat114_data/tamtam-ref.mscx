@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -43,11 +43,10 @@
         <barLineSpanFrom>-4</barLineSpanFrom>
         <barLineSpanTo>4</barLineSpanTo>
         </Staff>
+      <trackName>Tam-tam</trackName>
       <Instrument id="tam-tam">
-        <InstrumentLabel>
-          <longName>Tam-tam</longName>
-          <shortName>Tam-tam</shortName>
-          </InstrumentLabel>
+        <longName>Tam-tam</longName>
+        <shortName>Tam-tam</shortName>
         <trackName>Tam-tam</trackName>
         <instrumentId>metal.tamtam</instrumentId>
         <useDrumset>1</useDrumset>

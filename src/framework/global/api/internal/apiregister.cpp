@@ -96,14 +96,9 @@ JsApiEngine* ApiRegister::makeApiEngine(QJSEngine* jsengine)
         return it->apiengine;
     }
 
-    QmlIoCContext* qmlIoc = jsengine->property("ioc_context").value<QmlIoCContext*>();
-    IF_ASSERT_FAILED(qmlIoc) {
-        return nullptr;
-    }
-
     ApiEngine e;
     e.jsengine = jsengine;
-    e.apiengine = new JsApiEngine(jsengine, qmlIoc->ctx);
+    e.apiengine = new JsApiEngine(jsengine, muse::modularity::globalCtx());
     m_apiengines.push_back(e);
 
     QObject::connect(jsengine, &QJSEngine::destroyed, [this, jsengine]() {

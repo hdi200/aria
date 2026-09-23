@@ -22,6 +22,7 @@
 #pragma once
 
 #include <QQuickItem>
+#include <QAbstractNativeEventFilter>
 #include <QTimer>
 #include <qqmlintegration.h>
 
@@ -30,7 +31,7 @@
 
 namespace muse::vst {
 class RunLoop;
-class VstView : public QQuickItem, public Steinberg::IPlugFrame
+class VstView : public QQuickItem, public QAbstractNativeEventFilter, public Steinberg::IPlugFrame, public muse::Contextable
 {
     Q_OBJECT
 
@@ -43,7 +44,7 @@ class VstView : public QQuickItem, public Steinberg::IPlugFrame
 
     QML_ELEMENT
 
-    muse::GlobalInject<IVstInstancesRegister> instancesRegister;
+    muse::ContextInject<IVstInstancesRegister> instancesRegister { this };
 
     DECLARE_FUNKNOWN_METHODS
 
@@ -84,12 +85,17 @@ signals:
     void minimumWidthChanged();
 
 private:
+    void deinitPluginView();
+
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    bool nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) override;
+
     struct ScreenMetrics {
         QSize availableSize;
         double devicePixelRatio = 0.0;
     };
 
-    void updateScreenMetrics();
+    void updateScreenMetrics(QScreen* screen);
     void updateViewGeometry();
 
     int m_instanceId = -1;
@@ -105,7 +111,11 @@ private:
     // different padding properties it exposes.
     QWindow* m_vstWindow = nullptr;
 
+    void* m_plugViewHandle = nullptr;
+    void* m_rootHandle = nullptr;
+
     bool m_resizeViewCalled = false;
+    bool m_updatePending = false;
 
     QScreen* m_currentScreen = nullptr;
     ScreenMetrics m_screenMetrics;

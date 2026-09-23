@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -253,8 +253,8 @@ static constexpr PropertyMetaData propertyList[] = {
     { Pid::REPEAT_COUNT,                        P_TYPE::INT,                       PropertyGroup::APPEARANCE, true,  "repeatCount",                     QT_TRANSLATE_NOOP("engraving/propertyName", "repeat count") },
 
     { Pid::USER_STRETCH,                        P_TYPE::REAL,                      PropertyGroup::NONE,       false, "stretch",                         QT_TRANSLATE_NOOP("engraving/propertyName", "stretch") },
-    { Pid::MEASURE_NUMBER_OFFSET,               P_TYPE::INT,                       PropertyGroup::APPEARANCE, true,  "noOffset",                        QT_TRANSLATE_NOOP("engraving/propertyName", "measure number offset") },
-    { Pid::EXCLUDE_FROM_NUMBERING,              P_TYPE::BOOL,                      PropertyGroup::APPEARANCE, true,  "irregular",                       QT_TRANSLATE_NOOP("engraving/propertyName", "exclude from numbering") },
+    { Pid::NO_OFFSET,                           P_TYPE::INT,                       PropertyGroup::APPEARANCE, true,  "noOffset",                        QT_TRANSLATE_NOOP("engraving/propertyName", "numbering offset") },
+    { Pid::IRREGULAR,                           P_TYPE::BOOL,                      PropertyGroup::APPEARANCE, true,  "irregular",                       QT_TRANSLATE_NOOP("engraving/propertyName", "irregular") },
     { Pid::ANCHOR,                              P_TYPE::INT,                       PropertyGroup::APPEARANCE, false, "anchor",                          QT_TRANSLATE_NOOP("engraving/propertyName", "anchor") },
     { Pid::SLUR_UOFF1,                          P_TYPE::POINT,                     PropertyGroup::POSITION,   false, "o1",                              QT_TRANSLATE_NOOP("engraving/propertyName", "start offset") },
     { Pid::SLUR_UOFF2,                          P_TYPE::POINT,                     PropertyGroup::POSITION,   false, "o2",                              QT_TRANSLATE_NOOP("engraving/propertyName", "left shoulder offset") },
@@ -311,8 +311,6 @@ static constexpr PropertyMetaData propertyList[] = {
     { Pid::STAFF_STEMLESS,                      P_TYPE::BOOL,                      PropertyGroup::APPEARANCE, false, "",                                QT_TRANSLATE_NOOP("engraving/propertyName", "stemless") },
     { Pid::STAFF_INVISIBLE,                     P_TYPE::BOOL,                      PropertyGroup::APPEARANCE, false, "",                                QT_TRANSLATE_NOOP("engraving/propertyName", "invisible") },
     { Pid::STAFF_COLOR,                         P_TYPE::COLOR,                     PropertyGroup::APPEARANCE, false, "color",                           QT_TRANSLATE_NOOP("engraving/propertyName", "color") },
-    { Pid::STAFF_LONG_NAME,                     P_TYPE::STRING,                    PropertyGroup::APPEARANCE, false, "staffLongName",                   QT_TRANSLATE_NOOP("engraving/propertyName", "staff long name") },
-    { Pid::STAFF_SHORT_NAME,                    P_TYPE::STRING,                    PropertyGroup::APPEARANCE, false, "staffShortName",                  QT_TRANSLATE_NOOP("engraving/propertyName", "staff short name") },
 
     { Pid::HEAD_SCHEME,                         P_TYPE::NOTEHEAD_SCHEME,           PropertyGroup::APPEARANCE, false, "headScheme",                      QT_TRANSLATE_NOOP("engraving/propertyName", "notehead scheme") },
     { Pid::STAFF_GEN_CLEF,                      P_TYPE::BOOL,                      PropertyGroup::APPEARANCE, false, "",                                QT_TRANSLATE_NOOP("engraving/propertyName", "generating clefs") },
@@ -327,10 +325,6 @@ static constexpr PropertyMetaData propertyList[] = {
 
     { Pid::BRACKET_COLUMN,                      P_TYPE::SIZE_T,                    PropertyGroup::APPEARANCE, false, "level",                           QT_TRANSLATE_NOOP("engraving/propertyName", "level") },
     { Pid::INAME_LAYOUT_POSITION,               P_TYPE::INT,                       PropertyGroup::APPEARANCE, false, "layoutPosition",                  QT_TRANSLATE_NOOP("engraving/propertyName", "layout position") },
-
-    { Pid::GROUP_BRACKET_SHOW_TEXT,             P_TYPE::BOOL,                      PropertyGroup::NONE,       false, "groupBracketShowText",            QT_TRANSLATE_NOOP("engraving/propertyName", "group bracket show text") },
-    { Pid::GROUP_BRACKET_SHOW_BRACKET,          P_TYPE::BOOL,                      PropertyGroup::NONE,       false, "groupBracketShowBracket",         QT_TRANSLATE_NOOP("engraving/propertyName", "group bracket show bracket") },
-
     { Pid::TEXT_STYLE,                          P_TYPE::TEXT_STYLE,                PropertyGroup::TEXT,       false, "style",                           QT_TRANSLATE_NOOP("engraving/propertyName", "style") },
     { Pid::FONT_FACE,                           P_TYPE::STRING,                    PropertyGroup::TEXT,       false, "family",                          QT_TRANSLATE_NOOP("engraving/propertyName", "family") },
     { Pid::FONT_SIZE,                           P_TYPE::REAL,                      PropertyGroup::TEXT,       false, "size",                            QT_TRANSLATE_NOOP("engraving/propertyName", "size") },
@@ -410,7 +404,7 @@ static constexpr PropertyMetaData propertyList[] = {
     { Pid::VOICE_ASSIGNMENT,                    P_TYPE::VOICE_ASSIGNMENT,          PropertyGroup::NONE,       true,  "voiceAssignment",                 QT_TRANSLATE_NOOP("engraving/propertyName", "voice assignment") },
     { Pid::CENTER_BETWEEN_STAVES,               P_TYPE::AUTO_ON_OFF,               PropertyGroup::POSITION,   false, "centerBetweenStaves",             QT_TRANSLATE_NOOP("engraving/propertyName", "center between staves") },
 
-    { Pid::POS_ABOVE,                           P_TYPE::ABSOLUTE,                PropertyGroup::POSITION,   false, "posAbove",                        QT_TRANSLATE_NOOP("engraving/propertyName", "position above") },
+    { Pid::POS_ABOVE,                           P_TYPE::MILLIMETRE,                PropertyGroup::POSITION,   false, "posAbove",                        QT_TRANSLATE_NOOP("engraving/propertyName", "position above") },
 
     { Pid::LOCATION_STAVES,                     P_TYPE::INT,                       PropertyGroup::APPEARANCE, false, "staves",                          QT_TRANSLATE_NOOP("engraving/propertyName", "staves distance") },
     { Pid::LOCATION_VOICES,                     P_TYPE::INT,                       PropertyGroup::APPEARANCE, false, "voices",                          QT_TRANSLATE_NOOP("engraving/propertyName", "voices distance") },
@@ -500,7 +494,6 @@ static constexpr PropertyMetaData propertyList[] = {
     { Pid::SCORE_FONT,                          P_TYPE::STRING,                    PropertyGroup::APPEARANCE, true,  "scoreFont",                       QT_TRANSLATE_NOOP("engraving/propertyName", "score font") },
     { Pid::SYMBOLS_SIZE,                        P_TYPE::REAL,                      PropertyGroup::APPEARANCE, false, "symbolsSize",                     QT_TRANSLATE_NOOP("engraving/propertyName", "symbols size") },
     { Pid::SYMBOL_ANGLE,                        P_TYPE::REAL,                      PropertyGroup::APPEARANCE, false, "symbolAngle",                     QT_TRANSLATE_NOOP("engraving/propertyName", "symbol angle") },
-    { Pid::TEXT_ANGLE,                          P_TYPE::REAL,                      PropertyGroup::APPEARANCE, false, "textAngle",                       QT_TRANSLATE_NOOP("engraving/propertyName", "text angle") },
 
     { Pid::APPLY_TO_ALL_STAVES,                 P_TYPE::BOOL,                      PropertyGroup::NONE,       false, "applyToAllStaves",                QT_TRANSLATE_NOOP("engraving/propertyName", "apply to all staves") },
     { Pid::IS_COURTESY,                         P_TYPE::BOOL,                      PropertyGroup::NONE,       false, "isCourtesy",                      QT_TRANSLATE_NOOP("engraving/propertyName", "is courtesy") },

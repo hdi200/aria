@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -742,14 +742,14 @@ bool MeiExporter::writeLabel(pugi::xml_node node, const Part* part)
 
     StringList lines;
     const Instrument* instrument = part->instrument();
-    if (instrument && !instrument->longName().empty()) {
+    if (instrument && instrument->longNames().size() > 0) {
         libmei::Label meiLabel;
         pugi::xml_node labelNode = node.append_child();
         meiLabel.Write(labelNode);
         lines = instrument->nameAsPlainText().split(u"\n");
         this->writeLines(labelNode, lines);
     }
-    if (instrument && !instrument->shortName().empty()) {
+    if (instrument && instrument->shortNames().size() > 0) {
         libmei::LabelAbbr meiLabelAbbr;
         pugi::xml_node labelAbbrNode = node.append_child();
         meiLabelAbbr.Write(labelAbbrNode);

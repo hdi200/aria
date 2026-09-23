@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -16,6 +16,7 @@
       <pageTwosided>0</pageTwosided>
       <staffDistance>5.5</staffDistance>
       <minSystemDistance>9.25</minSystemDistance>
+      <romanNumeralFontFace>Edwin</romanNumeralFontFace>
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
       <spatium>2.11667</spatium>
       </Style>
@@ -40,11 +41,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Drums</trackName>
       <Instrument id="drumset">
-        <InstrumentLabel>
-          <longName>Drums</longName>
-          <shortName>Dr.</shortName>
-          </InstrumentLabel>
+        <longName>Drums</longName>
+        <shortName>Dr.</shortName>
         <trackName>Drums</trackName>
         <instrumentId>drum.group.set</instrumentId>
         <useDrumset>1</useDrumset>

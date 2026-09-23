@@ -41,11 +41,11 @@ bool QmlLauncher::openSync(const QString& uri)
 
 bool QmlLauncher::openApp(const QString& uri)
 {
-    platformInteractive()->openApp(UriQuery(uri.toStdString()));
+    interactive()->openApp(UriQuery(uri.toStdString()));
     return true;
 }
 
 bool QmlLauncher::openUrl(const QString& url)
 {
-    return platformInteractive()->openUrl(QUrl(url));
+    return interactive()->openUrl(QUrl(url));
 }

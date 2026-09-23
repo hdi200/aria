@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,17 +22,14 @@
 #ifndef MU_PALETTE_CUSTOMIZEKITDIALOG_H
 #define MU_PALETTE_CUSTOMIZEKITDIALOG_H
 
-#include "ui/view/widgetdialog.h"
-
 #include "ui_customizekitdialog.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
+#include "global/iinteractive.h"
 #include "context/iglobalcontext.h"
 #include "notation/inotationconfiguration.h"
 #include "engraving/iengravingfontsprovider.h"
 #include "engraving/rendering/isinglerenderer.h"
-#include "engraving/ipalettescoreprovider.h"
 #include "ui/iuiconfiguration.h"
 
 #include "engraving/dom/drumset.h"
@@ -42,7 +39,7 @@ namespace mu::palette {
 //   CustomizeKitDialog
 //---------------------------------------------------------
 
-class CustomizeKitDialog : public muse::ui::WidgetDialog, private Ui::CustomizeKitDialog
+class CustomizeKitDialog : public QDialog, private Ui::CustomizeKitDialog, public muse::Contextable
 {
     Q_OBJECT
 
@@ -50,14 +47,12 @@ public:
     inline static muse::GlobalInject<engraving::IEngravingFontsProvider> engravingFonts;
     inline static muse::GlobalInject<muse::ui::IUiConfiguration> uiConfiguration;
     muse::GlobalInject<notation::INotationConfiguration> notationConfiguration;
-    muse::GlobalInject<engraving::rendering::ISingleRenderer> engravingRenderer;
     muse::ContextInject<muse::IInteractive> interactive = { this };
     muse::ContextInject<context::IGlobalContext> globalContext = { this };
-    muse::ContextInject<engraving::IPaletteScoreProvider> paletteScoreProvider = { this };
+    muse::ContextInject<engraving::rendering::ISingleRenderer> engravingRenderer = { this };
+
 public:
     CustomizeKitDialog(QWidget* parent = nullptr);
-
-    void componentComplete() override;
 
 private slots:
     void bboxClicked(QAbstractButton* button);

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -47,7 +47,7 @@ public:
     const Staff* staff(const muse::ID& staffId) const override;
     bool staffExists(const muse::ID& staffId) const override;
 
-    StaffConfig staffConfig(const muse::ID& staffId, Fraction tick = Fraction(0, 1)) const override;
+    StaffConfig staffConfig(const muse::ID& staffId) const override;
     ScoreOrder scoreOrder() const override;
 
     void setParts(const PartInstrumentList& parts, const ScoreOrder& order) override;
@@ -58,11 +58,8 @@ public:
     void setPartSharpFlat(const muse::ID& partId, const SharpFlat& sharpFlat) override;
     void setInstrumentName(const InstrumentKey& instrumentKey, const QString& name) override;
     void setInstrumentAbbreviature(const InstrumentKey& instrumentKey, const QString& abbreviature) override;
-    void setInstrumentGroupNameOptions(const std::vector<InstrumentKey>& instruments, bool useCustom, const QString& longName,
-                                       const QString& shortName) override;
-    void setInstrumentNumber(const InstrumentKey& instrumentKey, int v) override;
     void setStaffType(const muse::ID& staffId, StaffTypeId type) override;
-    void setStaffConfig(const muse::ID& staffId, const StaffConfig& config, Fraction tick = Fraction(0, 1)) override;
+    void setStaffConfig(const muse::ID& staffId, const StaffConfig& config) override;
 
     void removeParts(const muse::IDList& partsIds) override;
     void removeStaves(const muse::IDList& stavesIds) override;
@@ -114,7 +111,7 @@ private:
     void doSetScoreOrder(const ScoreOrder& order);
     void doRemoveParts(const std::vector<Part*>& parts);
     void doAppendStaff(Staff* staff, Part* destinationPart, bool createRests=true);
-    void doSetStaffConfig(Staff* staff, const StaffConfig& config, Fraction tick = Fraction(0, 1));
+    void doSetStaffConfig(Staff* staff, const StaffConfig& config);
     void doInsertPart(Part* part, size_t index);
 
     Staff* staffModifiable(const muse::ID& staffId) const;

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -25,7 +25,6 @@
 #include "translation.h"
 
 #include "../editing/editmeasures.h"
-#include "../editing/editnote.h"
 #include "../editing/inserttime.h"
 #include "../editing/transpose.h"
 #include "infrastructure/messagebox.h"
@@ -183,11 +182,6 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
         return addPitchToChord(nval, toChord(c), externalInputState);
     }
 
-    if (is.beyondScore()) {
-        appendMeasures(1);
-        is.moveToNextInputPos();
-    }
-
     expandVoice(is.segment(), is.track());
 
     // insert note
@@ -295,7 +289,7 @@ Note* Score::addPitchToChord(NoteVal& nval, Chord* chord, InputState* externalIn
             return false;
         }
         Note* n = ch->notes().at(0);
-        return (n->tieFor() && !n->tieFor()->isLaissezVib()) || n->tieBack();
+        return n->tieFor() || n->tieBack();
     };
 
     Note* note = nullptr;
@@ -370,11 +364,6 @@ Ret Score::putNote(const Position& p, bool replace)
     m_is.setTrack(p.staffIdx * VOICES + m_is.voice());
     m_is.setSegment(s);
 
-    if (p.beyondScore) {
-        appendMeasures(1);
-        m_is.moveToNextInputPos();
-    }
-
     if (mu::engraving::Excerpt* excerpt = score()->excerpt()) {
         const TracksMap& tracks = excerpt->tracksMapping();
 
@@ -447,8 +436,7 @@ Ret Score::putNote(const Position& p, bool replace)
             return false;
         }
         auto ch = toChord(cr);
-        return (!ch->notes().empty() && !ch->notes()[0]->tieBack())
-               && (ch->notes()[0]->tieFor() && !ch->notes()[0]->tieFor()->isLaissezVib());
+        return !ch->notes().empty() && !ch->notes()[0]->tieBack() && ch->notes()[0]->tieFor();
     };
 
     bool addToChord = false;
@@ -481,7 +469,7 @@ Ret Score::putNote(const Position& p, bool replace)
                         // set fret number (original or combined) in all linked notes
                         int tpc1 = note->tpc1default(nval.pitch);
                         int tpc2 = note->tpc2default(nval.pitch);
-                        EditNote::undoChangeFretting(this, note, nval.pitch, nval.string, nval.fret, tpc1, tpc2);
+                        undoChangeFretting(note, nval.pitch, nval.string, nval.fret, tpc1, tpc2);
                         setPlayNote(true);
                         return muse::make_ok();
                     }
@@ -712,7 +700,7 @@ std::pair<Note*, Note*> Score::repitchReplaceNote(Chord* chord, const NoteVal& n
                 firstTiedNote = tn;
             }
             lastTiedNote = tn;
-            EditNote::undoChangePitch(this, tn, note->pitch(), note->tpc1(), note->tpc2());
+            undoChangePitch(tn, note->pitch(), note->tpc1(), note->tpc2());
             if (tn->tieFor()) {
                 tn = tn->tieFor()->endNote();
             } else {

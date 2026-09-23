@@ -42,8 +42,6 @@ Loader {
     property alias dropdown: loader.item
     property alias isOpened: loader.active
 
-    property Component contentListItem: null
-
     active: false
 
     signal handleItem(int index, var value)
@@ -71,7 +69,6 @@ Loader {
         itemWidth: loader.itemWidth
         itemHeight: loader.itemHeight
 
-        contentListItem: loader.contentListItem
         textRole: loader.textRole
         valueRole: loader.valueRole
 

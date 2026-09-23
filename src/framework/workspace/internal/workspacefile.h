@@ -19,18 +19,16 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#ifndef MUSE_WORKSPACE_WORKSPACEFILE_H
+#define MUSE_WORKSPACE_WORKSPACEFILE_H
 
-#pragma once
-
-#include <atomic>
-#include <map>
 #include <string>
-
+#include <map>
 #include <QByteArray>
 
-#include "global/io/path.h"
-#include "global/types/ret.h"
-#include "global/types/val.h"
+#include "io/ifilesystem.h"
+#include "modularity/ioc.h"
+#include "types/val.h"
 
 namespace muse {
 class ZipReader;
@@ -40,6 +38,8 @@ class ZipWriter;
 namespace muse::workspace {
 class WorkspaceFile
 {
+    GlobalInject<io::IFileSystem> fileSystem;
+
 public:
     WorkspaceFile(const io::path_t& filePath);
     WorkspaceFile(const io::path_t& filePath, const WorkspaceFile* other);
@@ -80,3 +80,5 @@ private:
     std::atomic<bool> m_needSave = false;
 };
 }
+
+#endif // MUSE_WORKSPACE_WORKSPACEFILE_H

@@ -33,7 +33,7 @@ namespace muse::network {
 class NetworkConfiguration : public INetworkConfiguration, public Contextable
 {
     GlobalInject<IGlobalConfiguration> globalConfiguration;
-    GlobalInject<IApplication> application;
+    ContextInject<IApplication> application = { this };
 
 public:
     NetworkConfiguration(const modularity::ContextPtr& iocCtx)

@@ -28,11 +28,14 @@
 #include "iglobalconfiguration.h"
 
 namespace muse::midiremote {
-class MidiRemoteConfiguration : public IMidiRemoteConfiguration,  public async::Asyncable
+class MidiRemoteConfiguration : public IMidiRemoteConfiguration, public Contextable, public async::Asyncable
 {
     GlobalInject<IGlobalConfiguration> globalConfiguration;
 
 public:
+    MidiRemoteConfiguration(const modularity::ContextPtr& iocCtx)
+        : Contextable(iocCtx) {}
+
     void init();
 
     io::path_t midiMappingUserAppDataPath() const override;

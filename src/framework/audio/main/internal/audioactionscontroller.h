@@ -27,7 +27,7 @@
 #include "modularity/ioc.h"
 #include "actions/iactionsdispatcher.h"
 #include "global/iapplication.h"
-#include "interactive/iinteractive.h"
+#include "global/iinteractive.h"
 
 #include "audio/common/workmode.h"
 
@@ -35,7 +35,7 @@ namespace muse::audio {
 class AudioActionsController : public actions::Actionable, public muse::Contextable
 {
     ContextInject<actions::IActionsDispatcher> dispatcher = { this };
-    GlobalInject<IApplication> application;
+    ContextInject<IApplication> application = { this };
     ContextInject<IInteractive> interactive = { this };
 
 public:

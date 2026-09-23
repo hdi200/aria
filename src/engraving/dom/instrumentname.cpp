@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -24,7 +24,6 @@
 
 #include "measure.h"
 #include "part.h"
-#include "score.h"
 #include "staff.h"
 #include "style/style.h"
 #include "system.h"
@@ -58,6 +57,30 @@ InstrumentName::InstrumentName(System* s)
 {
     setFlag(ElementFlag::MOVABLE, false);
     setInstrumentNameType(InstrumentNameType::LONG);
+}
+
+//---------------------------------------------------------
+//   instrumentNameTypeName
+//---------------------------------------------------------
+
+String InstrumentName::instrumentNameTypeName() const
+{
+    return instrumentNameType() == InstrumentNameType::SHORT ? u"short" : u"long";
+}
+
+//---------------------------------------------------------
+//   setInstrumentNameType
+//---------------------------------------------------------
+
+void InstrumentName::setInstrumentNameType(const String& s)
+{
+    if (s == u"short") {
+        setInstrumentNameType(InstrumentNameType::SHORT);
+    } else if (s == u"long") {
+        setInstrumentNameType(InstrumentNameType::LONG);
+    } else {
+        LOGD("InstrumentName::setSubtype: unknown <%s>", muPrintable(s));
+    }
 }
 
 double InstrumentName::largestStaffSpatium() const
@@ -98,10 +121,31 @@ void InstrumentName::setInstrumentNameType(InstrumentNameType st)
     }
 }
 
+//---------------------------------------------------------
+//   getProperty
+//---------------------------------------------------------
+
+PropertyValue InstrumentName::getProperty(Pid id) const
+{
+    switch (id) {
+    case Pid::INAME_LAYOUT_POSITION:
+        return m_layoutPos;
+    default:
+        return TextBase::getProperty(id);
+    }
+}
+
+//---------------------------------------------------------
+//   setProperty
+//---------------------------------------------------------
+
 bool InstrumentName::setProperty(Pid id, const PropertyValue& v)
 {
     bool rv = true;
     switch (id) {
+    case Pid::INAME_LAYOUT_POSITION:
+        m_layoutPos = v.toInt();
+        break;
     case Pid::VISIBLE:
         // not supported
         break;
@@ -112,16 +156,17 @@ bool InstrumentName::setProperty(Pid id, const PropertyValue& v)
     return rv;
 }
 
-mu::engraving::staff_idx_t mu::engraving::InstrumentName::effectiveStaffIdx() const
+//---------------------------------------------------------
+//   propertyDefault
+//---------------------------------------------------------
+
+PropertyValue InstrumentName::propertyDefault(Pid id) const
 {
-    if (m_sysStaff->show() || m_instrumentNameRole == InstrumentNameRole::STAFF) {
-        return staffIdx();
-    } else if (m_instrumentNameRole == InstrumentNameRole::PART) {
-        return system()->firstVisibleSysStaffOfPart(score()->staff(staffIdx())->part());
-    } else {
-        staff_idx_t curIdx = staffIdx();
-        Instrument* instr = score()->staff(curIdx)->part()->instrument(system()->first()->tick());
-        return system()->firstVisibleSysStaffWithInstrument(instr->id(), curIdx);
+    switch (id) {
+    case Pid::INAME_LAYOUT_POSITION:
+        return 0;
+    default:
+        return TextBase::propertyDefault(id);
     }
 }
 }

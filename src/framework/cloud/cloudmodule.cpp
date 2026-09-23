@@ -23,7 +23,7 @@
 #include "cloudmodule.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 
 #ifdef MUSE_MODULE_CLOUD_MUSESCORECOM
 #include "musescorecom/musescorecomservice.h"
@@ -42,19 +42,19 @@ std::string CloudModule::moduleName() const
 
 void CloudModule::registerExports()
 {
-    m_cloudConfiguration = std::make_shared<CloudConfiguration>(globalCtx());
-    globalIoc()->registerExport<ICloudConfiguration>(moduleName(), m_cloudConfiguration);
+    m_cloudConfiguration = std::make_shared<CloudConfiguration>(iocContext());
+    ioc()->registerExport<ICloudConfiguration>(moduleName(), m_cloudConfiguration);
 #ifdef MUSE_MODULE_CLOUD_MUSESCORECOM
-    m_museScoreComService = std::make_shared<MuseScoreComService>(globalCtx());
-    globalIoc()->registerExport<IMuseScoreComService>(moduleName(), m_museScoreComService);
+    m_museScoreComService = std::make_shared<MuseScoreComService>(iocContext());
+    ioc()->registerExport<IMuseScoreComService>(moduleName(), m_museScoreComService);
 #endif
-    m_audioComService = std::make_shared<AudioComService>(globalCtx());
-    globalIoc()->registerExport<IAudioComService>(moduleName(), m_audioComService);
+    m_audioComService = std::make_shared<AudioComService>(iocContext());
+    ioc()->registerExport<IAudioComService>(moduleName(), m_audioComService);
 }
 
 void CloudModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<interactive::IInteractiveUriRegister>(moduleName());
+    auto ir = ioc()->resolve<ui::IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerQmlUri(Uri("muse://cloud/requireauthorization"), "Muse.Cloud", "RequireAuthorizationDialog");
     }

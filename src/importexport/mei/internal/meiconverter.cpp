@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -2251,7 +2251,7 @@ Convert::MeasureStruct Convert::measureFromMEI(const libmei::Measure& meiMeasure
     return measureSt;
 }
 
-libmei::Measure Convert::measureToMEI(const engraving::Measure* measure, int& measureN, bool& isLastExcludedFromNumbering)
+libmei::Measure Convert::measureToMEI(const engraving::Measure* measure, int& measureN, bool& wasPreviousIrregular)
 {
     libmei::Measure meiMeasure;
 
@@ -2260,9 +2260,9 @@ libmei::Measure Convert::measureToMEI(const engraving::Measure* measure, int& me
         meiMeasure.SetMetcon(libmei::BOOLEAN_false);
     }
     // @n
-    if (!measure->excludeFromNumbering()) {
+    if (!measure->irregular()) {
         measureN++;
-        meiMeasure.SetN(String::number(measure->measureNumber() + 1).toStdString());
+        meiMeasure.SetN(String::number(measure->no() + 1).toStdString());
     }
     // @left
     if (measure->repeatStart()) {
@@ -2278,7 +2278,7 @@ libmei::Measure Convert::measureToMEI(const engraving::Measure* measure, int& me
     meiMeasure.SetRight(Convert::barlineToMEI(measure->endBarLineType()));
 
     // update the flag for the next measure
-    isLastExcludedFromNumbering = (measure->excludeFromNumbering());
+    wasPreviousIrregular = (measure->irregular());
 
     return meiMeasure;
 }
@@ -3505,7 +3505,7 @@ void Convert::textToMEI(textWithSmufl& textBlocks, const String& text)
         }
         // SMuFL
         else {
-            // Changing to smufl, add the current plain text block if something is in it
+            // Changing to smufl, add the current plain text block if something in in
             if (!isSmufl && textBlock.size() > 0) {
                 textBlocks.push_back(std::make_pair(false, textBlock));
                 textBlock.clear();

@@ -37,10 +37,11 @@ public:
 TEST_F(Global_Ser_XML, WriteRead)
 {
     ByteArray data;
+    Buffer buf(&data);
 
     // Write
     {
-        auto buf = Buffer::opened(IODevice::WriteOnly, &data);
+        buf.open(IODevice::WriteOnly);
         XmlStreamWriter xml(&buf);
         xml.startDocument();
         xml.startElement("parent");
@@ -63,7 +64,7 @@ TEST_F(Global_Ser_XML, WriteRead)
 
     // Read
     {
-        auto buf = Buffer::opened(IODevice::ReadOnly, &data);
+        buf.open(IODevice::ReadOnly);
         XmlStreamReader xml(&buf);
 
         EXPECT_TRUE(xml.readNextStartElement());

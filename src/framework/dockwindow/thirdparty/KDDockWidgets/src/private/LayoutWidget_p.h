@@ -59,7 +59,7 @@ class DOCKS_EXPORT LayoutWidget : public LayoutGuestWidget
 {
     Q_OBJECT
 public:
-    explicit LayoutWidget(int ctx, QWidgetOrQuick *parent = nullptr);
+    explicit LayoutWidget(QWidgetOrQuick *parent = nullptr);
     ~LayoutWidget() override;
 
     bool isInMainWindow() const;

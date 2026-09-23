@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -422,6 +422,14 @@ void MusicXmlParserPass1::setExporterSoftware(String& exporter)
         m_exporterSoftware = MusicXmlExporterSoftware::FINALE;
     } else if (exporter.contains(u"noteflight")) {
         m_exporterSoftware = MusicXmlExporterSoftware::NOTEFLIGHT;
+    }
+}
+
+void MusicXmlParserPass1::setExporterStyles()
+{
+    // If exporters have different default styles to MuseScore, assume they are being used here
+    if (sibOrDolet()) {
+        m_score->style().set(Sid::fretFrets, 5);
     }
 }
 
@@ -1001,7 +1009,7 @@ static void resizeTitleBox(VBox* vbox)
         score->renderer()->layoutItem(e);
     }
 
-    double padding = vbox->spatium();
+    const double padding = vbox->sizeIsSpatiumDependent() ? vbox->style().spatium() : vbox->style().defaultSpatium();
 
     for (EngravingItem* e : elist) {
         if (e->isText()) {
@@ -1017,7 +1025,7 @@ static void resizeTitleBox(VBox* vbox)
         }
     }
 
-    const auto height = Spatium::fromAbsolute(calculatedVBoxHeight, vbox->spatium());
+    const auto height = Spatium::fromMM(calculatedVBoxHeight, vbox->spatium());
     if (height > vbox->propertyDefault(Pid::BOX_HEIGHT).value<Spatium>()) {
         vbox->undoChangeProperty(Pid::BOX_HEIGHT, height);
     }
@@ -1188,7 +1196,7 @@ void MusicXmlParserPass1::createMeasuresAndVboxes(Score* score,
         Measure* measure  = Factory::createMeasure(score->dummy()->system());
         measure->setTick(ms.at(i));
         measure->setTicks(ml.at(i));
-        measure->setMeasureNumber(int(i));
+        measure->setNo(int(i));
         score->measures()->append(measure);
 
         // add break to previous measure or vbox
@@ -1527,6 +1535,7 @@ void MusicXmlParserPass1::identification()
                 } else if (m_e.name() == "software") {
                     String exporterString = m_e.readText().toLower();
                     setExporterSoftware(exporterString);
+                    setExporterStyles();
                 } else if (m_e.name() == "supports" && m_e.asciiAttribute("element") == "beam" && m_e.asciiAttribute("type") == "yes") {
                     m_hasBeamingInfo = true;
                     m_e.skipCurrentElement();
@@ -1837,17 +1846,14 @@ static void updateStyles(Score* score,
         // Roman numeral analysis and harp pedal diagrams (special case, leave untouched)
         // and text types used in the title frame
         // Some further tweaking may still be required.
-        if (wordFamily.empty()) {
-            break; // If no font is specified, use default styles
-        }
 
         if (tid == TextStyleType::LYRICS_ODD || tid == TextStyleType::LYRICS_EVEN
             || tid == TextStyleType::FRET_DIAGRAM_FINGERING || tid == TextStyleType::FRET_DIAGRAM_FRET_NUMBER
-            || tid == TextStyleType::HARMONY_ROMAN || tid == TextStyleType::TAB_FRET_NUMBER) {
+            || tid == TextStyleType::TAB_FRET_NUMBER) {
             continue;
         }
 
-        bool needUseDefaultSize = configuration()->needUseDefaultFont()
+        bool needUseDefaultSize = configuration()->needUseDefaultFont() || tid == TextStyleType::HARMONY_ROMAN
                                   || tid == TextStyleType::HAMMER_ON_PULL_OFF
                                   || isTitleFrameStyle(tid)
                                   || isHarpPedalStyle(tid);
@@ -1863,15 +1869,13 @@ static void updateStyles(Score* score,
     }
 
     // handle lyrics odd and even lines separately
-    if (!lyricFamily.empty()) {
-        if (!needUseDefaultFont) {
-            score->style().set(Sid::lyricsOddFontFace, lyricFamily);
-            score->style().set(Sid::lyricsEvenFontFace, lyricFamily);
-        }
-        if (dblLyricSize > epsilon) {
-            score->style().set(Sid::lyricsOddFontSize, dblLyricSize);
-            score->style().set(Sid::lyricsEvenFontSize, dblLyricSize);
-        }
+    if (!needUseDefaultFont) {
+        score->style().set(Sid::lyricsOddFontFace, lyricFamily);
+        score->style().set(Sid::lyricsEvenFontFace, lyricFamily);
+    }
+    if (dblLyricSize > epsilon) {
+        score->style().set(Sid::lyricsOddFontSize, dblLyricSize);
+        score->style().set(Sid::lyricsEvenFontSize, dblLyricSize);
     }
 }
 
@@ -2086,6 +2090,7 @@ void MusicXmlParserPass1::defaults()
            muPrintable(wordFontFamily), muPrintable(wordFontSize),
            muPrintable(lyricFontFamily), muPrintable(lyricFontSize));
     */
+    wordFontFamily = wordFontFamily.empty() ? u"Edwin" : wordFontFamily;
     lyricFontFamily = lyricFontFamily.empty() ? wordFontFamily : lyricFontFamily;
     updateStyles(m_score, wordFontFamily, wordFontSize, lyricFontFamily, lyricFontSize);
 
@@ -3286,11 +3291,11 @@ void MusicXmlParserPass1::handleOctaveShift(const Fraction& cTime,
     short sz = 0;
 
     switch (size) {
-    case  22: sz =  3;
+    case 22: sz =  3;
         break;
-    case  15: sz =  2;
+    case 15: sz =  2;
         break;
-    case   8:
+    case 8:
     default:
         sz =  1;
     }

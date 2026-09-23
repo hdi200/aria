@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,9 +35,8 @@ using namespace mu::notation;
 using namespace mu::engraving;
 using namespace muse::draw;
 
-NotationPainting::NotationPainting(Notation* notation)
-    : muse::Contextable(notation->iocContext())
-    , m_notation(notation)
+NotationPainting::NotationPainting(Notation* notation, const muse::modularity::ContextPtr& ctx)
+    : muse::Contextable(ctx), m_notation(notation)
 {
 }
 
@@ -184,7 +183,7 @@ void NotationPainting::paintPageSheet(Painter* painter, const Page* page, const 
     }
 }
 
-void NotationPainting::paintView(Painter* painter, const RectF& frameRect, bool isPrinting, bool isAutomation)
+void NotationPainting::paintView(Painter* painter, const RectF& frameRect, bool isPrinting)
 {
     Options opt;
     opt.isSetViewport = false;
@@ -193,17 +192,6 @@ void NotationPainting::paintView(Painter* painter, const RectF& frameRect, bool 
     opt.deviceDpi = uiConfiguration()->logicalDpi();
     opt.isPrinting = isPrinting;
     opt.invertColors = configuration()->shouldInvertScore();
-
-    if (isAutomation) {
-        opt.overrideItemColor = [](const EngravingItem* item, Color defaultColor) {
-            if (item->isDynamic() || item->isHairpinSegment()) {
-                return defaultColor;
-            }
-            defaultColor.setAlpha(defaultColor.alpha() * 0.4f);
-            return defaultColor;
-        };
-    }
-
     doPaint(painter, opt);
 }
 

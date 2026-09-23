@@ -39,8 +39,8 @@ class EditMidiMappingModel : public QObject, public Contextable, public async::A
 
     QML_ELEMENT
 
-    GlobalInject<midi::IMidiInPort> midiInPort;
     ContextInject<IMidiRemote> midiRemote = { this };
+    ContextInject<midi::IMidiInPort> midiInPort = { this };
 
 public:
     explicit EditMidiMappingModel(QObject* parent = nullptr);
@@ -57,7 +57,6 @@ signals:
 private:
     QString deviceName(const midi::MidiDeviceID& deviceId) const;
 
-    bool m_loaded = false;
     RemoteEvent m_event;
 };
 }

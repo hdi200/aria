@@ -40,7 +40,7 @@ class DOCKS_EXPORT TabWidgetQuick
     Q_PROPERTY(QObject *tabBar READ tabBarObj CONSTANT)
 
 public:
-    explicit TabWidgetQuick(int ctx, Frame *parent);
+    explicit TabWidgetQuick(Frame *parent);
 
     TabBar *tabBar() const override;
 

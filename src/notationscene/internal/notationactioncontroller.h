@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -26,7 +26,7 @@
 #include "actions/actiontypes.h"
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 #include "actions/iactionsdispatcher.h"
 #include "ui/inavigationcontroller.h"
 #include "ui/iuiactionsregister.h"
@@ -71,14 +71,12 @@ public:
     INotationStylePtr currentNotationStyle() const;
     muse::async::Notification currentNotationStyleChanged() const;
 
-    IMasterNotationPtr currentMasterNotation() const;
-    muse::async::Notification currentMasterNotationChanged() const;
-
     using EngravingDebuggingOptions = engraving::IEngravingConfiguration::DebuggingOptions;
     static const std::unordered_map<muse::actions::ActionCode, bool EngravingDebuggingOptions::*> engravingDebuggingActions;
 
 private:
     INotationPtr currentNotation() const;
+    IMasterNotationPtr currentMasterNotation() const;
     INotationElementsPtr currentNotationElements() const;
     INotationSelectionPtr currentNotationSelection() const;
     INotationMidiInputPtr currentNotationMidiInput() const;
@@ -211,7 +209,7 @@ private:
     void navigateToTextElementByFraction(const Fraction& fraction);
     void navigateToTextElementInNearMeasure(MoveDirection direction);
 
-    bool toggleNoteInputAllowed() const;
+    bool startNoteInputAllowed() const;
     void startNoteInput();
 
     bool hasSelection() const;
@@ -229,8 +227,6 @@ private:
     bool isTablatureStaff() const;
 
     void checkForScoreCorruptions();
-
-    void toggleAutomation();
 
     void registerAction(const muse::actions::ActionCode&, void (NotationActionController::*)(const muse::actions::ActionData& data),
                         bool (NotationActionController::*)() const = &NotationActionController::isNotationPage);
@@ -261,8 +257,6 @@ private:
 
     void registerMoveSelectionAction(const muse::actions::ActionCode& code, MoveSelectionType type, MoveDirection direction,
                                      PlayMode playMode = PlayMode::NoPlay);
-    void registerAddToSelectionAction(const muse::actions::ActionCode& code, MoveSelectionType type, MoveDirection direction);
-    void registerExpandSelectionAction(const muse::actions::ActionCode& code, ExpandSelectionMode mode);
 
     void registerAction(const muse::actions::ActionCode&, void (INotationInteraction::*)(), bool (NotationActionController::*)() const);
     void registerAction(const muse::actions::ActionCode&, void (INotationInteraction::*)(), PlayMode = PlayMode::NoPlay,
@@ -281,6 +275,5 @@ private:
 
     using IsActionEnabledFunc = std::function<bool ()>;
     std::map<muse::actions::ActionCode, IsActionEnabledFunc> m_isEnabledMap;
-    std::unordered_set<muse::actions::ActionCode> m_isAllowedDuringPlayback;
 };
 }

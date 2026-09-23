@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -25,10 +25,9 @@
           </StaffType>
         <defaultClef>F8vb</defaultClef>
         </Staff>
+      <trackName>Bass</trackName>
       <Instrument id="bass">
-        <InstrumentLabel>
-          <longName>Bass</longName>
-          </InstrumentLabel>
+        <longName>Bass</longName>
         <trackName></trackName>
         <instrumentId>voice.bass</instrumentId>
         <singleNoteDynamics>0</singleNoteDynamics>

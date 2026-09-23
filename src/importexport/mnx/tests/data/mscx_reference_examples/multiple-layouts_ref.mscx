@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -26,17 +26,12 @@
         <StaffType group="pitched">
           <name>stdNormal</name>
           </StaffType>
-        <BracketItem>
-          <type>Normal</type>
-          <bracketSpan>4</bracketSpan>
-          <level>0</level>
-          </BracketItem>
+        <bracket type="0" span="4" col="0" visible="1"/>
         </Staff>
+      <trackName>Soprano</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Soprano</longName>
-          <shortName>S</shortName>
-          </InstrumentLabel>
+        <longName>Soprano</longName>
+        <shortName>S</shortName>
         <trackName>Soprano</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -97,11 +92,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Alto</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Alto</longName>
-          <shortName>A</shortName>
-          </InstrumentLabel>
+        <longName>Alto</longName>
+        <shortName>A</shortName>
         <trackName>Alto</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -162,11 +156,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Tenor</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Tenor</longName>
-          <shortName>T</shortName>
-          </InstrumentLabel>
+        <longName>Tenor</longName>
+        <shortName>T</shortName>
         <trackName>Tenor</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>
@@ -227,11 +220,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Bass</trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Bass</longName>
-          <shortName>B</shortName>
-          </InstrumentLabel>
+        <longName>Bass</longName>
+        <shortName>B</shortName>
         <trackName>Bass</trackName>
         <minPitchP>21</minPitchP>
         <maxPitchP>108</maxPitchP>

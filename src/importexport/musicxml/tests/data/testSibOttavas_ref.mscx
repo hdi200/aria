@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -33,8 +33,10 @@
       <chordSymbolAFontSize>11.9365</chordSymbolAFontSize>
       <chordSymbolBFontFace>Quicksand</chordSymbolBFontFace>
       <chordSymbolBFontSize>11.9365</chordSymbolBFontSize>
+      <romanNumeralFontFace>Quicksand</romanNumeralFontFace>
       <nashvilleNumberFontFace>Quicksand</nashvilleNumberFontFace>
       <nashvilleNumberFontSize>11.9365</nashvilleNumberFontSize>
+      <fretFrets>5</fretFrets>
       <smallNoteMag>0.75</smallNoteMag>
       <graceNoteMag>0.6</graceNoteMag>
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
@@ -71,8 +73,6 @@
       <shortInstrumentFontSize>11.9365</shortInstrumentFontSize>
       <partInstrumentFontFace>Quicksand</partInstrumentFontFace>
       <partInstrumentFontSize>11.9365</partInstrumentFontSize>
-      <groupBracketFontFace>Quicksand</groupBracketFontFace>
-      <groupBracketFontSize>11.9365</groupBracketFontSize>
       <expressionFontFace>Quicksand</expressionFontFace>
       <expressionFontSize>11.9365</expressionFontSize>
       <tempoFontFace>Quicksand</tempoFontFace>
@@ -170,6 +170,7 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="grand-piano">
         <trackName></trackName>
         <instrumentId>keyboard.piano.grand</instrumentId>

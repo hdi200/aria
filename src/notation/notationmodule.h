@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -38,20 +38,9 @@ public:
     void resolveImports() override;
     void onInit(const muse::IApplication::RunMode&) override;
 
-    muse::modularity::IContextSetup* newContext(const muse::modularity::ContextPtr& ctx) const override;
-
 private:
     std::shared_ptr<NotationConfiguration> m_configuration;
     std::shared_ptr<InstrumentsRepository> m_instrumentsRepository;
     std::shared_ptr<EngravingFontsController> m_engravingFontsController;
-};
-
-class NotationContext : public muse::modularity::IContextSetup
-{
-public:
-    NotationContext(const muse::modularity::ContextPtr& ctx)
-        : muse::modularity::IContextSetup(ctx) {}
-
-    void registerExports() override;
 };
 }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -41,18 +41,18 @@ std::string MnxModule::moduleName() const
 void MnxModule::registerExports()
 {
     m_configuration = std::make_shared<MnxConfiguration>();
-    globalIoc()->registerExport<IMnxConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IMnxConfiguration>(moduleName(), m_configuration);
 }
 
 void MnxModule::resolveImports()
 {
-    auto readers = globalIoc()->resolve<INotationReadersRegister>(moduleName());
+    auto readers = ioc()->resolve<INotationReadersRegister>(moduleName());
     if (readers) {
-        readers->reg({ "mnx", "json" }, std::make_shared<NotationMnxReader>(globalCtx()));
+        readers->reg({ "mnx", "json" }, std::make_shared<NotationMnxReader>(iocContext()));
     }
-    auto writers = globalIoc()->resolve<INotationWritersRegister>(moduleName());
+    auto writers = ioc()->resolve<INotationWritersRegister>(moduleName());
     if (writers) {
-        writers->reg({ "mnx" }, std::make_shared<NotationMnxWriter>(globalCtx()));
+        writers->reg({ "mnx" }, std::make_shared<NotationMnxWriter>(iocContext()));
     }
 }
 

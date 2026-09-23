@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -34,12 +34,18 @@
 #include "musesampler/imusesamplerinfo.h"
 
 namespace mu::playback {
-class DrumsetLoader : public muse::async::Asyncable
+class DrumsetLoader : public muse::async::Asyncable, public muse::Contextable
 {
-    muse::GlobalInject<muse::musesampler::IMuseSamplerInfo> museSampler;
-    muse::GlobalInject<notation::IInstrumentsRepository> instrumentsRepository;
+    muse::ContextInject<notation::IInstrumentsRepository> instrumentsRepository = { this };
+    muse::ContextInject<muse::musesampler::IMuseSamplerInfo> museSampler = { this };
 
 public:
+
+    DrumsetLoader(const muse::modularity::ContextPtr& iocCtx)
+        : muse::Contextable(iocCtx)
+    {
+    }
+
     void loadDrumset(notation::INotationPtr notation, const mu::engraving::InstrumentTrackId& trackId,
                      const muse::audio::AudioResourceMeta& resourceMeta);
 

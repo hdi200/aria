@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -80,11 +80,9 @@
       <rhGuitarFingeringFramePadding>0</rhGuitarFingeringFramePadding>
       <rhGuitarFingeringFrameWidth>0</rhGuitarFingeringFrameWidth>
       <longInstrumentFontSize>11</longInstrumentFontSize>
-      <longInstrumentAlign>right,center</longInstrumentAlign>
       <longInstrumentFramePadding>0</longInstrumentFramePadding>
       <longInstrumentFrameWidth>0</longInstrumentFrameWidth>
       <shortInstrumentFontSize>11</shortInstrumentFontSize>
-      <shortInstrumentAlign>right,center</shortInstrumentAlign>
       <shortInstrumentFramePadding>0</shortInstrumentFramePadding>
       <shortInstrumentFrameWidth>0</shortInstrumentFrameWidth>
       <partInstrumentFramePadding>0</partInstrumentFramePadding>
@@ -181,10 +179,9 @@
         <StaffType group="pitched">
           </StaffType>
         </Staff>
+      <trackName>Tenor</trackName>
       <Instrument id="tenor">
-        <InstrumentLabel>
-          <longName>Tenor</longName>
-          </InstrumentLabel>
+        <longName>Tenor</longName>
         <trackName>Choir Aahs</trackName>
         <instrumentId>voice.tenor</instrumentId>
         <Channel>

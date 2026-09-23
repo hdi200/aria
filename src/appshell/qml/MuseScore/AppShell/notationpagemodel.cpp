@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -39,7 +39,7 @@ NotationPageModel::NotationPageModel(QObject* parent)
 
 bool NotationPageModel::isNavigatorVisible() const
 {
-    return appShellState()->isNotationNavigatorVisible();
+    return configuration()->isNotationNavigatorVisible();
 }
 
 bool NotationPageModel::isBraillePanelVisible() const
@@ -62,6 +62,8 @@ void NotationPageModel::init()
 
     globalContext()->currentNotationChanged().onNotify(this, [this]() {
         onNotationChanged();
+        scheduleUpdateDrumsetPanelVisibility();
+        scheduleUpdatePercussionPanelVisibility();
     });
 
     extensionsProvider()->manifestListChanged().onNotify(this, [this]() {
@@ -197,7 +199,7 @@ void NotationPageModel::onNotationChanged()
 void NotationPageModel::toggleDock(const QString& name)
 {
     if (name == NOTATION_NAVIGATOR_PANEL_NAME) {
-        appShellState()->setIsNotationNavigatorVisible(!isNavigatorVisible());
+        configuration()->setIsNotationNavigatorVisible(!isNavigatorVisible());
         emit isNavigatorVisibleChanged();
         return;
     }
@@ -317,15 +319,6 @@ void NotationPageModel::doUpdatePercussionPanelVisibility()
     }
 
     const mu::engraving::Score* score = notation->elements()->msScore();
-    if (score) {
-        const mu::engraving::InputState& inputState = score->inputState();
-        const mu::engraving::Staff* staff = inputState.staff();
-        if (inputState.noteEntryMode() && staff && staff->isDrumStaff(inputState.tick())) {
-            setPercussionPanelOpen(true);
-            return;
-        }
-    }
-
     const INotationSelectionPtr selection = notation->interaction()->selection();
     if (!score || !selection || selection->isNone()) {
         if (autoClose) {

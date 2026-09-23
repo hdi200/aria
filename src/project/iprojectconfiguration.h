@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -64,6 +64,9 @@ public:
     virtual void setUserProjectsPath(const muse::io::path_t& path) = 0;
     virtual muse::async::Channel<muse::io::path_t> userProjectsPathChanged() const = 0;
     virtual muse::io::path_t defaultUserProjectsPath() const = 0;
+
+    //! NOTE: best-guess directory to start browsing from in an "open file" dialog
+    virtual muse::io::path_t defaultOpenProjectsPath() const = 0;
 
     virtual bool shouldAskSaveLocationType() const = 0;
     virtual void setShouldAskSaveLocationType(bool shouldAsk) = 0;
@@ -132,10 +135,16 @@ public:
 
     virtual muse::io::path_t newProjectTemporaryPath() const = 0;
 
+    virtual bool isAccessibleEnabled() const = 0;
+
     virtual bool shouldDestinationFolderBeOpenedOnExport() const = 0;
     virtual void setShouldDestinationFolderBeOpenedOnExport(bool shouldDestinationFolderBeOpenedOnExport) = 0;
 
     virtual QUrl supportForumUrl() const = 0;
+
+    virtual QUrl dotComBugReportUrl() const = 0;
+
+    virtual QUrl scoreUploadingGuidelinesUrl() const = 0;
 
     virtual bool openDetailedProjectUploadedDialog() const = 0;
     virtual void setOpenDetailedProjectUploadedDialog(bool show) = 0;
@@ -163,6 +172,15 @@ public:
 
     virtual bool createBackupBeforeSaving() const = 0;
     virtual void setCreateBackupBeforeSaving(bool create) = 0;
+
+    virtual bool showConvertFileProcessingDialog() const = 0;
+    virtual void setShowConvertFileProcessingDialog(bool show) = 0;
+
+    virtual muse::io::path_t convertedScoresPath() const = 0;
+    virtual muse::io::path_t pendingConvertsJsonPath() const = 0;
+
+    virtual std::string uniqueFileNameAddition(const muse::io::path_t& filename, const muse::io::path_t& folderPath,
+                                               const std::string& suffix = std::string()) const = 0;
 };
 }
 

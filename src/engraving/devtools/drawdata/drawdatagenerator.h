@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2023 MuseScore Limited
+ * Copyright (C) 2023 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MU_ENGRAVING_DRAWDATAGENERATOR_H
+#define MU_ENGRAVING_DRAWDATAGENERATOR_H
 
 #include "global/types/ret.h"
 #include "global/io/path.h"
@@ -33,11 +33,12 @@
 
 namespace mu::engraving {
 class MasterScore;
-class DrawDataGenerator
+class DrawDataGenerator : public muse::Contextable
 {
-    muse::GlobalInject<engraving::rendering::IScoreRenderer> scoreRenderer;
-
+    muse::ContextInject<engraving::rendering::IScoreRenderer> scoreRenderer = { this };
 public:
+    DrawDataGenerator(const muse::modularity::ContextPtr& iocCtx);
+
     muse::Ret processDir(const muse::io::path_t& scoreDir, const muse::io::path_t& outDir, const GenOpt& opt = GenOpt());
     muse::Ret processFile(const muse::io::path_t& scoreFile, const muse::io::path_t& outFile, const GenOpt& opt = GenOpt());
 
@@ -49,3 +50,5 @@ private:
     void applyOptions(engraving::MasterScore* score, const GenOpt& opt) const;
 };
 }
+
+#endif // MU_ENGRAVING_DRAWDATAGENERATOR_H

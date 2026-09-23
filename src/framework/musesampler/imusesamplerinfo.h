@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MUSE_MUSESAMPLER_IMUSESAMPLERINFO_H
+#define MUSE_MUSESAMPLER_IMUSESAMPLERINFO_H
 
 #include "modularity/imoduleinterface.h"
 
@@ -28,7 +29,7 @@
 #include "global/types/version.h"
 
 namespace muse::musesampler {
-class IMuseSamplerInfo : MODULE_GLOBAL_INTERFACE
+class IMuseSamplerInfo : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(IMuseSamplerInfo)
 
@@ -44,3 +45,5 @@ public:
     virtual std::vector<Instrument> instruments() const = 0;
 };
 }
+
+#endif // MUSE_MUSESAMPLER_IMUSESAMPLERINFO_H

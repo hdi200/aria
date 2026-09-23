@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -33,14 +33,9 @@ using namespace muse::mi;
 
 static const std::string pname = "mi";
 
-size_t SingleProcessProvider::windowCount() const
+int SingleProcessProvider::windowCount() const
 {
-    return std::max(static_cast<size_t>(1), application()->contextCount());
-}
-
-bool SingleProcessProvider::isFirstWindow() const
-{
-    return windowCount() <= 1;
+    return application()->contextCount();
 }
 
 std::shared_ptr<IProjectProvider> SingleProcessProvider::projectProvider(const modularity::ContextPtr& ctx) const
@@ -146,23 +141,10 @@ void SingleProcessProvider::activateWindowWithoutProject(const QStringList& args
 
 bool SingleProcessProvider::openNewWindow(const QStringList& args)
 {
+    //! TODO Add argument passing and handling
     LOGDA() << args;
 
-    application()->setupNewContext(args);
+    application()->setupNewContext();
 
     return true;
-}
-
-void SingleProcessProvider::quitForAll()
-{
-    QCoreApplication::exit();
-}
-
-void SingleProcessProvider::quitWindow(const modularity::ContextPtr& ctx)
-{
-    if (application()->contextCount() <= 1) {
-        QCoreApplication::exit();
-    } else {
-        application()->destroyContext(ctx);
-    }
 }

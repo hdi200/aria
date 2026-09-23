@@ -59,11 +59,6 @@ public:
             return {};
         }
 
-        inline operator bool() const
-        {
-            return p.isConnected();
-        }
-
     private:
         mutable Promise<T...> p;
     };
@@ -79,11 +74,6 @@ public:
         {
             p.reject(code, msg);
             return {};
-        }
-
-        inline operator bool() const
-        {
-            return p.isConnected();
         }
 
     private:
@@ -197,8 +187,7 @@ public:
         bool has_reject = m_data->rejectCh != nullptr;
         assert(has_reject && "This promise has no rejection");
         if (has_reject) {
-            m_data->rejectCh->onReceive(receiver,
-                                        [data { m_data }, callback](const std::shared_ptr<Data>& d, int code, const std::string& msg) {
+            m_data->rejectCh->onReceive(receiver, [data { m_data }, callback](const std::shared_ptr<Data>& d, int code, const std::string& msg) {
                 (void)data;
                 (void)d;
                 assert(data == d);
@@ -208,28 +197,11 @@ public:
         return *this;
     }
 
-    template<typename ... U, typename OnResolve>
-    Promise<U...> then(const Asyncable* receiver, OnResolve&& onResolveF);
+    template <typename... U, typename OnResolve>
+    Promise<U...> then(const Asyncable *receiver, OnResolve &&onResolveF);
 
-    template<typename ... U, typename OnResolve, typename OnReject>
-    Promise<U...> then(const Asyncable* receiver, OnResolve&& onResolveF, OnReject&& onRejectF);
-
-    bool isConnected() const
-    {
-        if (!m_data) {
-            return false;
-        }
-
-        if (m_data->resolveCh.isConnected()) {
-            return true;
-        }
-
-        if (m_data->rejectCh && m_data->rejectCh->isConnected()) {
-            return true;
-        }
-
-        return false;
-    }
+    template <typename ... U, typename OnResolve, typename OnReject>
+    Promise<U...> then(const Asyncable *receiver, OnResolve &&onResolveF, OnReject &&onRejectF);
 
 private:
     Promise() = default;
@@ -259,11 +231,11 @@ private:
     struct Data
     {
         ChannelImpl<std::shared_ptr<Data>, T...> resolveCh;
-        std::unique_ptr<ChannelImpl<std::shared_ptr<Data>, int, std::string> > rejectCh;
+        std::unique_ptr<ChannelImpl<std::shared_ptr<Data>, int, std::string>> rejectCh;
 
         void make_rejectCh()
         {
-            rejectCh = std::make_unique<ChannelImpl<std::shared_ptr<Data>, int, std::string> >();
+            rejectCh = std::make_unique<ChannelImpl<std::shared_ptr<Data>, int, std::string>>();
         }
     };
 
@@ -282,11 +254,10 @@ inline Promise<T...> make_promise(typename Promise<T...>::BodyResolve f, Promise
     return Promise<T...>(f, type);
 }
 
-template<typename ... T>
-template<typename ... U, typename OnResolve>
-Promise<U...> Promise<T...>::then(const Asyncable* receiver, OnResolve&& onResolveF)
-{
-    static_assert(std::is_same_v<std::invoke_result_t<OnResolve, T..., typename Promise<U...>::Resolve>,
+template <typename ... T>
+template <typename ... U, typename OnResolve>
+Promise<U...> Promise<T...>::then(const Asyncable *receiver, OnResolve &&onResolveF) {
+    static_assert(std::is_same_v<std::invoke_result_t<OnResolve, T..., typename Promise<U...>::Resolve>, 
                                  typename Promise<U...>::Result>,
                   "onResolveF must return Promise<U...>::Result when called with (T... , Promise<U...>::Resolve)");
     if (m_data->rejectCh != nullptr) {
@@ -309,11 +280,10 @@ Promise<U...> Promise<T...>::then(const Asyncable* receiver, OnResolve&& onResol
     }
 }
 
-template<typename ... T>
-template<typename ... U, typename OnResolve, typename OnReject>
-Promise<U...> Promise<T...>::then(const Asyncable* receiver, OnResolve&& onResolveF, OnReject&& onRejectF)
-{
-    static_assert(std::is_same_v<std::invoke_result_t<OnResolve, T..., typename Promise<U...>::Resolve, typename Promise<U...>::Reject>,
+template <typename ... T>
+template <typename ... U, typename OnResolve, typename OnReject>
+Promise<U...> Promise<T...>::then(const Asyncable *receiver, OnResolve &&onResolveF, OnReject &&onRejectF) {
+    static_assert(std::is_same_v<std::invoke_result_t<OnResolve, T..., typename Promise<U...>::Resolve, typename Promise<U...>::Reject>, 
                                  typename Promise<U...>::Result>,
                   "onResolveF must return Promise<U...>::Result when called with (T... , Promise<U...>::Resolve, Promise<U...>::Reject)");
     return make_promise<U...>([this, receiver, onResolveF, onRejectF](auto resolve, auto reject) {

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -254,9 +254,11 @@ void ContinuousPanel::paint(Painter& painter, const NotationViewContext& ctx, co
             const engraving::Instrument* instrument = currentStaff->part()->instrument(tick);
 
             // Staff name
-            String staffName = instrument->longName();
+            const StaffNameList& staffNamesLong = instrument->longNames();
+            String staffName = staffNamesLong.empty() ? String() : staffNamesLong.front().name();
             if (staffName.empty()) {
-                staffName = instrument->shortName();
+                const StaffNameList& staffNamesShort = instrument->shortNames();
+                staffName = staffNamesShort.empty() ? String() : staffNamesShort.front().name();
             }
 
             engraving::Text*& nameText = m_cachedStaffNameTexts[staffIdx];
@@ -352,9 +354,9 @@ void ContinuousPanel::paint(Painter& painter, const NotationViewContext& ctx, co
         }
     }
 
-    const double clefLeftMargin = score->style().styleAbsolute(engraving::Sid::clefLeftMargin);
-    const double keySigLeftMargin = score->style().styleAbsolute(engraving::Sid::keysigLeftMargin);
-    const double timeSigLeftMargin = score->style().styleAbsolute(engraving::Sid::timesigLeftMargin);
+    const double clefLeftMargin = score->style().styleMM(engraving::Sid::clefLeftMargin);
+    const double keySigLeftMargin = score->style().styleMM(engraving::Sid::keysigLeftMargin);
+    const double timeSigLeftMargin = score->style().styleMM(engraving::Sid::timesigLeftMargin);
 
     leftMarginTotal = clefLeftMargin;
     leftMarginTotal += keySigLeftMargin;
@@ -417,7 +419,7 @@ void ContinuousPanel::paint(Painter& painter, const NotationViewContext& ctx, co
     const Color color = engravingConfiguration()->invisibleColor();
 
     // Draw measure number
-    m_cachedMeasureNumberText->setXmlText(String(u"#%1").arg(currentMeasure->measureNumber() + 1));
+    m_cachedMeasureNumberText->setXmlText(String(u"#%1").arg(currentMeasure->no() + 1));
     m_cachedMeasureNumberText->setColor(color);
     m_cachedMeasureNumberText->mutldata()->reset();
     m_cachedMeasureNumberText->renderer()->layoutText1(m_cachedMeasureNumberText);

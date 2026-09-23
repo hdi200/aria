@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -25,11 +25,10 @@
           </StaffType>
         <defaultClef>F</defaultClef>
         </Staff>
+      <trackName>Bass</trackName>
       <Instrument id="bass">
-        <InstrumentLabel>
-          <longName>Bass</longName>
-          <shortName>el.bs.</shortName>
-          </InstrumentLabel>
+        <longName>Bass</longName>
+        <shortName>el.bs.</shortName>
         <trackName></trackName>
         <transposeDiatonic>-7</transposeDiatonic>
         <transposeChromatic>-12</transposeChromatic>

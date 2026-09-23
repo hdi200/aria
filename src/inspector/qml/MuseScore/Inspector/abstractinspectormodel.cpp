@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -540,6 +540,11 @@ void AbstractInspectorModel::requestElements()
     }
 }
 
+void AbstractInspectorModel::disconnectAll()
+{
+    async_disconnectAll();
+}
+
 void AbstractInspectorModel::onCurrentNotationChanged()
 {
 }
@@ -626,8 +631,8 @@ PropertyValue AbstractInspectorModel::valueToElementUnits(const mu::engraving::P
         }
     }
 
-    case P_TYPE::ABSOLUTE:
-        return element->absoluteFromSpatium(Spatium(value.toReal()));
+    case P_TYPE::MILLIMETRE:
+        return Spatium(value.toReal()).toMM(element->spatium());
 
     case P_TYPE::SPATIUM:
         return Spatium(value.toReal());
@@ -672,8 +677,8 @@ QVariant AbstractInspectorModel::valueFromElementUnits(const mu::engraving::Pid&
         }
     }
 
-    case P_TYPE::ABSOLUTE:
-        return Spatium::fromAbsolute(value.toReal(), element->spatium()).val();
+    case P_TYPE::MILLIMETRE:
+        return Spatium::fromMM(value.toReal(), element->spatium()).val();
 
     case P_TYPE::SPATIUM:
         return value.value<Spatium>().val();
@@ -906,5 +911,5 @@ void AbstractInspectorModel::updateNotation()
         return;
     }
 
-    currentNotation()->notationChanged().send(muse::RectF());
+    currentNotation()->notationChanged().notify();
 }

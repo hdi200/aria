@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,8 +22,7 @@
 
 #include "customizekitdialog.h"
 
-#include "global/io/buffer.h"
-#include "global/io/file.h"
+#include "io/file.h"
 
 #include "engraving/infrastructure/smufl.h"
 
@@ -143,9 +142,16 @@ struct SymbolIcon {
 };
 
 CustomizeKitDialog::CustomizeKitDialog(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
+    : QDialog(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     setObjectName(QStringLiteral("CustomizeKitDialog"));
+
+    m_notation = globalContext()->currentNotation();
+    if (!m_notation) {
+        return;
+    }
+
+    initDrumsetAndKey();
 
     setupUi(this);
     setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -153,6 +159,7 @@ CustomizeKitDialog::CustomizeKitDialog(QWidget* parent)
     drumNote->setGridSize(70, 80);
     drumNote->setDrawGrid(false);
     drumNote->setReadOnly(true);
+    drumNote->setIgnoreInputEvents(true);
 
     QTreeWidgetItem* itemToSelect = loadPitchesList();
 
@@ -269,16 +276,6 @@ CustomizeKitDialog::CustomizeKitDialog(QWidget* parent)
 
     //! NOTE: It is necessary for the correct start of navigation in the dialog
     setFocus();
-}
-
-void CustomizeKitDialog::componentComplete()
-{
-    m_notation = globalContext()->currentNotation();
-    if (!m_notation) {
-        return;
-    }
-
-    initDrumsetAndKey();
 }
 
 //---------------------------------------------------------
@@ -572,7 +569,7 @@ void CustomizeKitDialog::updateExample()
     int v         = m_editedDrumset.voice(pitch);
     DirectionV dir = m_editedDrumset.stemDirection(pitch);
     bool up = (DirectionV::UP == dir) || (DirectionV::AUTO == dir && line > 4);
-    std::shared_ptr<Chord> chord = Factory::makeChord(paletteScoreProvider()->paletteScore()->dummy()->segment());
+    std::shared_ptr<Chord> chord = Factory::makeChord(gpaletteScore->dummy()->segment());
     chord->setDurationType(DurationType::V_QUARTER);
     chord->setStemDirection(dir);
     chord->setTrack(v);
@@ -583,7 +580,7 @@ void CustomizeKitDialog::updateExample()
     note->setPitch(pitch);
     note->setTpcFromPitch();
     note->setLine(line);
-    note->setPos(0.0, paletteScoreProvider()->paletteScore()->style().spatium() * .5 * line);
+    note->setPos(0.0, gpaletteScore->style().spatium() * .5 * line);
     note->setHeadType(NoteHeadType::HEAD_QUARTER);
     note->setHeadGroup(nh);
     note->mutldata()->cachedNoteheadSym.set_value(static_cast<SymId>(quarterCmb->currentData().toInt()));
@@ -661,24 +658,22 @@ void CustomizeKitDialog::save()
         return;
     }
 
-    auto outBuf = Buffer::opened(IODevice::WriteOnly);
+    File f(fname);
+    if (!f.open(IODevice::WriteOnly)) {
+        QString s = muse::qtrc("palette", "Opening file\n%1\nfailed: %2").arg(f.filePath().toQString(), strerror(errno));
+        interactive()->error(muse::trc("palette", "Open file"), s.toStdString());
+        return;
+    }
     valueChanged();    //save last changes in name
-    XmlWriter xml(&outBuf);
+    XmlWriter xml(&f);
     xml.startDocument();
     xml.startElement("museScore", { { "version", Constants::MSC_VERSION_STR } });
     m_editedDrumset.save(xml);
     xml.endElement();
     xml.flush();
-    if (outBuf.hasError()) {
-        QString s = muse::qtrc("palette", "Writing file failed: %1").arg(QString::fromStdString(outBuf.errorString()));
+    if (f.hasError()) {
+        QString s = muse::qtrc("palette", "Writing file failed: %1").arg(QString::fromStdString(f.errorString()));
         interactive()->error(muse::trc("palette", "Write drumset"), s.toStdString());
-    }
-
-    const muse::Ret ret = File::writeFile(fname, outBuf.data());
-    if (!ret) {
-        QString s = muse::qtrc("palette", "Writing file failed: %1").arg(ret.toString());
-        interactive()->error(muse::trc("palette", "Write drumset"), s.toStdString());
-        return;
     }
 }
 

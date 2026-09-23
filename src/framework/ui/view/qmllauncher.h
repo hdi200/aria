@@ -24,14 +24,13 @@
 #include <QObject>
 
 #include "modularity/ioc.h"
-#include "interactive/iinteractive.h"
-#include "interactive/iplatforminteractive.h"
+#include "iinteractive.h"
 
 namespace muse::ui {
 class QmlLauncher : public QObject, public Contextable
 {
     Q_OBJECT
-    GlobalInject<muse::IPlatformInteractive> platformInteractive;
+
     ContextInject<IInteractive> interactive = { this };
 
 public:

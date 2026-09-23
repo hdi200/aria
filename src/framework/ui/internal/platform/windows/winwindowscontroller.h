@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -31,7 +31,6 @@
 
 #include "modularity/ioc.h"
 #include "ui/iuiconfiguration.h"
-#include "ui/iuicontextconfiguration.h"
 #include "ui/imainwindow.h"
 
 #include "internal/windowscontroller.h"
@@ -40,7 +39,6 @@ namespace muse::ui {
 class WinWindowsController : public QObject, public WindowsController, public async::Asyncable, public Contextable
 {
     GlobalInject<muse::ui::IUiConfiguration> uiConfiguration;
-    ContextInject<muse::ui::IUiContextConfiguration> uiContextConfiguration = { this };
     ContextInject<muse::ui::IMainWindow> mainWindow  ={ this };
 
 public:

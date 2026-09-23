@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -65,7 +65,6 @@ static const QStringList ALL_PAGE_CODES {
     "header-and-footer",
     "measure-number",
     "system",
-    "instrument-names",
     "clefs-key-and-time-signatures",
     "accidentals",
     "barlines",
@@ -113,7 +112,6 @@ static const QStringList ALL_TEXT_STYLE_SUBPAGE_CODES {
     "instrument-name-long",
     "instrument-name-short",
     "instrument-change",
-    "group-bracket",
     "header",
     "footer",
     "copyright",
@@ -229,11 +227,7 @@ static void fillDynamicHairpinComboBox(QComboBox* comboBox)
 //---------------------------------------------------------
 
 EditStyle::EditStyle(QWidget* parent)
-    : muse::ui::WidgetDialog(parent)
-{
-}
-
-void EditStyle::classBegin()
+    : QDialog(parent), muse::Contextable(muse::iocCtxForQWidget(this))
 {
     //! NOTE: suppress all accessibility events causing a long delay when opening the dialog (massive spam from setupUi)
     accessibilityController()->setIgnoreQtAccessibilityEvents(true);
@@ -328,24 +322,6 @@ void EditStyle::classBegin()
     QButtonGroup* dividerRightAlignToSystemBarline = new QButtonGroup(this);
     dividerRightAlignToSystemBarline->addButton(rightDividerAlignToSystemBarline, 1);
     dividerRightAlignToSystemBarline->addButton(rightDividerAlignToPageMargin, 0);
-
-    QButtonGroup* groupBracketTextAlign = new QButtonGroup(this);
-    groupBracketTextAlign->addButton(groupBracketTextLeft, 1);
-    groupBracketTextAlign->addButton(groupBracketTextCenter, 0);
-    groupBracketTextAlign->addButton(groupBracketTextRight, 2);
-
-    QButtonGroup* groupBracketOrientation = new QButtonGroup(this);
-    groupBracketOrientation->addButton(groupBracketTextVertical, 0);
-    groupBracketOrientation->addButton(groupBracketTextHorizontal, 1);
-
-    auto updateHangIntoMarginEnabled = [&]() {
-        bool rightAlign = groupBracketTextRight->isChecked();
-        bool vertical = groupBracketTextVertical->isChecked();
-        groupBracketHangIntoMargin->setEnabled(vertical && !rightAlign);
-    };
-
-    connect(groupBracketTextAlign, &QButtonGroup::buttonClicked, this, updateHangIntoMarginEnabled);
-    connect(groupBracketOrientation, &QButtonGroup::buttonClicked, this, updateHangIntoMarginEnabled);
 
     // ====================================================
     // Style widgets
@@ -505,14 +481,6 @@ void EditStyle::classBegin()
         { StyleId::bracketDistance,         false, bracketDistance,         resetBracketDistance },
         { StyleId::akkoladeWidth,           false, akkoladeWidth,           resetBraceThickness },
         { StyleId::akkoladeBarDistance,     false, akkoladeBarDistance,     resetBraceDistance },
-        { StyleId::groupBracketLineWidth,   false, groupBracketLineThick,   groupBracketLineThickReset },
-        { StyleId::groupBracketHookLen,     false, groupBracketHookLen,     groupBracketHookLenReset },
-        { StyleId::groupBracketTextAlign,   false, groupBracketTextAlign,   0 },
-        { StyleId::groupBracketHangTextIntoMargin, false, groupBracketHangIntoMargin, 0 },
-        { StyleId::groupBracketDistanceToNames, false, groupBracketDistanceToNames, groupBracketDistanceToNamesReset },
-        { StyleId::groupBracketDistanceToGroupBracket, false, groupBracketDistanceToBrackets, groupBracketDistanceToBracketsReset },
-        { StyleId::groupBracketTextOrientation, false, groupBracketOrientation },
-
         { StyleId::dividerLeft,             false, dividerLeft,             0 },
         { StyleId::dividerLeftX,            false, dividerLeftX,            dividerLeftXReset },
         { StyleId::dividerLeftY,            false, dividerLeftY,            dividerLeftYReset },
@@ -1001,17 +969,6 @@ void EditStyle::classBegin()
     PageRepeats->layout()->addWidget(repeatPlayCountSection.widget);
 
     // ====================================================
-    // Instrument names page (QML)
-    // ====================================================
-
-    auto instrNamesPage = createQmlWidget(
-        pageInstrumentNames,
-        QUrl(QString::fromUtf8("qrc:/qt/qml/MuseScore/NotationScene/styledialog/InstrumentNamesPage.qml")));
-    instrNamesPage.widget->setMinimumSize(224, 400);
-    pageInstrumentNames->layout()->addWidget(instrNamesPage.widget);
-    //connect(instrNamesPage.view->rootObject(), SIGNAL(goToTextStylePage(int)), this, SLOT(goToTextStylePage(int)));
-
-    // ====================================================
     // Figured Bass
     // ====================================================
 
@@ -1048,8 +1005,8 @@ void EditStyle::classBegin()
     // Signal Mappers
     // ====================================================
 
-    QSignalMapper* setSignalMapper = new QSignalMapper(this);     // value change signals
-    QSignalMapper* resetSignalMapper = new QSignalMapper(this);     // reset style signals
+    QSignalMapper* setSignalMapper = new QSignalMapper(this); // value change signals
+    QSignalMapper* resetSignalMapper = new QSignalMapper(this); // reset style signals
 
     const auto mapFunction = QOverload<>::of(&QSignalMapper::map);
 
@@ -1106,14 +1063,7 @@ void EditStyle::classBegin()
     connect(setSignalMapper, &QSignalMapper::mappedInt, this, &EditStyle::valueChanged);
     connect(resetSignalMapper, &QSignalMapper::mappedInt, this, &EditStyle::resetStyleValue);
 
-    const INotationPtr notation = globalContext()->currentNotation();
-    IF_ASSERT_FAILED(notation) {
-        return;
-    }
-    const Score* score = notation->elements()->msScore();
-    IF_ASSERT_FAILED(score) {
-        return;
-    }
+    Score* score = globalContext()->currentNotation()->elements()->msScore();
 
     textStyles->clear();
     for (TextStyleType textStyleType : editableTextStyles()) {
@@ -1283,11 +1233,11 @@ void EditStyle::classBegin()
     });
 
     connect(textStyles, &QListWidget::currentRowChanged, this, &EditStyle::textStyleChanged);
-    textStyles->setCurrentRow(notation->viewState()->styleDialogLastSubPageIndex());
+    textStyles->setCurrentRow(configuration()->styleDialogLastSubPageIndex());
 
     connect(pageList, &QListWidget::currentRowChanged, pageStack, &QStackedWidget::setCurrentIndex);
     connect(pageList, &QListWidget::currentRowChanged, this, &EditStyle::on_pageRowSelectionChanged);
-    pageList->setCurrentRow(notation->viewState()->styleDialogLastPageIndex());
+    pageList->setCurrentRow(configuration()->styleDialogLastPageIndex());
 
     editLyricsTextStyleButton->setChecked(false);
     connect(editLyricsTextStyleButton, &QPushButton::clicked, pageList, [=](){
@@ -1300,14 +1250,6 @@ void EditStyle::classBegin()
     connect(resetLyricsMaxDashCount, &QCheckBox::clicked, this, [this] () {
         resetStyleValue(int(StyleId::lyricsLimitDashCount));
         resetStyleValue(int(StyleId::lyricsMaxDashCount));
-    });
-
-    editGroupBracketTextStyleLink->setChecked(false);
-    connect(editGroupBracketTextStyleLink, &QPushButton::clicked, pageList, [=](){
-        pageList->setCurrentRow(ALL_PAGE_CODES.indexOf("text-styles"));
-    });
-    connect(editGroupBracketTextStyleLink, &QPushButton::clicked, textStyles, [=](){
-        textStyles->setCurrentRow(ALL_TEXT_STYLE_SUBPAGE_CODES.indexOf("group-bracket"));
     });
 
     adjustPagesStackSize(0);
@@ -1735,10 +1677,7 @@ void EditStyle::on_resetStylesButton_clicked()
 
 void EditStyle::on_pageRowSelectionChanged()
 {
-    IF_ASSERT_FAILED(globalContext()->currentNotation()) {
-        return;
-    }
-    globalContext()->currentNotation()->viewState()->setStyleDialogLastPageIndex(pageList->currentRow());
+    configuration()->setStyleDialogLastPageIndex(pageList->currentRow());
 }
 
 //---------------------------------------------------------
@@ -1818,8 +1757,6 @@ PropertyValue EditStyle::getValue(StyleId idx)
     } break;
     case P_TYPE::PLACEMENT_H:
     case P_TYPE::PLACEMENT_V:
-    case P_TYPE::DIRECTION_H:
-    case P_TYPE::ORIENTATION:
     case P_TYPE::LINE_TYPE:
     case P_TYPE::TIMESIG_PLACEMENT:
     case P_TYPE::TIMESIG_STYLE:
@@ -1939,8 +1876,6 @@ void EditStyle::setValues()
         } break;
         case P_TYPE::PLACEMENT_H:
         case P_TYPE::PLACEMENT_V:
-        case P_TYPE::DIRECTION_H:
-        case P_TYPE::ORIENTATION:
         case P_TYPE::BARLINE_TYPE:
         case P_TYPE::LINE_TYPE:
         case P_TYPE::HOOK_TYPE:
@@ -2088,11 +2023,6 @@ void EditStyle::setValues()
                                            != defaultStyleValue(StyleId::lyricsDashMaxDistance));
 
     updateParenthesisIndicatingTiesGroupState();
-
-    bool textBracketRight = styleValue(StyleId::groupBracketTextAlign).value<DirectionH>() == DirectionH::RIGHT;
-    bool vertical = styleValue(StyleId::groupBracketTextOrientation).value<mu::engraving::Orientation>()
-                    == mu::engraving::Orientation::VERTICAL;
-    groupBracketHangIntoMargin->setEnabled(vertical && !textBracketRight);
 }
 
 //---------------------------------------------------------
@@ -2441,12 +2371,26 @@ void EditStyle::textStyleChanged(int row)
 
         case TextStylePropertyType::TextAlign:
             textStyleAlign->setAlign(styleValue(a.sid).value<Align>());
-            resetTextStyleAlign->setEnabled(styleValue(a.sid) != defaultStyleValue(a.sid));
+            resetTextStyleAlign->setEnabled(
+                styleValue(a.sid) != defaultStyleValue(a.sid)
+                || [&ts, this]()->bool {    // OR Position is modified
+                const auto& b = std::find_if(ts->begin(), ts->end(), [](const auto& s){
+                    return s.type == TextStylePropertyType::Position;
+                });
+                return b != ts->end() && styleValue(b->sid) != defaultStyleValue(b->sid);
+            }());
             break;
 
         case TextStylePropertyType::Position:
             textStyleAlign->setPosition(styleValue(a.sid).value<AlignH>());
-            resetTextStyleAlign->setEnabled(styleValue(a.sid) != defaultStyleValue(a.sid));
+            resetTextStyleAlign->setEnabled(
+                styleValue(a.sid) != defaultStyleValue(a.sid)
+                || [&ts, this]()->bool { // OR TextAlign is modified
+                const auto& b = std::find_if(ts->begin(), ts->end(), [](const auto& s){
+                    return s.type == TextStylePropertyType::TextAlign;
+                });
+                return b != ts->end() && styleValue(b->sid) != defaultStyleValue(b->sid);
+            }());
             break;
 
         case TextStylePropertyType::Offset:
@@ -2503,14 +2447,7 @@ void EditStyle::textStyleChanged(int row)
         }
     }
 
-    INotationPtr notation = globalContext()->currentNotation();
-    IF_ASSERT_FAILED(notation) {
-        return;
-    }
-    const Score* score = notation->elements()->msScore();
-    IF_ASSERT_FAILED(score) {
-        return;
-    }
+    Score* score = globalContext()->currentNotation()->elements()->msScore();
 
     styleName->setText(score->getTextStyleUserName(tid).qTranslated());
     styleName->setEnabled(int(tid) >= int(TextStyleType::USER1));
@@ -2519,7 +2456,7 @@ void EditStyle::textStyleChanged(int row)
     tupletUseSymbols->setVisible(tid == TextStyleType::TUPLET);
     resetTupletUseSymbols->setVisible(tid == TextStyleType::TUPLET);
 
-    notation->viewState()->setStyleDialogLastSubPageIndex(row);
+    configuration()->setStyleDialogLastSubPageIndex(row);
 }
 
 //---------------------------------------------------------

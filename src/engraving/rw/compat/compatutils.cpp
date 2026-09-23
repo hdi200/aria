@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -1015,7 +1015,7 @@ void CompatUtils::resetHookHeightSign(TextLineBase* tl)
     }
 }
 
-void mu::engraving::compat::CompatUtils::setMusicSymbolSize470(MStyle& style)
+void compat::CompatUtils::setMusicSymbolSize470(MStyle* style)
 {
     // Music symbols have their own point size in 4.7
     // Initialize this to the text type's default font size
@@ -1042,12 +1042,12 @@ void mu::engraving::compat::CompatUtils::setMusicSymbolSize470(MStyle& style)
             continue;
         }
 
-        double size = style.value(fontSizeSid).toDouble();
+        double size = style->value(fontSizeSid).toDouble();
         if (textStyleType == TextStyleType::TEMPO) {
             size *= TempoText::DEFAULT_SYM_SIZE_RATIO;
         }
 
-        style.set(musicSymbolSizeSid, size);
+        style->set(musicSymbolSizeSid, size);
     }
 }
 

@@ -29,58 +29,26 @@
 
 #include "../dsp/audiomathutils.h"
 
-#include "global/io/iodevice.h"
-
 #include "log.h"
 
-namespace muse::audio::encode {
-class FlacHandler final : public FLAC::Encoder::Stream
+using namespace muse::audio;
+using namespace muse::audio::encode;
+
+struct FlacHandler : public FLAC::Encoder::File
 {
-public:
-    explicit FlacHandler(io::IODevice& outDev)
-        : m_outDev{&outDev}
-    {
-        DO_ASSERT(m_outDev);
-    }
-
-protected:
-    FLAC__StreamEncoderWriteStatus write_callback(const FLAC__byte buffer[], const size_t bytes, uint32_t, uint32_t) override
-    {
-        if (m_outDev->write(buffer, bytes) != bytes) {
-            return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
-        }
-
-        return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
-    }
-
-    FLAC__StreamEncoderSeekStatus seek_callback(const FLAC__uint64 absolute_byte_offset) override
-    {
-        if (!m_outDev->seek(absolute_byte_offset)) {
-            return FLAC__STREAM_ENCODER_SEEK_STATUS_ERROR;
-        }
-
-        return FLAC__STREAM_ENCODER_SEEK_STATUS_OK;
-    }
-
-    FLAC__StreamEncoderTellStatus tell_callback(FLAC__uint64* absolute_byte_offset) override
-    {
-        *absolute_byte_offset = m_outDev->pos();
-        return FLAC__STREAM_ENCODER_TELL_STATUS_OK;
-    }
-
-private:
-    io::IODevice* m_outDev;
+    void progress_callback(FLAC__uint64, FLAC__uint64, uint32_t, uint32_t) override {}
 };
 
-FlacEncoder::FlacEncoder(const SoundTrackFormat& format, io::IODevice& dstDevice)
-    : AbstractAudioEncoder(format), m_flac{std::make_unique<FlacHandler>(dstDevice)}
+bool FlacEncoder::init(const io::path_t& path, const SoundTrackFormat& format, const samples_t totalSamplesNumber)
 {
-}
+    if (!format.isValid()) {
+        return false;
+    }
 
-FlacEncoder::~FlacEncoder() noexcept = default;
+    m_format = format;
 
-bool FlacEncoder::begin(const samples_t totalSamplesNumber)
-{
+    m_flac = new FlacHandler();
+
     int bitsPerSample = 0;
     switch (m_format.sampleFormat) {
     case AudioSampleFormat::Int16:
@@ -114,15 +82,26 @@ bool FlacEncoder::begin(const samples_t totalSamplesNumber)
     metadata[1]->length = 1234; /* set the padding length */
     m_flac->set_metadata(metadata, 2);
 
-    if (m_flac->init() != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
+    if (!openDestination(path)) {
         return false;
     }
+
+    prepareOutputBuffer(totalSamplesNumber);
 
     return true;
 }
 
-size_t FlacEncoder::encode(const samples_t samplesPerChannel, const float* input)
+void FlacEncoder::prepareOutputBuffer(const samples_t /*totalSamplesNumber*/)
 {
+    m_outputBuffer.clear();
+}
+
+size_t FlacEncoder::encode(samples_t samplesPerChannel, const float* input)
+{
+    IF_ASSERT_FAILED(m_flac) {
+        return 0;
+    }
+
     int bitsPerSample = 0;
     switch (m_format.sampleFormat) {
     case AudioSampleFormat::Int16:
@@ -144,29 +123,52 @@ size_t FlacEncoder::encode(const samples_t samplesPerChannel, const float* input
     std::vector<FLAC__int32> blockBuffer(static_cast<size_t>(BLOCK_FRAMES) * channels);
 
     for (samples_t frameStart = 0; frameStart < samplesPerChannel;) {
-        const uint32_t framesCount = static_cast<uint32_t>(std::min<samples_t>(BLOCK_FRAMES, samplesPerChannel - frameStart));
+        const uint32_t nFrames = static_cast<uint32_t>(std::min<samples_t>(BLOCK_FRAMES, samplesPerChannel - frameStart));
 
-        for (size_t frame = 0; frame < framesCount; ++frame) {
+        for (uint32_t f = 0; f < nFrames; ++f) {
             for (audioch_t c = 0; c < channels; ++c) {
-                const size_t i = (static_cast<size_t>(frameStart) + frame) * channels + c;
-                blockBuffer[static_cast<size_t>(frame) * channels + c]
+                const size_t i = (static_cast<size_t>(frameStart) + f) * channels + c;
+                blockBuffer[static_cast<size_t>(f) * channels + c]
                     = dsp::convertFloatSamples<FLAC__int32>(input[i], bitsPerSample);
             }
         }
 
-        if (!m_flac->process_interleaved(blockBuffer.data(), framesCount)) {
+        if (!m_flac->process_interleaved(blockBuffer.data(), nFrames)) {
             return 0;
         }
 
-        frameStart += framesCount;
+        frameStart += nFrames;
     }
 
     return static_cast<size_t>(samplesPerChannel) * channels;
 }
 
-size_t FlacEncoder::end()
+size_t FlacEncoder::flush()
 {
     m_flac->finish();
     return 0;
 }
+
+size_t FlacEncoder::requiredOutputBufferSize(samples_t /*totalSamplesNumber*/) const
+{
+    return 0;
+}
+
+bool FlacEncoder::openDestination(const io::path_t& path)
+{
+    IF_ASSERT_FAILED(m_flac) {
+        return false;
+    }
+
+    if (m_flac->init(path.c_str()) != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
+        return false;
+    }
+
+    return true;
+}
+
+void FlacEncoder::closeDestination()
+{
+    delete m_flac;
+    m_flac = nullptr;
 }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MU_IMPORTEXPORT_SVGWRITER_H
+#define MU_IMPORTEXPORT_SVGWRITER_H
 
 #include "abstractimagewriter.h"
 
@@ -32,9 +33,12 @@ namespace mu::iex::imagesexport {
 class SvgWriter : public AbstractImageWriter
 {
     muse::GlobalInject<IImagesExportConfiguration> configuration;
-    muse::GlobalInject<engraving::rendering::IScoreRenderer> scoreRenderer;
+    muse::ContextInject<engraving::rendering::IScoreRenderer> scoreRenderer = { this };
 
 public:
+    SvgWriter(const muse::modularity::ContextPtr& iocCtx)
+        : AbstractImageWriter(iocCtx) {}
+
     std::vector<project::INotationWriter::UnitType> supportedUnitTypes() const override;
     muse::Ret write(notation::INotationPtr notation, muse::io::IODevice& dstDevice, const Options& options = Options()) override;
 
@@ -44,3 +48,5 @@ private:
     BeatsColors parseBeatsColors(const QVariant& obj) const;
 };
 }
+
+#endif // MU_IMPORTEXPORT_SVGWRITER_H

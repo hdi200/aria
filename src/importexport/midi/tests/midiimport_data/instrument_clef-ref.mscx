@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -29,11 +29,10 @@
         <defaultConcertClef>F8vb</defaultConcertClef>
         <defaultTransposingClef>F</defaultTransposingClef>
         </Staff>
+      <trackName>Electric Bass</trackName>
       <Instrument id="electric-bass">
-        <InstrumentLabel>
-          <longName>Electric Bass</longName>
-          <shortName>El. B.</shortName>
-          </InstrumentLabel>
+        <longName>Electric Bass</longName>
+        <shortName>El. B.</shortName>
         <trackName>Electric Bass</trackName>
         <minPitchP>28</minPitchP>
         <maxPitchP>67</maxPitchP>

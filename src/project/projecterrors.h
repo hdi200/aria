@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -37,15 +37,28 @@ enum class Err {
     CorruptionUponSavingError,
 
     FileOpenError,
+    FileCreateError,
     InvalidCloudScoreId,
 
     UnsupportedUrl,
     MalformedOpenScoreUrl,
+
+    ConvertValidationFailed,
+    ConvertProcessingFailed,
+    DownloadLinkExpired,
 };
+
+//! NOTE: key for the converted file name stored in Ret::data
+static const std::string CONVERT_FAILED_FILE_NAME_KEY("convertedFileName");
 
 inline muse::Ret make_ret(Err e)
 {
     return muse::Ret(static_cast<int>(e));
+}
+
+inline muse::Ret make_ret(Err e, const std::string& text)
+{
+    return muse::Ret(static_cast<int>(e), text);
 }
 }
 

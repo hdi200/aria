@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -534,7 +534,7 @@ void Cursor::addTuplet(Fraction* ratio, Fraction* duration)
     if (tupletTick + fDuration > tupletMeasure->endTick()) {
         LOGW(
             "Cursor::addTuplet: cannot add cross-measure tuplet (measure %d, rel.tick %s, duration %s)",
-            tupletMeasure->measureNumber() + 1, qPrintable(segment()->rtick().toString()), qPrintable(fDuration.toString()));
+            tupletMeasure->no() + 1, qPrintable(segment()->rtick().toString()), qPrintable(fDuration.toString()));
 
         return;
     }

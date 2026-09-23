@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -30,19 +30,12 @@
 using namespace mu::print;
 using namespace muse::modularity;
 
-static const std::string mname("print");
-
 std::string PrintModule::moduleName() const
 {
-    return mname;
+    return "print";
 }
 
-IContextSetup* PrintModule::newContext(const ContextPtr& ctx) const
+void PrintModule::registerExports()
 {
-    return new PrintContext(ctx);
-}
-
-void PrintContext::registerExports()
-{
-    ioc()->registerExport<IPrintProvider>(mname, std::make_shared<PrintProvider>(iocContext()));
+    ioc()->registerExport<IPrintProvider>(moduleName(), std::make_shared<PrintProvider>(iocContext()));
 }

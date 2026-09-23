@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MUSE_MI_MULTIINSTANCESPROVIDER_H
+#define MUSE_MI_MULTIINSTANCESPROVIDER_H
 
 #include <map>
 
@@ -33,9 +33,9 @@
 #include "modularity/ioc.h"
 #include "actions/iactionsdispatcher.h"
 #include "actions/actionable.h"
+#include "iinteractive.h"
 #include "async/asyncable.h"
 #include "async/notification.h"
-#include "interactive/iinteractive.h"
 #include "ui/imainwindow.h"
 #include "../../iprojectprovider.h"
 
@@ -51,19 +51,17 @@ class MultiProcessProvider : public IMultiWindowsProvider, public IMultiProcessP
     ContextInject<IProjectProvider> projectProvider = { this };
 
 public:
-    MultiProcessProvider()
-        : Contextable(nullptr)
+    MultiProcessProvider(const modularity::ContextPtr& iocCtx)
+        : Contextable(iocCtx)
     {
     }
 
     ~MultiProcessProvider();
 
-    void initOnGlobal();
-    void initOnContext();
+    void init();
 
     // Contexts info
-    size_t windowCount() const override;
-    bool isFirstWindow() const override;
+    int windowCount() const override;
 
     // Project opening
     bool isProjectAlreadyOpened(const io::path_t& projectPath) const override;
@@ -90,7 +88,6 @@ public:
     // Quit for all
     void notifyAboutWindowWasQuited() override;
     void quitForAll() override;
-    void quitWindow(const modularity::ContextPtr& ctx) override;
     void quitAllAndRestartLast() override;
     void quitAllAndRunInstallation(const io::path_t& installerPath) override;
 
@@ -117,3 +114,5 @@ private:
     std::map<std::string, muse::ipc::IpcLock*> m_locks;
 };
 }
+
+#endif // MUSE_MI_MULTIINSTANCESPROVIDER_H

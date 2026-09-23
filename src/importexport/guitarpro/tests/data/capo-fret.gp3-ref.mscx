@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -24,21 +24,20 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Track 1</trackName>
       <Instrument id="cavaquinho">
-        <InstrumentLabel>
-          <longName>Track 1</longName>
-          </InstrumentLabel>
+        <longName>Track 1</longName>
         <trackName></trackName>
         <instrumentId>pluck.guitar</instrumentId>
         <singleNoteDynamics>0</singleNoteDynamics>
         <StringData>
           <frets>24</frets>
-          <string>40</string>
-          <string>45</string>
+          <string>36</string>
+          <string>43</string>
           <string>50</string>
           <string>55</string>
           <string>59</string>
-          <string>64</string>
+          <string>62</string>
           </StringData>
         <Channel>
           <program value="25"/>
@@ -87,40 +86,25 @@
             <eid>K_K</eid>
             <text><sym>metNoteQuarterUp</sym> = 70</text>
             </Tempo>
-          <StringTunings>
-            <visibleStrings></visibleStrings>
-            <StringData>
-              <frets>24</frets>
-              <string>36</string>
-              <string>43</string>
-              <string>50</string>
-              <string>55</string>
-              <string>59</string>
-              <string>62</string>
-              </StringData>
-            <eid>L_L</eid>
-            <style>string_tunings</style>
-            <text/>
-            </StringTunings>
           <Chord>
-            <eid>M_M</eid>
+            <eid>L_L</eid>
             <durationType>half</durationType>
             <Note>
-              <eid>N_N</eid>
+              <eid>M_M</eid>
               <pitch>52</pitch>
               <tpc>18</tpc>
               <fret>2</fret>
               <string>3</string>
               </Note>
             <Note>
-              <eid>O_O</eid>
+              <eid>N_N</eid>
               <pitch>55</pitch>
               <tpc>15</tpc>
               <fret>0</fret>
               <string>2</string>
               </Note>
             <Note>
-              <eid>P_P</eid>
+              <eid>O_O</eid>
               <pitch>59</pitch>
               <tpc>19</tpc>
               <fret>0</fret>
@@ -128,24 +112,24 @@
               </Note>
             </Chord>
           <Chord>
-            <eid>Q_Q</eid>
+            <eid>P_P</eid>
             <durationType>half</durationType>
             <Note>
-              <eid>R_R</eid>
+              <eid>Q_Q</eid>
               <pitch>53</pitch>
               <tpc>13</tpc>
               <fret>3</fret>
               <string>3</string>
               </Note>
             <Note>
-              <eid>S_S</eid>
+              <eid>R_R</eid>
               <pitch>57</pitch>
               <tpc>17</tpc>
               <fret>2</fret>
               <string>2</string>
               </Note>
             <Note>
-              <eid>T_T</eid>
+              <eid>S_S</eid>
               <pitch>60</pitch>
               <tpc>14</tpc>
               <fret>1</fret>
@@ -155,10 +139,10 @@
           </voice>
         </Measure>
       <Measure>
-        <eid>U_U</eid>
+        <eid>T_T</eid>
         <voice>
           <Rest>
-            <eid>V_V</eid>
+            <eid>U_U</eid>
             <durationType>measure</durationType>
             <duration>4/4</duration>
             </Rest>

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -22,11 +22,13 @@
 
 #pragma once
 
+#include <unordered_set>
 #include <variant>
 
 #include <QString>
 #include <QUrl>
 
+#include "containers.h"
 #include "io/path.h"
 #include "progress.h"
 #include "log.h"
@@ -343,5 +345,14 @@ inline std::vector<MigrationType> allMigrationTypes()
     };
 
     return types;
+}
+
+inline bool isAudioFileSuffix(const std::string& suffix)
+{
+    static const std::unordered_set<std::string> audioSuffixes {
+        "mp3", "wav", "ogg", "flac", "aac",
+    };
+
+    return muse::contains(audioSuffixes, suffix);
 }
 }

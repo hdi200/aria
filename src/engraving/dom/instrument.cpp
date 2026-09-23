@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -74,7 +74,8 @@ Instrument::Instrument(const Instrument& i)
 {
     m_id           = i.m_id;
     m_soundId      = i.m_soundId;
-    m_instrumentLabel = i.m_instrumentLabel;
+    m_longNames    = i.m_longNames;
+    m_shortNames   = i.m_shortNames;
     m_trackName    = i.m_trackName;
     m_minPitchA    = i.m_minPitchA;
     m_maxPitchA    = i.m_maxPitchA;
@@ -106,7 +107,8 @@ void Instrument::operator=(const Instrument& i)
 
     m_id           = i.m_id;
     m_soundId      = i.m_soundId;
-    m_instrumentLabel = i.m_instrumentLabel;
+    m_longNames    = i.m_longNames;
+    m_shortNames   = i.m_shortNames;
     m_trackName    = i.m_trackName;
     m_minPitchA    = i.m_minPitchA;
     m_maxPitchA    = i.m_maxPitchA;
@@ -141,6 +143,16 @@ Instrument::~Instrument()
     m_drumset = nullptr;
 }
 
+//---------------------------------------------------------
+//   StaffName
+//---------------------------------------------------------
+
+StaffName::StaffName(const String& xmlText, int pos)
+    : m_name(xmlText), m_pos(pos)
+{
+    TextBase::validateText(m_name); // enforce HTML encoding
+}
+
 String Instrument::recognizeMusicXmlId() const
 {
     // Return a MusicXML "Sound ID", which is essentially an instrument ID.
@@ -149,11 +161,15 @@ String Instrument::recognizeMusicXmlId() const
     static const String defaultMusicXmlPercussionId(u"drum.group"); // our General MIDI Percussion
 
     std::vector<String> nameList;
-    nameList.reserve(3);
+    nameList.reserve(1 + m_longNames.size() + m_shortNames.size());
 
     nameList.push_back(m_trackName);
-    nameList.push_back(m_instrumentLabel.longName());
-    nameList.push_back(m_instrumentLabel.shortName());
+    for (const StaffName& name : m_longNames) {
+        nameList.push_back(name.toString());
+    }
+    for (const StaffName& name : m_shortNames) {
+        nameList.push_back(name.toString());
+    }
 
     const InstrumentTemplate* tmplByName = mu::engraving::searchTemplateForInstrNameList(nameList, m_useDrumset);
 
@@ -805,7 +821,8 @@ void Instrument::setGlissandoStyle(GlissandoStyle style)
 
 bool Instrument::operator==(const Instrument& i) const
 {
-    bool equal = i.m_instrumentLabel == m_instrumentLabel;
+    bool equal = i.m_longNames == m_longNames;
+    equal &= i.m_shortNames == m_shortNames;
     equal &= i.m_trackName == m_trackName;
     equal &= i.m_id == m_id;
     equal &= i.m_soundId == m_soundId;
@@ -864,36 +881,33 @@ bool Instrument::isDifferentInstrument(const Instrument& i) const
 
 String Instrument::family() const
 {
-    static const String NO_FAMILY = u"-";
+    auto search = searchTemplateIndexForId(m_id);
 
-    if (m_familyCache.empty()) {
-        auto search = searchTemplateIndexForId(m_id);
-
-        if (search.instrTemplate) {
-            m_familyCache = search.instrTemplate->familyId();
-        } else {
-            m_familyCache = NO_FAMILY;
-        }
+    if (!search.instrTemplate) {
+        static String empty;
+        return empty;
     }
 
-    return m_familyCache == NO_FAMILY ? String() : m_familyCache;
+    return search.instrTemplate->familyId();
 }
 
-String Instrument::group() const
+String StaffName::toPlainText() const
 {
-    static const String NO_GROUP = u"-";
+    return TextBase::unEscape(m_name);
+}
 
-    if (m_groupCache.empty()) {
-        auto search = searchTemplateIndexForId(m_id);
+//---------------------------------------------------------
+//   operator==
+//---------------------------------------------------------
 
-        if (search.instrTemplate) {
-            m_groupCache = search.instrTemplate->groupId;
-        } else {
-            m_groupCache = NO_GROUP;
-        }
-    }
+bool StaffName::operator==(const StaffName& i) const
+{
+    return (i.m_pos == m_pos) && (i.m_name == m_name);
+}
 
-    return m_groupCache == NO_GROUP ? String() : m_groupCache;
+String StaffName::toString() const
+{
+    return m_name;
 }
 
 //---------------------------------------------------------
@@ -922,6 +936,50 @@ void Instrument::setDrumset(const Drumset* ds)
         m_useDrumset = false;
         m_drumset = 0;
     }
+}
+
+//---------------------------------------------------------
+//   setLongName
+//    f is in richtext format
+//---------------------------------------------------------
+
+void Instrument::setLongName(const String& f)
+{
+    m_longNames.clear();
+    if (f.size() > 0) {
+        m_longNames.push_back(StaffName(f, 0));
+    }
+}
+
+//---------------------------------------------------------
+//   setShortName
+//    f is in richtext format
+//---------------------------------------------------------
+
+void Instrument::setShortName(const String& f)
+{
+    m_shortNames.clear();
+    if (f.size() > 0) {
+        m_shortNames.push_back(StaffName(f, 0));
+    }
+}
+
+//---------------------------------------------------------
+//   addLongName
+//---------------------------------------------------------
+
+void Instrument::addLongName(const StaffName& f)
+{
+    m_longNames.push_back(f);
+}
+
+//---------------------------------------------------------
+//   addShortName
+//---------------------------------------------------------
+
+void Instrument::addShortName(const StaffName& f)
+{
+    m_shortNames.push_back(f);
 }
 
 size_t Instrument::cleffTypeCount() const
@@ -1057,6 +1115,36 @@ bool InstrumentList::contains(const String& instrumentId) const
     return false;
 }
 
+void Instrument::setLongNames(const StaffNameList& l)
+{
+    m_longNames = l;
+}
+
+const StaffNameList& Instrument::longNames() const
+{
+    return m_longNames;
+}
+
+void Instrument::setShortNames(const StaffNameList& l)
+{
+    m_shortNames = l;
+}
+
+const StaffNameList& Instrument::shortNames() const
+{
+    return m_shortNames;
+}
+
+void Instrument::appendLongName(const StaffName& n)
+{
+    m_longNames.push_back(n);
+}
+
+void Instrument::appendShortName(const StaffName& n)
+{
+    m_shortNames.push_back(n);
+}
+
 //---------------------------------------------------------
 //   trackName
 //---------------------------------------------------------
@@ -1073,22 +1161,22 @@ void Instrument::setTrackName(const String& s)
 
 String Instrument::nameAsXmlText() const
 {
-    return m_instrumentLabel.longName();
+    return !m_longNames.empty() ? m_longNames.front().name() : String();
 }
 
 String Instrument::nameAsPlainText() const
 {
-    return TextBase::unEscape(m_instrumentLabel.longName());
+    return !m_longNames.empty() ? m_longNames.front().toPlainText() : String();
 }
 
 String Instrument::abbreviatureAsXmlText() const
 {
-    return m_instrumentLabel.shortName();
+    return !m_shortNames.empty() ? m_shortNames.front().name() : String();
 }
 
 String Instrument::abbreviatureAsPlainText() const
 {
-    return TextBase::unEscape(m_instrumentLabel.shortName());
+    return !m_shortNames.empty() ? m_shortNames.front().toPlainText() : String();
 }
 
 Instrument Instrument::fromTemplate(const InstrumentTemplate* templ)
@@ -1097,7 +1185,14 @@ Instrument Instrument::fromTemplate(const InstrumentTemplate* templ)
     instrument.setSoundId(templ->soundId);
     instrument.setAmateurPitchRange(templ->minPitchA, templ->maxPitchA);
     instrument.setProfessionalPitchRange(templ->minPitchP, templ->maxPitchP);
-    instrument.setInstrumentName(templ->instrumentName);
+
+    for (const StaffName& sn : templ->longNames) {
+        instrument.addLongName(StaffName(sn.name(), sn.pos()));
+    }
+
+    for (const StaffName& sn : templ->shortNames) {
+        instrument.addShortName(StaffName(sn.name(), sn.pos()));
+    }
 
     instrument.setTrackName(templ->trackName);
     instrument.setTranspose(templ->transpose);

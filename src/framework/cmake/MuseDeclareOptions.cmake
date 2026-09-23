@@ -38,9 +38,6 @@ set(MUSE_MODULE_AUDIO_WORKMODE 1 CACHE STRING "Audio subsystem work mode")
 declare_muse_module_opt(AUDIOPLUGINS ON)
 
 declare_muse_module_opt(AUTOBOT ON)
-
-declare_muse_module_opt(AUTOMATION ON)
-
 declare_muse_module_opt(CLOUD ON)
 option(MUSE_MODULE_CLOUD_MUSESCORECOM "Enable MuseScore.com account" ON)
 
@@ -50,7 +47,6 @@ set(MUSE_MODULE_DIAGNOSTICS_CRASHPAD_HANDLER_PATH "" CACHE FILEPATH "Path to cus
 set(MUSE_MODULE_DIAGNOSTICS_CRASHREPORT_URL "" CACHE STRING "URL where to send crash reports")
 
 declare_muse_module_opt(DOCKWINDOW ON)
-option(MUSE_MODULE_DOCKWINDOW_KDDOCKWIDGETS_V2 "Use KDDockWidgets v2" OFF)
 
 declare_muse_module_opt(DRAW ON)
 option(MUSE_MODULE_DRAW_TRACE "Trace draw objects" OFF)
@@ -62,17 +58,13 @@ declare_muse_module_opt(GLOBAL ON)
 option(MUSE_MODULE_GLOBAL_LOGGER_DEBUGLEVEL "Enable logging debug level" ON)
 option(MUSE_MODULE_GLOBAL_MULTI_IOC "Enable multi ioc (multi windows)" OFF)
 
-declare_muse_module_opt(INTERACTIVE ON)
-option(MUSE_MODULE_INTERACTIVE_SYNC_SUPPORTED "Sync interactive supported" ON)
-
 declare_muse_module_opt(LANGUAGES ON)
 declare_muse_module_opt(LEARN ON)
+declare_muse_module_opt(MEDIA ON)
 declare_muse_module_opt(MIDI ON)
 declare_muse_module_opt(MIDIREMOTE ON)
 declare_muse_module_opt(MPE ON)
-
 declare_muse_module_opt(MULTIWINDOWS ON)
-option(MUSE_MODULE_MULTIWINDOWS_SINGLEPROC_MODE "Use single process mode for multi windows" OFF)
 
 declare_muse_module_opt(MUSESAMPLER ON)
 option(MUSE_MODULE_MUSESAMPLER_LOAD_IN_DEBUG "Load MuseSampler module in debug builds" OFF)
@@ -87,6 +79,7 @@ declare_muse_module_opt(TOURS ON)
 declare_muse_module_opt(UI ON)
 option(MUSE_MODULE_UI_DISABLE_MODALITY "Disable dialogs modality for testing purpose" OFF)
 option(MUSE_MODULE_UI_SYSTEMDRAG_SUPPORTED "System drag supported" ON)
+option(MUSE_MODULE_UI_SYNCINTERACTIVE_SUPPORTED "Sync interactive supported" ON)
 option(MUSE_MODULE_UI_NAVIGATION_EXCLUDEPROJECT "Exclude the main project view from navigation" ON)
 
 declare_muse_module_opt(UPDATE ON)
@@ -105,6 +98,7 @@ option(MUSE_COMPILE_BUILD_64 "Build 64 bit version" ON)
 option(MUSE_COMPILE_ASAN "Enable Address Sanitizer" OFF)
 option(MUSE_COMPILE_USE_PCH "Use precompiled headers." ON)
 option(MUSE_COMPILE_STRING_DEBUG_HACK "Enable string debug hack (only clang)" ON)
+option(MUSE_MULTICONTEXT_WIP "Enable transition code to support multi-context" OFF)
 
 # === Tests ===
 option(MUSE_ENABLE_UNIT_TESTS "Build framework unit tests" ON)

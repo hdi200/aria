@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2024 MuseScore Limited
+ * Copyright (C) 2024 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,11 +23,12 @@
 #include "percussionutilities.h"
 
 #include "engraving/dom/chord.h"
-#include "engraving/dom/factory.h"
-#include "engraving/dom/masterscore.h"
 #include "engraving/dom/note.h"
 #include "engraving/dom/stem.h"
-#include "engraving/rw/xmlreader.h"
+
+#include "engraving/dom/masterscore.h"
+
+#include "engraving/dom/factory.h"
 
 using namespace mu::notation;
 using namespace mu::engraving;
@@ -54,7 +55,7 @@ void PercussionUtilities::readDrumset(const muse::ByteArray& drumMapping, Drumse
 /// Returns a drum note prepared for preview.
 std::shared_ptr<Chord> PercussionUtilities::getDrumNoteForPreview(const Drumset* drumset, int pitch)
 {
-    double _spatium = paletteScoreProvider()->paletteScore()->style().spatium(); // TODO: Don't use palette here?
+    double _spatium = gpaletteScore->style().spatium(); // TODO: Don't use palette here?
 
     bool up = false;
     int line = drumset->line(pitch);
@@ -70,7 +71,7 @@ std::shared_ptr<Chord> PercussionUtilities::getDrumNoteForPreview(const Drumset*
         up = line > 4;
     }
 
-    auto chord = Factory::makeChord(paletteScoreProvider()->paletteScore()->dummy()->segment());
+    auto chord = Factory::makeChord(gpaletteScore->dummy()->segment());
     chord->setDurationType(DurationType::V_QUARTER);
     chord->setStemDirection(dir);
     chord->setIsUiItem(true);

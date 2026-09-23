@@ -33,9 +33,9 @@ from roundtrip_475 import DEFAULT_CORPUS, aria_resave_all, collect_inputs, mscor
 
 
 REPO = Path(__file__).resolve().parents[3]
-DEFAULT_ARIA = REPO / "build-aria-compat-host" / "score_render_musicxml_export"
+DEFAULT_ARIA = REPO / "build-aria-475-host" / "score_render_musicxml_export"
 DEFAULT_MSCORE = Path("/Applications/MuseScore 4.app/Contents/MacOS/mscore")
-DEFAULT_OUT_PARENT = REPO / "build-aria-compat-host" / "musicxml-export"
+DEFAULT_OUT_PARENT = REPO / "build-aria-475-host" / "musicxml-export"
 
 
 def local_name(tag):

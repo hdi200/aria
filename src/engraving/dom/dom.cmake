@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2021 MuseScore Limited
+# Copyright (C) 2021 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -286,7 +286,6 @@ set(DOM_SRC
     ${CMAKE_CURRENT_LIST_DIR}/staff.h
     ${CMAKE_CURRENT_LIST_DIR}/stafflines.cpp
     ${CMAKE_CURRENT_LIST_DIR}/stafflines.h
-    ${CMAKE_CURRENT_LIST_DIR}/stafflabel.h
     ${CMAKE_CURRENT_LIST_DIR}/staffstate.cpp
     ${CMAKE_CURRENT_LIST_DIR}/staffstate.h
     ${CMAKE_CURRENT_LIST_DIR}/stafftext.cpp

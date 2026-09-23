@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,7 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef MU_IMPORTEXPORT_PNGWRITER_H
+#define MU_IMPORTEXPORT_PNGWRITER_H
 
 #include "abstractimagewriter.h"
 
@@ -35,6 +36,9 @@ class PngWriter : public AbstractImageWriter
     muse::GlobalInject<IImagesExportConfiguration> configuration;
 
 public:
+    PngWriter(const muse::modularity::ContextPtr& iocCtx)
+        : AbstractImageWriter(iocCtx) {}
+
     std::vector<project::INotationWriter::UnitType> supportedUnitTypes() const override;
     muse::Ret write(notation::INotationPtr notation, muse::io::IODevice& dstDevice, const Options& options = Options()) override;
 
@@ -42,3 +46,5 @@ private:
     void convertImageToGrayscale(QImage& image);
 };
 }
+
+#endif // MU_IMPORTEXPORT_PNGWRITER_H

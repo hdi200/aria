@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2026 MuseScore Limited
+ * Copyright (C) 2026 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -264,9 +264,13 @@ bool Mnx_Tests::compareWithMscxReference(Score* score, const String& referencePa
     }
     return ScoreRW::saveScore(score, referenceAbsPath);
 #else
-    auto buffer = io::Buffer::opened(io::IODevice::WriteOnly);
+    io::Buffer buffer;
+    if (!buffer.open(io::IODevice::WriteOnly)) {
+        ADD_FAILURE() << "Failed to open buffer for MSCX output.";
+        return false;
+    }
 
-    if (!rw::RWRegister::writer()->writeScore(score, &buffer)) {
+    if (!rw::RWRegister::writer(score->iocContext())->writeScore(score, &buffer)) {
         ADD_FAILURE() << "Failed to serialize score to MSCX.";
         return false;
     }

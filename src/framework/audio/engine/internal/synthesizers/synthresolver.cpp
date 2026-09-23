@@ -43,7 +43,7 @@ void SynthResolver::init(const AudioInputParams& defaultInputParams, const Outpu
 }
 
 ISynthesizerPtr SynthResolver::resolveSynth(const TrackId trackId, const AudioInputParams& params, const audio::OutputSpec& spec,
-                                            const PlaybackSetupData& setupData, const muse::modularity::ContextPtr& iocCtx) const
+                                            const PlaybackSetupData& setupData) const
 {
     ONLY_AUDIO_ENGINE_THREAD;
 
@@ -68,14 +68,14 @@ ISynthesizerPtr SynthResolver::resolveSynth(const TrackId trackId, const AudioIn
         return nullptr;
     }
 
-    return resolver->resolveSynth(trackId, params, spec, iocCtx);
+    return resolver->resolveSynth(trackId, params, spec);
 }
 
-ISynthesizerPtr SynthResolver::resolveDefaultSynth(const TrackId trackId, const muse::modularity::ContextPtr& iocCtx) const
+ISynthesizerPtr SynthResolver::resolveDefaultSynth(const TrackId trackId) const
 {
     ONLY_AUDIO_ENGINE_THREAD;
 
-    return resolveSynth(trackId, m_defaultInputParams, m_defaultOutputSpec, {}, iocCtx);
+    return resolveSynth(trackId, m_defaultInputParams, m_defaultOutputSpec, {});
 }
 
 AudioInputParams SynthResolver::resolveDefaultInputParams() const
@@ -126,6 +126,15 @@ void SynthResolver::registerResolver(const AudioSourceType type, IResolverPtr re
     std::lock_guard lock(m_mutex);
 
     m_resolvers.insert_or_assign(type, std::move(resolver));
+}
+
+void SynthResolver::unregisterResolver(const AudioSourceType type)
+{
+    ONLY_AUDIO_MAIN_OR_ENGINE_THREAD;
+
+    std::lock_guard lock(m_mutex);
+
+    m_resolvers.erase(type);
 }
 
 void SynthResolver::clearSources()

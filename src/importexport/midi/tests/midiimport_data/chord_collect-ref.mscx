@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -28,11 +28,10 @@
           </StaffType>
         <defaultClef>G8vb</defaultClef>
         </Staff>
+      <trackName>Acoustic Guitar</trackName>
       <Instrument id="guitar-steel">
-        <InstrumentLabel>
-          <longName>Acoustic Guitar</longName>
-          <shortName>Guit.</shortName>
-          </InstrumentLabel>
+        <longName>Acoustic Guitar</longName>
+        <shortName>Guit.</shortName>
         <trackName>Acoustic Guitar</trackName>
         <minPitchP>40</minPitchP>
         <maxPitchP>84</maxPitchP>

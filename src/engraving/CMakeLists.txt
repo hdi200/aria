@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2021 MuseScore Limited
+# Copyright (C) 2021 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -69,7 +69,6 @@ target_sources(engraving PRIVATE
     engravingproject.h
     iengravingpluginapihelper.h
     iengravingconfiguration.h
-    iengravingcontextconfiguration.h
     iengravingfont.h
     iengravingfontsprovider.h
 
@@ -103,8 +102,6 @@ target_sources(engraving PRIVATE
 
     editing/addremoveelement.cpp
     editing/addremoveelement.h
-    editing/clonevoice.cpp
-    editing/clonevoice.h
     editing/cmd.cpp
     editing/cmd.h
     editing/edit.cpp
@@ -152,10 +149,8 @@ target_sources(engraving PRIVATE
     editing/edittie.h
     editing/edittremolo.cpp
     editing/edittremolo.h
-    editing/exchangevoices.cpp
-    editing/exchangevoices.h
-    editing/implodeexplode.cpp
-    editing/implodeexplode.h
+    editing/editvoicing.cpp
+    editing/editvoicing.h
     editing/inserttime.cpp
     editing/inserttime.h
     editing/elementeditdata.h
@@ -274,7 +269,7 @@ target_sources(engraving PRIVATE
 
     types/constants.h
     types/types.h
-    types/spatium.h
+    types/dimension.h
     types/fraction.h
     types/typesconv.cpp
     types/typesconv.h
@@ -345,16 +340,12 @@ else()
     target_sources(engraving PRIVATE
         internal/engravingconfiguration.cpp
         internal/engravingconfiguration.h
-        internal/engravingcontextconfiguration.cpp
-        internal/engravingcontextconfiguration.h
         internal/qmimedataadapter.cpp
         internal/qmimedataadapter.h
         internal/engravingfontsprovider.cpp
         internal/engravingfontsprovider.h
         internal/engravingfont.cpp
         internal/engravingfont.h
-        internal/palettescoreprovider.cpp
-        internal/palettescoreprovider.h
         ${API_V1_SRC}
     )
 endif()

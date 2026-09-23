@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>R_R</eid>
     <name>Klarinet in B♭</name>
@@ -21,8 +21,6 @@
       <pageEvenBottomMargin>0.590551</pageEvenBottomMargin>
       <pageOddTopMargin>0.590551</pageOddTopMargin>
       <pageOddBottomMargin>0.590551</pageOddBottomMargin>
-      <windsNameByGroup>0</windsNameByGroup>
-      <vocalsNameByGroup>0</vocalsNameByGroup>
       <lyricsDashMaxLength>0.8</lyricsDashMaxLength>
       <lyricsMelismaPad>0.1</lyricsMelismaPad>
       <lyricsDashYposRatio>0.6</lyricsDashYposRatio>
@@ -82,11 +80,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>Klarinet in B♭</trackName>
       <Instrument id="bb-clarinet">
-        <InstrumentLabel>
-          <longName>Klarinet in B♭</longName>
-          <shortName>Kl. in B♭</shortName>
-          </InstrumentLabel>
+        <longName>Klarinet in B♭</longName>
+        <shortName>Kl. in B♭</shortName>
         <trackName>Klarinet</trackName>
         <minPitchP>50</minPitchP>
         <maxPitchP>94</maxPitchP>

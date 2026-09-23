@@ -78,7 +78,7 @@ public:
     };
     Q_ENUM(State)
 
-    static DragController *instance(int ctx);
+    static DragController *instance();
 
     // Registers something that wants to be able to be dragged
     void registerDraggable(Draggable *);
@@ -110,8 +110,6 @@ public:
     ///@sa setResolveDropAreaFunc().
     ResolveDropAreaFunc resolveDropAreaFunc() const;
 
-    int ctx() const { return m_ctx; }
-
 Q_SIGNALS:
     void mousePressed();
     void manhattanLengthMove();
@@ -132,16 +130,12 @@ private:
     friend class StateInternalMDIDragging;
     friend class StateDropped;
     friend class StateDraggingWayland;
-    friend class ContextData;
 
-    DragController(int ctx, QObject * = nullptr);
+    DragController(QObject * = nullptr);
     StateBase *activeState() const;
     WidgetType *qtTopLevelUnderCursor() const;
     DropArea *dropAreaUnderCursor() const;
     Draggable *draggableForQObject(QObject *o) const;
-
-    const int m_ctx = 0;
-
     QPoint m_pressPos;
     QPoint m_offset;
 

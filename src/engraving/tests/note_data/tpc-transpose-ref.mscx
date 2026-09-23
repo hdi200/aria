@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -29,11 +29,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName>B♭ Clarinet</trackName>
       <Instrument id="bb-clarinet">
-        <InstrumentLabel>
-          <longName>B♭ Clarinet</longName>
-          <shortName>B♭ Cl.</shortName>
-          </InstrumentLabel>
+        <longName>B♭ Clarinet</longName>
+        <shortName>B♭ Cl.</shortName>
         <trackName>B♭ Clarinet</trackName>
         <minPitchP>50</minPitchP>
         <maxPitchP>94</maxPitchP>

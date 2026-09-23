@@ -35,5 +35,5 @@ std::string MpeModule::moduleName() const
 
 void MpeModule::registerExports()
 {
-    globalIoc()->registerExport<IArticulationProfilesRepository>(moduleName(), new ArticulationProfilesRepositoryStub());
+    ioc()->registerExport<IArticulationProfilesRepository>(moduleName(), new ArticulationProfilesRepositoryStub());
 }

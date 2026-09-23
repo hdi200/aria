@@ -36,11 +36,11 @@ std::string LearnModule::moduleName() const
 
 void LearnModule::registerExports()
 {
-    m_learnConfiguration = std::make_shared<LearnConfiguration>(globalCtx());
-    m_learnService = std::make_shared<LearnService>(globalCtx());
+    m_learnConfiguration = std::make_shared<LearnConfiguration>(iocContext());
+    m_learnService = std::make_shared<LearnService>(iocContext());
 
-    globalIoc()->registerExport<ILearnConfiguration>(moduleName(), m_learnConfiguration);
-    globalIoc()->registerExport<ILearnService>(moduleName(), m_learnService);
+    ioc()->registerExport<ILearnConfiguration>(moduleName(), m_learnConfiguration);
+    ioc()->registerExport<ILearnService>(moduleName(), m_learnService);
 }
 
 void LearnModule::onInit(const IApplication::RunMode&)

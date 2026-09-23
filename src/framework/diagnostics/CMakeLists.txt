@@ -4,7 +4,7 @@
 # MuseScore Studio
 # Music Composition & Notation
 #
-# Copyright (C) 2026 MuseScore Limited
+# Copyright (C) 2026 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -98,7 +98,7 @@ if (MUSE_MODULE_DIAGNOSTICS_CRASHPAD_CLIENT)
             set(MUSE_MODULE_DIAGNOSTICS_CRASHPAD_HANDLER_PATH ${CPAD_ROOT_PATH}/windows/x86-64/crashpad_handler.exe)
         endif()
 
-        install(PROGRAMS ${MUSE_MODULE_DIAGNOSTICS_CRASHPAD_HANDLER_PATH} DESTINATION ${INSTALL_BIN_DIR})
+        install(PROGRAMS ${MUSE_MODULE_DIAGNOSTICS_CRASHPAD_HANDLER_PATH} DESTINATION ${INSTALL_SUBDIR})
     elseif(OS_IS_MAC)
         if (NOT MUSE_MODULE_DIAGNOSTICS_CRASHPAD_HANDLER_PATH)
             set(MUSE_MODULE_DIAGNOSTICS_CRASHPAD_HANDLER_PATH ${CPAD_ROOT_PATH}/macos/crashpad_handler)

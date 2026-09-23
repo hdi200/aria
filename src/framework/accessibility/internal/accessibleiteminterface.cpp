@@ -64,7 +64,7 @@ QWindow* AccessibleItemInterface::window() const
         return window;
     }
 
-    return interactive()->topWindow();
+    return interactiveProvider()->topWindow();
 }
 
 QRect AccessibleItemInterface::rect() const

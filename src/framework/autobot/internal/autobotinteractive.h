@@ -24,7 +24,7 @@
 
 #include <memory>
 
-#include "interactive/iinteractive.h"
+#include "iinteractive.h"
 
 namespace muse::autobot {
 class AutobotInteractive : public IInteractive
@@ -103,19 +103,24 @@ public:
     Ret closeSync(const UriQuery& uri) override;
     Ret closeAllDialogsSync() override;
 
-    // state
     ValCh<Uri> currentUri() const override;
     RetVal<bool> isCurrentUriDialog() const override;
-    async::Notification currentUriAboutToBeChanged() const override;
     std::vector<Uri> stack() const override;
 
-    QWindow* topWindow() const override;
-    bool topWindowIsWidget() const override;
+    Ret openUrl(const std::string& url) const override;
+    Ret openUrl(const QUrl& url) const override;
+
+    Ret isAppExists(const std::string& appIdentifier) const override;
+    Ret canOpenApp(const UriQuery& uri) const override;
+    async::Promise<Ret> openApp(const UriQuery& uri) const override;
+
+    Ret revealInFileBrowser(const io::path_t& filePath) const override;
 
     // AutobotInteractive
     io::path_t selectedFilePath() const; // last selected file path
 
 private:
+
     std::shared_ptr<IInteractive> m_real = nullptr;
 
     io::path_t m_selectedFilePath;

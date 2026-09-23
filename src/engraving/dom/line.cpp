@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -1014,8 +1014,8 @@ bool SLine::setProperty(Pid id, const PropertyValue& v)
         setLineColor(v.value<Color>());
         break;
     case Pid::LINE_WIDTH:
-        if (v.type() == P_TYPE::ABSOLUTE) {
-            m_lineWidth = Spatium::fromAbsolute(v.value<double>(), spatium());
+        if (v.type() == P_TYPE::MILLIMETRE) {
+            m_lineWidth = Spatium::fromMM(v.value<Millimetre>(), spatium());
         } else if (v.type() == P_TYPE::SPATIUM) {
             m_lineWidth = v.value<Spatium>();
         }

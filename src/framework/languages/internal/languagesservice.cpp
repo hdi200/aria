@@ -46,6 +46,11 @@ using namespace muse;
 using namespace muse::languages;
 using namespace muse::network;
 
+static const QStringList LANGUAGE_RESOURCE_NAMES = {
+    "musescore",
+    "instruments"
+};
+
 static const std::string LANGUAGES_RESOURCE_NAME("LANGUAGES");
 
 void LanguagesService::init()
@@ -109,7 +114,7 @@ const Language& LanguagesService::placeholderLanguage() const
 
 bool LanguagesService::hasPlaceholderLanguage() const
 {
-    for (const QString& resourceName : configuration()->languageResourceNames()) {
+    for (const QString& resourceName : LANGUAGE_RESOURCE_NAMES) {
         if (!fileSystem()->exists(configuration()->builtinLanguageFilePath(resourceName, PLACEHOLDER_LANGUAGE_CODE))) {
             return false;
         }
@@ -141,12 +146,9 @@ void LanguagesService::loadLanguages()
 
     QJsonObject languagesObject = jsonDoc.object();
     for (auto it = languagesObject.begin(); it != languagesObject.end(); ++it) {
-        QJsonObject langObject = it.value().toObject();
-
         Language lang;
         lang.code = it.key();
-        lang.name = langObject.value("name").toString();
-        lang.fallbackLanguages = langObject.value("fallbackLanguages").toVariant().toStringList();
+        lang.name = it.value().toString();
 
         m_languagesHash.insert(it.key(), lang);
     }
@@ -177,40 +179,28 @@ void LanguagesService::setCurrentLanguage(const QString& languageCode)
         loadLanguage(lang);
     }
 
-    for (QTranslator* t : std::as_const(m_translators)) {
-        QCoreApplication::instance()->removeTranslator(t);
+    for (QTranslator* t : m_translators) {
+        qApp->removeTranslator(t);
         delete t;
     }
     m_translators.clear();
     m_translators.reserve(lang.files.size());
 
-    auto installTranslatorsForLanguage = [this](const Language& l) {
-        for (const io::path_t& file : l.files) {
-            QTranslator* translator = new QTranslator();
-            bool ok = translator->load(file.toQString());
-            if (ok) {
-                QCoreApplication::instance()->installTranslator(translator);
-                m_translators.push_back(translator);
-            } else {
-                LOGE() << "Error loading translator " << file.toQString();
-                delete translator;
-            }
+    for (const io::path_t& file : lang.files) {
+        QTranslator* translator = new QTranslator();
+        bool ok = translator->load(file.toQString());
+        if (ok) {
+            qApp->installTranslator(translator);
+            m_translators.push_back(translator);
+        } else {
+            LOGE() << "Error loading translator " << file.toQString();
+            delete translator;
         }
-    };
-
-    // Install translators for fallback languages in reverse order:
-    // Qt searches the most recently installed translator first,
-    // and the least recently installed translator last.
-    for (auto it = lang.fallbackLanguages.crbegin(); it != lang.fallbackLanguages.crend(); ++it) {
-        Language& fallbackLang = m_languagesHash[*it];
-        installTranslatorsForLanguage(fallbackLang);
     }
-
-    installTranslatorsForLanguage(lang);
 
     QLocale locale(lang.code);
     QLocale::setDefault(locale);
-    qGuiApp->setLayoutDirection(locale.textDirection());
+    qApp->setLayoutDirection(locale.textDirection());
 
     lang.direction = locale.textDirection();
 
@@ -281,29 +271,6 @@ QString LanguagesService::effectiveLanguageCode(QString languageCode) const
 
 Ret LanguagesService::loadLanguage(Language& lang)
 {
-    Ret ret = doLoadLanguage(lang);
-    if (!ret) {
-        LOGE() << "Failed to load language " << lang.code << ": " << ret.toString();
-        return ret;
-    }
-
-    for (const QString& fallbackCode : lang.fallbackLanguages) {
-        Language& fallbackLang = m_languagesHash[fallbackCode];
-
-        if (!fallbackLang.isLoaded()) {
-            ret = doLoadLanguage(fallbackLang);
-            if (!ret) {
-                LOGE() << "Failed to load fallback language " << fallbackLang.code << ": " << ret.toString();
-                return ret;
-            }
-        }
-    }
-
-    return muse::make_ok();
-}
-
-Ret LanguagesService::doLoadLanguage(Language& lang)
-{
     io::path_t languagesAppDataPath = configuration()->languagesAppDataPath();
     io::path_t languagesUserAppDataPath = configuration()->languagesUserAppDataPath();
 
@@ -329,7 +296,7 @@ Ret LanguagesService::doLoadLanguage(Language& lang)
         lang.files[resourceName] = useUserPath ? userFilePath : appFilePath;
     }
 
-    for (const QString& resourceName : configuration()->languageResourceNames()) {
+    for (const QString& resourceName : LANGUAGE_RESOURCE_NAMES) {
         if (!lang.files.contains(resourceName)) {
             LOGE() << "Could not find resource " << resourceName << " for language " << lang.code;
             return muse::make_ret(muse::Ret::Code::InternalError);
@@ -341,16 +308,14 @@ Ret LanguagesService::doLoadLanguage(Language& lang)
 
 Progress LanguagesService::update(const QString& languageCode)
 {
-    if (m_languageUpdateInProgress) {
-        LOGW() << "Language update already in progress";
-        return {};
-    }
-
-    m_languageUpdateInProgress = true;
-
     QString effectiveLanguageCode = this->effectiveLanguageCode(languageCode);
     IF_ASSERT_FAILED(!effectiveLanguageCode.isEmpty()) {
         return {};
+    }
+
+    auto progressIt = m_updateOperationsHash.find(effectiveLanguageCode);
+    if (progressIt != m_updateOperationsHash.end()) {
+        return progressIt.value();
     }
 
     Language& lang = m_languagesHash[effectiveLanguageCode];
@@ -358,41 +323,43 @@ Progress LanguagesService::update(const QString& languageCode)
         loadLanguage(lang);
     }
 
+    auto finishProgress = [this, effectiveLanguageCode](const Ret& ret) {
+        m_updateOperationsHash[effectiveLanguageCode].finish(ret);
+        m_updateOperationsHash.remove(effectiveLanguageCode);
+    };
+
+    auto updateFinished = [this, effectiveLanguageCode, finishProgress](const muse::Ret& ret) {
+        if (ret) {
+            m_restartRequiredToApplyLanguage = true;
+            m_restartRequiredToApplyLanguageChanged.send(m_restartRequiredToApplyLanguage);
+        }
+
+        finishProgress(ret);
+    };
+
+    auto updateCheckFinished = [this, effectiveLanguageCode, updateFinished, finishProgress](const muse::RetVal<bool>& res) {
+        if (!res.ret) {
+            finishProgress(res.ret);
+            return;
+        }
+
+        if (!res.val) {
+            finishProgress(make_ret(Err::AlreadyUpToDate));
+            return;
+        }
+
+        updateLanguage(effectiveLanguageCode, updateFinished);
+    };
+
     if (!m_networkManager) {
         m_networkManager = networkManagerCreator()->makeNetworkManager();
     }
 
-    Progress progress;
+    Progress& progress = m_updateOperationsHash[effectiveLanguageCode];
     progress.start();
     progress.progress(0, 0, muse::trc("global", "Checking for updates…"));
 
-    downloadServerLanguagesInfo(
-        effectiveLanguageCode,
-        [this, languageCode, progress]( const RetVal<QJsonObject>& res) mutable {
-        if (!res.ret) {
-            LOGE() << "Failed to download server languages info: " << res.ret.toString();
-            progress.finish(res.ret);
-            return;
-        }
-
-        QJsonObject serverLanguagesInfo = res.val;
-        QStringList languagesToUpdate = this->languagesToUpdate(languageCode, serverLanguagesInfo);
-
-        if (languagesToUpdate.isEmpty()) {
-            progress.finish(make_ret(Err::AlreadyUpToDate));
-            return;
-        }
-
-        doUpdateLanguages(languagesToUpdate, progress, [this, progress](const Ret& ret) mutable {
-            m_languageUpdateInProgress = false;
-            progress.finish(ret);
-
-            if (ret) {
-                m_restartRequiredToApplyLanguage = true;
-                m_restartRequiredToApplyLanguageChanged.send(true);
-            }
-        });
-    });
+    checkUpdateAvailable(effectiveLanguageCode, updateCheckFinished);
 
     return progress;
 }
@@ -407,131 +374,70 @@ async::Channel<bool> LanguagesService::restartRequiredToApplyLanguageChanged() c
     return m_restartRequiredToApplyLanguageChanged;
 }
 
-void LanguagesService::downloadServerLanguagesInfo(const QString& languageCode, std::function<void(const RetVal<QJsonObject>&)> finished)
+void LanguagesService::checkUpdateAvailable(const QString& languageCode, std::function<void(const RetVal<bool>&)> finished)
 {
     auto buff = std::make_shared<QBuffer>();
     RetVal<Progress> progress = m_networkManager->get(configuration()->languagesUpdateUrl().toString(), buff);
     if (!progress.ret) {
-        finished(RetVal<QJsonObject>::make_ret(progress.ret));
+        finished(RetVal<bool>::make_ret(progress.ret));
         return;
     }
 
-    progress.val.finished().onReceive(this, [languageCode, buff, finished](const ProgressResult& res) {
+    progress.val.finished().onReceive(this, [this, languageCode, buff, finished](const ProgressResult& res) {
         if (!res.ret) {
-            finished(RetVal<QJsonObject>::make_ret(res.ret));
+            finished(RetVal<bool>::make_ret(res.ret));
             return;
         }
 
         QJsonParseError err;
         QJsonDocument jsonDoc = QJsonDocument::fromJson(buff->data(), &err);
         if (err.error != QJsonParseError::NoError || !jsonDoc.isObject()) {
-            finished(RetVal<QJsonObject>::make_ret(make_ret(Err::ErrorInvalidServerLanguagesInfo)));
+            finished(RetVal<bool>::make_ret(make_ret(Err::ErrorParseConfig)));
             return;
         }
 
-        finished(RetVal<QJsonObject>::make_ok(jsonDoc.object()));
-    });
-}
+        QJsonObject languageObject = jsonDoc.object().value(languageCode).toObject();
+        const Language& language = m_languagesHash[languageCode];
 
-QStringList LanguagesService::languagesToUpdate(const QString& mainLanguageCode, const QJsonObject& serverLanguagesInfo) const
-{
-    QStringList languagesToUpdate;
+        bool shouldUpdate = false;
 
-    auto languageNeedsUpdate = [this, &serverLanguagesInfo](const QString& code) {
-        const Language& lang = m_languagesHash[code];
-        const QJsonObject languageObject = serverLanguagesInfo.value(code).toObject();
-
-        for (const QString& resource : configuration()->languageResourceNames()) {
-            RetVal<QString> hash = fileHash(lang.files[resource]);
+        for (const QString& resource : LANGUAGE_RESOURCE_NAMES) {
+            RetVal<QString> hash = fileHash(language.files[resource]);
             QString latestHash = languageObject.value(resource).toObject().value("hash").toString();
 
             if (!hash.ret || hash.val != latestHash) {
-                return true;
+                shouldUpdate = true;
+                break;
             }
         }
 
-        return false;
-    };
-
-    if (languageNeedsUpdate(mainLanguageCode)) {
-        languagesToUpdate.append(mainLanguageCode);
-    }
-
-    for (const QString& fallbackCode : m_languagesHash[mainLanguageCode].fallbackLanguages) {
-        if (languageNeedsUpdate(fallbackCode)) {
-            languagesToUpdate.append(fallbackCode);
-        }
-    }
-
-    return languagesToUpdate;
+        finished(RetVal<bool>::make_ok(shouldUpdate));
+    });
 }
 
-void LanguagesService::doUpdateLanguages(const QStringList& languageCodes, Progress overallProgress,
-                                         std::function<void(const Ret&)> overallFinished)
-{
-    assert(!languageCodes.empty());
-
-    // Can't create recursion with self-capturing lambda, because we can't
-    // capture any local variable by reference (they will have been destroyed by
-    // the time the lambda is executed). So we pass the lambda as a parameter
-    // instead. The type of this parameter cannot be written directly, as it
-    // would be a recursive type.
-    auto updateLanguage
-        = [this, languageCodes, overallProgress, overallFinished](int languageIndex, auto updateNextLanguage) mutable -> void {
-        auto progressCallback
-            = [languageCodes, overallProgress, languageIndex](int64_t current, int64_t total, const std::string& msg) mutable {
-            const int64_t overallTotal = languageCodes.size() * 10000;
-            const int64_t overallCurrent = languageIndex * 10000 + current * 10000 / total;
-            overallProgress.progress(overallCurrent, overallTotal, msg);
-        };
-
-        auto finished
-            = [languageCodes, overallFinished, languageIndex, updateNextLanguage](const Ret& ret) mutable {
-            if (ret) {
-                if (++languageIndex < languageCodes.size()) {
-                    updateNextLanguage(languageIndex, updateNextLanguage);
-                } else {
-                    overallFinished(make_ok());
-                }
-            } else {
-                overallFinished(ret);
-            }
-        };
-
-        doUpdateLanguage(languageCodes[languageIndex], progressCallback, finished);
-    };
-
-    updateLanguage(0, updateLanguage);
-}
-
-void LanguagesService::doUpdateLanguage(const QString& languageCode,
-                                        std::function<void(int64_t current, int64_t total, const std::string&)> progressCallback,
-                                        std::function<void(const Ret&)> finished)
+void LanguagesService::updateLanguage(const QString& languageCode, std::function<void(const Ret&)> finished)
 {
     auto qbuff = std::make_shared<QBuffer>();
-    const QUrl url = configuration()->languageFileServerUrl(languageCode);
+    QUrl url = configuration()->languageFileServerUrl(languageCode);
     RetVal<Progress> downloadProgress = m_networkManager->get(url, qbuff);
     if (!downloadProgress.ret) {
         finished(make_ret(Err::ErrorDownloadLanguage));
         return;
     }
 
-    const std::string downloadingMsg = muse::qtrc("global", "Downloading %1…").arg(languageCode).toStdString();
-    progressCallback(0, 1, downloadingMsg);
+    m_updateOperationsHash[languageCode].progress(0, 0, muse::trc("global", "Downloading…"));
 
-    downloadProgress.val.progressChanged().onReceive(this,
-                                                     [progressCallback, downloadingMsg](int64_t current, int64_t total, const std::string&) {
-        progressCallback(current, total,
-                         downloadingMsg);
+    downloadProgress.val.progressChanged().onReceive(this, [this, languageCode](int64_t current, int64_t total, const std::string&) {
+        m_updateOperationsHash[languageCode].progress(current, total, muse::trc("global", "Downloading…"));
     });
 
-    downloadProgress.val.finished().onReceive(this, [this, progressCallback, finished, languageCode, qbuff](const ProgressResult& res) {
+    downloadProgress.val.finished().onReceive(this, [this, languageCode, qbuff, finished](const ProgressResult& res) {
         if (!res.ret) {
             finished(make_ret(Err::ErrorDownloadLanguage));
             return;
         }
 
-        progressCallback(1, 1, muse::qtrc("global", "Unpacking %1…").arg(languageCode).toStdString());
+        m_updateOperationsHash[languageCode].progress(0, 0, muse::trc("global", "Unpacking…"));
 
         Ret ret = unpackAndWriteLanguage(qbuff->data());
         finished(ret);

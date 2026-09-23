@@ -4,7 +4,7 @@
 # MuseScore
 # Music Composition & Notation
 #
-# Copyright (C) 2025 MuseScore Limited
+# Copyright (C) 2025 MuseScore Limited and others
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -48,8 +48,11 @@ qt_add_qml_module(muse_ui_qml
         qmldrag.h
         windowsmodel.cpp
         windowsmodel.h
+        dev/interactivetestsmodel.cpp
+        dev/interactivetestsmodel.h
 
     QML_FILES
+        InteractiveProvider.qml
         ToolTipProvider.qml
 
     IMPORTS
@@ -59,7 +62,7 @@ qt_add_qml_module(muse_ui_qml
 fixup_qml_module_dependencies(muse_ui_qml)
 
 # Necessary for the auto-generated sources
-target_include_directories(muse_ui_qml PRIVATE internal)
+target_include_directories(muse_ui_qml PRIVATE dev internal)
 
 if (MUSE_MODULE_UI_TESTS)
     add_subdirectory(tests)

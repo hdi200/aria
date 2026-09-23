@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,12 +27,14 @@
 
 #include "modularity/ioc.h"
 #include "async/asyncable.h"
+
 #include "audio/main/iaudioconfiguration.h"
 #include "audio/iaudiodrivercontroller.h"
 #include "midi/imidiconfiguration.h"
 #include "midi/imidioutport.h"
 #include "midi/imidiinport.h"
 #include "playback/iplaybackconfiguration.h"
+#include "global/iinteractive.h"
 
 namespace mu::preferences {
 class AudioMidiPreferencesModel : public QObject, public muse::Contextable, public muse::async::Asyncable
@@ -59,13 +61,16 @@ class AudioMidiPreferencesModel : public QObject, public muse::Contextable, publ
         bool autoProcessOnlineSoundsInBackground READ autoProcessOnlineSoundsInBackground WRITE setAutoProcessOnlineSoundsInBackground NOTIFY autoProcessOnlineSoundsInBackgroundChanged)
     Q_PROPERTY(
         int onlineSoundsShowProgressBarMode READ onlineSoundsShowProgressBarMode WRITE setOnlineSoundsShowProgressBarMode NOTIFY onlineSoundsShowProgressBarModeChanged)
+    Q_PROPERTY(
+        bool useSoundFontLowPassFilter READ useSoundFontLowPassFilter WRITE setUseSoundFontLowPassFilter NOTIFY useSoundFontLowPassFilterChanged)
 
     muse::GlobalInject<muse::audio::IAudioConfiguration> audioConfiguration;
     muse::GlobalInject<muse::midi::IMidiConfiguration> midiConfiguration;
     muse::GlobalInject<playback::IPlaybackConfiguration> playbackConfiguration;
-    muse::GlobalInject<muse::midi::IMidiOutPort> midiOutPort;
-    muse::GlobalInject<muse::midi::IMidiInPort> midiInPort;
     muse::ContextInject<muse::audio::IAudioDriverController> audioDriverController = { this };
+    muse::ContextInject<muse::midi::IMidiOutPort> midiOutPort = { this };
+    muse::ContextInject<muse::midi::IMidiInPort> midiInPort = { this };
+    muse::ContextInject<muse::IInteractive> interactive = { this };
 
 public:
     explicit AudioMidiPreferencesModel(QObject* parent = nullptr);
@@ -97,6 +102,7 @@ public:
     bool shouldShowOnlineSoundsProcessingError() const;
     bool autoProcessOnlineSoundsInBackground() const;
     int onlineSoundsShowProgressBarMode() const;
+    bool useSoundFontLowPassFilter() const;
 
 public slots:
     void setCurrentAudioApiIndex(int index);
@@ -108,6 +114,7 @@ public slots:
     void setShouldShowOnlineSoundsProcessingError(bool value);
     void setAutoProcessOnlineSoundsInBackground(bool value);
     void setOnlineSoundsShowProgressBarMode(int mode);
+    void setUseSoundFontLowPassFilter(bool value);
 
 signals:
     void currentAudioApiIndexChanged(int index);
@@ -124,6 +131,7 @@ signals:
     void shouldShowOnlineSoundsProcessingErrorChanged();
     void autoProcessOnlineSoundsInBackgroundChanged();
     void onlineSoundsShowProgressBarModeChanged();
+    void useSoundFontLowPassFilterChanged();
 
 private:
     muse::midi::MidiDeviceID midiInputDeviceId(int index) const;

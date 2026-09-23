@@ -37,12 +37,12 @@
 
 using namespace KDDockWidgets;
 
-MultiSplitter::MultiSplitter(int ctx, QWidgetOrQuick *parent)
-    : LayoutWidget(ctx, parent)
+MultiSplitter::MultiSplitter(QWidgetOrQuick *parent)
+    : LayoutWidget(parent)
 {
     Q_ASSERT(parent);
     setRootItem(new Layouting::ItemBoxContainer(this));
-    DockRegistry::self(ctx)->registerLayout(this);
+    DockRegistry::self()->registerLayout(this);
 
     setLayoutSize(parent->size());
 
@@ -139,7 +139,7 @@ void MultiSplitter::addWidget(QWidgetOrQuick *w, Location location,
         newItem->setGuestWidget(frame);
     } else if (dw) {
         newItem = new Layouting::Item(this);
-        frame = Config::self(m_ctx).frameworkWidgetFactory()->createFrame();
+        frame = Config::self().frameworkWidgetFactory()->createFrame();
         newItem->setGuestWidget(frame);
         frame->addWidget(dw, option);
     } else if (auto ms = qobject_cast<MultiSplitter *>(w)) {

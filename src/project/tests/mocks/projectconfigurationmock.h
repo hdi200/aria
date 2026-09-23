@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -52,6 +52,7 @@ public:
     MOCK_METHOD(void, setUserProjectsPath, (const muse::io::path_t&), (override));
     MOCK_METHOD(muse::async::Channel<muse::io::path_t>, userProjectsPathChanged, (), (const, override));
     MOCK_METHOD(muse::io::path_t, defaultUserProjectsPath, (), (const, override));
+    MOCK_METHOD(muse::io::path_t, defaultOpenProjectsPath, (), (const, override));
 
     MOCK_METHOD(bool, shouldAskSaveLocationType, (), (const, override));
     MOCK_METHOD(void, setShouldAskSaveLocationType, (bool), (override));
@@ -109,10 +110,16 @@ public:
 
     MOCK_METHOD(muse::io::path_t, newProjectTemporaryPath, (), (const, override));
 
+    MOCK_METHOD(bool, isAccessibleEnabled, (), (const, override));
+
     MOCK_METHOD(bool, shouldDestinationFolderBeOpenedOnExport, (), (const, override));
     MOCK_METHOD(void, setShouldDestinationFolderBeOpenedOnExport, (bool), (override));
 
     MOCK_METHOD(QUrl, supportForumUrl, (), (const, override));
+
+    MOCK_METHOD(QUrl, dotComBugReportUrl, (), (const, override));
+
+    MOCK_METHOD(QUrl, scoreUploadingGuidelinesUrl, (), (const, override));
 
     MOCK_METHOD(bool, openDetailedProjectUploadedDialog, (), (const, override));
     MOCK_METHOD(void, setOpenDetailedProjectUploadedDialog, (bool), (override));
@@ -140,6 +147,15 @@ public:
 
     MOCK_METHOD(bool, createBackupBeforeSaving, (), (const, override));
     MOCK_METHOD(void, setCreateBackupBeforeSaving, (bool), (override));
+
+    MOCK_METHOD(bool, showConvertFileProcessingDialog, (), (const, override));
+    MOCK_METHOD(void, setShowConvertFileProcessingDialog, (bool), (override));
+
+    MOCK_METHOD(muse::io::path_t, convertedScoresPath, (), (const, override));
+    MOCK_METHOD(muse::io::path_t, pendingConvertsJsonPath, (), (const, override));
+
+    MOCK_METHOD(std::string, uniqueFileNameAddition, (const muse::io::path_t&, const muse::io::path_t&, const std::string&),
+                (const, override));
 };
 }
 

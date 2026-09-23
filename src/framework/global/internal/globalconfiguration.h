@@ -28,12 +28,13 @@
 #include "../iapplication.h"
 
 namespace muse {
-class GlobalConfiguration : public IGlobalConfiguration
+class GlobalConfiguration : public IGlobalConfiguration, public Contextable
 {
-    GlobalInject<IApplication> application;
+    ContextInject<IApplication> application{ this };
 
 public:
-    GlobalConfiguration() {}
+    GlobalConfiguration(const modularity::ContextPtr& ctx)
+        : Contextable(ctx) {}
 
     void init();
 
@@ -59,6 +60,7 @@ public:
     bool metricUnit() const override;
     void setMetricUnit(bool metricUnit) override;
 
+    std::string museScoreUrl() const override;
     std::string museHubWebUrl() const override;
 
     bool highResolutionTimers() const override;

@@ -23,7 +23,7 @@
 
 #include "modularity/ioc.h"
 
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 
 #include "internal/extensionsprovider.h"
 #include "internal/extensionsconfiguration.h"
@@ -42,32 +42,34 @@
 using namespace muse::extensions;
 using namespace muse::modularity;
 
-static const std::string mname("extensions");
-
 std::string ExtensionsModule::moduleName() const
 {
-    return mname;
+    return "extensions";
 }
 
 void ExtensionsModule::registerExports()
 {
-    m_configuration = std::make_shared<ExtensionsConfiguration>(globalCtx());
+    m_configuration = std::make_shared<ExtensionsConfiguration>(iocContext());
+    m_provider = std::make_shared<ExtensionsProvider>(iocContext());
     m_execPointsRegister = std::make_shared<ExtensionsExecPointsRegister>();
 
-    globalIoc()->registerExport<IExtensionsConfiguration>(mname, m_configuration);
-    globalIoc()->registerExport<IExtensionsExecPointsRegister>(mname, m_execPointsRegister);
+    ioc()->registerExport<IExtensionsProvider>(moduleName(), m_provider);
+    ioc()->registerExport<IExtensionsConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IExtensionsUiEngine>(moduleName(), new ExtensionsUiEngine(iocContext()));
+    ioc()->registerExport<IExtensionInstaller>(moduleName(), new ExtensionInstaller(iocContext()));
+    ioc()->registerExport<IExtensionsExecPointsRegister>(moduleName(), m_execPointsRegister);
 }
 
 void ExtensionsModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<interactive::IInteractiveUriRegister>(mname);
+    auto ir = ioc()->resolve<ui::IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerQmlUri(Uri("muse://extensions/viewer"), "Muse.Extensions", "ExtensionViewerDialog");
         ir->registerQmlUri(Uri("muse://extensions/apidump"), "Muse.Extensions", "ExtensionsApiDumpDialog");
     }
 
-    m_execPointsRegister->reg(mname, { EXEC_DISABLED, TranslatableString("extensions", "Disabled") });
-    m_execPointsRegister->reg(mname, { EXEC_MANUALLY, TranslatableString("extensions", "Manually") });
+    m_execPointsRegister->reg(moduleName(), { EXEC_DISABLED, TranslatableString("extensions", "Disabled") });
+    m_execPointsRegister->reg(moduleName(), { EXEC_MANUALLY, TranslatableString("extensions", "Manually") });
 }
 
 void ExtensionsModule::registerApi()
@@ -78,9 +80,10 @@ void ExtensionsModule::registerApi()
 void ExtensionsModule::onInit(const IApplication::RunMode&)
 {
     m_configuration->init();
+    m_provider->reloadExtensions();
 
 #ifdef MUSE_MODULE_DIAGNOSTICS
-    auto pr = globalIoc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(mname);
+    auto pr = ioc()->resolve<muse::diagnostics::IDiagnosticsPathsRegister>(moduleName());
     if (pr) {
         pr->reg("extensions: defaultPath", m_configuration->defaultPath());
         pr->reg("extensions: userPath", m_configuration->userPath());
@@ -99,15 +102,9 @@ IContextSetup* ExtensionsModule::newContext(const muse::modularity::ContextPtr& 
 void ExtensionsContext::registerExports()
 {
     m_actionController = std::make_shared<ExtensionsActionController>(iocContext());
-    m_provider = std::make_shared<ExtensionsProvider>(iocContext());
-
-    ioc()->registerExport<IExtensionsUiEngine>(mname, new ExtensionsUiEngine(iocContext()));
-    ioc()->registerExport<IExtensionsProvider>(mname, m_provider);
-    ioc()->registerExport<IExtensionInstaller>(mname, new ExtensionInstaller(iocContext()));
 }
 
 void ExtensionsContext::onInit(const IApplication::RunMode&)
 {
     m_actionController->init();
-    m_provider->reloadExtensions();
 }

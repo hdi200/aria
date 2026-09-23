@@ -29,13 +29,13 @@
 #include "muse_framework_config.h"
 
 namespace muse::mi {
-#ifdef MUSE_MODULE_MULTIWINDOWS_SINGLEPROC_MODE
+#ifdef MUSE_MULTICONTEXT_WIP
 class SingleProcessProvider;
 #else
 class MultiProcessProvider;
 #endif
 
-class MultiWindowsModule : public modularity::IModuleSetup
+class MultiInstancesModule : public modularity::IModuleSetup
 {
 public:
     std::string moduleName() const override;
@@ -43,25 +43,11 @@ public:
     void resolveImports() override;
     void onPreInit(const IApplication::RunMode& mode) override;
 
-    modularity::IContextSetup* newContext(const muse::modularity::ContextPtr& ctx) const override;
-
 private:
-#ifdef MUSE_MODULE_MULTIWINDOWS_SINGLEPROC_MODE
+#ifdef MUSE_MULTICONTEXT_WIP
     std::shared_ptr<SingleProcessProvider> m_windowsProvider;
 #else
     std::shared_ptr<MultiProcessProvider> m_windowsProvider;
 #endif
-};
-
-class MultiWindowsContext : public modularity::IContextSetup
-{
-public:
-    MultiWindowsContext(const modularity::ContextPtr& ctx)
-        : modularity::IContextSetup(ctx)
-    {
-    }
-
-    void resolveImports() override;
-    void onInit(const IApplication::RunMode& mode) override;
 };
 }

@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -19,8 +19,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#pragma once
+#ifndef MU_PLAYBACK_PLAYBACKCONFIGURATION_H
+#define MU_PLAYBACK_PLAYBACKCONFIGURATION_H
 
 #include "../iplaybackconfiguration.h"
 #include "async/asyncable.h"
@@ -30,13 +30,15 @@
 #include "audio/main/iaudioconfiguration.h"
 
 namespace mu::playback {
-class PlaybackConfiguration : public IPlaybackConfiguration, public muse::async::Asyncable
+class PlaybackConfiguration : public IPlaybackConfiguration, public muse::async::Asyncable, public muse::Contextable
 {
     muse::GlobalInject<muse::audio::IAudioConfiguration> audioConfiguration;
-    muse::GlobalInject<muse::musesampler::IMuseSamplerInfo> musesamplerInfo;
+    muse::ContextInject<muse::musesampler::IMuseSamplerInfo> musesamplerInfo = { this };
 
 public:
-    PlaybackConfiguration() = default;
+
+    PlaybackConfiguration(const muse::modularity::ContextPtr& iocCtx)
+        : muse::Contextable(iocCtx) {}
 
     void init();
 
@@ -121,3 +123,5 @@ private:
     muse::async::Channel<bool> m_muteHiddenInstrumentsChanged;
 };
 }
+
+#endif // MU_PLAYBACK_PLAYBACKCONFIGURATION_H

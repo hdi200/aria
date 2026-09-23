@@ -24,9 +24,10 @@
 
 #include "modularity/ioc.h"
 
-#include "interactive/iinteractiveuriregister.h"
+#include "ui/iinteractiveuriregister.h"
 
 using namespace muse::uicomponents;
+using namespace muse::ui;
 using namespace muse::modularity;
 
 std::string UiComponentsModule::moduleName() const
@@ -36,7 +37,7 @@ std::string UiComponentsModule::moduleName() const
 
 void UiComponentsModule::resolveImports()
 {
-    auto ir = globalIoc()->resolve<interactive::IInteractiveUriRegister>(moduleName());
+    auto ir = ioc()->resolve<IInteractiveUriRegister>(moduleName());
     if (ir) {
         ir->registerQmlUri(Uri("muse://interactive/selectmultipledirectories"), "Muse.UiComponents", "SelectMultipleDirectoriesDialog");
     }

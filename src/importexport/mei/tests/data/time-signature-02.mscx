@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<museScore version="5.00">
+<museScore version="4.70">
   <Score>
     <eid>B_B</eid>
     <Division>480</Division>
@@ -28,11 +28,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="piano">
-        <InstrumentLabel>
-          <longName>Clarinet in B♭</longName>
-          <shortName>Cl. in B♭</shortName>
-          </InstrumentLabel>
+        <longName>Clarinet in B♭</longName>
+        <shortName>Cl. in B♭</shortName>
         <trackName></trackName>
         <transposeDiatonic>-1</transposeDiatonic>
         <transposeChromatic>-2</transposeChromatic>
@@ -48,11 +47,10 @@
           <name>stdNormal</name>
           </StaffType>
         </Staff>
+      <trackName></trackName>
       <Instrument id="trombone">
-        <InstrumentLabel>
-          <longName>Trombone</longName>
-          <shortName>Tbn.</shortName>
-          </InstrumentLabel>
+        <longName>Trombone</longName>
+        <shortName>Tbn.</shortName>
         <trackName></trackName>
         <instrumentId>brass.trombone</instrumentId>
         <Channel>

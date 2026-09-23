@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -40,9 +40,9 @@ class DrumsetPalette : public PaletteScrollArea, public muse::Contextable
 {
     Q_OBJECT
 
-    muse::GlobalInject<engraving::rendering::ISingleRenderer> engravingRenderer;
     muse::ContextInject<muse::actions::IActionsDispatcher> dispatcher = { this };
     muse::ContextInject<playback::IPlaybackController> playback = { this };
+    muse::ContextInject<engraving::rendering::ISingleRenderer> engravingRenderer = { this };
 
 public:
     explicit DrumsetPalette(QWidget* parent = nullptr);

@@ -27,23 +27,19 @@
 #include "async/asyncable.h"
 
 #include "imusesamplercheckupdateservice.h"
+#include "global/iinteractive.h"
 #include "global/iprocess.h"
 #include "global/iglobalconfiguration.h"
 #include "actions/iactionsdispatcher.h"
-#include "interactive/iinteractive.h"
-#include "interactive/iplatforminteractive.h"
 #include "multiwindows/imultiwindowsprovider.h"
-#include "update/iupdateconfiguration.h"
 
 namespace mu::musesounds {
 class MuseSamplerCheckUpdateScenario : public IMuseSamplerCheckUpdateScenario, public muse::Contextable, public muse::async::Asyncable
 {
     muse::GlobalInject<muse::mi::IMultiWindowsProvider> multiwindowsProvider;
     muse::GlobalInject<muse::IGlobalConfiguration> globalConfiguration;
-    muse::GlobalInject<muse::update::IUpdateConfiguration> updateConfiguration;
     muse::GlobalInject<muse::IProcess> process;
-    muse::GlobalInject<IMuseSamplerCheckUpdateService> service;
-    muse::GlobalInject<muse::IPlatformInteractive> platformInteractive;
+    muse::ContextInject<IMuseSamplerCheckUpdateService> service = { this };
     muse::ContextInject<muse::IInteractive> interactive = { this };
     muse::ContextInject<muse::actions::IActionsDispatcher> dispatcher = { this };
 

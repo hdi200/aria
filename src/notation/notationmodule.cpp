@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -25,7 +25,6 @@
 #include "project/inotationwritersregister.h"
 
 #include "internal/notationconfiguration.h"
-#include "internal/notationcontextconfiguration.h"
 #include "internal/positionswriter.h"
 #include "internal/mscnotationwriter.h"
 #include "internal/instrumentsrepository.h"
@@ -37,32 +36,30 @@ using namespace mu::notation;
 using namespace muse;
 using namespace muse::modularity;
 
-static const std::string mname("notation");
-
 std::string NotationModule::moduleName() const
 {
-    return mname;
+    return "notation";
 }
 
 void NotationModule::registerExports()
 {
     m_configuration = std::make_shared<NotationConfiguration>();
-    m_instrumentsRepository = std::make_shared<InstrumentsRepository>();
+    m_instrumentsRepository = std::make_shared<InstrumentsRepository>(iocContext());
 
 #ifdef MUE_BUILD_ENGRAVING_FONTSCONTROLLER
     m_engravingFontsController = std::make_shared<EngravingFontsController>();
 #endif
 
-    globalIoc()->registerExport<INotationConfiguration>(moduleName(), m_configuration);
-    globalIoc()->registerExport<IInstrumentsRepository>(mname, m_instrumentsRepository);
+    ioc()->registerExport<INotationConfiguration>(moduleName(), m_configuration);
+    ioc()->registerExport<IInstrumentsRepository>(moduleName(), m_instrumentsRepository);
 }
 
 void NotationModule::resolveImports()
 {
-    auto writers = globalIoc()->resolve<project::INotationWritersRegister>(mname);
+    auto writers = ioc()->resolve<project::INotationWritersRegister>(moduleName());
     if (writers) {
-        writers->reg({ "spos" }, std::make_shared<PositionsWriter>(PositionsWriter::ElementType::SEGMENT));
-        writers->reg({ "mpos" }, std::make_shared<PositionsWriter>(PositionsWriter::ElementType::MEASURE));
+        writers->reg({ "spos" }, std::make_shared<PositionsWriter>(PositionsWriter::ElementType::SEGMENT, iocContext()));
+        writers->reg({ "mpos" }, std::make_shared<PositionsWriter>(PositionsWriter::ElementType::MEASURE, iocContext()));
         writers->reg({ "mscz" }, std::make_shared<MscNotationWriter>(engraving::MscIoMode::Zip));
         writers->reg({ "mscx" }, std::make_shared<MscNotationWriter>(engraving::MscIoMode::Dir));
     }
@@ -80,7 +77,7 @@ void NotationModule::onInit(const IApplication::RunMode&)
     bool isVertical = m_configuration->canvasOrientation().val == muse::Orientation::Vertical;
     mu::engraving::MScore::setVerticalOrientation(isVertical);
 
-    auto pr = globalIoc()->resolve<diagnostics::IDiagnosticsPathsRegister>(mname);
+    auto pr = ioc()->resolve<diagnostics::IDiagnosticsPathsRegister>(moduleName());
     if (pr) {
         pr->reg("instruments", m_configuration->instrumentsXmlPath());
         pr->reg("score orders", m_configuration->scoreOrdersXmlPath());
@@ -90,14 +87,4 @@ void NotationModule::onInit(const IApplication::RunMode&)
             pr->reg("user instruments folder", userInstrumentsPath);
         }
     }
-}
-
-IContextSetup* NotationModule::newContext(const ContextPtr& ctx) const
-{
-    return new NotationContext(ctx);
-}
-
-void NotationContext::registerExports()
-{
-    ioc()->registerExport<INotationContextConfiguration>(mname, new NotationContextConfiguration(iocContext()));
 }

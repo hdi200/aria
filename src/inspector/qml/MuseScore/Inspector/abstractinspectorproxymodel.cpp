@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -91,6 +91,15 @@ void AbstractInspectorProxyModel::requestResetToDefaults()
     }
 }
 
+void AbstractInspectorProxyModel::disconnectAll()
+{
+    for (AbstractInspectorModel* model : modelList()) {
+        model->disconnectAll();
+    }
+
+    AbstractInspectorModel::disconnectAll();
+}
+
 bool AbstractInspectorProxyModel::isEmpty() const
 {
     for (const AbstractInspectorModel* model : modelList()) {
@@ -113,8 +122,12 @@ void AbstractInspectorProxyModel::setModels(const QList<AbstractInspectorModel*>
 
         auto oldModel = m_models.take(model->modelType());
 
-        delete oldModel;
-        oldModel = nullptr;
+        //! NOTE: may run synchronously from a model's own property-change callback;
+        //! deleting immediately would destroy "this" mid-call, so defer it.
+        //! Disconnect now so it (and its submodels) doesn't react to further updates
+        //! while it awaits destruction
+        oldModel->disconnectAll();
+        oldModel->deleteLater();
     }
 
     for (AbstractInspectorModel* model : models) {

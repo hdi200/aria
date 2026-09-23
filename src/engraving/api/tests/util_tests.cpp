@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2025 MuseScore Limited
+ * Copyright (C) 2025 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -29,8 +29,6 @@
 
 #include "engraving/api/v1/util.h"
 #include "global/modularity/ioc.h"
-
-static const muse::modularity::ContextPtr utestCtx = std::make_shared<muse::modularity::Context>(1);
 
 using namespace mu::engraving::apiv1;
 
@@ -77,7 +75,7 @@ TEST_F(Extensions_UtilTests, pathTraversalResolution)
 
 TEST_F(Extensions_UtilTests, allowedPaths)
 {
-    FileIO fileIO(utestCtx);
+    FileIO fileIO;
 
     // Test temp directory is allowed
     QString tempFile = tempDir.filePath("test.txt");
@@ -96,7 +94,7 @@ TEST_F(Extensions_UtilTests, allowedPaths)
 
 TEST_F(Extensions_UtilTests, blockedSystemPaths)
 {
-    FileIO fileIO(utestCtx);
+    FileIO fileIO;
 
     // Test system directories are blocked
     QStringList blockedPaths = {
@@ -119,7 +117,7 @@ TEST_F(Extensions_UtilTests, blockedSystemPaths)
 
 TEST_F(Extensions_UtilTests, pathTraversalBlocked)
 {
-    FileIO fileIO(utestCtx);
+    FileIO fileIO;
 
     // Test various path traversal patterns
     QStringList traversalPaths = {
@@ -142,7 +140,7 @@ TEST_F(Extensions_UtilTests, pathTraversalBlocked)
 
 TEST_F(Extensions_UtilTests, relativePathResolution)
 {
-    FileIO fileIO(utestCtx);
+    FileIO fileIO;
 
     // Test straightforward path within temp directory
     QString testPath = tempDir.path() + "/test.txt";

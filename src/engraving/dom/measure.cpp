@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -189,8 +189,8 @@ Measure::Measure(System* parent)
         ms->lines()->setVisible(!staff->isLinesInvisible(tick()));
         m_mstaves.push_back(ms);
     }
-    setExcludeFromNumbering(false);
-    m_measureNumberMode     = MeasureNumberMode::AUTO;
+    setIrregular(false);
+    m_measureNumberMode                = MeasureNumberMode::AUTO;
     m_userStretch           = 1.0;
     m_breakMultiMeasureRest = false;
     m_mmRest                = nullptr;
@@ -207,11 +207,9 @@ Measure::Measure(const Measure& m)
 {
     m_segments    = m.m_segments.clone();
     m_timesig     = m.m_timesig;
-    m_len         = m.m_len;
+    m_len          = m.m_len;
     m_repeatCount = m.m_repeatCount;
-    m_measureNumber = m.m_measureNumber;
-    m_measureNumberOffset = m.m_measureNumberOffset;
-    m_measureNumberMode = m.m_measureNumberMode;
+    m_measureNumberMode      = m.m_measureNumberMode;
     m_userStretch = m.m_userStretch;
 
     m_mstaves.reserve(m.m_mstaves.size());
@@ -566,8 +564,8 @@ bool Measure::showMeasureNumberInAutoMode() const
         return false;
     }
 
-    // Measure numbers should not be shown on measures excluded from numbering.
-    if (excludeFromNumbering()) {
+    // Measure numbers should not be shown on irregular measures.
+    if (irregular()) {
         return false;
     }
 
@@ -576,16 +574,16 @@ bool Measure::showMeasureNumberInAutoMode() const
 
     // Measure numbers should not show on first measure unless specified with Sid::showMeasureNumberOne
     // except, when showing numbers on each measure, and first measure is after anacrusis - then show always
-    if (isFirstInSection() || (prevMeasure->excludeFromNumbering() && prevMeasure->isFirstInSection() && interval != 1)) {
+    if (isFirstInSection() || (prevMeasure->irregular() && prevMeasure->isFirstInSection() && interval != 1)) {
         return style().styleB(Sid::showMeasureNumberOne);
     }
 
     if (style().styleB(Sid::measureNumberSystem)) {
         // Show either if
         //   1) This is the first measure of the system OR
-        //   2) The previous measure in the system is the first, and is excluded from numbering.
+        //   2) The previous measure in the system is the first, and is irregular.
         return (system() && isFirstInSystem())
-               || (prevMeasure && prevMeasure->system() && prevMeasure->excludeFromNumbering() && prevMeasure->isFirstInSystem());
+               || (prevMeasure && prevMeasure->system() && prevMeasure->irregular() && prevMeasure->isFirstInSystem());
     } else {
         // In the case of an interval, we should show the measure number either if:
         //   1) We should show them every measure
@@ -596,7 +594,7 @@ bool Measure::showMeasureNumberInAutoMode() const
         //   2) (measureNumber + 1) % interval == 0 (or 1 if measure number one is numbered.)
         // If measure number 1 is numbered, and the interval is let's say 5, then we should number #1, 6, 11, 16, etc.
         // If measure number 1 is not numbered, with the same interval (5), then we should number #5, 10, 15, 20, etc.
-        return ((measureNumber() + 1) % interval) == (style().styleB(Sid::showMeasureNumberOne) ? 1 : 0);
+        return ((no() + 1) % interval) == (style().styleB(Sid::showMeasureNumberOne) ? 1 : 0);
     }
 }
 
@@ -1384,7 +1382,7 @@ bool Measure::acceptDrop(EditData& data) const
     MuseScoreView* viewer = data.view();
     const EngravingItem* e = data.dropElement;
 
-    if (data.track == muse::nidx) {
+    if (data.track == muse::nidx || !system()) {
         return false;
     }
 
@@ -1559,19 +1557,19 @@ EngravingItem* Measure::drop(EditData& data)
 
     case ElementType::BRACKET:
     {
-        Selection sel = score()->selection();
-        staff_idx_t firstStaff = sel.staffStart();
-        staff_idx_t lastStaff = sel.staffEnd() - 1;
+        Bracket* b = toBracket(e);
         size_t level = 0;
-        for (staff_idx_t idx = 0; idx < score()->nstaves(); ++idx) {
-            for (const BracketItem* bi : score()->staff(idx)->brackets()) {
-                if (bi->intersects(firstStaff, lastStaff)) {
-                    level = std::max(level, bi->column() + 1);
+        staff_idx_t firstStaff = 0;
+        for (Staff* s : score()->staves()) {
+            for (const BracketItem* bi : s->brackets()) {
+                staff_idx_t lastStaff = firstStaff + bi->bracketSpan() - 1;
+                if (staffIdx >= firstStaff && staffIdx <= lastStaff) {
+                    ++level;
                 }
             }
+            firstStaff++;
         }
-
-        Bracket* b = toBracket(e);
+        Selection sel = score()->selection();
         if (sel.isRange()) {
             score()->undoAddBracket(staff, level, b->bracketType(), sel.staffEnd() - sel.staffStart());
         } else {
@@ -1690,7 +1688,7 @@ EngravingItem* Measure::drop(EditData& data)
                 double y2 = s->staffYpage(nextVisStaffIdx);
                 gap = y2 - y1 - score()->staff(staffIdx)->staffHeight();
             }
-            spacer->setGap(Spatium::fromAbsolute(gap, spatium()));
+            spacer->setGap(Spatium::fromMM(gap, spatium()));
         }
         score()->undoAddElement(spacer);
         triggerLayout();
@@ -2104,7 +2102,7 @@ bool Measure::isAnacrusis() const
 {
     const MeasureBase* pm = prev();
 
-    if (excludeFromNumbering() || !pm || pm->isBox() || pm->lineBreak() || pm->pageBreak() || pm->sectionBreak()) {
+    if (irregular() || !pm || pm->isBox() || pm->lineBreak() || pm->pageBreak() || pm->sectionBreak()) {
         if (timesig() - ticks() > Fraction(0, 1)) {
             return true;
         }
@@ -2303,6 +2301,41 @@ void Measure::sortStaves(std::vector<staff_idx_t>& dst)
     }
 
     score()->undoUpdatePlayCountText(this);
+}
+
+//---------------------------------------------------------
+//   exchangeVoice
+//---------------------------------------------------------
+
+void Measure::exchangeVoice(track_idx_t strack, track_idx_t dtrack, staff_idx_t staffIdx)
+{
+    for (Segment* s = first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest)) {
+        s->swapElements(strack, dtrack);
+    }
+
+    auto spanners = score()->spannerMap().findOverlapping(tick().ticks(), endTick().ticks() - 1);
+    Fraction start = tick();
+    Fraction end = start + ticks();
+    for (auto i = spanners.begin(); i < spanners.end(); i++) {
+        Spanner* sp = i->value;
+        Fraction spStart = sp->tick();
+        Fraction spEnd = spStart + sp->ticks();
+        LOGD("Start %d End %d Diff %d \n Measure Start %d End %d", spStart.ticks(), spEnd.ticks(), (spEnd - spStart).ticks(),
+             start.ticks(), end.ticks());
+        if (sp->isSlur() && (spStart >= start || spEnd < end)) {
+            if (sp->track() == strack && spStart >= start) {
+                sp->setTrack(dtrack);
+            } else if (sp->track() == dtrack && spStart >= start) {
+                sp->setTrack(strack);
+            }
+            if (sp->track2() == strack && spEnd < end) {
+                sp->setTrack2(dtrack);
+            } else if (sp->track2() == dtrack && spEnd < end) {
+                sp->setTrack2(strack);
+            }
+        }
+    }
+    checkMultiVoices(staffIdx);     // probably true, but check for invisible notes & rests
 }
 
 //---------------------------------------------------------
@@ -2551,7 +2584,7 @@ bool Measure::isFullMeasureRest() const
 
 bool Measure::empty() const
 {
-    if (excludeFromNumbering()) {
+    if (irregular()) {
         return false;
     }
     int n = 0;
@@ -2640,9 +2673,9 @@ Measure* Measure::cloneMeasure(Score* sc, const Fraction& tick, TieMap* tieMap)
 
     assert(sc->staves().size() >= m_mstaves.size());   // destination score we're cloning into must have at least as many staves as measure being cloned
 
-    m->setMeasureNumber(measureNumber());
-    m->setMeasureNumberOffset(measureNumberOffset());
-    m->setExcludeFromNumbering(excludeFromNumbering());
+    m->setNo(no());
+    m->setNoOffset(noOffset());
+    m->setIrregular(irregular());
     m->m_userStretch           = m_userStretch;
     m->m_breakMultiMeasureRest = m_breakMultiMeasureRest;
     m->m_playbackCount         = m_playbackCount;
@@ -2853,10 +2886,6 @@ PropertyValue Measure::getProperty(Pid propertyId) const
         return PropertyValue::fromValue(m_timesig);
     case Pid::TIMESIG_ACTUAL:
         return PropertyValue::fromValue(m_len);
-    case Pid::EXCLUDE_FROM_NUMBERING:
-        return excludeFromNumbering();
-    case Pid::MEASURE_NUMBER_OFFSET:
-        return measureNumberOffset();
     case Pid::MEASURE_NUMBER_MODE:
         return int(measureNumberMode());
     case Pid::BREAK_MMR:
@@ -2865,12 +2894,6 @@ PropertyValue Measure::getProperty(Pid propertyId) const
         return repeatCount();
     case Pid::USER_STRETCH:
         return userStretch();
-    case Pid::REPEAT_END:
-        return repeatEnd();
-    case Pid::REPEAT_START:
-        return repeatStart();
-    case Pid::REPEAT_JUMP:
-        return repeatJump();
     default:
         return MeasureBase::getProperty(propertyId);
     }
@@ -2889,16 +2912,6 @@ bool Measure::setProperty(Pid propertyId, const PropertyValue& value)
     case Pid::TIMESIG_ACTUAL:
         m_len = value.value<Fraction>();
         break;
-    case Pid::EXCLUDE_FROM_NUMBERING:
-        setExcludeFromNumbering(value.toBool());
-        triggerLayoutAll();
-        score()->setPlaylistDirty();
-        return true;
-    case Pid::MEASURE_NUMBER_OFFSET:
-        setMeasureNumberOffset(value.toInt());
-        triggerLayoutAll();
-        score()->setPlaylistDirty();
-        return true;
     case Pid::MEASURE_NUMBER_MODE:
         setMeasureNumberMode(MeasureNumberMode(value.toInt()));
         break;
@@ -2911,15 +2924,6 @@ bool Measure::setProperty(Pid propertyId, const PropertyValue& value)
         break;
     case Pid::USER_STRETCH:
         setUserStretch(value.toDouble());
-        break;
-    case Pid::REPEAT_END:
-        setRepeatEnd(value.toBool());
-        break;
-    case Pid::REPEAT_START:
-        setRepeatStart(value.toBool());
-        break;
-    case Pid::REPEAT_JUMP:
-        setRepeatJump(value.toBool());
         break;
     default:
         return MeasureBase::setProperty(propertyId, value);
@@ -2938,10 +2942,6 @@ PropertyValue Measure::propertyDefault(Pid propertyId) const
     case Pid::TIMESIG_NOMINAL:
     case Pid::TIMESIG_ACTUAL:
         return PropertyValue();
-    case Pid::EXCLUDE_FROM_NUMBERING:
-        return false;
-    case Pid::MEASURE_NUMBER_OFFSET:
-        return 0;
     case Pid::MEASURE_NUMBER_MODE:
         return int(MeasureNumberMode::AUTO);
     case Pid::BREAK_MMR:
@@ -2950,9 +2950,9 @@ PropertyValue Measure::propertyDefault(Pid propertyId) const
         return 2;
     case Pid::USER_STRETCH:
         return 1.0;
-    case Pid::REPEAT_END:
-    case Pid::REPEAT_START:
-    case Pid::REPEAT_JUMP:
+    case Pid::NO_OFFSET:
+        return 0;
+    case Pid::IRREGULAR:
         return false;
     default:
         break;
@@ -3328,7 +3328,7 @@ double Measure::firstNoteRestSegmentX(bool leading) const
     if (!sys) {
         return 0.0;
     }
-    double margin = style().styleAbsolute(Sid::headerToLineStartDistance);
+    double margin = style().styleMM(Sid::headerToLineStartDistance);
     for (const Segment* seg = first(); seg; seg = seg->next()) {
         if (seg->isChordRestType()) {
             double noteRestPos = seg->measure()->pos().x() + seg->pos().x();
@@ -3355,7 +3355,7 @@ double Measure::firstNoteRestSegmentX(bool leading) const
                     }
                 }
                 if (seg->isStartRepeatBarLineType()) {
-                    margin = style().styleAbsolute(Sid::lineEndToBarlineDistance);
+                    margin = style().styleMM(Sid::lineEndToBarlineDistance);
                 }
                 return std::min(seg->measure()->pos().x() + seg->pos().x() + width + margin, noteRestPos);
             } else if (system() && !isFirstInSystem() && !isFirstInSection() && prevMeasure()) {
@@ -3371,7 +3371,7 @@ double Measure::firstNoteRestSegmentX(bool leading) const
                     width = std::max(width, endBl->pos().x() + endBl->ldata()->bbox().right());
                 }
 
-                const double startBlMargin = style().styleAbsolute(Sid::barlineToLineStartDistance);
+                const double startBlMargin = style().styleMM(Sid::barlineToLineStartDistance);
 
                 return std::min(endBlSeg->measure()->pos().x() + endBlSeg->pos().x() + width + startBlMargin, noteRestPos);
             } else {
@@ -3386,7 +3386,7 @@ double Measure::firstNoteRestSegmentX(bool leading) const
 double Measure::endingXForOpenEndedLines() const
 {
     const System* sys = system();
-    double margin = style().styleAbsolute(Sid::lineEndToBarlineDistance);
+    double margin = style().styleMM(Sid::lineEndToBarlineDistance);
     double systemEndX = sys->ldata()->bbox().width();
 
     Segment* lastSeg = last();
@@ -3406,7 +3406,7 @@ double Measure::endingXForOpenEndedLines() const
 
 String Measure::accessibleInfo() const
 {
-    return String(u"%1: %2").arg(EngravingItem::accessibleInfo(), String::number(measureNumber() + 1));
+    return String(u"%1: %2").arg(EngravingItem::accessibleInfo(), String::number(no() + 1));
 }
 
 void Measure::styleChanged()

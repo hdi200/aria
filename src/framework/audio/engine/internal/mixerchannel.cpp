@@ -28,14 +28,17 @@
 #include "dsp/audiomathutils.h"
 #include "igetplaybackposition.h"
 
+#include "log.h"
+
 using namespace muse;
 using namespace muse::async;
 using namespace muse::audio;
 using namespace muse::audio::engine;
 
 MixerChannel::MixerChannel(const TrackId trackId, const OutputSpec& outputSpec, IAudioSourcePtr source,
-                           const IGetPlaybackPosition* getPlaybackPosition)
-    : m_trackId(trackId),
+                           const IGetPlaybackPosition* getPlaybackPosition,
+                           const modularity::ContextPtr& iocCtx)
+    : Contextable(iocCtx), m_trackId(trackId),
     m_outputSpec(outputSpec),
     m_audioSource(std::move(source)),
     m_getPlaybackPosition(getPlaybackPosition)
@@ -44,8 +47,9 @@ MixerChannel::MixerChannel(const TrackId trackId, const OutputSpec& outputSpec, 
 }
 
 MixerChannel::MixerChannel(const TrackId trackId, const OutputSpec& outputSpec,
-                           const IGetPlaybackPosition* getPlaybackPosition)
-    : MixerChannel(trackId, outputSpec, nullptr, getPlaybackPosition)
+                           const IGetPlaybackPosition* getPlaybackPosition,
+                           const modularity::ContextPtr& iocCtx)
+    : MixerChannel(trackId, outputSpec, nullptr, getPlaybackPosition, iocCtx)
 {
     ONLY_AUDIO_ENGINE_THREAD;
 }
@@ -88,11 +92,15 @@ void MixerChannel::applyOutputParams(const AudioOutputParams& requiredParams)
 
     for (IFxProcessorPtr& fx : m_fxProcessors) {
         fx->setOutputSpec(m_outputSpec);
-        fx->setPlaying(isActive());
+
+        if (m_audioSource) {
+            fx->setPlaying(m_audioSource->isActive());
+        }
 
         fx->paramsChanged().onReceive(this, [this](const AudioFxParams& fxParams) {
             m_params.fxChain.insert_or_assign(fxParams.chainOrder, fxParams);
             m_paramsChanges.send(m_params);
+            updateShouldProcessDuringSilence();
         }, async::Asyncable::Mode::SetReplace);
     }
 
@@ -130,15 +138,7 @@ void MixerChannel::applyOutputParams(const AudioOutputParams& requiredParams)
         m_mutedChanged.notify();
     }
 
-    const bool shouldProcessDuringSilence = std::any_of(m_fxProcessors.cbegin(), m_fxProcessors.cend(),
-                                                        [](const IFxProcessorPtr& fx) {
-        return fx->shouldProcessDuringSilence();
-    });
-
-    if (shouldProcessDuringSilence != m_shouldProcessDuringSilence) {
-        m_shouldProcessDuringSilence = shouldProcessDuringSilence;
-        m_shouldProcessDuringSilenceChanged.send(shouldProcessDuringSilence);
-    }
+    updateShouldProcessDuringSilence();
 }
 
 async::Channel<AudioOutputParams> MixerChannel::outputParamsChanged() const
@@ -261,6 +261,22 @@ void MixerChannel::completeOutput(float* buffer, unsigned int samplesCount)
     }
 
     m_isSilent = RealIsNull(globalPeak);
+}
+
+void MixerChannel::updateShouldProcessDuringSilence()
+{
+    bool shouldProcessDuringSilence = false;
+    for (const IFxProcessorPtr& fx : m_fxProcessors) {
+        if (fx->shouldProcessDuringSilence()) {
+            shouldProcessDuringSilence = true;
+            break;
+        }
+    }
+
+    if (shouldProcessDuringSilence != m_shouldProcessDuringSilence) {
+        m_shouldProcessDuringSilence = shouldProcessDuringSilence;
+        m_shouldProcessDuringSilenceChanged.send(shouldProcessDuringSilence);
+    }
 }
 
 bool MixerChannel::isSilent() const

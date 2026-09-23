@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -128,7 +128,6 @@
 
 #include "../xmlreader.h"
 #include "../read206/read206.h"
-#include "../read460/tread.h"
 #include "../compat/compatutils.h"
 #include "readcontext.h"
 #include "connectorinforeader.h"
@@ -191,7 +190,7 @@ PropertyValue TRead::readPropertyValue(Pid id, XmlReader& e, ReadContext& ctx)
     case P_TYPE::REAL:
         return PropertyValue(e.readDouble());
     case P_TYPE::SPATIUM: return PropertyValue(Spatium(e.readDouble()));
-    case P_TYPE::ABSOLUTE: return PropertyValue(Spatium(e.readDouble())); //! NOTE type mm, but stored in xml as spatium
+    case P_TYPE::MILLIMETRE: return PropertyValue(Spatium(e.readDouble())); //! NOTE type mm, but stored in xml as spatium
     case P_TYPE::TEMPO:
         return PropertyValue(e.readDouble());
     case P_TYPE::FRACTION:
@@ -307,8 +306,8 @@ void TRead::readProperty(EngravingItem* item, XmlReader& xml, ReadContext& ctx, 
     double spatium = ctx.score() ? ctx.spatium() : item->spatium();
     PropertyValue v = readPropertyValue(pid, xml, ctx);
     switch (propertyType(pid)) {
-    case P_TYPE::ABSOLUTE: //! NOTE type mm, but stored in xml as spatium
-        v = v.value<Spatium>().toAbsolute(spatium);
+    case P_TYPE::MILLIMETRE: //! NOTE type mm, but stored in xml as spatium
+        v = v.value<Spatium>().toMM(spatium);
         break;
     case P_TYPE::POINT:
         if (item->offsetIsSpatiumDependent()) {
@@ -808,9 +807,13 @@ bool TRead::readProperties(Instrument* item, XmlReader& e, ReadContext& ctx, Par
 
     const AsciiStringView tag(e.name());
     if (tag == "longName") {
-        item->setLongName(read460::TRead::readLegacyStaffName(e));
+        StaffName name;
+        TRead::read(&name, e);
+        item->appendLongName(name);
     } else if (tag == "shortName") {
-        item->setShortName(read460::TRead::readLegacyStaffName(e));
+        StaffName name;
+        TRead::read(&name, e);
+        item->appendShortName(name);
     } else if (tag == "trackName") {
         item->setTrackName(e.readText());
     } else if (tag == "minPitch") {      // obsolete
@@ -1196,19 +1199,19 @@ void TRead::read(KeySig* s, XmlReader& e, ReadContext& ctx)
                 } else if (t == "def") {
                     cd.degree = e.intAttribute("degree", 0);
                     cd.octAlt = e.intAttribute("octAlt", 0);
-                    cd.xAlt = Spatium(e.doubleAttribute("xAlt", 0.0));
+                    cd.xAlt = e.doubleAttribute("xAlt", 0.0);
                     e.readNext();
                 } else if (t == "pos") { // for older files
-                    Spatium prevx = 0_sp;
-                    Spatium accidentalGap = ctx.score()->style().styleS(Sid::keysigAccidentalDistance);
+                    double prevx = 0;
+                    double accidentalGap = ctx.score()->style().styleS(Sid::keysigAccidentalDistance).val();
                     double _spatium = s->spatium();
                     // count default x position
                     for (CustDef& cd2 : sig.customKeyDefs()) {
-                        prevx += Spatium::fromAbsolute(s->symWidth(cd2.sym), _spatium) + accidentalGap + cd2.xAlt;
+                        prevx += s->symWidth(cd2.sym) / _spatium + accidentalGap + cd2.xAlt;
                     }
                     bool flat = std::string(SymNames::nameForSymId(cd.sym).ascii()).find("Flat") != std::string::npos;
                     // if x not there, use default step
-                    cd.xAlt = Spatium(e.doubleAttribute("x", prevx.val())) - prevx;
+                    cd.xAlt = e.doubleAttribute("x", prevx) - prevx;
                     // if y not there, use middle line
                     int line = static_cast<int>(e.doubleAttribute("y", 2) * 2);
                     cd.degree = (3 - line) % 7;
@@ -1399,7 +1402,7 @@ void TRead::read(Image* img, XmlReader& e, ReadContext& ctx)
             // setting this using the property Pid::SIZE_IS_SPATIUM breaks, because the
             // property setter attempts to maintain a constant size. If we're reading, we
             // don't want to do that, because the stored size will be in:
-            //    absolute if size isn't spatium
+            //    mm if size isn't spatium
             //    sp if size is spatium
             img->setSizeIsSpatium(e.readBool());
         } else if (tag == "path") {
@@ -1422,6 +1425,8 @@ void TRead::read(Image* img, XmlReader& e, ReadContext& ctx)
 
 void TRead::read(Tuplet* t, XmlReader& e, ReadContext& ctx)
 {
+    t->setId(e.intAttribute("id", 0));
+
     Text* number = nullptr;
     Fraction ratio;
     TDuration baseLen;
@@ -1502,6 +1507,10 @@ void TRead::read(Tuplet* t, XmlReader& e, ReadContext& ctx)
 
 void TRead::read(Beam* b, XmlReader& e, ReadContext& ctx)
 {
+    if (b->score()->mscVersion() < 301) {
+        b->setId(e.intAttribute("id"));
+    }
+
     while (e.readNextStartElement()) {
         const AsciiStringView tag(e.name());
         if (tag == "StemDirection") {
@@ -3301,8 +3310,9 @@ void TRead::read(Part* p, XmlReader& e, ReadContext& ctx)
         }
     }
 
-    // <trackName> precedes <Instrument>, so bind it once the whole part is read.
-    p->bindLoadedTrackNameToInstrument();
+    if (p->partName().isEmpty()) {
+        p->setPartName(p->instrument()->trackName());
+    }
 
     read(p, staffHideModes, ctx.style().styleB(Sid::hideEmptyStaves));
 }
@@ -3400,12 +3410,12 @@ bool TRead::readProperties(Part* p, XmlReader& e, ReadContext& ctx, StaffHideMod
         p->setColor(e.readInt());
     } else if (tag == "shortName") {
         p->instrument()->setShortName(e.readText());
+    } else if (tag == "trackName") {
+        p->setPartName(e.readText());
     } else if (tag == "show") {
         p->setShow(e.readInt());
     } else if (tag == "soloist") {
         p->setSoloist(e.readInt());
-    } else if (tag == "trackName") {
-        p->setLoadedTrackName(e.readText());
     } else if (tag == "preferSharpFlat") {
         String val = e.readText();
         if (val == "sharps") {
@@ -3893,6 +3903,17 @@ bool TRead::readProperties(Staff* s, XmlReader& e, ReadContext& ctx, StaffHideMo
     return true;
 }
 
+void TRead::read(StaffName* item, XmlReader& xml)
+{
+    item->setPos(xml.intAttribute("pos", 0));
+    String name = xml.readXml();
+    if (name.startsWith(u"<html>")) {
+        // compatibility to old html implementation:
+        name = HtmlParser::parse(name);
+    }
+    item->setName(name);
+}
+
 void TRead::read(Stem* s, XmlReader& e, ReadContext& ctx)
 {
     while (e.readNextStartElement()) {
@@ -4096,6 +4117,55 @@ void TRead::read(TimeSig* s, XmlReader& e, ReadContext& ctx)
     s->setStretch(stretch);
     s->setNumeratorString(numeratorString);
     s->setDenominatorString(denominatorString);
+}
+
+void TRead::read(TimeSigMap* item, XmlReader& e, ReadContext& ctx)
+{
+    while (e.readNextStartElement()) {
+        const AsciiStringView tag(e.name());
+        if (tag == "sig") {
+            SigEvent t;
+            int tick = TRead::read(&t, e, ctx.fileDivision());
+            (*item)[tick] = t;
+        } else {
+            e.unknown();
+        }
+    }
+    item->normalize();
+}
+
+int TRead::read(SigEvent* item, XmlReader& e, int fileDivision)
+{
+    int tick  = e.intAttribute("tick", 0);
+    tick      = tick * Constants::DIVISION / fileDivision;
+
+    int numerator = 1;
+    int denominator = 1;
+    int denominator2 = -1;
+    int numerator2   = -1;
+
+    while (e.readNextStartElement()) {
+        const AsciiStringView tag(e.name());
+        if (tag == "nom") {
+            numerator = e.readInt();
+        } else if (tag == "denom") {
+            denominator = e.readInt();
+        } else if (tag == "nom2") {
+            numerator2 = e.readInt();
+        } else if (tag == "denom2") {
+            denominator2 = e.readInt();
+        } else {
+            e.unknown();
+        }
+    }
+    if ((numerator2 == -1) || (denominator2 == -1)) {
+        numerator2   = numerator;
+        denominator2 = denominator;
+    }
+
+    item->setTimesig(TimeSigFrac(numerator, denominator));
+    item->setNominal(TimeSigFrac(numerator2, denominator2));
+    return tick;
 }
 
 void TRead::read(TremoloCompat& t, XmlReader& e, ReadContext& ctx)

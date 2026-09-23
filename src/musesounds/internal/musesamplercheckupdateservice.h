@@ -31,15 +31,16 @@
 #include "imusesoundsconfiguration.h"
 
 namespace mu::musesounds {
-class MuseSamplerCheckUpdateService : public IMuseSamplerCheckUpdateService, public muse::async::Asyncable
+class MuseSamplerCheckUpdateService : public IMuseSamplerCheckUpdateService, public muse::Contextable, public muse::async::Asyncable
 {
     muse::GlobalInject<IMuseSoundsConfiguration> configuration;
     muse::GlobalInject<muse::network::INetworkManagerCreator> networkManagerCreator;
     muse::GlobalInject<muse::musesampler::IMuseSamplerConfiguration> museSamplerConfiguration;
-    muse::GlobalInject<muse::musesampler::IMuseSamplerInfo> museSampler;
+    muse::ContextInject<muse::musesampler::IMuseSamplerInfo> museSampler = { this };
 
 public:
-    MuseSamplerCheckUpdateService() = default;
+    MuseSamplerCheckUpdateService(const muse::modularity::ContextPtr& iocCtx)
+        : muse::Contextable(iocCtx) {}
 
     bool canCheckForUpdate() const override;
     bool incompatibleLocalVersion() const override;

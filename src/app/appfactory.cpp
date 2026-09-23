@@ -50,6 +50,12 @@
 #include "framework/stubs/learn/learnmodule.h"
 #endif
 
+#ifdef MUSE_MODULE_MEDIA
+#include "framework/media/mediamodule.h"
+#else
+#include "framework/stubs/media/mediastubmodule.h"
+#endif
+
 #ifdef MUSE_MODULE_MIDI
 #include "framework/midi/midimodule.h"
 #else
@@ -129,21 +135,11 @@
 #include "framework/stubs/extensions/extensionsstubmodule.h"
 #endif
 
-#ifdef MUSE_MODULE_INTERACTIVE
-#include "framework/interactive/interactivemodule.h"
-#endif
-
 // Modules
 #include "appshell/appshellmodule.h"
 
 #ifdef MUSE_MODULE_AUTOBOT
 #include "autobot/autobotmodule.h"
-#endif
-
-#ifdef MUSE_MODULE_AUTOMATION
-#include "framework/automation/automationmodule.h"
-#else
-#include "framework/stubs/automation/automationstubmodule.h"
 #endif
 
 #ifdef MUE_BUILD_BRAILLE_MODULE
@@ -173,9 +169,6 @@
 #include "importexport/midi/midimodule.h"
 #else
 #include "stubs/importexport/midi/midimodule.h"
-#endif
-#ifdef MUE_BUILD_IMPEXP_MLSCORE_MODULE
-#include "importexport/mlscore/mlscoremodule.h"
 #endif
 #ifdef MUE_BUILD_IMPEXP_MNX_MODULE
 #include "importexport/mnx/mnxmodule.h"
@@ -279,22 +272,23 @@
 using namespace muse;
 using namespace mu::app;
 
-std::shared_ptr<muse::IApplication> AppFactory::newApp(const std::shared_ptr<MuseScoreCmdOptions>& options) const
+std::shared_ptr<muse::IApplication> AppFactory::newApp(const CmdOptions& options) const
 {
-    IF_ASSERT_FAILED(options) {
-        return nullptr;
-    }
-
-    if (options->runMode == IApplication::RunMode::GuiApp) {
+    if (options.runMode == IApplication::RunMode::GuiApp) {
         return newGuiApp(options);
     } else {
         return newConsoleApp(options);
     }
 }
 
-std::shared_ptr<muse::IApplication> AppFactory::newGuiApp(const std::shared_ptr<MuseScoreCmdOptions>& options) const
+std::shared_ptr<muse::IApplication> AppFactory::newGuiApp(const CmdOptions& options) const
 {
-    std::shared_ptr<MuseScoreGuiApp> app = std::make_shared<MuseScoreGuiApp>(options);
+    modularity::ContextPtr ctx = std::make_shared<modularity::Context>();
+    ++m_lastID;
+    //ctx->id = m_lastID;
+    ctx->id = -1; //! NOTE At the moment global ioc
+
+    std::shared_ptr<GuiApp> app = std::make_shared<GuiApp>(options, ctx);
 
 #ifdef MUSE_MODULE_DIAGNOSTICS
     //! NOTE `diagnostics` must be first, because it installs the crash handler.
@@ -309,11 +303,7 @@ std::shared_ptr<muse::IApplication> AppFactory::newGuiApp(const std::shared_ptr<
 #ifdef MUSE_MODULE_AUDIOPLUGINS
     app->addModule(new muse::audioplugins::AudioPluginsModule());
 #endif
-    app->addModule(new muse::automation::AutomationModule());
     app->addModule(new muse::draw::DrawModule());
-#ifdef MUSE_MODULE_INTERACTIVE
-    app->addModule(new muse::interactive::InteractiveModule());
-#endif
     app->addModule(new muse::midi::MidiModule());
     app->addModule(new muse::midiremote::MidiRemoteModule());
     app->addModule(new muse::mpe::MpeModule());
@@ -344,6 +334,7 @@ std::shared_ptr<muse::IApplication> AppFactory::newGuiApp(const std::shared_ptr<
 #endif
     app->addModule(new muse::tours::ToursModule());
     app->addModule(new muse::vst::VSTModule());
+    app->addModule(new muse::media::MediaModule());
 
 // modules
 #ifdef MUE_BUILD_APPSHELL_MODULE
@@ -375,9 +366,6 @@ std::shared_ptr<muse::IApplication> AppFactory::newGuiApp(const std::shared_ptr<
     app->addModule(new mu::iex::capella::CapellaModule());
 #endif
     app->addModule(new mu::iex::midi::MidiModule());
-#ifdef MUE_BUILD_IMPEXP_MLSCORE_MODULE
-    app->addModule(new mu::iex::mlscore::MlScoreModule());
-#endif
     app->addModule(new mu::iex::mnxio::MnxModule());
 #ifdef MUE_BUILD_IMPEXP_MUSEDATA_MODULE
     app->addModule(new mu::iex::musedata::MuseDataModule());
@@ -409,7 +397,7 @@ std::shared_ptr<muse::IApplication> AppFactory::newGuiApp(const std::shared_ptr<
     app->addModule(new muse::extensions::ExtensionsModule());
     app->addModule(new muse::languages::LanguagesModule());
     app->addModule(new muse::learn::LearnModule());
-    app->addModule(new muse::mi::MultiWindowsModule());
+    app->addModule(new muse::mi::MultiInstancesModule());
     app->addModule(new mu::musesounds::MuseSoundsModule());
     app->addModule(new mu::notation::NotationModule());
     app->addModule(new mu::notation::NotationSceneModule());
@@ -433,7 +421,7 @@ std::shared_ptr<muse::IApplication> AppFactory::newGuiApp(const std::shared_ptr<
     return app;
 }
 
-static void addConsoleModules(std::shared_ptr<MuseScoreConsoleApp> app)
+static void addConsoleModules(std::shared_ptr<ConsoleApp> app)
 {
 #ifdef MUSE_MODULE_DIAGNOSTICS
     //! NOTE `diagnostics` must be first, because it installs the crash handler.
@@ -479,6 +467,8 @@ static void addConsoleModules(std::shared_ptr<MuseScoreConsoleApp> app)
     app->addModule(new muse::autobot::AutobotModule());
 #endif
 
+    app->addModule(new muse::media::MediaModule());
+
     app->addModule(new mu::context::ContextModule());
 
 #ifdef MUE_BUILD_CONVERTER_MODULE
@@ -497,9 +487,6 @@ static void addConsoleModules(std::shared_ptr<MuseScoreConsoleApp> app)
     app->addModule(new mu::iex::capella::CapellaModule());
 #endif
     app->addModule(new mu::iex::midi::MidiModule());
-#ifdef MUE_BUILD_IMPEXP_MLSCORE_MODULE
-    app->addModule(new mu::iex::mlscore::MlScoreModule());
-#endif
     app->addModule(new mu::iex::mnxio::MnxModule());
 #ifdef MUE_BUILD_IMPEXP_MUSEDATA_MODULE
     app->addModule(new mu::iex::musedata::MuseDataModule());
@@ -526,7 +513,7 @@ static void addConsoleModules(std::shared_ptr<MuseScoreConsoleApp> app)
     app->addModule(new mu::iex::lrcexport::LyricsExportModule());
 #endif
 
-    app->addModule(new muse::mi::MultiWindowsModule());
+    app->addModule(new muse::mi::MultiInstancesModule());
     app->addModule(new mu::notation::NotationModule());
     app->addModule(new mu::playback::PlaybackModule());
     app->addModule(new mu::project::ProjectModule());
@@ -534,7 +521,7 @@ static void addConsoleModules(std::shared_ptr<MuseScoreConsoleApp> app)
     app->addModule(new mu::notation::NotationSceneModule());
 }
 
-static void addAudioPluginRegistrationModules(std::shared_ptr<MuseScoreConsoleApp> app)
+static void addAudioPluginRegistrationModules(std::shared_ptr<ConsoleApp> app)
 {
     app->addModule(new muse::audio::AudioModule());
 
@@ -547,15 +534,20 @@ static void addAudioPluginRegistrationModules(std::shared_ptr<MuseScoreConsoleAp
 #endif
 }
 
-std::shared_ptr<muse::IApplication> AppFactory::newConsoleApp(const std::shared_ptr<MuseScoreCmdOptions>& options) const
+std::shared_ptr<muse::IApplication> AppFactory::newConsoleApp(const CmdOptions& options) const
 {
 #ifdef MUE_ENABLE_CONSOLEAPP
 
-    std::shared_ptr<MuseScoreConsoleApp> app = std::make_shared<MuseScoreConsoleApp>(options);
+    modularity::ContextPtr ctx = std::make_shared<modularity::Context>();
+    ++m_lastID;
+    // ctx->id = m_lastID;
+    ctx->id = -1; //! NOTE At the moment global ioc
 
-    if (options->runMode == muse::IApplication::RunMode::ConsoleApp) {
+    std::shared_ptr<ConsoleApp> app = std::make_shared<ConsoleApp>(options, ctx);
+
+    if (options.runMode == muse::IApplication::RunMode::ConsoleApp) {
         addConsoleModules(app);
-    } else if (options->runMode == muse::IApplication::RunMode::AudioPluginRegistration) {
+    } else if (options.runMode == muse::IApplication::RunMode::AudioPluginRegistration) {
         addAudioPluginRegistrationModules(app);
     }
 

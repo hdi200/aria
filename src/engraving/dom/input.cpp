@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -231,7 +231,6 @@ void InputState::update(Selection& selection)
     setRest(false);
     setAccidentalType(AccidentalType::NONE);
     setNotes({});
-    setBeyondScore(false);
 
     Note* n1 = nullptr;
     ChordRest* cr1 = nullptr;
@@ -399,9 +398,15 @@ void InputState::moveToNextInputPos()
     m_lastSegment = m_segment;
     if (s) {
         m_segment = s;
-        m_beyondScore = false;
-    } else {
-        m_beyondScore = true;
     }
+}
+
+//---------------------------------------------------------
+//   endOfScore
+//---------------------------------------------------------
+
+bool InputState::endOfScore() const
+{
+    return (m_lastSegment == m_segment) && !nextInputPos();
 }
 }

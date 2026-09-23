@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -56,9 +56,9 @@ Item {
             currentIndex: indexOfValue(apiModel.currentDeviceId)
             model: apiModel.deviceList
 
-            navigationName: "AudioDeviceBox"
-            navigationPanel: root.navigation
-            navigationRow: root.navigationOrderStart
+            navigation.name: "AudioDeviceBox"
+            navigation.panel: root.navigation
+            navigation.row: root.navigationOrderStart
 
             onValueEdited: function(newIndex, newValue) {
                 apiModel.deviceSelected(newValue)
@@ -74,9 +74,9 @@ Item {
             currentIndex: indexOfValue(apiModel.bufferSize)
             model: apiModel.bufferSizeList
 
-            navigationName: "BufferSizeBox"
-            navigationPanel: root.navigation
-            navigationRow: root.navigationOrderStart + 1
+            navigation.name: "BufferSizeBox"
+            navigation.panel: root.navigation
+            navigation.row: root.navigationOrderStart + 1
 
             onValueEdited: function(newIndex, newValue) {
                 apiModel.bufferSizeSelected(newValue)
@@ -92,9 +92,9 @@ Item {
             currentIndex: indexOfValue(apiModel.sampleRate)
             model: apiModel.sampleRateList
 
-            navigationName: "SampleRateBox"
-            navigationPanel: root.navigation
-            navigationRow: root.navigationOrderStart + 2
+            navigation.name: "SampleRateBox"
+            navigation.panel: root.navigation
+            navigation.row: root.navigationOrderStart + 2
 
             onValueEdited: function(newIndex, newValue) {
                 apiModel.sampleRateSelected(newValue)

@@ -31,27 +31,38 @@
 #include <algorithm>
 #include <climits>
 
-#include "global/io/iodevice.h"
-
 #include "log.h"
 
 using namespace muse::audio;
 using namespace muse::audio::encode;
 
-OggEncoder::OggEncoder(const SoundTrackFormat& format, io::IODevice& dstDevice)
-    : AbstractAudioEncoder(format), m_dstDevice{&dstDevice}
+size_t OggEncoder::encode(samples_t samplesPerChannel, const float* input)
 {
-    DO_ASSERT(m_dstDevice);
-}
-
-OggEncoder::~OggEncoder() noexcept
-{
-    if (m_opusEncoder) {
-        ope_encoder_destroy(m_opusEncoder);
+    if (samplesPerChannel == 0 || !m_opusEncoder) {
+        return 0;
     }
+
+    const int n = static_cast<int>(std::min(samplesPerChannel, static_cast<samples_t>(INT_MAX)));
+    const int code = ope_encoder_write_float(m_opusEncoder, input, n);
+
+    return code == OPE_OK ? static_cast<size_t>(n) : 0;
 }
 
-bool OggEncoder::begin(const samples_t)
+size_t OggEncoder::flush()
+{
+    if (!m_opusEncoder) {
+        return 0;
+    }
+
+    return ope_encoder_drain(m_opusEncoder) == OPE_OK ? 1 : 0;
+}
+
+size_t OggEncoder::requiredOutputBufferSize(samples_t /*totalSamplesNumber*/) const
+{
+    return 0;
+}
+
+bool OggEncoder::openDestination(const io::path_t& path)
 {
     OggOpusComments* comments = ope_comments_create();
     if (!comments) {
@@ -60,25 +71,8 @@ bool OggEncoder::begin(const samples_t)
 
     int error = 0;
 
-    const OpusEncCallbacks callbacks{
-        [] (void* userData, const unsigned char* ptr, opus_int32 len) -> int {
-            auto* dstDevice = static_cast<io::IODevice*>(userData);
-            IF_ASSERT_FAILED(dstDevice) {
-                return 1;
-            }
-
-            const auto numBytesToWrite = static_cast<std::size_t>(len);
-            if (dstDevice->write(ptr, numBytesToWrite) != numBytesToWrite) {
-                return 1;
-            }
-
-            return 0;
-        },
-        [] (void*) -> int { return 0; }
-    };
-
-    m_opusEncoder = ope_encoder_create_callbacks(&callbacks, m_dstDevice, comments, m_format.outputSpec.sampleRate,
-                                                 m_format.outputSpec.audioChannelCount, 0, &error);
+    m_opusEncoder = ope_encoder_create_file(path.c_str(), comments, m_format.outputSpec.sampleRate,
+                                            m_format.outputSpec.audioChannelCount, 0, &error);
     ope_comments_destroy(comments);
 
     if (error != OPE_OK || !m_opusEncoder) {
@@ -94,29 +88,10 @@ bool OggEncoder::begin(const samples_t)
     return true;
 }
 
-size_t OggEncoder::encode(const samples_t samplesPerChannel, const float* input)
+void OggEncoder::closeDestination()
 {
-    IF_ASSERT_FAILED(m_opusEncoder) {
-        return 0;
+    if (m_opusEncoder) {
+        ope_encoder_destroy(m_opusEncoder);
+        m_opusEncoder = nullptr;
     }
-
-    if (samplesPerChannel == 0) {
-        return 0;
-    }
-
-    const int n = static_cast<int>(std::min(samplesPerChannel, static_cast<samples_t>(INT_MAX)));
-    const int code = ope_encoder_write_float(m_opusEncoder, input, n);
-
-    return code == OPE_OK ? static_cast<size_t>(n) : 0;
-}
-
-size_t OggEncoder::end()
-{
-    IF_ASSERT_FAILED(m_opusEncoder) {
-        return 0;
-    }
-
-    ope_encoder_drain(m_opusEncoder);
-
-    return 0;
 }

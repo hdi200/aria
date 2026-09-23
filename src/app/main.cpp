@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -25,6 +25,7 @@
 #include <QApplication>
 #include <QStyleHints>
 #include <QQuickWindow>
+#include <QSslSocket>
 
 #include "appfactory.h"
 #include "internal/commandlineparser.h"
@@ -112,10 +113,12 @@ int main(int argc, char** argv)
 
     QGuiApplication::styleHints()->setMousePressAndHoldInterval(250);
 
+// Can't use MUSE_APP_TITLE until next major release, because this "application name" is used to determine
+// where user settings are stored. Changing it would result in all user settings being lost.
 #ifdef MUSE_APP_UNSTABLE
-    QCoreApplication::setApplicationName(MUSE_APP_NAME_MACHINE_READABLE MUSE_APP_VERSION_MAJOR "Development");
+    QCoreApplication::setApplicationName("MuseScore4Development");
 #else
-    QCoreApplication::setApplicationName(MUSE_APP_NAME_MACHINE_READABLE MUSE_APP_VERSION_MAJOR);
+    QCoreApplication::setApplicationName("MuseScore4");
 #endif
     QCoreApplication::setOrganizationName("MuseScore");
     QCoreApplication::setOrganizationDomain("musescore.org");
@@ -131,6 +134,15 @@ int main(int argc, char** argv)
 
     using namespace muse;
     using namespace mu::app;
+
+    auto fixSslBackend = []() {
+#ifdef Q_OS_WIN
+        // NOTE: Force schannel backend. Qt prefers OpenSSL when qopensslbackend.dll
+        //       is present, which can crash on ABI mismatch with bundled OpenSSL.
+        //       see https://github.com/musescore/MuseScore/issues/33401
+        QSslSocket::setActiveBackend("schannel");
+#endif
+    };
 
     // ====================================================
     // Parse command line options
@@ -149,38 +161,33 @@ int main(int argc, char** argv)
         qapp = new QApplication(argc, argv);
     }
 
+    fixSslBackend();
+
     commandLineParser.processBuiltinArgs(*qapp);
-    std::shared_ptr<MuseScoreCmdOptions> opt = commandLineParser.options();
+    CmdOptions opt = commandLineParser.options();
 
 #else
     QCoreApplication* qapp = new QApplication(argc, argv);
-    std::shared_ptr<MuseScoreCmdOptions> opt = std::make_shared<MuseScoreCmdOptions>();
-    opt->runMode = IApplication::RunMode::GuiApp;
+
+    fixSslBackend();
+
+    CmdOptions opt;
+    opt.runMode = IApplication::RunMode::GuiApp;
 #endif
 
-    // ====================================================
-    // Setup application
-    // ====================================================
+    AppFactory f;
+    std::shared_ptr<muse::IApplication> app = f.newApp(opt);
 
-    //! NOTE: We immediately launch the application's event loop
-    // to be able to show a splash screen (on Linux, splash screen won't show without event loop).
-    // All subsequent initialization steps will be executed as events in the event loop.
+    app->setup();
 
-    std::shared_ptr<muse::IApplication> app;
-    QMetaObject::invokeMethod(qapp, [qapp, &app, &opt]() {
-        AppFactory f;
-        app = f.newApp(opt);
-        IF_ASSERT_FAILED(app) {
-            return;
-        }
-        app->showSplash();
-        QMetaObject::invokeMethod(qapp, [qapp, &app]() {
-            app->setup();
-            QMetaObject::invokeMethod(qapp, [&app]() {
-                app->setupNewContext();
-            }, Qt::QueuedConnection);
-        }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    app->setupNewContext();
+
+    LOGI() << QString("SSL Info: supported: %1, build: %2, runtime: %3, active backend: %4, available backends: %5")
+        .arg(QSslSocket::supportsSsl())
+        .arg(QSslSocket::sslLibraryBuildVersionString())
+        .arg(QSslSocket::sslLibraryVersionString())
+        .arg(QSslSocket::activeBackend())
+        .arg(QSslSocket::availableBackends().join(", "));
 
     // ====================================================
     // Run main loop
@@ -191,9 +198,7 @@ int main(int argc, char** argv)
     // Quit
     // ====================================================
 
-    if (app) {
-        app->finish();
-    }
+    app->finish();
 
     delete qapp;
 

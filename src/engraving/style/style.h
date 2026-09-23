@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -27,7 +27,7 @@
 
 #include "global/io/iodevice.h"
 
-#include "../types/spatium.h"
+#include "../types/dimension.h"
 #include "../types/propertyvalue.h"
 
 #include "styledef.h"
@@ -53,14 +53,14 @@ public:
         return value(idx).value<Spatium>();
     }
 
-    double   styleAbsolute(Sid idx) const { assert(MStyle::valueType(idx) == P_TYPE::SPATIUM); return valueAbsolute(idx); }
-    String   styleSt(Sid idx) const { assert(MStyle::valueType(idx) == P_TYPE::STRING); return value(idx).value<String>(); }
+    Millimetre styleMM(Sid idx) const { assert(MStyle::valueType(idx) == P_TYPE::SPATIUM); return valueMM(idx); }
+    String  styleSt(Sid idx) const { assert(MStyle::valueType(idx) == P_TYPE::STRING); return value(idx).value<String>(); }
     bool     styleB(Sid idx) const { assert(MStyle::valueType(idx) == P_TYPE::BOOL); return value(idx).toBool(); }
     double   styleD(Sid idx) const { assert(MStyle::valueType(idx) == P_TYPE::REAL); return value(idx).toReal(); }
     int      styleI(Sid idx) const { /* can be int or enum, so no assert */ return value(idx).toInt(); }
 
     const PropertyValue& value(Sid idx) const;
-    double valueAbsolute(Sid idx) const;
+    Millimetre valueMM(Sid idx) const;
 
     void set(Sid idx, const PropertyValue& v);
 
@@ -93,6 +93,6 @@ private:
     bool readTextStyleValCompat(XmlReader&);
 
     std::array<PropertyValue, size_t(Sid::STYLES)> m_values;
-    std::array<double, size_t(Sid::STYLES)> m_precomputedValues;
+    std::array<Millimetre, size_t(Sid::STYLES)> m_precomputedValues;
 };
 }

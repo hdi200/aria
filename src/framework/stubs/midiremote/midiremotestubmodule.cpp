@@ -29,24 +29,13 @@
 using namespace muse::midiremote;
 using namespace muse::modularity;
 
-static const std::string mname("midiremote_stub");
-
 std::string MidiRemoteModule::moduleName() const
 {
-    return mname;
+    return "midiremote_stub";
 }
 
 void MidiRemoteModule::registerExports()
 {
-    globalIoc()->registerExport<IMidiRemoteConfiguration>(mname, std::make_shared<MidiRemoteConfigurationStub>());
-}
-
-IContextSetup* MidiRemoteModule::newContext(const ContextPtr& ctx) const
-{
-    return new MidiRemoteContext(ctx);
-}
-
-void MidiRemoteContext::registerExports()
-{
-    ioc()->registerExport<IMidiRemote>(mname, std::make_shared<MidiRemoteStub>());
+    ioc()->registerExport<IMidiRemote>(moduleName(), new MidiRemoteStub());
+    ioc()->registerExport<IMidiRemoteConfiguration>(moduleName(), new MidiRemoteConfigurationStub());
 }

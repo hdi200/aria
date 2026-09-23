@@ -5,7 +5,7 @@
  * MuseScore Studio
  * Music Composition & Notation
  *
- * Copyright (C) 2021 MuseScore Limited
+ * Copyright (C) 2021 MuseScore Limited and others
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,6 +35,10 @@
 using namespace mu::engraving;
 using namespace mu::palette;
 
+namespace mu::engraving {
+extern MasterScore* gpaletteScore;
+}
+
 //---------------------------------------------------------
 //   createSymbolPalette
 //---------------------------------------------------------
@@ -56,12 +60,11 @@ void SymbolDialog::createSymbols()
     // init the font if not done yet
     engravingFonts()->fontByName(f->name());
     m_symbolsWidget->clear();
-    auto paletteScore = paletteScoreProvider()->paletteScore();
     for (SymId symId : Smufl::smuflRanges().at(range)) {
         String symName = SymNames::translatedUserNameForSymId(symId);
         if (search->text().isEmpty()
             || symName.toQString().contains(search->text(), Qt::CaseInsensitive)) {
-            auto s = std::make_shared<Symbol>(paletteScore->dummy());
+            auto s = std::make_shared<Symbol>(gpaletteScore->dummy());
             s->setSym(symId, f);
             m_symbolsWidget->appendElement(s, symName);
         }

@@ -30,7 +30,7 @@
 #include "audiopluginstypes.h"
 
 namespace muse::audioplugins {
-class IKnownAudioPluginsRegister : MODULE_GLOBAL_INTERFACE
+class IKnownAudioPluginsRegister : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(IKnownAudioPluginsRegister)
 
@@ -38,6 +38,7 @@ public:
     virtual ~IKnownAudioPluginsRegister() = default;
 
     virtual Ret load() = 0;
+    virtual Ret clear() = 0;
 
     using PluginInfoAccepted = std::function<bool (const AudioPluginInfo& info)>;
 
