@@ -887,6 +887,23 @@ void testBlankPartDynamicsRequireApproval(const std::filesystem::path& testRoot)
     const std::string repaired = savedExcerptXml(root);
     expect(countOccurrences(repaired, "other-dynamics") == 0, "Blank part dynamic was not repaired");
     expect(countOccurrences(repaired, "<subtype>mf</subtype>") == 1, "Repaired part dynamic is not mf");
+
+    // The old part-view bug could instead leave the full score blank.
+    reopened.reset();
+    const std::filesystem::path masterPath = root / "blank-dynamics-repaired.mscx";
+    std::string master = readFile(masterPath);
+    const size_t masterMf = master.find("<subtype>mf</subtype>");
+    expect(masterMf != std::string::npos, "The repaired full score has no mf dynamic");
+    master.replace(masterMf, std::string("<subtype>mf</subtype>").size(), "<subtype>other-dynamics</subtype>");
+    writeFile(masterPath, master);
+    reopened = msr::render::ScoreRenderSession::open(masterPath.string(), error);
+    expect(reopened != nullptr, "Could not reopen the damaged full score: " + error);
+    expect(reopened->legacyRepairIssues(issues, error), "Could not scan the damaged full score: " + error);
+    expect(issues.size() == 1 && issues.front().location == "Full score", "The full-score dynamic was not offered as a repair");
+    expect(reopened->applyLegacyRepairs({ issues.front().index }, state, error), "Could not repair the full score: " + error);
+    saveSnapshot(*reopened, root, "blank-full-score-repaired");
+    expect(readFile(root / "blank-full-score-repaired.mscx").find("other-dynamics") == std::string::npos,
+           "The full-score dynamic was not saved after repair");
 }
 
 void testOldPartTempoRequiresApproval(const std::filesystem::path& testRoot)

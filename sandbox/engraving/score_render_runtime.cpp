@@ -128,7 +128,7 @@ std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::Mas
                             }
                         }
                         kind = "tempo";
-                        message = "Match this part's tempo to the same marking in a linked view.";
+                        message = "Restore this tempo setting from its matching linked marking.";
                     }
                     if (!source || conflicting) { continue; }
                     msr::render::ScoreLegacyRepairIssue issue;
