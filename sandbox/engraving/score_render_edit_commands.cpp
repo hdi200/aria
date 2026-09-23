@@ -3637,6 +3637,15 @@
         return true;
     }
 
+    void markLinkedScoresForLayout(const mu::engraving::Score* changedScore)
+    {
+        for (mu::engraving::Score* linkedScore : m_masterScore->scoreList()) {
+            if (linkedScore && linkedScore != changedScore) {
+                linkedScore->setLayoutAll();
+            }
+        }
+    }
+
     bool undo(msr::render::ScoreEditState& output, std::string& errorMessage)
     {
         if (!supportsEditing()) {
@@ -3652,16 +3661,11 @@
 
         score->undoRedo(true, nullptr);
         // The shared undo stack restores linked notation in every score, but
-        // undoRedo() lays out only the score it is invoked on. Re-layout the
-        // excerpts too so derived notation (for example generated accidentals
-        // after a key-signature change) cannot remain stale and be serialized.
-        for (mu::engraving::Score* linkedScore : m_masterScore->scoreList()) {
-            if (!linkedScore || linkedScore == score) {
-                continue;
-            }
-            linkedScore->setLayoutAll();
-            linkedScore->doLayout();
-        }
+        // undoRedo() lays out only the score it is invoked on. Mark the other
+        // views stale rather than laying them all out here, which is slow on
+        // scores with many parts: saveToPath() lays out every view before
+        // serializing, and a view is laid out again when it is shown.
+        markLinkedScoresForLayout(score);
         refreshAfterEdit();
         output = makeEditState(score);
         return true;
@@ -3681,13 +3685,7 @@
         }
 
         score->undoRedo(false, nullptr);
-        for (mu::engraving::Score* linkedScore : m_masterScore->scoreList()) {
-            if (!linkedScore || linkedScore == score) {
-                continue;
-            }
-            linkedScore->setLayoutAll();
-            linkedScore->doLayout();
-        }
+        markLinkedScoresForLayout(score);
         refreshAfterEdit();
         output = makeEditState(score);
         return true;

@@ -10,7 +10,11 @@ enum ScoreLegacyRepairBackup {
         }
 
         let backupsRoot = documentsURL.appendingPathComponent("Aria Backups", isDirectory: true)
-        let backupFolder = backupsRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let backupFolder = uniqueBackupFolder(
+            in: backupsRoot,
+            scoreName: sourceURL.deletingPathExtension().lastPathComponent,
+            fileManager: fileManager
+        )
         try fileManager.createDirectory(at: backupFolder, withIntermediateDirectories: true)
 
         // Managed loose MSCX scores keep images and other package entries beside
@@ -36,5 +40,22 @@ enum ScoreLegacyRepairBackup {
             throw ScoreDocumentServiceError.bridgeFailure("Aria could not verify the untouched backup copy.")
         }
         return destinationURL
+    }
+
+    /// A folder people can recognize in the Files app, e.g. "Hikari – 2026-09-23 14.05.09".
+    nonisolated private static func uniqueBackupFolder(in root: URL, scoreName: String, fileManager: FileManager) -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        let name = scoreName.isEmpty ? "Score" : scoreName
+        let base = "\(name) – \(formatter.string(from: Date()))"
+
+        var candidate = root.appendingPathComponent(base, isDirectory: true)
+        var counter = 2
+        while fileManager.fileExists(atPath: candidate.path) {
+            candidate = root.appendingPathComponent("\(base) (\(counter))", isDirectory: true)
+            counter += 1
+        }
+        return candidate
     }
 }

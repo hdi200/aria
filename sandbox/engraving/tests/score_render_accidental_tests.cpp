@@ -577,7 +577,8 @@ void testPointEntryKeySignatures(const std::filesystem::path& root)
 
 void testLinearScoresOpenInPageMode(const std::filesystem::path& root)
 {
-    std::string xml = scoreXml(0, { { 60, 14 } }, 99);
+    // Enough bars to need a second page even on A4 (100 empty bars fit on one).
+    std::string xml = scoreXml(0, { { 60, 14 } }, 199);
     const size_t scoreTagStart = xml.find("<Score>");
     expect(scoreTagStart != std::string::npos, "Could not add the linear layout fixture tag");
     const size_t scoreTagEnd = scoreTagStart + std::string("<Score>").size();
@@ -659,7 +660,7 @@ void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& r
     expect(session->setInstrumentFromTick(
                state.selection.partId,
                state.selection.tick,
-               "strings.viola",
+               "viola", // template id, as the app's instrument catalog passes
                changedState,
                error),
            "Could not change instrument from the selected measure: " + error);
