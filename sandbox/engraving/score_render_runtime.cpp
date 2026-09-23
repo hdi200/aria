@@ -65,50 +65,86 @@ int harmonyCountInScore(const mu::engraving::Score* score)
     return count;
 }
 
-// Before addExpression set dynamic types through the undo stack, a dynamic added in one
-// view reached its linked copies (full score or parts) as a blank "other-dynamics". On
-// reading, MuseScore turns that into the literal text "other-dynamics" and prints it.
-// Restore such copies from a linked copy that has the real marking.
-int repairBlankLinkedDynamics(mu::engraving::MasterScore* masterScore)
+// Only identify repairs backed by a single, unambiguous value in linked views.
+// Scanning must never modify the score: the user sees and approves these first.
+struct LegacyRepairCandidate {
+    msr::render::ScoreLegacyRepairIssue issue;
+    mu::engraving::EngravingItem* target = nullptr;
+    mu::engraving::EngravingItem* source = nullptr;
+};
+
+std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::MasterScore* masterScore)
 {
     static const muse::String blankDynamicText(u"other-dynamics");
-    int repaired = 0;
+    std::vector<LegacyRepairCandidate> candidates;
+    int scoreIndex = 0;
     for (mu::engraving::Score* score : masterScore->scoreList()) {
         for (mu::engraving::Measure* measure = score->firstMeasure(); measure; measure = measure->nextMeasure()) {
             for (mu::engraving::Segment* segment = measure->first(); segment && segment->measure() == measure; segment = segment->next()) {
                 for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
-                    if (!annotation || !annotation->isDynamic()) {
+                    if (!annotation) {
                         continue;
                     }
-
-                    mu::engraving::Dynamic* dynamic = mu::engraving::toDynamic(annotation);
-                    const muse::String& text = dynamic->xmlText();
-                    if (dynamic->dynamicType() != mu::engraving::DynamicType::OTHER
-                        || !(text.empty() || text == blankDynamicText)) {
-                        continue;
-                    }
-
-                    for (mu::engraving::EngravingObject* linked : dynamic->linkList()) {
-                        if (linked == dynamic || !linked->isDynamic()) {
+                    mu::engraving::EngravingItem* source = nullptr;
+                    bool conflicting = false;
+                    std::string kind;
+                    std::string message;
+                    if (annotation->isDynamic()) {
+                        auto* target = mu::engraving::toDynamic(annotation);
+                        if (target->dynamicType() != mu::engraving::DynamicType::OTHER
+                            || !(target->xmlText().empty() || target->xmlText() == blankDynamicText)) {
                             continue;
                         }
-
-                        const mu::engraving::Dynamic* source = mu::engraving::toDynamic(linked);
-                        if (source->dynamicType() == mu::engraving::DynamicType::OTHER) {
-                            continue;
+                        for (mu::engraving::EngravingObject* linked : target->linkList()) {
+                            if (linked == target || !linked->isDynamic()) { continue; }
+                            auto* possible = mu::engraving::toDynamic(linked);
+                            if (possible->dynamicType() == mu::engraving::DynamicType::OTHER) { continue; }
+                            if (source) {
+                                auto* first = mu::engraving::toDynamic(source);
+                                if (first->dynamicType() != possible->dynamicType() || first->xmlText() != possible->xmlText()) {
+                                    conflicting = true;
+                                }
+                            } else {
+                                source = possible;
+                            }
                         }
-
-                        dynamic->setDynamicType(source->dynamicType());
-                        dynamic->setXmlText(source->xmlText());
-                        ++repaired;
-                        break;
+                        kind = "dynamic";
+                        message = "Restore a blank dynamic from its matching linked marking.";
+                    } else if (annotation->isTempoText()) {
+                        auto* target = mu::engraving::toTempoText(annotation);
+                        // Loading can normalize the in-memory BPM from the linked
+                        // master even when this part serialized 120 BPM. The
+                        // stale followText flag survives and identifies the bug.
+                        if (target->followText()) { continue; }
+                        for (mu::engraving::EngravingObject* linked : target->linkList()) {
+                            if (linked == target || !linked->isTempoText()) { continue; }
+                            auto* possible = mu::engraving::toTempoText(linked);
+                            if (!possible->followText() || std::abs(possible->tempoBpm() - 120.0) < 0.01
+                                || possible->xmlText() != target->xmlText()) { continue; }
+                            if (source && std::abs(mu::engraving::toTempoText(source)->tempoBpm() - possible->tempoBpm()) > 0.01) {
+                                conflicting = true;
+                            } else if (!source) {
+                                source = possible;
+                            }
+                        }
+                        kind = "tempo";
+                        message = "Match this part's tempo to the same marking in a linked view.";
                     }
+                    if (!source || conflicting) { continue; }
+                    msr::render::ScoreLegacyRepairIssue issue;
+                    issue.index = static_cast<int>(candidates.size());
+                    issue.measureNumber = measure->measureNumber() + 1;
+                    issue.staffIndex = static_cast<int>(annotation->staffIdx());
+                    issue.kind = kind;
+                    issue.location = scoreIndex == 0 ? "Full score" : "Part " + std::to_string(scoreIndex);
+                    issue.message = message;
+                    candidates.push_back({ issue, annotation, source });
                 }
             }
         }
+        ++scoreIndex;
     }
-
-    return repaired;
+    return candidates;
 }
 
 bool validatePartHarmonyLinksBeforeSave(mu::engraving::MasterScore* masterScore,

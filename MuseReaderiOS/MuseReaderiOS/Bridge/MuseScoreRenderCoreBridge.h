@@ -160,6 +160,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+@interface MSRLegacyRepairIssue : NSObject
+
+@property (nonatomic, readonly) NSInteger index;
+@property (nonatomic, readonly) NSInteger measureNumber;
+@property (nonatomic, readonly) NSInteger staffIndex;
+@property (nonatomic, copy, readonly) NSString *kind;
+@property (nonatomic, copy, readonly) NSString *location;
+@property (nonatomic, copy, readonly) NSString *message;
+
+- (instancetype)initWithIndex:(NSInteger)index
+                measureNumber:(NSInteger)measureNumber
+                   staffIndex:(NSInteger)staffIndex
+                         kind:(NSString *)kind
+                     location:(NSString *)location
+                      message:(NSString *)message NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
 @interface MSRNoteEntryPreviewInfo : NSObject
 
 @property (nonatomic, readonly) NSInteger pageIndex;
@@ -486,6 +506,9 @@ isEditableText:(BOOL)isEditableText
                                                                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackEventAudioData(soundFontPath:startTimeSeconds:durationSeconds:metronomeEnabled:));
 - (nullable NSArray<MSRPlaybackMeasureRegion *> *)playbackMeasureRegionsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackMeasureRegions());
 - (nullable MSRScoreCorruptionReport *)scoreCorruptionReportWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(scoreCorruptionReport());
+- (nullable NSArray<MSRLegacyRepairIssue *> *)legacyRepairIssuesWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(legacyRepairIssues());
+- (nullable MSREditState *)applyLegacyRepairsAtIndexes:(NSArray<NSNumber *> *)indexes
+                                                 error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(applyLegacyRepairs(indexes:));
 - (nullable MSREditState *)selectCorruptionIssueAtIndex:(NSInteger)index
                                                    error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(selectCorruptionIssue(index:));
 - (nullable MSRScoreCorruptionReport *)clearCorruptionIssueAtIndex:(NSInteger)index

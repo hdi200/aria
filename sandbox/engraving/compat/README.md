@@ -63,5 +63,5 @@ Native tests in `tests/score_render_accidental_tests.cpp` cover the edit side, w
 this check does not (build with `-DSCORE_RENDER_BUILD_TESTS=ON`):
 `part names survive save and follow instrument replacement`,
 `new dynamics and text reach linked parts`,
-`blank part dynamics are repaired on open`, and
+`blank part dynamics require approval`, and
 `jumps and markers reach linked parts`.

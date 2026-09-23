@@ -707,6 +707,21 @@ struct ScoreCorruptionReport: Sendable, Equatable {
     nonisolated static let clean = ScoreCorruptionReport(isCorrupted: false, details: "", issues: [])
 }
 
+struct ScoreLegacyRepairIssue: Identifiable, Sendable, Equatable {
+    let index: Int
+    let measureNumber: Int
+    let staffIndex: Int
+    let kind: String
+    let location: String
+    let message: String
+
+    var id: Int { index }
+    var title: String {
+        let category = kind == "tempo" ? "Tempo" : "Dynamic"
+        return "\(category) · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
+    }
+}
+
 struct ScoreSession: Identifiable, Sendable {
     let document: ScoreDocument
     let previewPages: [ScorePage]

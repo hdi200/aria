@@ -144,6 +144,18 @@ bool msr::render::ScoreRenderSession::scoreCorruptionReport(ScoreCorruptionRepor
     return m_impl->scoreCorruptionReport(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::legacyRepairIssues(std::vector<ScoreLegacyRepairIssue>& output, std::string& errorMessage)
+{
+    return m_impl->legacyRepairIssues(output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::applyLegacyRepairs(const std::vector<int>& issueIndexes,
+                                                         ScoreEditState& output,
+                                                         std::string& errorMessage)
+{
+    return m_impl->applyLegacyRepairs(issueIndexes, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::selectCorruptionIssue(const int issueIndex,
                                                             ScoreEditState& output,
                                                             std::string& errorMessage)

@@ -739,6 +739,29 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
 @end
 
+@implementation MSRLegacyRepairIssue
+
+- (instancetype)initWithIndex:(NSInteger)index
+                measureNumber:(NSInteger)measureNumber
+                   staffIndex:(NSInteger)staffIndex
+                         kind:(NSString *)kind
+                     location:(NSString *)location
+                      message:(NSString *)message
+{
+    self = [super init];
+    if (self) {
+        _index = index;
+        _measureNumber = measureNumber;
+        _staffIndex = staffIndex;
+        _kind = [kind copy];
+        _location = [location copy];
+        _message = [message copy];
+    }
+    return self;
+}
+
+@end
+
 @implementation MSRPlaybackAudioData
 
 - (instancetype)initWithSampleRate:(NSInteger)sampleRate
@@ -1247,6 +1270,59 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
     if (error) {
         *error = UnavailableError(@"This build of Aria is not linked to MuseScore corruption inspection yet.");
     }
+    return nil;
+#endif
+}
+
+- (NSArray<MSRLegacyRepairIssue *> *)legacyRepairIssuesWithError:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) { *error = FailureError(@"The MuseScore render session is no longer available."); }
+        return nil;
+    }
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    std::string errorMessage;
+    if (!_session->legacyRepairIssues(issues, errorMessage)) {
+        if (error) { *error = FailureError(FailureMessage(errorMessage, @"Aria could not inspect older score issues.")); }
+        return nil;
+    }
+    NSMutableArray<MSRLegacyRepairIssue *> *result = [[NSMutableArray alloc] initWithCapacity:issues.size()];
+    for (const auto& issue : issues) {
+        [result addObject:[[MSRLegacyRepairIssue alloc] initWithIndex:issue.index
+                                                        measureNumber:issue.measureNumber
+                                                           staffIndex:issue.staffIndex
+                                                                 kind:[NSString stringWithUTF8String:issue.kind.c_str()]
+                                                             location:[NSString stringWithUTF8String:issue.location.c_str()]
+                                                              message:[NSString stringWithUTF8String:issue.message.c_str()]]];
+    }
+    return result;
+#else
+    if (error) { *error = UnavailableError(@"This build of Aria cannot inspect older score issues."); }
+    return nil;
+#endif
+}
+
+- (MSREditState *)applyLegacyRepairsAtIndexes:(NSArray<NSNumber *> *)indexes
+                                        error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) { *error = FailureError(@"The MuseScore render session is no longer available."); }
+        return nil;
+    }
+    std::vector<int> selected;
+    selected.reserve(indexes.count);
+    for (NSNumber *index in indexes) { selected.push_back(index.intValue); }
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->applyLegacyRepairs(selected, editState, errorMessage)) {
+        if (error) { *error = FailureError(FailureMessage(errorMessage, @"Aria could not repair this score.")); }
+        return nil;
+    }
+    return MakeEditState(editState);
+#else
+    if (error) { *error = UnavailableError(@"This build of Aria cannot repair older score issues."); }
     return nil;
 #endif
 }

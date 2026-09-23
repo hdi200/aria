@@ -1,3 +1,53 @@
+    bool legacyRepairIssues(std::vector<msr::render::ScoreLegacyRepairIssue>& output, std::string& errorMessage)
+    {
+        if (!m_masterScore) {
+            errorMessage = "The MuseScore render session is no longer available.";
+            return false;
+        }
+        output.clear();
+        for (const LegacyRepairCandidate& candidate : scanLegacyRepairCandidates(m_masterScore.get())) {
+            output.push_back(candidate.issue);
+        }
+        return true;
+    }
+
+    bool applyLegacyRepairs(const std::vector<int>& issueIndexes,
+                            msr::render::ScoreEditState& output,
+                            std::string& errorMessage)
+    {
+        if (!supportsEditing() || issueIndexes.empty()) {
+            errorMessage = "No score repairs were selected.";
+            return false;
+        }
+        const std::vector<LegacyRepairCandidate> candidates = scanLegacyRepairCandidates(m_masterScore.get());
+        std::unordered_set<int> uniqueIndexes;
+        for (int index : issueIndexes) {
+            if (index < 0 || index >= static_cast<int>(candidates.size()) || !uniqueIndexes.insert(index).second) {
+                errorMessage = "The repair list changed. Reopen the score and review it again.";
+                return false;
+            }
+        }
+        for (int index : issueIndexes) {
+            const LegacyRepairCandidate& candidate = candidates.at(static_cast<size_t>(index));
+            if (candidate.issue.kind == "dynamic") {
+                auto* target = mu::engraving::toDynamic(candidate.target);
+                auto* source = mu::engraving::toDynamic(candidate.source);
+                target->setDynamicType(source->dynamicType());
+                target->setXmlText(source->xmlText());
+            } else if (candidate.issue.kind == "tempo") {
+                auto* target = mu::engraving::toTempoText(candidate.target);
+                auto* source = mu::engraving::toTempoText(candidate.source);
+                target->setTempo(source->tempo());
+                target->setFollowText(source->followText());
+                target->score()->setTempo(target->segment(), target->tempo());
+            }
+        }
+        relayoutAllScores();
+        refreshAfterEdit();
+        output = makeEditState(activeScore());
+        return true;
+    }
+
     bool scoreCorruptionReport(msr::render::ScoreCorruptionReport& output, std::string& errorMessage)
     {
         if (!m_masterScore) {
@@ -112,4 +162,3 @@
         std::cout << "Aria corruption repair: raw repair end" << std::endl;
         return true;
     }
-

@@ -242,6 +242,29 @@ actor LiveScoreRenderSession {
         try makeCorruptionReport(from: bridgeSession.scoreCorruptionReport())
     }
 
+    func legacyRepairIssues() throws -> [ScoreLegacyRepairIssue] {
+        try RenderCoreWorkGate.sync {
+            try bridgeSession.legacyRepairIssues().map { issue in
+                ScoreLegacyRepairIssue(
+                    index: issue.index,
+                    measureNumber: issue.measureNumber,
+                    staffIndex: issue.staffIndex,
+                    kind: issue.kind,
+                    location: issue.location,
+                    message: issue.message
+                )
+            }
+        }
+    }
+
+    func applyLegacyRepairs(_ indexes: [Int]) throws -> ScoreEditingState {
+        let editState = try RenderCoreWorkGate.sync {
+            try bridgeSession.applyLegacyRepairs(indexes: indexes.map(NSNumber.init(value:)))
+        }
+        invalidateCachedPlaybackArtifacts()
+        return try makeEditingState(from: editState, refreshScope: .all)
+    }
+
     func selectCorruptionIssue(_ issue: ScoreCorruptionIssue) throws -> ScoreEditingState {
         try makeEditingState(from: bridgeSession.selectCorruptionIssue(index: issue.index))
     }

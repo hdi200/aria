@@ -216,6 +216,7 @@ struct ScoreReaderView: View {
     @State private var lastPhoneLandscapeZoomMode: Bool?
     @State private var selectedToolCategory: ScoreReaderToolCategory
     @State private var textEditorDraft: ScoreReaderTextEditorDraft?
+    @State private var legacyRepairPrompt: ScoreLegacyRepairPrompt?
     @State private var isPartsPanelPresented = false
     @State private var isMixerPresented = false
     @State private var isFeatureTourPresented = false
@@ -766,7 +767,6 @@ struct ScoreReaderView: View {
             }
         }
         .onAppear { handleReaderAppear() }
-        .task { await presentFeatureTourIfNeeded() }
         .task {
             readerState.playbackFollowEnabled = initialRememberedState.playbackFollowEnabled
             let rememberedPartIndex = rememberedPartIndexForInitialLoad()
@@ -778,6 +778,19 @@ struct ScoreReaderView: View {
             readerState.startPlaybackMonitoring()
             await readerState.prepareInitialInteractionMode()
             await reportReaderReadyWhenAvailable()
+            if readerState.supportsEditing, let liveRenderSession = session.liveRenderSession {
+                do {
+                    let issues = try await liveRenderSession.legacyRepairIssues()
+                    if !issues.isEmpty {
+                        legacyRepairPrompt = ScoreLegacyRepairPrompt(issues: issues)
+                    } else {
+                        await presentFeatureTourIfNeeded()
+                    }
+                } catch {
+                    // An inspection failure must never prevent the score from opening.
+                    await presentFeatureTourIfNeeded()
+                }
+            }
         }
         .onDisappear {
             unlockPhoneOrientation()
@@ -865,6 +878,11 @@ struct ScoreReaderView: View {
 
     private var readerSheetsBody: some View {
         readerLifecycleBody
+        .sheet(item: $legacyRepairPrompt) { prompt in
+            ScoreLegacyRepairSheet(issues: prompt.issues) { selectedIndexes in
+                try await applyLegacyRepairs(selectedIndexes, from: prompt)
+            }
+        }
         .sheet(isPresented: Binding(
             get: { isMixerPresented && UIDevice.current.userInterfaceIdiom == .phone },
             set: { isMixerPresented = $0 }
@@ -1057,6 +1075,35 @@ struct ScoreReaderView: View {
             )
             .frame(width: 0, height: 0)
         )
+    }
+
+    @MainActor
+    private func applyLegacyRepairs(_ indexes: [Int], from prompt: ScoreLegacyRepairPrompt) async throws {
+        guard let liveRenderSession = session.liveRenderSession, !indexes.isEmpty else {
+            throw ScoreDocumentServiceError.bridgeFailure("No score fixes were selected.")
+        }
+        guard await readerState.savePendingChanges() else {
+            throw ScoreDocumentServiceError.bridgeFailure(readerState.editingErrorMessage ?? "Aria could not save current edits before making a backup.")
+        }
+        let currentIssues = try await liveRenderSession.legacyRepairIssues()
+        guard currentIssues == prompt.issues else {
+            throw ScoreDocumentServiceError.bridgeFailure("The score changed. Close and reopen it to review the fixes again.")
+        }
+
+        let scoreURL = session.document.url
+        _ = try await Task.detached(priority: .userInitiated) {
+            try ScoreLegacyRepairBackup.createUntouchedCopy(of: scoreURL)
+        }.value
+
+        let editingState = try await liveRenderSession.applyLegacyRepairs(indexes)
+        let remaining = try await liveRenderSession.legacyRepairIssues()
+        guard remaining.count == currentIssues.count - indexes.count else {
+            throw ScoreDocumentServiceError.bridgeFailure("Aria made a repair, but could not verify every selected issue. The untouched backup is in Aria Backups.")
+        }
+        readerState.refreshAfterScoreMutation(with: editingState)
+        guard await readerState.savePendingChanges() else {
+            throw ScoreDocumentServiceError.bridgeFailure("The fixes could not be saved. The untouched backup is in Aria Backups.")
+        }
     }
 
     private var floatingToolCategory: ScoreReaderToolCategory? {

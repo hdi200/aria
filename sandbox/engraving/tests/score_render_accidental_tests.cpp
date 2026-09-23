@@ -7,6 +7,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -847,13 +848,13 @@ std::filesystem::path savedExcerptPath(const std::filesystem::path& root)
     fail("Saved score has no part (excerpt) file");
 }
 
-void testBlankPartDynamicsAreRepairedOnOpen(const std::filesystem::path& testRoot)
+void testBlankPartDynamicsRequireApproval(const std::filesystem::path& testRoot)
 {
     // Folder-style .mscx saves replace their whole directory, so use one of our own.
     const std::filesystem::path root = testRoot / "blank-dynamics";
     std::filesystem::create_directories(root);
     // Scores saved before the addExpression fix carry blank "other-dynamics" copies in
-    // their parts. Recreate one and check that opening it in Aria restores the marking.
+    // their parts. Recreate one and check that opening alone never changes it.
     auto session = openSession(root, "blank-dynamics", scoreXml(0, { { 60, 14 } }, 0));
     int pageCount = 0;
     std::string error;
@@ -875,10 +876,56 @@ void testBlankPartDynamicsAreRepairedOnOpen(const std::filesystem::path& testRoo
     std::unique_ptr<msr::render::ScoreRenderSession> reopened
         = msr::render::ScoreRenderSession::open((root / "blank-dynamics-saved.mscx").string(), error);
     expect(reopened != nullptr, "Could not reopen the damaged score: " + error);
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    expect(reopened->legacyRepairIssues(issues, error), "Could not scan old repair issues: " + error);
+    expect(issues.size() == 1 && issues.front().kind == "dynamic", "The blank dynamic was not offered as an explicit repair");
+    saveSnapshot(*reopened, root, "blank-dynamics-unchanged");
+    expect(countOccurrences(savedExcerptXml(root), "other-dynamics") > 0, "Opening or saving silently repaired the dynamic");
+    expect(reopened->applyLegacyRepairs({ issues.front().index }, state, error), "Could not apply the selected repair: " + error);
+    expect(reopened->legacyRepairIssues(issues, error) && issues.empty(), "The repair did not clear the detected issue");
     saveSnapshot(*reopened, root, "blank-dynamics-repaired");
     const std::string repaired = savedExcerptXml(root);
     expect(countOccurrences(repaired, "other-dynamics") == 0, "Blank part dynamic was not repaired");
     expect(countOccurrences(repaired, "<subtype>mf</subtype>") == 1, "Repaired part dynamic is not mf");
+}
+
+void testOldPartTempoRequiresApproval(const std::filesystem::path& testRoot)
+{
+    const std::filesystem::path root = testRoot / "old-part-tempo";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "old-part-tempo", scoreXml(0, { { 60, 14 } }, 0));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+    msr::render::ScoreEditState state;
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->addTempo("quarter", 90, state, error), "Could not add a tempo: " + error);
+    saveSnapshot(*session, root, "old-part-tempo-saved");
+    session.reset();
+
+    const std::filesystem::path partPath = savedExcerptPath(root);
+    std::string part = readFile(partPath);
+    expect(part.find("<followText>1</followText>") != std::string::npos, "The linked tempo did not serialize followText");
+    part.replace(part.find("<followText>1</followText>"), std::string("<followText>1</followText>").size(), "<followText>0</followText>");
+    part = std::regex_replace(part, std::regex("<tempo>[^<]+</tempo>"), "<tempo>2</tempo>");
+    writeFile(partPath, part);
+
+    auto reopened = msr::render::ScoreRenderSession::open((root / "old-part-tempo-saved.mscx").string(), error);
+    expect(reopened != nullptr, "Could not reopen the old tempo score: " + error);
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    expect(reopened->legacyRepairIssues(issues, error), "Could not scan old tempo issues: " + error);
+    expect(issues.size() == 1 && issues.front().kind == "tempo", "The default-tempo linked copy was not offered as a repair");
+    expect(readFile(partPath) == part, "Opening silently changed the old part tempo file");
+    saveSnapshot(*reopened, root, "old-part-tempo-unchanged");
+    const std::string noOpPart = savedExcerptXml(root);
+    expect(noOpPart.find("<tempo>2</tempo>") != std::string::npos,
+           "A no-op save silently changed the old part tempo: " + noOpPart);
+    expect(reopened->applyLegacyRepairs({ issues.front().index }, state, error), "Could not repair the old part tempo: " + error);
+    expect(reopened->legacyRepairIssues(issues, error) && issues.empty(), "The tempo repair did not clear the issue");
+    saveSnapshot(*reopened, root, "old-part-tempo-repaired");
+    expect(savedExcerptXml(root).find("<followText>1</followText>") != std::string::npos,
+           "The repaired part tempo did not save its followText property");
 }
 
 template<typename Function>
@@ -912,7 +959,8 @@ int main()
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
     passed &= runTest("part names survive save and follow instrument replacement", [&] { testPartNamesSurviveSave(testDirectory.path); });
     passed &= runTest("new dynamics and text reach linked parts", [&] { testNewDynamicsAndTextReachLinkedParts(testDirectory.path); });
-    passed &= runTest("blank part dynamics are repaired on open", [&] { testBlankPartDynamicsAreRepairedOnOpen(testDirectory.path); });
+    passed &= runTest("blank part dynamics require approval", [&] { testBlankPartDynamicsRequireApproval(testDirectory.path); });
+    passed &= runTest("old part tempo requires approval", [&] { testOldPartTempoRequiresApproval(testDirectory.path); });
     passed &= runTest("jumps and markers reach linked parts", [&] { testJumpsAndMarkersReachLinkedParts(testDirectory.path); });
     return passed ? 0 : 1;
 }

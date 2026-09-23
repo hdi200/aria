@@ -195,6 +195,15 @@ struct ScoreCorruptionReport {
     std::vector<ScoreCorruptionIssue> issues;
 };
 
+struct ScoreLegacyRepairIssue {
+    int index = 0;
+    int measureNumber = 0;
+    int staffIndex = 0;
+    std::string kind;
+    std::string location;
+    std::string message;
+};
+
 struct PlaybackAudioData {
     int sampleRate = 48000;
     int channelCount = 2;
@@ -266,6 +275,8 @@ public:
     bool playbackTrackSummary(std::vector<PlaybackTrackSummary>& output, std::string& errorMessage) const;
     bool playbackMeasureRegions(std::vector<PlaybackMeasureRegion>& output, std::string& errorMessage) const;
     bool scoreCorruptionReport(ScoreCorruptionReport& output, std::string& errorMessage);
+    bool legacyRepairIssues(std::vector<ScoreLegacyRepairIssue>& output, std::string& errorMessage);
+    bool applyLegacyRepairs(const std::vector<int>& issueIndexes, ScoreEditState& output, std::string& errorMessage);
     bool selectCorruptionIssue(int issueIndex, ScoreEditState& output, std::string& errorMessage);
     bool clearCorruptionIssue(int issueIndex, ScoreEditState& output, ScoreCorruptionReport& report, std::string& errorMessage);
     bool currentEditState(ScoreEditState& output, std::string& errorMessage) const;
