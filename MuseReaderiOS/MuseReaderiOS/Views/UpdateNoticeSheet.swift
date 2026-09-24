@@ -84,26 +84,20 @@ struct UpdateNoticeSheet: View {
     private let items: [Item] = [
         Item(
             id: 0,
-            systemImage: "desktopcomputer",
-            title: "Matches MuseScore Studio 4.7.5",
-            message: "Aria now uses the same engine as MuseScore Studio 4.7.5. Your pages look "
-                + "exactly as they do on your computer, and scores save in MuseScore 4.7's own format."
+            systemImage: "wrench.and.screwdriver",
+            title: "Fixed: markings missing from parts/full score",
+            message: "Sorry about this one! Dynamics, tempo markings, and repeat signs you added in earlier versions of "
+                + "Aria didn't carry between a part and the full score. If you now reopen a score with "
+                + "this problem, Aria will offer to fix it for you. Nothing changes until you tap Fix, "
+                + "and Aria saves a copy of the original when you do. From now on, these markings "
+                + "stay in sync between the full score and its parts."
         ),
         Item(
             id: 1,
-            systemImage: "rectangle.stack",
-            title: "Parts and full score stay in sync",
-            message: "Dynamics, tempo markings, and repeat signs such as D.S. al Coda now appear in "
-                + "every part, and changes you make while viewing a part reach the full score."
-        ),
-        Item(
-            id: 2,
-            systemImage: "wrench.and.screwdriver",
-            title: "Fixes for older scores",
-            message: "Earlier versions of Aria sometimes didn't carry dynamics, tempo markings, or "
-                + "repeat signs between a part and the full score. When you reopen a score with this "
-                + "problem, Aria will show you what's missing and fix it for you. Nothing changes "
-                + "until you tap Fix, and Aria saves a copy of the original when you do."
+            systemImage: "desktopcomputer",
+            title: "Now in sync with MuseScore Studio 4.7.5",
+            message: "Aria now uses the same engine as MuseScore Studio 4.7.5, so your scores look "
+                + "the same here as on your computer. Scores save in MuseScore 4.7 format."
         )
     ]
 
@@ -111,7 +105,7 @@ struct UpdateNoticeSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("This update brings Aria in line with MuseScore Studio 4.7.5 and fixes several issues with parts.")
+                    Text("This update fixes scores affected by an earlier version of Aria and brings Aria in line with MuseScore Studio 4.7.5.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
