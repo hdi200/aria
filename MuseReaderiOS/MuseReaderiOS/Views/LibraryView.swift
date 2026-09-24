@@ -279,20 +279,7 @@ struct LibraryView: View {
             model.presentEarlySupporterMessageIfNeeded()
             await model.checkForUpdateNotice()
         }
-        .onChangeCompatible(of: model.libraryAccessSheet?.id) { _ in
-            // Launch messages share this sheet; whichever waited shows once the other closes.
-            guard model.libraryAccessSheet == nil else {
-                return
-            }
-            model.presentEarlySupporterMessageIfNeeded()
-            model.presentUpdateNoticeIfNeeded()
-        }
-        .onChangeCompatible(of: model.currentSession?.id) { _ in
-            model.presentUpdateNoticeIfNeeded()
-        }
-        .onChangeCompatible(of: accessController.status) { _ in
-            model.presentEarlySupporterMessageIfNeeded()
-        }
+        .modifier(LibraryLaunchMessages(model: model, accessStatus: accessController.status))
         .onChangeCompatible(of: selectedCategory) { _ in
             isEditingActiveSetlist = false
         }
@@ -1047,6 +1034,30 @@ private enum LibraryScoreLayout: String, CaseIterable, Identifiable {
         case .large: return 28
         case .extraLarge: return 32
         }
+    }
+}
+
+/// Shows the launch messages (early supporter, update notice) once nothing else is in the way.
+private struct LibraryLaunchMessages: ViewModifier {
+    @ObservedObject var model: MuseReaderAppModel
+    let accessStatus: LibraryAccessStatus
+
+    func body(content: Content) -> some View {
+        content
+            .onChangeCompatible(of: model.libraryAccessSheet?.id) { _ in
+                // Launch messages share this sheet; whichever waited shows once the other closes.
+                guard model.libraryAccessSheet == nil else {
+                    return
+                }
+                model.presentEarlySupporterMessageIfNeeded()
+                model.presentUpdateNoticeIfNeeded()
+            }
+            .onChangeCompatible(of: model.currentSession?.id) { _ in
+                model.presentUpdateNoticeIfNeeded()
+            }
+            .onChangeCompatible(of: accessStatus) { _ in
+                model.presentEarlySupporterMessageIfNeeded()
+            }
     }
 }
 
