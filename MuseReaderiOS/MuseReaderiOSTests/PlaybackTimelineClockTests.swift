@@ -61,6 +61,40 @@ struct PlaybackTimelineClockTests {
     }
 
     @Test
+    func silentGapHoldsScoreTimeUntilAudioResumes() {
+        var clock = PlaybackTimelineClock()
+        clock.reset(to: 10)
+        clock.recordSilentGap(startingAtPlayerSeconds: 2, durationSeconds: 0.5)
+
+        #expect(clock.positionSeconds(playerSampleTimeSeconds: 1.5) == 11.5)
+        #expect(clock.positionSeconds(playerSampleTimeSeconds: 2.25) == 12)
+        #expect(clock.positionSeconds(playerSampleTimeSeconds: 3.5) == 13)
+
+        clock.reset(to: 20)
+        #expect(clock.positionSeconds(playerSampleTimeSeconds: 3.5) == 23.5)
+    }
+
+    @Test
+    func forwardChunksStopAtTheStreamEnd() {
+        #expect(PlaybackChunkRequest.next(
+            renderFrame: 100, chunkFrames: 6_000, endFrame: 1_000, loopStartFrame: nil, loopEndFrame: nil
+        ) == PlaybackChunkRequest(startFrame: 100, frameCount: 6_000))
+        #expect(PlaybackChunkRequest.next(
+            renderFrame: 1_000, chunkFrames: 6_000, endFrame: 1_000, loopStartFrame: nil, loopEndFrame: nil
+        ) == nil)
+    }
+
+    @Test
+    func loopChunksStopAtTheLoopEndAndWrap() {
+        #expect(PlaybackChunkRequest.next(
+            renderFrame: 9_000, chunkFrames: 6_000, endFrame: 50_000, loopStartFrame: 4_000, loopEndFrame: 12_000
+        ) == PlaybackChunkRequest(startFrame: 9_000, frameCount: 3_000))
+        #expect(PlaybackChunkRequest.next(
+            renderFrame: 12_000, chunkFrames: 6_000, endFrame: 50_000, loopStartFrame: 4_000, loopEndFrame: 12_000
+        ) == PlaybackChunkRequest(startFrame: 4_000, frameCount: 6_000))
+    }
+
+    @Test
     func wallClockFallbackStartsAtPausedPosition() {
         var clock = PlaybackTimelineClock()
         let resumedAt = Date(timeIntervalSinceReferenceDate: 100)

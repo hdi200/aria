@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 
 struct StemSoftwareMix {
@@ -25,14 +26,54 @@ struct StemSoftwareMixer {
             throw StemSoftwareMixerError.invalidBuffer
         }
 
+        guard partSamples.values.allSatisfy({ $0.count == reference.count }) else {
+            throw StemSoftwareMixerError.mismatchedBuffers
+        }
+
+        let frameCount = reference.count / MemoryLayout<Float>.size / 2
+        var left = [Float](repeating: 0, count: frameCount)
+        var right = [Float](repeating: 0, count: frameCount)
+        let levels = try left.withUnsafeMutableBufferPointer { left in
+            try right.withUnsafeMutableBufferPointer { right in
+                try mix(
+                    partSamples: partSamples,
+                    frameCount: frameCount,
+                    settings: settings,
+                    metronomeEnabled: metronomeEnabled,
+                    left: left.baseAddress!,
+                    right: right.baseAddress!
+                )
+            }
+        }
+
+        var interleaved = [Float](repeating: 0, count: frameCount * 2)
+        for frame in 0..<frameCount {
+            interleaved[frame * 2] = left[frame]
+            interleaved[frame * 2 + 1] = right[frame]
+        }
+        let samples = interleaved.withUnsafeBufferPointer { buffer in
+            Data(bytes: buffer.baseAddress!, count: buffer.count * MemoryLayout<Float>.size)
+        }
+        return StemSoftwareMix(interleavedFloat32Samples: samples, normalizedLevels: levels)
+    }
+
+    /// Mixes the first `frameCount` frames of interleaved stereo stems straight into
+    /// planar output channels, which must hold `frameCount` zeroed samples.
+    /// Returns post-fader part levels.
+    static func mix(
+        partSamples: [String: Data],
+        frameCount: Int,
+        settings: ScoreMixerSettings,
+        metronomeEnabled: Bool,
+        left: UnsafeMutablePointer<Float>,
+        right: UnsafeMutablePointer<Float>
+    ) throws -> [String: Float] {
+        let expectedByteCount = frameCount * 2 * MemoryLayout<Float>.size
         let partIDs = Set(partSamples.keys.filter { $0 != "metronome" })
-        let sampleCount = reference.count / MemoryLayout<Float>.size
-        let frameCount = sampleCount / 2
-        var mixedSamples = [Float](repeating: 0, count: sampleCount)
         var normalizedLevels: [String: Float] = [:]
 
         for id in partSamples.keys.sorted() {
-            guard let data = partSamples[id], data.count == reference.count else {
+            guard let data = partSamples[id], data.count >= expectedByteCount else {
                 throw StemSoftwareMixerError.mismatchedBuffers
             }
 
@@ -45,37 +86,30 @@ struct StemSoftwareMixer {
                 gain = settings.gain(for: id, activePartIDs: partIDs)
                 pan = min(max(settings.settings(for: id).pan, -1), 1)
             }
-            guard gain > 0 else { continue }
+            guard gain > 0, frameCount > 0 else { continue }
 
             // Match the stereo balance behavior of AVAudioMixing: centre preserves
             // both channels and either edge attenuates only the opposite channel.
-            let leftGain = gain * (pan > 0 ? 1 - pan : 1)
-            let rightGain = gain * (pan < 0 ? 1 + pan : 1)
-            var peak: Float = 0
+            var leftGain = gain * (pan > 0 ? 1 - pan : 1)
+            var rightGain = gain * (pan < 0 ? 1 + pan : 1)
+            var leftPeak: Float = 0
+            var rightPeak: Float = 0
 
             data.withUnsafeBytes { rawBuffer in
-                let source = rawBuffer.bindMemory(to: Float.self)
-                for frame in 0..<frameCount {
-                    let left = source[frame * 2] * leftGain
-                    let right = source[frame * 2 + 1] * rightGain
-                    mixedSamples[frame * 2] += left
-                    mixedSamples[frame * 2 + 1] += right
-                    peak = max(peak, max(abs(left), abs(right)))
-                }
+                let source = rawBuffer.bindMemory(to: Float.self).baseAddress!
+                let count = vDSP_Length(frameCount)
+                vDSP_vsma(source, 2, &leftGain, left, 1, left, 1, count)
+                vDSP_vsma(source + 1, 2, &rightGain, right, 1, right, 1, count)
+                vDSP_maxmgv(source, 2, &leftPeak, count)
+                vDSP_maxmgv(source + 1, 2, &rightPeak, count)
             }
 
+            let peak = max(leftPeak * leftGain, rightPeak * rightGain)
             if id != "metronome", let level = normalizedMeterLevel(forPeak: peak) {
                 normalizedLevels[id] = level
             }
         }
-
-        let samples = mixedSamples.withUnsafeBufferPointer { buffer in
-            Data(bytes: buffer.baseAddress!, count: buffer.count * MemoryLayout<Float>.size)
-        }
-        return StemSoftwareMix(
-            interleavedFloat32Samples: samples,
-            normalizedLevels: normalizedLevels
-        )
+        return normalizedLevels
     }
 
     private static func normalizedMeterLevel(forPeak peak: Float) -> Float? {

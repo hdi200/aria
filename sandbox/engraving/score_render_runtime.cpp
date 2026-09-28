@@ -5597,25 +5597,11 @@ FluidSynthPlaybackSequence makeFluidSynthPlaybackSequence(mu::engraving::Score* 
     FluidSynthPlaybackSequence sequence;
     appendPlaybackModelSynthEvents(score, playbackModel, activePartId, sequence.synthEvents, sequence.channelPrograms, sequence.stats);
 
-    std::vector<SynthNoteEvent> metronomeSynthEvents;
-    std::copy_if(sequence.synthEvents.cbegin(), sequence.synthEvents.cend(), std::back_inserter(metronomeSynthEvents), [](const SynthNoteEvent& event) {
+    const bool hasMetronomeNotes = std::any_of(sequence.synthEvents.cbegin(), sequence.synthEvents.cend(), [](const SynthNoteEvent& event) {
         return event.channel == 9 && (event.kind == SynthNoteEvent::Kind::NoteOn || event.kind == SynthNoteEvent::Kind::NoteOff);
     });
-    std::vector<SynthChannelProgram> metronomeChannelPrograms;
-    std::copy_if(sequence.channelPrograms.cbegin(), sequence.channelPrograms.cend(), std::back_inserter(metronomeChannelPrograms),
-                 [](const SynthChannelProgram& channelProgram) {
-        return channelProgram.channel == 9;
-    });
-
-    if (metronomeEnabled && metronomeSynthEvents.empty()) {
+    if (metronomeEnabled && !hasMetronomeNotes) {
         appendMetronomeFallbackSynthEvents(score, sequence.synthEvents, sequence.channelPrograms);
-        std::copy_if(sequence.synthEvents.cbegin(), sequence.synthEvents.cend(), std::back_inserter(metronomeSynthEvents), [](const SynthNoteEvent& event) {
-            return event.channel == 9 && (event.kind == SynthNoteEvent::Kind::NoteOn || event.kind == SynthNoteEvent::Kind::NoteOff);
-        });
-        std::copy_if(sequence.channelPrograms.cbegin(), sequence.channelPrograms.cend(), std::back_inserter(metronomeChannelPrograms),
-                     [](const SynthChannelProgram& channelProgram) {
-            return channelProgram.channel == 9;
-        });
     }
 
     std::vector<SynthNoteEvent> fallbackSynthEvents;
@@ -5623,41 +5609,101 @@ FluidSynthPlaybackSequence makeFluidSynthPlaybackSequence(mu::engraving::Score* 
     EventExtractionStats fallbackStats;
     appendEngravingFallbackSynthEvents(score, activePartId, fallbackSynthEvents, fallbackChannelPrograms, fallbackStats);
 
-    if (!fallbackSynthEvents.empty() && fallbackStats.noteEventCount > sequence.stats.noteEventCount) {
-        const int metronomeNoteEventCount = static_cast<int>(metronomeSynthEvents.size() / 2);
-        if (!metronomeSynthEvents.empty()) {
-            fallbackSynthEvents.insert(fallbackSynthEvents.end(), metronomeSynthEvents.cbegin(), metronomeSynthEvents.cend());
-            fallbackStats.noteEventCount += metronomeNoteEventCount;
-            for (const SynthChannelProgram& metronomeChannelProgram : metronomeChannelPrograms) {
-                if (!hasChannelProgram(fallbackChannelPrograms, metronomeChannelProgram.channel)) {
-                    fallbackChannelPrograms.push_back(metronomeChannelProgram);
-                }
+    // Decide per part: a part that PlaybackModel left silent uses the engraving
+    // fallback, and every other part keeps its model dynamics and articulations.
+    // Fewer model notes alone is normal: bends, slides, let ring and linked ties
+    // merge notated notes into one sounding note.
+    auto noteOnCountsByPart = [](const std::vector<SynthNoteEvent>& events,
+                                 const std::vector<SynthChannelProgram>& programs) {
+        std::unordered_map<int, std::string> partByChannel;
+        for (const SynthChannelProgram& program : programs) {
+            partByChannel.emplace(program.channel, program.partId);
+        }
+        std::map<std::string, int> counts;
+        for (const SynthNoteEvent& event : events) {
+            if (event.kind != SynthNoteEvent::Kind::NoteOn) {
+                continue;
+            }
+            auto part = partByChannel.find(event.channel);
+            if (part != partByChannel.end()) {
+                counts[part->second] += 1;
             }
         }
+        return counts;
+    };
+    const std::map<std::string, int> modelNotesByPart = noteOnCountsByPart(sequence.synthEvents, sequence.channelPrograms);
+    const std::map<std::string, int> fallbackNotesByPart = noteOnCountsByPart(fallbackSynthEvents, fallbackChannelPrograms);
+
+    std::set<std::string> fallbackParts;
+    for (const auto& [partId, fallbackCount] : fallbackNotesByPart) {
+        const auto model = modelNotesByPart.find(partId);
+        if (partId != "metronome" && fallbackCount > 0 && (model == modelNotesByPart.end() || model->second == 0)) {
+            fallbackParts.insert(partId);
+        }
+    }
+
+    if (!fallbackParts.empty()) {
+        std::set<int> replacedChannels;
+        int nextChannel = 0;
+        for (const SynthChannelProgram& program : sequence.channelPrograms) {
+            if (muse::contains(fallbackParts, program.partId)) {
+                replacedChannels.insert(program.channel);
+            }
+            nextChannel = std::max(nextChannel, program.channel + 1);
+        }
+        sequence.channelPrograms.erase(
+            std::remove_if(sequence.channelPrograms.begin(), sequence.channelPrograms.end(), [&](const SynthChannelProgram& program) {
+            return muse::contains(replacedChannels, program.channel);
+        }), sequence.channelPrograms.end());
+        sequence.synthEvents.erase(
+            std::remove_if(sequence.synthEvents.begin(), sequence.synthEvents.end(), [&](const SynthNoteEvent& event) {
+            return muse::contains(replacedChannels, event.channel);
+        }), sequence.synthEvents.end());
+
+        // Fallback channels were numbered independently, so move them above the
+        // model's channels, keeping clear of the percussion channel.
+        std::unordered_map<int, int> remappedChannels;
+        for (const SynthChannelProgram& program : fallbackChannelPrograms) {
+            if (!muse::contains(fallbackParts, program.partId) || muse::contains(remappedChannels, program.channel)) {
+                continue;
+            }
+            if (nextChannel == 9) {
+                nextChannel = 10;
+            }
+            remappedChannels.emplace(program.channel, nextChannel++);
+            SynthChannelProgram remapped = program;
+            remapped.channel = remappedChannels.at(program.channel);
+            sequence.channelPrograms.push_back(remapped);
+        }
+        int fallbackNoteCount = 0;
+        for (SynthNoteEvent event : fallbackSynthEvents) {
+            const auto remapped = remappedChannels.find(event.channel);
+            if (remapped == remappedChannels.end()) {
+                continue;
+            }
+            event.channel = remapped->second;
+            fallbackNoteCount += event.kind == SynthNoteEvent::Kind::NoteOn ? 1 : 0;
+            sequence.synthEvents.push_back(event);
+        }
+
+        std::string partCounts;
+        for (const std::string& partId : fallbackParts) {
+            const auto model = modelNotesByPart.find(partId);
+            partCounts += " " + partId + ":" + std::to_string(model == modelNotesByPart.end() ? 0 : model->second)
+                          + "/" + std::to_string(fallbackNotesByPart.at(partId));
+        }
         std::cout << "MuseReader event playback extraction: using engraving fallback"
-                  << " modelTracks=" << sequence.stats.trackCount
+                  << " parts=" << fallbackParts.size() << " (model/fallback notes:" << partCounts << ")"
+                  << " modelParts=" << modelNotesByPart.size()
                   << " invalidTracks=" << sequence.stats.invalidTrackCount
-                  << " modelTimestamps=" << sequence.stats.playbackModelTimestampCount
-                  << " modelEvents=" << sequence.stats.playbackModelEventCount
                   << " modelNotes=" << sequence.stats.noteEventCount
-                  << " soundPresets=" << sequence.stats.soundPresetEventCount
-                  << " textArticulations=" << sequence.stats.textArticulationEventCount
-                  << " controllers=" << sequence.stats.controllerEventCount
-                  << " mergedMetronomeNotes=" << metronomeNoteEventCount
-                  << " fallbackRepeats=" << fallbackStats.fallbackRepeatSegmentCount
-                  << " fallbackChords=" << fallbackStats.fallbackChordCount
-                  << " fallbackNotes=" << fallbackStats.fallbackPlayableNoteCount
-                  << " fallbackHarmonies=" << fallbackStats.fallbackHarmonyCount
-                  << " fallbackHarmonyNotes=" << fallbackStats.fallbackHarmonyPlayableNoteCount
+                  << " fallbackNotes=" << fallbackNoteCount
                   << " skippedTieBacks=" << fallbackStats.fallbackSkippedTieBackCount
-                  << " fallbackSynthEvents=" << fallbackSynthEvents.size()
                   << " start=" << startTimeSeconds
                   << " duration=" << durationSeconds
                   << std::endl;
-        sequence.synthEvents = std::move(fallbackSynthEvents);
-        sequence.channelPrograms = std::move(fallbackChannelPrograms);
-        fallbackStats.trackCount = std::max(fallbackStats.trackCount, static_cast<int>(sequence.channelPrograms.size()));
-        sequence.stats = fallbackStats;
+        sequence.stats.noteEventCount += fallbackNoteCount;
+        sequence.stats.usedEngravingFallback = true;
     }
 
     std::sort(sequence.synthEvents.begin(), sequence.synthEvents.end());
@@ -5742,7 +5788,6 @@ public:
         // FluidSynth supports 256 MIDI channels but only 128 isolated output groups.
         // A second sampler avoids folding large-score channels onto another part.
         m_audioGroups = std::min(requiredMidiChannels, 128);
-        const int synthCount = (requiredMidiChannels + m_audioGroups - 1) / m_audioGroups;
         m_settings.reset(new_fluid_settings());
         if (!m_settings) {
             errorMessage = "FluidSynth could not allocate settings.";
@@ -5762,7 +5807,23 @@ public:
         fluid_settings_setint(m_settings.get(), "synth.chorus.active", 0);
         fluid_settings_setstr(m_settings.get(), "audio.sample-format", "float");
 
-        for (int index = 0; index < synthCount; ++index) {
+        m_synthCount = (requiredMidiChannels + m_audioGroups - 1) / m_audioGroups;
+        m_lastEventFrame = m_sequence.synthEvents.back().frame + (kFluidSynthTailSeconds * kFluidSynthSampleRate);
+        return positionAt(startFrame, errorMessage);
+    }
+
+    //! Moves the stream to a new position with fresh synths, reusing the event
+    //! sequence. Fresh synths render exactly like an uninterrupted stream;
+    //! fluid_synth_system_reset leaves small audible differences.
+    bool positionAt(const int startFrame, std::string& errorMessage)
+    {
+        if (m_empty) {
+            m_currentFrame = startFrame;
+            return true;
+        }
+
+        m_synths.clear();
+        for (int index = 0; index < m_synthCount; ++index) {
             std::unique_ptr<fluid_synth_t, FluidSynthDeleter> synth(new_fluid_synth(m_settings.get()));
             if (!synth) {
                 errorMessage = "FluidSynth could not allocate the synthesizer.";
@@ -5780,17 +5841,37 @@ public:
             fluid_synth_program_change(synthForChannel(channelProgram.channel), channelProgram.channel, channelProgram.program.program);
         }
 
-        m_lastEventFrame = m_sequence.synthEvents.back().frame + (kFluidSynthTailSeconds * kFluidSynthSampleRate);
         const int prerollFrames = static_cast<int>(std::ceil(kFluidSynthChunkPrerollSeconds * kFluidSynthSampleRate));
-        const int renderStartFrame = std::max(0, startFrame - prerollFrames);
+        // Render blocks must sit on the absolute block grid that chunk ends are
+        // aligned to. Otherwise every chunk overshoots its end, the next request
+        // falls behind m_currentFrame, and the stream is rebuilt for each chunk.
+        int renderStartFrame = std::max(0, startFrame - prerollFrames);
+        renderStartFrame -= renderStartFrame % kFluidSynthRenderBlockFrames;
         const std::unordered_map<int, ActiveSynthNote> activeNotes
             = activeSynthNotesAtFrame(m_sequence.synthEvents, renderStartFrame, m_eventIndex);
+
+        // Only the latest program, controller value and pitch bend per channel
+        // matter at the render start. Replaying every earlier change would make
+        // late seeks slower, and each program change can load samples.
+        std::map<std::tuple<int, int, int>, size_t> latestStateEvents;
         for (size_t prerollEventIndex = 0; prerollEventIndex < m_eventIndex; ++prerollEventIndex) {
             const SynthNoteEvent& event = m_sequence.synthEvents[prerollEventIndex];
-            if (event.kind != SynthNoteEvent::Kind::NoteOn && event.kind != SynthNoteEvent::Kind::NoteOff) {
-                applySynthEvent(event);
+            if (event.kind == SynthNoteEvent::Kind::NoteOn || event.kind == SynthNoteEvent::Kind::NoteOff) {
+                continue;
             }
+            const int controller = event.kind == SynthNoteEvent::Kind::ControlChange ? event.controller : 0;
+            latestStateEvents[{ event.channel, static_cast<int>(event.kind), controller }] = prerollEventIndex;
         }
+        std::vector<size_t> stateEventIndexes;
+        stateEventIndexes.reserve(latestStateEvents.size());
+        for (const auto& pair : latestStateEvents) {
+            stateEventIndexes.push_back(pair.second);
+        }
+        std::sort(stateEventIndexes.begin(), stateEventIndexes.end());
+        for (const size_t index : stateEventIndexes) {
+            applySynthEvent(m_sequence.synthEvents[index]);
+        }
+
         for (const auto& pair : activeNotes) {
             const int channel = (pair.first >> 8) & 0xff;
             const int key = pair.first & 0xff;
@@ -5944,6 +6025,7 @@ public:
 
 private:
     int m_audioGroups = 16;
+    int m_synthCount = 1;
 
     fluid_synth_t* synthForChannel(const int channel) const
     {
@@ -6089,9 +6171,17 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
     const SteadyClock::time_point started = SteadyClock::now();
     const int startFrame = frameForSeconds(startTimeSeconds);
     bool streamReset = false;
-    if (!playbackStream
-        || !playbackStream->matches(score, soundFontPath, activePartId, metronomeEnabled, playbackRevision)
-        || !playbackStream->canRenderFrom(startFrame)) {
+    if (playbackStream
+        && playbackStream->matches(score, soundFontPath, activePartId, metronomeEnabled, playbackRevision)
+        && !playbackStream->canRenderFrom(startFrame)) {
+        // Seek within an unchanged score: reuse the event sequence.
+        streamReset = true;
+        if (!playbackStream->positionAt(startFrame, errorMessage)) {
+            playbackStream.reset();
+            return false;
+        }
+    } else if (!playbackStream
+               || !playbackStream->matches(score, soundFontPath, activePartId, metronomeEnabled, playbackRevision)) {
         playbackStream = std::make_unique<FluidSynthPlaybackStream>(
             score,
             soundFontPath,

@@ -25,20 +25,69 @@ struct PlaybackLoopTimeline: Equatable, Sendable {
     }
 }
 
+/// The score range of the next streamed chunk. Frames are score-time frames at
+/// the playback sample rate, so repeated loop passes stay sample-exact.
+struct PlaybackChunkRequest: Equatable {
+    let startFrame: Int
+    let frameCount: Int
+
+    /// Returns nil once a non-looping stream has reached `endFrame`.
+    static func next(
+        renderFrame: Int,
+        chunkFrames: Int,
+        endFrame: Int,
+        loopStartFrame: Int?,
+        loopEndFrame: Int?
+    ) -> PlaybackChunkRequest? {
+        if let loopStartFrame, let loopEndFrame, loopEndFrame > loopStartFrame {
+            let start = renderFrame >= loopEndFrame || renderFrame < loopStartFrame ? loopStartFrame : renderFrame
+            return PlaybackChunkRequest(startFrame: start, frameCount: min(chunkFrames, loopEndFrame - start))
+        }
+        guard renderFrame < endFrame else {
+            return nil
+        }
+        return PlaybackChunkRequest(startFrame: renderFrame, frameCount: chunkFrames)
+    }
+}
+
 /// Maps an `AVAudioPlayerNode` sample timeline to score time.
 ///
 /// Pausing a player node preserves its sample timeline. Resuming must therefore
 /// preserve `sampleTimeOriginSeconds`; changing it to the paused score position
 /// would count the elapsed samples a second time.
+///
+/// The player's sample time keeps advancing when its queue runs dry. Each such
+/// silent gap is recorded so score time holds still while no audio is playing.
 struct PlaybackTimelineClock {
+    private struct SilentGap {
+        let startSeconds: TimeInterval
+        let durationSeconds: TimeInterval
+    }
+
     private(set) var sampleTimeOriginSeconds: TimeInterval = 0
     private var fallbackStartPositionSeconds: TimeInterval = 0
     private var fallbackStartedAt: Date?
+    private var silentGaps: [SilentGap] = []
 
     mutating func reset(to positionSeconds: TimeInterval) {
         sampleTimeOriginSeconds = positionSeconds
         fallbackStartPositionSeconds = positionSeconds
         fallbackStartedAt = nil
+        silentGaps.removeAll()
+    }
+
+    /// Records player-timeline seconds during which no audio was scheduled.
+    mutating func recordSilentGap(startingAtPlayerSeconds startSeconds: TimeInterval, durationSeconds: TimeInterval) {
+        guard durationSeconds > 0 else { return }
+        silentGaps.append(SilentGap(startSeconds: startSeconds, durationSeconds: durationSeconds))
+    }
+
+    private func audiblePlayerSeconds(_ playerSeconds: TimeInterval) -> TimeInterval {
+        var silentSeconds: TimeInterval = 0
+        for gap in silentGaps where playerSeconds > gap.startSeconds {
+            silentSeconds += min(playerSeconds - gap.startSeconds, gap.durationSeconds)
+        }
+        return playerSeconds - silentSeconds
     }
 
     mutating func startFallback(
@@ -56,7 +105,7 @@ struct PlaybackTimelineClock {
 
     func positionSeconds(playerSampleTimeSeconds: TimeInterval?, now: Date = Date()) -> TimeInterval {
         if let playerSampleTimeSeconds {
-            return sampleTimeOriginSeconds + max(playerSampleTimeSeconds, 0)
+            return sampleTimeOriginSeconds + audiblePlayerSeconds(max(playerSampleTimeSeconds, 0))
         }
 
         guard let fallbackStartedAt else {

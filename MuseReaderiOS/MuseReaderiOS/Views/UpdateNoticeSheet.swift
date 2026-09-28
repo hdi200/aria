@@ -105,7 +105,7 @@ struct UpdateNoticeSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("This update fixes scores affected by an earlier version of Aria and brings Aria in line with MuseScore Studio 4.7.5.")
+                    Text("This update fixes scores affected by earlier versions of Aria and brings Aria in line with MuseScore Studio 4.7.5.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
