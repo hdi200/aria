@@ -109,6 +109,9 @@ file(WRITE "${MPE_PROFILES_GENERATED_CPP}" "${_mpe_embed}")
 set(score_render_core_common_sources
     score_render_core.cpp
     score_render_core.h
+    score_render_reverb.cpp
+    ${MU_ROOT}/src/framework/audio/engine/internal/fx/reverb/reverbprocessor.cpp
+    ${MU_ROOT}/src/framework/audio/engine/internal/fx/reverb/ivndecorrelation.cpp
     ${MPE_PROFILES_GENERATED_CPP}
     ${FLUIDSYNTH_SRC}
     ${MU_ROOT}/src/importexport/midi/internal/midishared/generalmidi.cpp

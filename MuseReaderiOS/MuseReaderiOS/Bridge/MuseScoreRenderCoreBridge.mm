@@ -8,6 +8,7 @@
 
 #import "MuseScorePackageBridge.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 
@@ -758,6 +759,42 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _message = [message copy];
     }
     return self;
+}
+
+@end
+
+@implementation MSRPlaybackReverb
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    std::unique_ptr<msr::render::PlaybackReverb> _reverb;
+#endif
+}
+
+- (instancetype)initWithSampleRate:(double)sampleRate
+{
+    self = [super init];
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (self) {
+        _reverb = std::make_unique<msr::render::PlaybackReverb>(sampleRate);
+    }
+#endif
+    return self;
+}
+
+- (void)processInterleavedStereo:(float *)samples frameCount:(NSInteger)frameCount
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    _reverb->process(samples, static_cast<int>(frameCount));
+#else
+    std::fill(samples, samples + frameCount * 2, 0.0f);
+#endif
+}
+
+- (void)reset
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    _reverb->reset();
+#endif
 }
 
 @end

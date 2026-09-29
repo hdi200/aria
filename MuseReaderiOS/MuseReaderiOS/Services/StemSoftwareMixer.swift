@@ -59,14 +59,18 @@ struct StemSoftwareMixer {
 
     /// Mixes the first `frameCount` frames of interleaved stereo stems straight into
     /// planar output channels, which must hold `frameCount` zeroed samples.
-    /// Returns post-fader part levels.
+    /// When `reverbSend` (interleaved, zeroed) is given, every part except the
+    /// metronome is also added to it post-fader at `reverbSendLevel`, as desktop
+    /// MuseScore feeds its reverb aux channel. Returns post-fader part levels.
     static func mix(
         partSamples: [String: Data],
         frameCount: Int,
         settings: ScoreMixerSettings,
         metronomeEnabled: Bool,
         left: UnsafeMutablePointer<Float>,
-        right: UnsafeMutablePointer<Float>
+        right: UnsafeMutablePointer<Float>,
+        reverbSend: UnsafeMutablePointer<Float>? = nil,
+        reverbSendLevel: Float = 0
     ) throws -> [String: Float] {
         let expectedByteCount = frameCount * 2 * MemoryLayout<Float>.size
         let partIDs = Set(partSamples.keys.filter { $0 != "metronome" })
@@ -102,6 +106,12 @@ struct StemSoftwareMixer {
                 vDSP_vsma(source + 1, 2, &rightGain, right, 1, right, 1, count)
                 vDSP_maxmgv(source, 2, &leftPeak, count)
                 vDSP_maxmgv(source + 1, 2, &rightPeak, count)
+                if let reverbSend, id != "metronome", reverbSendLevel > 0 {
+                    var leftSendGain = leftGain * reverbSendLevel
+                    var rightSendGain = rightGain * reverbSendLevel
+                    vDSP_vsma(source, 2, &leftSendGain, reverbSend, 2, reverbSend, 2, count)
+                    vDSP_vsma(source + 1, 2, &rightSendGain, reverbSend + 1, 2, reverbSend + 1, 2, count)
+                }
             }
 
             let peak = max(leftPeak * leftGain, rightPeak * rightGain)

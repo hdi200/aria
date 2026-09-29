@@ -254,6 +254,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+/// MuseScore Studio's default reverb (the "Muse Reverb" aux channel). Feed it the
+/// reverb send in playback order; it replaces the samples with the wet signal.
+@interface MSRPlaybackReverb : NSObject
+
+- (instancetype)initWithSampleRate:(double)sampleRate NS_DESIGNATED_INITIALIZER;
+- (void)processInterleavedStereo:(float *)samples frameCount:(NSInteger)frameCount;
+- (void)reset;
+
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
 @interface MSRSelectionInfo : NSObject
 
 @property (nonatomic, readonly) NSInteger pageIndex;

@@ -71,11 +71,9 @@ final class NativeNotePreviewController {
         }
 
         guard let soundBankURL = Bundle.main.url(forResource: "MuseScore_General", withExtension: "sf2")
-            ?? Bundle.main.url(forResource: "MuseScore_General", withExtension: "sf3")
-            ?? Bundle.main.url(forResource: "MS Basic", withExtension: "sf3")
         else {
             throw NativePlaybackController.PlaybackError.soundBankUnavailable(
-                "Add `MuseScore_General.sf2`, `MuseScore_General.sf3`, or `MS Basic.sf3` to the app bundle resources."
+                "Add `MuseScore_General.sf2` to the app bundle resources."
             )
         }
 

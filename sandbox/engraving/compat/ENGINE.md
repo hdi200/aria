@@ -31,6 +31,12 @@ Rendering hook:
 - `rendering/paintoptions.h`, `dom/engravingitem.cpp`: `PaintOptions::overrideItemColor`
   (ported from MuseScore 5) so Aria can draw its own selection colors. Display only.
 
+Performance:
+- `src/framework/draw/internal/qimageprovider.cpp`: `createPixmap` keeps a picture's
+  original bytes and reads its size from the header, instead of decoding it and
+  re-encoding it as PNG (about 2 s for a large title-frame picture). Every reader decodes
+  a `Pixmap` with `loadFromData`, so the drawn pixels are the same. Files are unaffected.
+
 iOS build plumbing (no effect on the Mac build):
 - `src/framework/draw/CMakeLists.txt`, `drawmodule.cpp`: iOS uses Qt's font provider only
   (`DRAW_QT_FONT_PROVIDER_ONLY`), no FreeType/HarfBuzz font engine.

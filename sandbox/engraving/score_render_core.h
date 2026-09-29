@@ -389,6 +389,28 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
+//! MuseScore Studio's "Muse Reverb" with the default settings desktop loads on
+//! its reverb aux channel. Processes an interleaved stereo send bus in place,
+//! returning the wet signal. Calls must be contiguous in playback order.
+class PlaybackReverb
+{
+public:
+    explicit PlaybackReverb(double sampleRate);
+    ~PlaybackReverb();
+
+    void process(float* interleavedStereo, int frameCount);
+    //! Clears the reverb tail, e.g. after a seek.
+    void reset();
+
+private:
+    struct Impl;
+
+    PlaybackReverb(const PlaybackReverb&) = delete;
+    PlaybackReverb& operator=(const PlaybackReverb&) = delete;
+
+    std::unique_ptr<Impl> m_impl;
+};
+
 class ScoreRenderCore
 {
 public:

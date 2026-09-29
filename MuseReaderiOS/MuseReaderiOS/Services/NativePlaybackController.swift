@@ -57,13 +57,17 @@ final class NativePlaybackController {
     /// Rendered, unmixed audio kept ahead of the output, bounded by `renderAheadByteLimit`.
     private let maximumRenderAheadDurationSeconds: TimeInterval = 3
     private let renderAheadByteLimit = 32.0 * 1_024 * 1_024
-    /// Matches the release tail the native renderer adds after the last event.
-    private let tailDurationSeconds: TimeInterval = 1
+    /// Lets the last notes and the reverb ring out after the final barline.
+    private let tailDurationSeconds: TimeInterval = 2
+    /// Desktop MuseScore's default send from each SoundFont instrument to its
+    /// reverb aux channel; the metronome has no send.
+    private let reverbSendLevel: Float = 0.3
     /// Short fades at loop wraps so notes cut at the loop end do not click.
     private let loopEdgeFadeFrames = 192
 
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
+    private var reverb: MSRPlaybackReverb?
     private var renderedStemIDs: Set<String> = []
     private var nextScheduledSampleTime: AVAudioFramePosition = 0
     private var needsPlayerPriming = true
@@ -214,6 +218,7 @@ final class NativePlaybackController {
         self.liveRenderSession = liveRenderSession
         self.sampleRate = Double(audioData.sampleRate)
         self.durationSeconds = max(durationSeconds, audioData.durationSeconds)
+        self.reverb = MSRPlaybackReverb(sampleRate: sampleRate)
         resetQueueState(to: pendingStartSeconds)
         self.isPaused = false
 
@@ -367,6 +372,7 @@ final class NativePlaybackController {
         streamingErrorMessage = nil
         engine = nil
         playerNode = nil
+        reverb = nil
         liveRenderSession = nil
         revision += 1
         sampleRate = 48_000
@@ -587,6 +593,7 @@ final class NativePlaybackController {
         nextScheduledSampleTime = 0
         needsPlayerPriming = true
         playWhenBuffered = false
+        reverb?.reset()
     }
 
     private func resetPlaybackQueue(to positionSeconds: TimeInterval, wasPlaying: Bool) {
@@ -649,24 +656,42 @@ final class NativePlaybackController {
         buffer.frameLength = AVAudioFrameCount(chunk.frameCount)
         vDSP_vclr(left, 1, vDSP_Length(chunk.frameCount))
         vDSP_vclr(right, 1, vDSP_Length(chunk.frameCount))
+        var reverbSend = [Float](repeating: 0, count: chunk.frameCount * 2)
         let partMeterLevels: [String: Float]
         do {
-            partMeterLevels = try StemSoftwareMixer.mix(
-                partSamples: chunk.audioData.partSamples,
-                frameCount: chunk.frameCount,
-                settings: mixerSettings,
-                metronomeEnabled: metronomeEnabled,
-                left: left,
-                right: right
-            )
+            partMeterLevels = try reverbSend.withUnsafeMutableBufferPointer { send in
+                try StemSoftwareMixer.mix(
+                    partSamples: chunk.audioData.partSamples,
+                    frameCount: chunk.frameCount,
+                    settings: mixerSettings,
+                    metronomeEnabled: metronomeEnabled,
+                    left: left,
+                    right: right,
+                    reverbSend: reverb == nil ? nil : send.baseAddress,
+                    reverbSendLevel: reverbSendLevel
+                )
+            }
         } catch {
             throw PlaybackError.sequenceLoadFailed("An instrument audio buffer was invalid.")
         }
-        if chunk.fadesIn {
-            applyFade(left: left, right: right, frameCount: chunk.frameCount, fadingIn: true)
-        }
-        if chunk.fadesOut {
-            applyFade(left: left, right: right, frameCount: chunk.frameCount, fadingIn: false)
+        // Fade the dry signal and the send at loop wraps; the reverb tail itself
+        // keeps ringing across the wrap.
+        reverbSend.withUnsafeMutableBufferPointer { send in
+            let sendBase = send.baseAddress!
+            if chunk.fadesIn {
+                applyFade(left: left, right: right, frameCount: chunk.frameCount, fadingIn: true)
+                applyFade(interleaved: sendBase, frameCount: chunk.frameCount, fadingIn: true)
+            }
+            if chunk.fadesOut {
+                applyFade(left: left, right: right, frameCount: chunk.frameCount, fadingIn: false)
+                applyFade(interleaved: sendBase, frameCount: chunk.frameCount, fadingIn: false)
+            }
+            if let reverb {
+                reverb.processInterleavedStereo(sendBase, frameCount: chunk.frameCount)
+                let count = vDSP_Length(chunk.frameCount)
+                vDSP_vadd(sendBase, 2, left, 1, left, 1, count)
+                vDSP_vadd(sendBase + 1, 2, right, 1, right, 1, count)
+            }
         }
 
         // Schedule at an explicit player time. If the queue ran dry, start a
@@ -721,14 +746,26 @@ final class NativePlaybackController {
     }
 
     private func applyFade(left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>, frameCount: Int, fadingIn: Bool) {
+        forEachFadeGain(frameCount: frameCount, fadingIn: fadingIn) { frame, gain in
+            left[frame] *= gain
+            right[frame] *= gain
+        }
+    }
+
+    private func applyFade(interleaved samples: UnsafeMutablePointer<Float>, frameCount: Int, fadingIn: Bool) {
+        forEachFadeGain(frameCount: frameCount, fadingIn: fadingIn) { frame, gain in
+            samples[frame * 2] *= gain
+            samples[frame * 2 + 1] *= gain
+        }
+    }
+
+    private func forEachFadeGain(frameCount: Int, fadingIn: Bool, _ body: (Int, Float) -> Void) {
         let fadeFrames = min(loopEdgeFadeFrames, frameCount)
         guard fadeFrames > 1 else { return }
         let offset = fadingIn ? 0 : frameCount - fadeFrames
         for index in 0..<fadeFrames {
             let progress = Float(index) / Float(fadeFrames - 1)
-            let gain = fadingIn ? progress : 1 - progress
-            left[offset + index] *= gain
-            right[offset + index] *= gain
+            body(offset + index, fadingIn ? progress : 1 - progress)
         }
     }
 

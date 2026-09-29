@@ -41,10 +41,16 @@ public:
         // every loaded score (master and existing excerpts) to page layout before
         // the first render, while remembering the mode so save can preserve the
         // user's preferred desktop view.
+        //
+        // Only the full score is laid out now. As on desktop, which skips parts
+        // that are not open, a part is laid out when it is first shown
+        // (setActivePartIndex) and every part is laid out before saving.
         for (mu::engraving::Score* score : masterScore->scoreList()) {
             persistedLayoutModes.emplace(score, score->layoutMode());
             score->setLayoutMode(mu::engraving::LayoutMode::PAGE);
-            score->doLayout();
+            if (score->isMaster()) {
+                score->doLayout();
+            }
         }
 
         // As desktop does after its first layout (lyric lines, cross-staff beams in

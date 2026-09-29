@@ -1,6 +1,7 @@
 #include "qimageprovider.h"
 
 #include <QBuffer>
+#include <QImageReader>
 
 #include "qimagepainterprovider.h"
 #include "types/pixmap.h"
@@ -13,6 +14,21 @@ static const char FILE_FORMAT[] = "PNG";
 
 std::shared_ptr<Pixmap> QImageProvider::createPixmap(const ByteArray& data) const
 {
+    // Aria: a Pixmap holds encoded bytes that every reader decodes with
+    // QPixmap::loadFromData, which accepts any format Qt can read. Keep the
+    // file's own bytes and read the size from its header, instead of decoding
+    // the image and re-encoding it as PNG, which takes seconds for a large
+    // picture in a title frame.
+    {
+        QByteArray bytes = data.toQByteArrayNoCopy();
+        QBuffer buffer(&bytes);
+        QImageReader reader(&buffer);
+        const QSize size = reader.canRead() ? reader.size() : QSize();
+        if (size.isValid() && !size.isEmpty()) {
+            return std::make_shared<Pixmap>(data, Size(size.width(), size.height()));
+        }
+    }
+
     QImage image;
     image.loadFromData(data.toQByteArrayNoCopy());
 
