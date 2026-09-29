@@ -349,6 +349,20 @@ struct ScoreReaderView: View {
             } else {
                 readerCanvas
                     .animation(.easeInOut(duration: 0.22), value: readerState.interactionMode)
+                    .overlay(alignment: .center) {
+                        if readerState.isCountingIn, let beat = readerState.countInBeatNumber {
+                            Text("\(beat)")
+                                .font(.system(size: isPhoneInterface ? 88 : 120, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Color.blue.opacity(0.78))
+                                .shadow(color: .white.opacity(0.9), radius: 12)
+                                .id(beat)
+                                .transition(.opacity.combined(with: .scale(scale: 0.7)))
+                                .animation(.easeOut(duration: 0.18), value: beat)
+                                .allowsHitTesting(false)
+                                .accessibilityLabel("Count-in beat \(beat)")
+                        }
+                    }
                     .overlay(alignment: .bottom) {
                         if readerState.isEditingMode && !plainTextEditorIsActive {
                             ScoreReaderNoteEntrySurface(
@@ -491,6 +505,8 @@ struct ScoreReaderView: View {
                             editingState: readerState.editingState,
                             playbackState: readerState.playbackState,
                             metronomeEnabled: readerState.metronomeEnabled,
+                            countInEnabled: readerState.countInEnabled,
+                            isCountingIn: readerState.isCountingIn,
                             isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isTransitioningScore || isPreparingExport,
                             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
                             isExportBusy: isPreparingExport,
@@ -501,6 +517,7 @@ struct ScoreReaderView: View {
                             togglePlaybackAction: readerState.togglePlayback,
                             stopPlaybackAction: readerState.stopPlayback,
                             toggleMetronomeAction: readerState.toggleMetronome,
+                            toggleCountInAction: readerState.toggleCountIn,
                             toggleMixerAction: {
                                 isPartsPanelPresented = false
                                 isExportPanelPresented = false

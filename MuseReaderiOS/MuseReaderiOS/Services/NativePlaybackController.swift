@@ -291,6 +291,14 @@ final class NativePlaybackController {
             log("pause armed playback position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
             return
         }
+        if isCountingIn {
+            let position = pendingStartSeconds
+            resetPlaybackQueue(to: position, wasPlaying: false)
+            timelineClock.pauseFallback(at: position)
+            isPaused = true
+            log("pause count-in position=\(formatSeconds(position)) revision=\(revision)")
+            return
+        }
         guard playerNode.isPlaying else {
             return
         }

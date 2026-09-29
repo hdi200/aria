@@ -41,6 +41,8 @@ struct ScoreReaderPhoneHeaderLayoutPolicy: Equatable {
 }
 
 struct ScoreReaderChromeBar: View {
+    @State private var isMetronomeSettingsPresented = false
+
     let scoreTitle: String
     let parts: [ScorePart]
     @Binding var selectedPartID: String
@@ -54,6 +56,8 @@ struct ScoreReaderChromeBar: View {
     let editingState: ScoreEditingState
     let playbackState: ScorePlaybackState
     let metronomeEnabled: Bool
+    let countInEnabled: Bool
+    let isCountingIn: Bool
     let isEditingBusy: Bool
     let isPlaybackBusy: Bool
     let isExportBusy: Bool
@@ -64,6 +68,7 @@ struct ScoreReaderChromeBar: View {
     let togglePlaybackAction: () -> Void
     let stopPlaybackAction: () -> Void
     let toggleMetronomeAction: () -> Void
+    let toggleCountInAction: () -> Void
     let toggleMixerAction: () -> Void
     let isMixerPresented: Bool
     let exportAction: () -> Void
@@ -279,22 +284,12 @@ struct ScoreReaderChromeBar: View {
             .opacity(playbackState.isAvailable && playbackState.status != .stopped ? 0.92 : 0.36)
             .accessibilityLabel("Stop playback")
 
-            Button(action: toggleMetronomeAction) {
-                Image(systemName: "metronome")
-                    .font(.system(size: isCompactHeader ? 22 : 24, weight: .medium))
-                    .scaleEffect(x: 0.86, y: 1.0, anchor: .center)
-                    .scoreReaderChromeTapTarget(minWidth: 44)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
-            .disabled(!playbackState.isAvailable || isPlaybackBusy)
-            .opacity(playbackState.isAvailable ? 1 : 0.45)
-            .accessibilityLabel("Metronome")
+            metronomeButton(compact: false, iconSize: isCompactHeader ? 22 : 24)
 
             mixerButton
 
             if showsElapsedTime {
-                Text(playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)")
+                Text(playbackTimeLabel)
                     .font(.system(size: isCompactHeader ? 11 : 13, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)
@@ -315,6 +310,78 @@ struct ScoreReaderChromeBar: View {
         .disabled(!supportsPlayback)
         .accessibilityLabel("Mixer")
         .accessibilityValue(isMixerPresented ? "Open" : "Closed")
+    }
+
+    private var playbackTimeLabel: String {
+        if isCountingIn { return "Count-in" }
+        return playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)"
+    }
+
+    private func metronomeButton(compact: Bool, iconSize: CGFloat) -> some View {
+        Button(action: toggleMetronomeAction) {
+            Image(systemName: "metronome")
+                .font(.system(size: iconSize, weight: .medium))
+                .scaleEffect(x: 0.86, y: 1.0, anchor: .center)
+                .overlay(alignment: .topTrailing) {
+                    if countInEnabled {
+                        Text("1")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 14, height: 14)
+                            .background(Color.blue, in: Circle())
+                            .offset(x: 7, y: -5)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .frame(width: compact ? 24 : 44, height: compact ? 30 : 44)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
+        .disabled(!playbackState.isAvailable || isPlaybackBusy)
+        .opacity(playbackState.isAvailable ? 1 : 0.45)
+        .highPriorityGesture(
+            LongPressGesture(minimumDuration: 0.22, maximumDistance: 18)
+                .onEnded { _ in
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    isMetronomeSettingsPresented = true
+                }
+        )
+        .popover(isPresented: $isMetronomeSettingsPresented, arrowEdge: .top) {
+            metronomeSettingsPopover
+                .presentationCompactPopoverWhenAvailable()
+        }
+        .accessibilityLabel("Metronome")
+        .accessibilityHint("Touch and hold for count-in settings")
+    }
+
+    private var metronomeSettingsPopover: some View {
+        Toggle(isOn: Binding(
+            get: { countInEnabled },
+            set: { enabled in
+                if enabled != countInEnabled {
+                    toggleCountInAction()
+                }
+            }
+        )) {
+            HStack(spacing: 11) {
+                Image(systemName: "metronome")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Count-in")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("One bar before playback")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .toggleStyle(.switch)
+        .padding(.horizontal, 16)
+        .frame(height: 64)
+        .frame(width: 275)
+        .presentationDetents([.height(64)])
     }
 
     private var compactMixerButton: some View {
@@ -544,21 +611,12 @@ struct ScoreReaderChromeBar: View {
             .disabled(!playbackState.isAvailable || playbackState.status == .stopped || isPlaybackBusy)
             .opacity(playbackState.isAvailable && playbackState.status != .stopped ? 0.92 : 0.36)
 
-            Button(action: toggleMetronomeAction) {
-                Image(systemName: "metronome")
-                    .font(.system(size: 19, weight: .medium))
-                    .scaleEffect(x: 0.86, y: 1.0, anchor: .center)
-                    .frame(width: 24, height: 30)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
-            .disabled(!playbackState.isAvailable || isPlaybackBusy)
-            .opacity(playbackState.isAvailable ? 1 : 0.45)
+            metronomeButton(compact: true, iconSize: 19)
 
             compactMixerButton
 
             if showsElapsedTime {
-                Text(playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)")
+                Text(playbackTimeLabel)
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)

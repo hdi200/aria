@@ -108,6 +108,9 @@ final class ScoreReaderState: ObservableObject {
     @Published var playbackLoopIsActive = false
     @Published var mixerSettings = ScoreMixerSettings()
     @Published var metronomeEnabled = false
+    @Published var countInEnabled = UserDefaults.standard.bool(forKey: "ScoreReader.countInEnabled")
+    @Published var isCountingIn = false
+    @Published var countInBeatNumber: Int?
     @Published var editingState: ScoreEditingState = .inactive
     @Published var measureRangePreviewSelection: ScoreSelectedElement?
     @Published var editingErrorMessage: String?

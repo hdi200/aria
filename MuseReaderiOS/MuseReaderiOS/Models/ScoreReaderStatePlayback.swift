@@ -22,6 +22,10 @@ extension ScoreReaderState {
 
                 let latestPlaybackState = playbackController.state()
                 self.playbackState = latestPlaybackState
+                let countingIn = playbackController.isCountingIn
+                if self.isCountingIn != countingIn { self.isCountingIn = countingIn }
+                let beat = countingIn ? playbackController.currentCountInClick()?.beatNumber : nil
+                if self.countInBeatNumber != beat { self.countInBeatNumber = beat }
                 self.updatePlaybackPreparationMessage(for: playbackController)
                 self.updatePlaybackFollowState(with: latestPlaybackState)
                 try? await Task.sleep(for: self.playbackMonitorInterval)
@@ -102,14 +106,22 @@ extension ScoreReaderState {
                         try playbackController.pause()
                     }
                 } else if currentState.status == .paused {
-                    try playbackController.play()
+                    try await self.playWithOptionalCountIn(
+                        at: currentState.positionSeconds,
+                        liveRenderSession: liveRenderSession,
+                        playbackController: playbackController
+                    )
                 } else {
                     let shouldUseSelection = self.isEditingMode && self.editingState.selection != nil
                     let startTimeSeconds = shouldUseSelection
                         ? (self.playbackRegionForCurrentSelection()?.startTimeSeconds ?? 0)
                         : (self.playbackLoopIsActive ? (self.playbackLoopRange?.startTimeSeconds ?? 0) : 0)
                     try playbackController.seek(to: startTimeSeconds)
-                    try playbackController.play()
+                    try await self.playWithOptionalCountIn(
+                        at: startTimeSeconds,
+                        liveRenderSession: liveRenderSession,
+                        playbackController: playbackController
+                    )
                     self.playbackWasExplicitlyStopped = false
                 }
 
@@ -164,6 +176,23 @@ extension ScoreReaderState {
 
         metronomeEnabled.toggle()
         playbackController?.setMetronomeEnabled(metronomeEnabled)
+    }
+
+    func toggleCountIn() {
+        guard session.capabilities.supportsPlayback else { return }
+        countInEnabled.toggle()
+        UserDefaults.standard.set(countInEnabled, forKey: "ScoreReader.countInEnabled")
+    }
+
+    private func playWithOptionalCountIn(
+        at startTimeSeconds: TimeInterval,
+        liveRenderSession: LiveScoreRenderSession,
+        playbackController: NativePlaybackController
+    ) async throws {
+        let countIn = countInEnabled
+            ? try await liveRenderSession.playbackCountIn(startTimeSeconds: startTimeSeconds)
+            : nil
+        try playbackController.play(countIn: countIn)
     }
 
     func seekPlayback(to progress: Double) {
@@ -263,8 +292,13 @@ extension ScoreReaderState {
                 )
 
                 let region = self.playbackRegionForCurrentSelection()
-                try playbackController.seek(to: region?.startTimeSeconds ?? 0)
-                try playbackController.play()
+                let startTimeSeconds = region?.startTimeSeconds ?? 0
+                try playbackController.seek(to: startTimeSeconds)
+                try await self.playWithOptionalCountIn(
+                    at: startTimeSeconds,
+                    liveRenderSession: liveRenderSession,
+                    playbackController: playbackController
+                )
 
                 let latestPlaybackState = playbackController.state()
                 self.playbackState = latestPlaybackState
@@ -779,7 +813,11 @@ extension ScoreReaderState {
                 )
 
                 try playbackController.seek(to: target.startTimeSeconds)
-                try playbackController.play()
+                try await self.playWithOptionalCountIn(
+                    at: target.startTimeSeconds,
+                    liveRenderSession: liveRenderSession,
+                    playbackController: playbackController
+                )
 
                 let latestPlaybackState = playbackController.state()
                 self.playbackState = latestPlaybackState
@@ -870,7 +908,11 @@ extension ScoreReaderState {
                     startTimeSeconds: range.startTimeSeconds,
                     endTimeSeconds: range.endTimeSeconds
                 )
-                try playbackController.play()
+                try await self.playWithOptionalCountIn(
+                    at: range.startTimeSeconds,
+                    liveRenderSession: liveRenderSession,
+                    playbackController: playbackController
+                )
 
                 let latestPlaybackState = playbackController.state()
                 self.playbackState = latestPlaybackState
