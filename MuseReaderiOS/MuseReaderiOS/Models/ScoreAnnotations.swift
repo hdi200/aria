@@ -70,7 +70,7 @@ struct ScoreAnnotationRGBA: Codable, Equatable, Sendable {
     let alpha: Double
 }
 
-struct ScoreAnnotationPoint: Codable, Equatable, Sendable {
+nonisolated struct ScoreAnnotationPoint: Codable, Equatable, Sendable {
     var x: Double
     var y: Double
 
