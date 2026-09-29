@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #if defined(__arm64__) || defined(__aarch64__)
 #include <arm_acle.h>
@@ -1326,6 +1327,21 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                                                 metronomeEnabled:(BOOL)metronomeEnabled
                                                              error:(NSError * _Nullable __autoreleasing *)error
 {
+    return [self playbackEventAudioDataWithSoundFontPath:soundFontPath
+                                      startTimeSeconds:startTimeSeconds
+                                       durationSeconds:durationSeconds
+                                      metronomeEnabled:metronomeEnabled
+                                     includePartSamples:YES
+                                                 error:error];
+}
+
+- (MSRPlaybackAudioData *)playbackEventAudioDataWithSoundFontPath:(NSString *)soundFontPath
+                                                 startTimeSeconds:(NSTimeInterval)startTimeSeconds
+                                                  durationSeconds:(NSTimeInterval)durationSeconds
+                                                metronomeEnabled:(BOOL)metronomeEnabled
+                                               includePartSamples:(BOOL)includePartSamples
+                                                             error:(NSError * _Nullable __autoreleasing *)error
+{
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
     if (!_session) {
         if (error) {
@@ -1341,7 +1357,8 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                                            durationSeconds,
                                            metronomeEnabled,
                                            audioData,
-                                           errorMessage)) {
+                                           errorMessage,
+                                           includePartSamples)) {
         if (error) {
             *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not render event-driven playback audio."));
         }

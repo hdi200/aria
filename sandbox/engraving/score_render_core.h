@@ -305,12 +305,15 @@ public:
     bool pdfData(std::vector<std::uint8_t>& output, std::string& errorMessage) const;
     bool playbackMIDIData(std::vector<std::uint8_t>& output, std::string& errorMessage) const;
     bool musicXMLData(std::vector<std::uint8_t>& output, std::string& errorMessage) const;
+    //! Stem collection is optional for exports that use only mixed PCM. It does
+    //! not change synth routing, sample summation, or persistent stream state.
     bool playbackEventAudioData(const std::string& soundFontPath,
                                 double startTimeSeconds,
                                 double durationSeconds,
                                 bool metronomeEnabled,
                                 PlaybackAudioData& output,
-                                std::string& errorMessage) const;
+                                std::string& errorMessage,
+                                bool includePartSamples = true) const;
     //! One bar of metronome clicks leading into playback at `startTimeSeconds`.
     //! Empty when there is no bar to count in from.
     bool playbackCountIn(const std::string& soundFontPath,

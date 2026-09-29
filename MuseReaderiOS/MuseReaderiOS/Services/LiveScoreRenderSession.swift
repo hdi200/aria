@@ -184,7 +184,7 @@ actor LiveScoreRenderSession {
         try bridgeSession.pdfData()
     }
 
-    func playbackAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval, metronomeEnabled: Bool) throws -> MSRPlaybackAudioData {
+    func playbackAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval, metronomeEnabled: Bool, includePartSamples: Bool = true) throws -> MSRPlaybackAudioData {
         guard let soundFontURL = playbackSoundFontURL() else {
             throw NativePlaybackController.PlaybackError.soundBankUnavailable(
                 "Add `MuseScore_General.sf2` to the app bundle resources."
@@ -195,7 +195,8 @@ actor LiveScoreRenderSession {
             soundFontPath: soundFontURL.path,
             startTimeSeconds: startTimeSeconds,
             durationSeconds: durationSeconds,
-            metronomeEnabled: metronomeEnabled
+            metronomeEnabled: metronomeEnabled,
+            includePartSamples: includePartSamples
         )
         return audioData
     }

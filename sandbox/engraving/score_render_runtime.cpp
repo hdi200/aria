@@ -5214,6 +5214,7 @@ void makeSilentPlaybackAudio(const double durationSeconds, msr::render::Playback
     output.channelCount = kFluidSynthChannelCount;
     output.durationSeconds = static_cast<double>(frameCount) / static_cast<double>(kFluidSynthSampleRate);
     output.interleavedSamples.assign(static_cast<size_t>(frameCount * kFluidSynthChannelCount), 0.0f);
+    output.partSamples.clear();
 }
 
 int channelForPartId(const mu::engraving::ID partId, std::unordered_map<std::uint64_t, int>& channelsByPartId, int& nextChannel)
@@ -5927,7 +5928,8 @@ public:
                 const bool streamReset,
                 const SteadyClock::time_point started,
                 msr::render::PlaybackAudioData& output,
-                std::string& errorMessage)
+                std::string& errorMessage,
+                const bool includePartSamples)
     {
         int startFrame = requestedStartFrame;
         if (m_currentFrame > startFrame && m_currentFrame - startFrame <= 2) {
@@ -5936,8 +5938,10 @@ public:
 
         if (m_empty) {
             makeSilentPlaybackAudio(durationSeconds, output);
-            for (const auto& program : m_sequence.channelPrograms) {
-                output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+            if (includePartSamples) {
+                for (const auto& program : m_sequence.channelPrograms) {
+                    output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+                }
             }
             const int requestedFrames = durationSeconds > 0.0
                 ? std::max(1, static_cast<int>(std::ceil(durationSeconds * kFluidSynthSampleRate)))
@@ -5957,8 +5961,10 @@ public:
 
         if (startFrame >= endFrame) {
             makeSilentPlaybackAudio(durationSeconds, output);
-            for (const auto& program : m_sequence.channelPrograms) {
-                output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+            if (includePartSamples) {
+                for (const auto& program : m_sequence.channelPrograms) {
+                    output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+                }
             }
             std::cout << "MuseReader event playback render: silent tail chunk"
                       << " tracks=" << m_sequence.stats.trackCount
@@ -5990,11 +5996,13 @@ public:
         const size_t sampleCount = static_cast<size_t>(std::max(endFrame - startFrame, 1) * 2);
         std::vector<std::pair<int, std::vector<float>*>> stemChannels;
         std::set<int> copiedChannels;
-        for (const auto& program : m_sequence.channelPrograms) {
-            if (!copiedChannels.insert(program.channel).second) { continue; }
-            auto& stem = output.partSamples[program.partId];
-            stem.resize(sampleCount, 0.0f);
-            stemChannels.emplace_back(program.channel, &stem);
+        if (includePartSamples) {
+            for (const auto& program : m_sequence.channelPrograms) {
+                if (!copiedChannels.insert(program.channel).second) { continue; }
+                auto& stem = output.partSamples[program.partId];
+                stem.resize(sampleCount, 0.0f);
+                stemChannels.emplace_back(program.channel, &stem);
+            }
         }
         std::vector<float> samples;
         samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
@@ -6195,7 +6203,8 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
                                     const int playbackRevision,
                                     std::unique_ptr<FluidSynthPlaybackStream>& playbackStream,
                                     msr::render::PlaybackAudioData& output,
-                                    std::string& errorMessage)
+                                    std::string& errorMessage,
+                                    const bool includePartSamples)
 {
     if (!score) {
         errorMessage = "Playback is unavailable because the score session is closed.";
@@ -6234,7 +6243,7 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
         }
     }
 
-    return playbackStream->render(startFrame, startTimeSeconds, durationSeconds, streamReset, started, output, errorMessage);
+    return playbackStream->render(startFrame, startTimeSeconds, durationSeconds, streamReset, started, output, errorMessage, includePartSamples);
 }
 
 //! Renders MuseScore's count-in for playback starting at `startTimeSeconds`:

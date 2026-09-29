@@ -3,7 +3,8 @@
                                 const double durationSeconds,
                                 const bool metronomeEnabled,
                                 msr::render::PlaybackAudioData& output,
-                                std::string& errorMessage) const
+                                std::string& errorMessage,
+                                const bool includePartSamples) const
     {
         if (startTimeSeconds < 0.0) {
             errorMessage = "Playback chunk start time must be non-negative.";
@@ -39,7 +40,8 @@
                                               m_playbackStreamRevision,
                                               m_playbackStream,
                                               output,
-                                              errorMessage);
+                                              errorMessage,
+                                              includePartSamples);
     }
 
     bool playbackCountIn(const std::string& soundFontPath,

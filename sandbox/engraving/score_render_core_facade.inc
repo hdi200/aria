@@ -137,9 +137,10 @@ bool msr::render::ScoreRenderSession::playbackEventAudioData(const std::string& 
                                                              const double durationSeconds,
                                                              const bool metronomeEnabled,
                                                              PlaybackAudioData& output,
-                                                             std::string& errorMessage) const
+                                                             std::string& errorMessage,
+                                                             const bool includePartSamples) const
 {
-    return m_impl->playbackEventAudioData(soundFontPath, startTimeSeconds, durationSeconds, metronomeEnabled, output, errorMessage);
+    return m_impl->playbackEventAudioData(soundFontPath, startTimeSeconds, durationSeconds, metronomeEnabled, output, errorMessage, includePartSamples);
 }
 
 bool msr::render::ScoreRenderSession::playbackCountIn(const std::string& soundFontPath,

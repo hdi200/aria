@@ -583,6 +583,13 @@ isEditableText:(BOOL)isEditableText
                                                            durationSeconds:(NSTimeInterval)durationSeconds
                                                          metronomeEnabled:(BOOL)metronomeEnabled
                                                                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackEventAudioData(soundFontPath:startTimeSeconds:durationSeconds:metronomeEnabled:));
+// Mixed-only export avoids allocating and copying per-part PCM. Playback keeps the original selector.
+- (nullable MSRPlaybackAudioData *)playbackEventAudioDataWithSoundFontPath:(NSString *)soundFontPath
+                                                          startTimeSeconds:(NSTimeInterval)startTimeSeconds
+                                                           durationSeconds:(NSTimeInterval)durationSeconds
+                                                         metronomeEnabled:(BOOL)metronomeEnabled
+                                                        includePartSamples:(BOOL)includePartSamples
+                                                                     error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackEventAudioData(soundFontPath:startTimeSeconds:durationSeconds:metronomeEnabled:includePartSamples:));
 - (nullable MSRPlaybackCountIn *)playbackCountInWithSoundFontPath:(NSString *)soundFontPath
                                                   startTimeSeconds:(NSTimeInterval)startTimeSeconds
                                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackCountIn(soundFontPath:startTimeSeconds:));
