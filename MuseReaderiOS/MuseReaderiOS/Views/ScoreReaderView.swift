@@ -663,63 +663,11 @@ struct ScoreReaderView: View {
                     }
                     .overlay(alignment: .bottom) {
                         if readerState.interactionMode == .view,
-                           readingStyle == .pageTurn,
-                           readerState.pageCount > 1,
-                           !isMixerPresented
-                        {
-                            Text(viewModePageLabel)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Color.black.opacity(0.62))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(.regularMaterial, in: Capsule())
-                                .padding(.bottom, 10)
-                                .allowsHitTesting(false)
-                        }
-                    }
-                    .overlay(alignment: .bottomLeading) {
-                        if readerState.interactionMode == .view,
-                           readingStyle == .pageTurn,
-                           readerState.pageCount > 1,
                            isChromeVisible,
                            !isMixerPresented
                         {
-                            Button(action: toggleTwoPageView) {
-                                VStack(spacing: 4) {
-                                    ScoreReaderTwoPageViewIcon(isActive: twoPageViewEnabled)
-                                        .frame(width: 38, height: 34)
-                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                        .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
-
-                                    Text("Two-page view")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(Color.black.opacity(0.68))
-                                        .lineLimit(1)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.leading, 14)
-                            .padding(.bottom, 10)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            .accessibilityLabel(twoPageViewEnabled ? "Use single-page view" : "Use two-page view")
-                            .accessibilityValue(twoPageViewEnabled ? "Two pages" : "One page")
-                        }
-                    }
-                    .overlay(alignment: .bottomTrailing) {
-                        if readerState.interactionMode == .view,
-                           isChromeVisible,
-                           !isMixerPresented,
-                           let viewKey = readerState.viewTransposeKey
-                        {
-                            ScoreReaderViewKeyControl(
-                                currentKey: viewKey,
-                                originalKey: readerState.viewTransposeSourceKey ?? viewKey,
-                                isBusy: readerState.isViewTransposeActionInFlight,
-                                selectKey: readerState.setTemporaryViewKey
-                            )
-                            .padding(.trailing, 14)
-                            .padding(.bottom, 10)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            viewModeBottomBar
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
                     .overlay(alignment: .bottom) {
@@ -1288,12 +1236,67 @@ struct ScoreReaderView: View {
         min(twoPageSpreadStartIndex + 1, max(readerState.pageCount - 1, 0))
     }
 
-    private var viewModePageLabel: String {
-        guard usesTwoPageSpread else {
-            return readerState.currentPageLabel.replacingOccurrences(of: "Page ", with: "")
-        }
+    private var showsViewModePageControls: Bool {
+        readingStyle == .pageTurn && readerState.pageCount > 1
+    }
 
-        return "\(twoPageSpreadStartIndex + 1)–\(twoPageSpreadEndIndex + 1) of \(readerState.pageCount)"
+    /// View mode's bottom row. The side slots share the leftover width equally,
+    /// so the page slider stays centred and never overlaps the side controls.
+    private var viewModeBottomBar: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            Group {
+                if showsViewModePageControls {
+                    twoPageViewButton
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showsViewModePageControls {
+                ScoreReaderPageScrubber(
+                    pageCount: readerState.pageCount,
+                    currentPageIndex: readerState.selectedPageIndex,
+                    usesTwoPageSpread: usesTwoPageSpread,
+                    commitAction: showPageFromScrubber
+                )
+                .frame(minWidth: 120, maxWidth: 520)
+                .padding(.bottom, 10)
+            }
+
+            Group {
+                if let viewKey = readerState.viewTransposeKey {
+                    ScoreReaderViewKeyControl(
+                        currentKey: viewKey,
+                        originalKey: readerState.viewTransposeSourceKey ?? viewKey,
+                        isBusy: readerState.isViewTransposeActionInFlight,
+                        selectKey: readerState.setTemporaryViewKey
+                    )
+                    .padding(.bottom, 10)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, 14)
+    }
+
+    private var twoPageViewButton: some View {
+        Button(action: toggleTwoPageView) {
+            VStack(spacing: 4) {
+                ScoreReaderTwoPageViewIcon(isActive: twoPageViewEnabled)
+                    .frame(width: 38, height: 34)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
+
+                Text("Two-page view")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.68))
+                    .lineLimit(1)
+            }
+            .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 10)
+        .accessibilityLabel(twoPageViewEnabled ? "Use single-page view" : "Use two-page view")
+        .accessibilityValue(twoPageViewEnabled ? "Two pages" : "One page")
     }
 
     private func toggleTwoPageView() {
@@ -2143,6 +2146,15 @@ struct ScoreReaderView: View {
             }
             return
         }
+        zoomScale = 1
+        readerState.updatePageTurnSelection(to: targetPageIndex)
+    }
+
+    private func showPageFromScrubber(_ pageIndex: Int) {
+        guard readerState.interactionMode == .view else {
+            return
+        }
+        let targetPageIndex = usesTwoPageSpread ? pageIndex - (pageIndex % 2) : pageIndex
         zoomScale = 1
         readerState.updatePageTurnSelection(to: targetPageIndex)
     }
