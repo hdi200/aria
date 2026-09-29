@@ -2349,11 +2349,13 @@ struct ScoreReaderView: View {
             if case .part(let part, _) = target {
                 title += " – \(part.name)"
             }
+            let textFonts = await liveRenderSession.videoTextFonts()
             try await ScoreVideoExporter.export(
                 liveRenderSession: liveRenderSession,
                 pageCount: target.pageCount,
                 to: exportURL,
                 options: ScoreVideoExportOptions(style: style, title: title, composer: composer,
+                                                 titleFont: textFonts.title, composerFont: textFonts.composer,
                                                  backgroundImageData: backgroundImageData),
                 progress: reportProgress
             )

@@ -13,14 +13,23 @@ enum MusicNotationFont {
     static let bundledFileName = "BravuraText"
 
     static func registerBundledFonts() {
-        guard let fontURL = Bundle.main.url(forResource: bundledFileName, withExtension: "otf", subdirectory: "Resources/Fonts")
-            ?? Bundle.main.url(forResource: bundledFileName, withExtension: "otf", subdirectory: "Fonts")
-            ?? Bundle.main.url(forResource: bundledFileName, withExtension: "otf")
-        else {
-            return
+        let otfNames = [
+            bundledFileName,
+            "Edwin-Roman", "Edwin-Bold", "Edwin-Italic", "Edwin-BdIta",
+            "MuseJazzText", "GootvilleText", "LelandText", "MScoreText",
+            "FinaleBroadwayText", "FinaleMaestroText-Regular",
+            "PetalumaScript", "PetalumaText"
+        ]
+        let ttfNames = ["FreeSerif", "FreeSerifBold", "FreeSerifItalic", "FreeSerifBoldItalic"]
+        for (name, ext) in otfNames.map({ ($0, "otf") }) + ttfNames.map({ ($0, "ttf") }) {
+            guard let fontURL = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Resources/Fonts")
+                ?? Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Fonts")
+                ?? Bundle.main.url(forResource: name, withExtension: ext)
+            else {
+                continue
+            }
+            CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
         }
-
-        CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
     }
 
     static func font(size: CGFloat) -> Font {

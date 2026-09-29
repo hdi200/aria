@@ -471,6 +471,46 @@ public:
         output.composer = styledValue(mu::engraving::TextStyleType::COMPOSER, u"composer");
         output.lyricist = styledValue(mu::engraving::TextStyleType::LYRICIST, u"lyricist");
         output.arranger = masterScore->metaTag(u"arranger").toStdString();
+        // Read the rendered text item's overrides when it exists. A score
+        // without a title frame still has a Title style to use for export.
+        const mu::engraving::Score* styleScore = presentationScore();
+        if (!styleScore) {
+            styleScore = masterScore;
+        }
+        const auto readFont = [styleScore](mu::engraving::TextStyleType textType,
+                                           mu::engraving::Sid faceId,
+                                           mu::engraving::Sid styleId,
+                                           std::string& family,
+                                           bool& bold,
+                                           bool& italic) {
+            if (const mu::engraving::Text* textItem = styleScore->getText(textType)) {
+                // Rich text can override the font inside the title itself.
+                // Use the first visible fragment, matching what is printed.
+                for (const mu::engraving::TextFragment& fragment : textItem->fragmentList()) {
+                    if (fragment.text.empty()) {
+                        continue;
+                    }
+                    family = fragment.format.fontFamily().toStdString();
+                    bold = fragment.format.bold();
+                    italic = fragment.format.italic();
+                    return;
+                }
+                family = textItem->family().toStdString();
+                bold = textItem->bold();
+                italic = textItem->italic();
+                return;
+            }
+            family = styleScore->style().styleSt(faceId).toStdString();
+            const int fontStyle = styleScore->style().styleI(styleId);
+            bold = (fontStyle & int(mu::engraving::FontStyle::Bold)) != 0;
+            italic = (fontStyle & int(mu::engraving::FontStyle::Italic)) != 0;
+        };
+        readFont(mu::engraving::TextStyleType::TITLE,
+                 mu::engraving::Sid::titleFontFace, mu::engraving::Sid::titleFontStyle,
+                 output.titleFontFamily, output.titleFontBold, output.titleFontItalic);
+        readFont(mu::engraving::TextStyleType::COMPOSER,
+                 mu::engraving::Sid::composerFontFace, mu::engraving::Sid::composerFontStyle,
+                 output.composerFontFamily, output.composerFontBold, output.composerFontItalic);
         return output;
     }
 

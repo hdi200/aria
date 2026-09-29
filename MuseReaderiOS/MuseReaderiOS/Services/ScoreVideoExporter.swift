@@ -54,10 +54,18 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+struct ScoreVideoTextFont: Sendable {
+    var family: String = "Edwin"
+    var bold = false
+    var italic = false
+}
+
 struct ScoreVideoExportOptions: Sendable {
     var style: ScoreVideoStyle
     var title: String
     var composer: String
+    var titleFont: ScoreVideoTextFont = ScoreVideoTextFont()
+    var composerFont: ScoreVideoTextFont = ScoreVideoTextFont()
     var frameRate: Int32 = 30
     /// Desktop MuseScore's default reverb send, matching in-app playback.
     var reverbSendLevel: Float = 0.3
@@ -557,6 +565,33 @@ class ScoreVideoPainterBase {
         self.options = options
     }
 
+    func font(_ selected: ScoreVideoTextFont, size: CGFloat) -> UIFont {
+        let requestedFamily = selected.family.trimmingCharacters(in: .whitespacesAndNewlines)
+        let family = UIFont.familyNames.first { $0.caseInsensitiveCompare(requestedFamily) == .orderedSame }
+            ?? requestedFamily
+        let candidates = UIFont.fontNames(forFamilyName: family).compactMap { UIFont(name: $0, size: size) }
+        if let exact = candidates.first(where: {
+            let traits = $0.fontDescriptor.symbolicTraits
+            return traits.contains(.traitBold) == selected.bold && traits.contains(.traitItalic) == selected.italic
+        }) {
+            return exact
+        }
+        if let candidate = candidates.first {
+            var traits = candidate.fontDescriptor.symbolicTraits
+            if selected.bold { traits.insert(.traitBold) } else { traits.remove(.traitBold) }
+            if selected.italic { traits.insert(.traitItalic) } else { traits.remove(.traitItalic) }
+            if let descriptor = candidate.fontDescriptor.withSymbolicTraits(traits) {
+                return UIFont(descriptor: descriptor, size: size)
+            }
+            return candidate
+        }
+        if let named = UIFont(name: requestedFamily, size: size) {
+            return named
+        }
+        // A score may name a desktop-only font unavailable on iPad.
+        return UIFont(name: "Edwin-Roman", size: size) ?? UIFont.systemFont(ofSize: size)
+    }
+
     /// Runs `body` with a top-left, UIKit-style context over the pixel buffer.
     func withFrameContext(_ pixelBuffer: CVPixelBuffer, _ body: (CGContext) -> Void) {
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
@@ -669,12 +704,12 @@ class ScoreVideoPainterBase {
         let alpha = time < 3.5 ? 1 : max(0, 1 - (time - 3.5))
         let scale = frameSize.width / 1920 * (frameSize.height > frameSize.width ? 1.6 : 1)
         let titleText = NSAttributedString(string: title, attributes: [
-            .font: UIFont.systemFont(ofSize: 44 * scale, weight: .semibold),
+            .font: font(options.titleFont, size: 44 * scale),
             .foregroundColor: UIColor.white.withAlphaComponent(alpha)
         ])
         let composer = options.composer.trimmingCharacters(in: .whitespacesAndNewlines)
         let composerText = NSAttributedString(string: composer, attributes: [
-            .font: UIFont.systemFont(ofSize: 26 * scale, weight: .medium),
+            .font: font(options.composerFont, size: 26 * scale),
             .foregroundColor: UIColor.white.withAlphaComponent(0.72 * alpha)
         ])
         let padding = 22 * scale
@@ -952,12 +987,12 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         centered.alignment = .center
         centered.lineBreakMode = .byTruncatingTail
         let titleText = NSAttributedString(string: title, attributes: [
-            .font: UIFont.systemFont(ofSize: 40, weight: .semibold),
+            .font: font(options.titleFont, size: 40),
             .foregroundColor: photoBackground == nil ? UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 1) : UIColor.white,
             .paragraphStyle: centered
         ])
         let composerText = NSAttributedString(string: composer, attributes: [
-            .font: UIFont.systemFont(ofSize: 24, weight: .medium),
+            .font: font(options.composerFont, size: 24),
             .foregroundColor: photoBackground == nil ? UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 0.6) : UIColor.white.withAlphaComponent(0.78),
             .paragraphStyle: centered
         ])

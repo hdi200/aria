@@ -85,12 +85,24 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, readonly) NSString *composer;
 @property (nonatomic, copy, readonly) NSString *lyricist;
 @property (nonatomic, copy, readonly) NSString *arranger;
+@property (nonatomic, copy, readonly) NSString *titleFontFamily;
+@property (nonatomic, copy, readonly) NSString *composerFontFamily;
+@property (nonatomic, readonly) BOOL titleFontBold;
+@property (nonatomic, readonly) BOOL titleFontItalic;
+@property (nonatomic, readonly) BOOL composerFontBold;
+@property (nonatomic, readonly) BOOL composerFontItalic;
 
 - (instancetype)initWithTitle:(NSString *)title
                      subtitle:(NSString *)subtitle
                      composer:(NSString *)composer
                      lyricist:(NSString *)lyricist
-                     arranger:(NSString *)arranger NS_DESIGNATED_INITIALIZER;
+                     arranger:(NSString *)arranger
+              titleFontFamily:(NSString *)titleFontFamily
+           composerFontFamily:(NSString *)composerFontFamily
+               titleFontBold:(BOOL)titleFontBold
+             titleFontItalic:(BOOL)titleFontItalic
+            composerFontBold:(BOOL)composerFontBold
+          composerFontItalic:(BOOL)composerFontItalic NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;

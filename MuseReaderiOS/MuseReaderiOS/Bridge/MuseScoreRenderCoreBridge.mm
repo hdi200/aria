@@ -368,6 +368,12 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                      composer:(NSString *)composer
                      lyricist:(NSString *)lyricist
                      arranger:(NSString *)arranger
+              titleFontFamily:(NSString *)titleFontFamily
+           composerFontFamily:(NSString *)composerFontFamily
+               titleFontBold:(BOOL)titleFontBold
+             titleFontItalic:(BOOL)titleFontItalic
+            composerFontBold:(BOOL)composerFontBold
+          composerFontItalic:(BOOL)composerFontItalic
 {
     self = [super init];
     if (self) {
@@ -376,6 +382,12 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _composer = [composer copy];
         _lyricist = [lyricist copy];
         _arranger = [arranger copy];
+        _titleFontFamily = [titleFontFamily copy];
+        _composerFontFamily = [composerFontFamily copy];
+        _titleFontBold = titleFontBold;
+        _titleFontItalic = titleFontItalic;
+        _composerFontBold = composerFontBold;
+        _composerFontItalic = composerFontItalic;
     }
     return self;
 }
@@ -1151,10 +1163,18 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                                               subtitle:[NSString stringWithUTF8String:metadata.subtitle.c_str()] ?: @""
                                               composer:[NSString stringWithUTF8String:metadata.composer.c_str()] ?: @""
                                               lyricist:[NSString stringWithUTF8String:metadata.lyricist.c_str()] ?: @""
-                                              arranger:[NSString stringWithUTF8String:metadata.arranger.c_str()] ?: @""];
+                                              arranger:[NSString stringWithUTF8String:metadata.arranger.c_str()] ?: @""
+                                       titleFontFamily:[NSString stringWithUTF8String:metadata.titleFontFamily.c_str()] ?: @""
+                                    composerFontFamily:[NSString stringWithUTF8String:metadata.composerFontFamily.c_str()] ?: @""
+                                        titleFontBold:metadata.titleFontBold
+                                      titleFontItalic:metadata.titleFontItalic
+                                     composerFontBold:metadata.composerFontBold
+                                   composerFontItalic:metadata.composerFontItalic];
     }
 #endif
-    return [[MSRScoreMetadata alloc] initWithTitle:@"" subtitle:@"" composer:@"" lyricist:@"" arranger:@""];
+    return [[MSRScoreMetadata alloc] initWithTitle:@"" subtitle:@"" composer:@"" lyricist:@"" arranger:@""
+                                   titleFontFamily:@"Edwin" composerFontFamily:@"Edwin"
+                                       titleFontBold:NO titleFontItalic:NO composerFontBold:NO composerFontItalic:NO];
 }
 
 - (BOOL)setConcertPitchEnabled:(BOOL)enabled

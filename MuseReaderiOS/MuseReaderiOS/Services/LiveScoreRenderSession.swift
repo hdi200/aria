@@ -1281,6 +1281,20 @@ actor LiveScoreRenderSession {
         )
     }
 
+    func videoTextFonts() -> (title: ScoreVideoTextFont, composer: ScoreVideoTextFont) {
+        let metadata = RenderCoreWorkGate.sync {
+            bridgeSession.currentMetadata
+        }
+        return (
+            title: ScoreVideoTextFont(family: metadata.titleFontFamily,
+                                      bold: metadata.titleFontBold,
+                                      italic: metadata.titleFontItalic),
+            composer: ScoreVideoTextFont(family: metadata.composerFontFamily,
+                                         bold: metadata.composerFontBold,
+                                         italic: metadata.composerFontItalic)
+        )
+    }
+
     func updateInitialKeySignature(_ keyValue: Int) throws {
         guard supportsEditing else {
             throw ScoreDocumentServiceError.bridgeFailure("This score session does not support editing yet.")

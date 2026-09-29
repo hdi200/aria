@@ -76,6 +76,12 @@ struct ScoreMetadata {
     std::string composer;
     std::string lyricist;
     std::string arranger;
+    std::string titleFontFamily;
+    std::string composerFontFamily;
+    bool titleFontBold = false;
+    bool titleFontItalic = false;
+    bool composerFontBold = false;
+    bool composerFontItalic = false;
 };
 
 struct ScoreSelectionState {
