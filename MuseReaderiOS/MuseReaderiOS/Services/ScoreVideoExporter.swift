@@ -6,7 +6,9 @@
 import AVFoundation
 import Accelerate
 import CoreGraphics
+import CoreImage
 import CoreMedia
+import Metal
 import UIKit
 
 enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
@@ -317,7 +319,7 @@ enum ScoreVideoExporter {
         if options.style == .scrollingPhoto, options.backgroundImageData == nil {
             throw ScoreVideoExportError.missingBackgroundImage
         }
-        try await Task.detached(priority: .userInitiated) {
+        let rendering = Task.detached(priority: .userInitiated) {
             guard options.style == .scrolling || options.style == .scrollingPhoto else {
                 try await render(liveRenderSession: liveRenderSession, pageCount: pageCount, to: url, options: options, progress: progress)
                 return
@@ -331,7 +333,12 @@ enum ScoreVideoExporter {
                 _ = try? await liveRenderSession.setContinuousLayout(false)
                 throw error
             }
-        }.value
+        }
+        try await withTaskCancellationHandler {
+            try await rendering.value
+        } onCancel: {
+            rendering.cancel()
+        }
     }
 
     private static func render(
@@ -388,7 +395,9 @@ enum ScoreVideoExporter {
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferWidthKey as String: Int(frameSize.width),
-            kCVPixelBufferHeightKey as String: Int(frameSize.height)
+            kCVPixelBufferHeightKey as String: Int(frameSize.height),
+            kCVPixelBufferMetalCompatibilityKey as String: true,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:]
         ])
         let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
@@ -407,10 +416,16 @@ enum ScoreVideoExporter {
         }
         writer.startSession(atSourceTime: .zero)
 
+        // One chunk ahead, on the session's audio actor. Keep only two seconds
+        // of PCM resident and let frame composition proceed while it renders.
+        let prefetch = ScoreVideoAudioPrefetch(stream: audio)
+        await prefetch.start()
+
         do {
             var frameIndex = 0
             var audioFramesWritten: Int64 = 0
             var audioFinished = false
+            var needsAudio = false
 
             // Feed whichever input the writer is ready for, preferring the one
             // that is behind. The writer may hold back one input until the other
@@ -420,10 +435,21 @@ enum ScoreVideoExporter {
                 if writer.status == .failed {
                     throw ScoreVideoExportError.writerFailed(writer.error?.localizedDescription ?? "Unknown error.")
                 }
+                if needsAudio, let chunk = try await prefetch.takeIfReady() {
+                    guard chunk.sampleRate == pendingAudio.sampleRate,
+                          chunk.channelCount == pendingAudio.channelCount else {
+                        throw ScoreVideoExportError.writerFailed("The audio format changed during export.")
+                    }
+                    pendingAudio = chunk
+                    needsAudio = false
+                    if audioFramesWritten + Int64(chunk.frameCount) < totalAudioFrames {
+                        await prefetch.start()
+                    }
+                }
 
                 let videoTime = Double(frameIndex) / frameRate
                 let audioTime = Double(audioFramesWritten) / pendingAudio.sampleRate
-                let audioReady = !audioFinished && audioInput.isReadyForMoreMediaData
+                let audioReady = !audioFinished && !needsAudio && audioInput.isReadyForMoreMediaData
                 let videoReady = frameIndex < totalFrames && videoInput.isReadyForMoreMediaData
 
                 if audioReady, !videoReady || audioTime <= videoTime {
@@ -440,7 +466,7 @@ enum ScoreVideoExporter {
                         audioFinished = true
                         audioInput.markAsFinished()
                     } else {
-                        pendingAudio = try await audio.nextChunk(durationSeconds: audioChunkSeconds)
+                        needsAudio = true
                     }
                 } else if videoReady {
                     guard let pool = adaptor.pixelBufferPool else {
@@ -451,7 +477,9 @@ enum ScoreVideoExporter {
                     guard let pixelBuffer else {
                         throw ScoreVideoExportError.writerFailed("No pixel buffer.")
                     }
-                    painter.draw(into: pixelBuffer, at: videoTime, frameDuration: 1 / frameRate)
+                    autoreleasepool {
+                        painter.draw(into: pixelBuffer, at: videoTime, frameDuration: 1 / frameRate)
+                    }
                     let presentationTime = CMTime(value: CMTimeValue(frameIndex), timescale: options.frameRate)
                     guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime) else {
                         throw ScoreVideoExportError.writerFailed(writer.error?.localizedDescription ?? "A frame was rejected.")
@@ -468,12 +496,16 @@ enum ScoreVideoExporter {
                 }
             }
 
+            await prefetch.stop()
             await writer.finishWriting()
             guard writer.status == .completed else {
                 throw ScoreVideoExportError.writerFailed(writer.error?.localizedDescription ?? "The video did not finish.")
             }
             progress(1)
         } catch {
+            // Drain before restoring layout or switching to another part; an
+            // outstanding native audio request still owns the current score.
+            await prefetch.stop()
             writer.cancelWriting()
             try? FileManager.default.removeItem(at: url)
             throw error
@@ -548,9 +580,91 @@ protocol ScoreVideoPainter: AnyObject {
     func draw(into pixelBuffer: CVPixelBuffer, at time: TimeInterval, frameDuration: TimeInterval)
 }
 
+/// All coordinates use the same top-left pixel space as the CPU painter.
+private struct ScoreVideoLayer {
+    let image: CGImage?
+    let color: UIColor?
+    let rect: CGRect
+    var alpha: CGFloat = 1
+
+    init(image: CGImage, rect: CGRect, alpha: CGFloat = 1) {
+        self.image = image
+        color = nil
+        self.rect = rect
+        self.alpha = alpha
+    }
+
+    init(color: UIColor, rect: CGRect) {
+        image = nil
+        self.color = color
+        self.rect = rect
+    }
+}
+
+/// Core Image composes the cached, full resolution assets on Metal directly
+/// into the encoder's IOSurface buffer. No CPU full-frame bitmap or upload of
+/// the completed frame. Retain a bounded set of source images across frames.
+private final class ScoreVideoGPUCompositor {
+    private let context: CIContext
+    private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    private var images: [ObjectIdentifier: (bitmap: CGImage, image: CIImage)] = [:]
+    private var order: [ObjectIdentifier] = []
+
+    init?() {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        context = CIContext(mtlDevice: device, options: [
+            .workingColorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+            .outputColorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+            .cacheIntermediates: false
+        ])
+    }
+
+    private func source(_ image: CGImage) -> CIImage {
+        let key = ObjectIdentifier(image)
+        if let cached = images[key] { return cached.image }
+        let result = CIImage(cgImage: image, options: [.colorSpace: colorSpace])
+        images[key] = (bitmap: image, image: result)
+        order.append(key)
+        if order.count > 16 { images[order.removeFirst()] = nil }
+        return result
+    }
+
+    func draw(_ layers: [ScoreVideoLayer], into buffer: CVPixelBuffer, size: CGSize) {
+        let bounds = CGRect(origin: .zero, size: size)
+        var frame = CIImage(color: .clear).cropped(to: bounds)
+        for layer in layers where layer.rect.width > 0 && layer.rect.height > 0 && layer.alpha > 0 {
+            let destination = CGRect(x: layer.rect.minX, y: size.height - layer.rect.maxY,
+                                     width: layer.rect.width, height: layer.rect.height)
+            guard destination.intersects(bounds) else { continue }
+            var image: CIImage
+            if let bitmap = layer.image {
+                image = source(bitmap).transformed(by: CGAffineTransform(
+                    a: destination.width / CGFloat(bitmap.width), b: 0, c: 0,
+                    d: destination.height / CGFloat(bitmap.height),
+                    tx: destination.minX, ty: destination.minY))
+            } else if let color = layer.color {
+                image = CIImage(color: CIColor(color: color)).cropped(to: destination)
+            } else { continue }
+            if layer.alpha < 1 {
+                let alpha = layer.alpha
+                image = image.applyingFilter("CIColorMatrix", parameters: [
+                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: alpha)
+                ])
+            }
+            frame = image.composited(over: frame)
+        }
+        // This synchronous render completes before AVAssetWriter sees the buffer.
+        context.render(frame, to: buffer, bounds: bounds, colorSpace: colorSpace)
+    }
+}
+
 /// What every video style shares: the backdrop, the title card, the progress
 /// bar and the measure highlight.
 class ScoreVideoPainterBase {
+    private struct OverlaySize: Hashable {
+        let width: Int
+        let height: Int
+    }
     static let accent = UIColor(red: 0.36, green: 0.62, blue: 1.0, alpha: 1)
     static let highlightFadeSeconds: TimeInterval = 0.15
 
@@ -558,6 +672,93 @@ class ScoreVideoPainterBase {
     let timeline: ScoreVideoTimeline
     let options: ScoreVideoExportOptions
     private lazy var backgroundImage: CGImage? = makeBackgroundImage()
+    private let gpu = ScoreVideoGPUCompositor()
+    private lazy var titleCard: ScoreVideoLayer? = makeTitleCard()
+    private var highlightImages: [OverlaySize: CGImage] = [:]
+    private var playheadImages: [OverlaySize: CGImage] = [:]
+
+    fileprivate func compose(_ layers: [ScoreVideoLayer], into buffer: CVPixelBuffer) {
+        if let gpu {
+            gpu.draw(layers, into: buffer, size: frameSize)
+        } else {
+            // Older environments without Metal keep the exact same assets,
+            // timing and dimensions through the Core Graphics path.
+            withFrameContext(buffer) { context in
+                for layer in layers {
+                    context.saveGState()
+                    context.setAlpha(layer.alpha)
+                    if let image = layer.image {
+                        drawImage(image, in: layer.rect, context: context)
+                    } else if let color = layer.color {
+                        context.setFillColor(color.cgColor)
+                        context.fill(layer.rect)
+                    }
+                    context.restoreGState()
+                }
+            }
+        }
+    }
+
+    fileprivate func backgroundLayer() -> ScoreVideoLayer {
+        let rect = CGRect(origin: .zero, size: frameSize)
+        if let backgroundImage { return ScoreVideoLayer(image: backgroundImage, rect: rect) }
+        return ScoreVideoLayer(color: UIColor(red: 0.09, green: 0.11, blue: 0.14, alpha: 1), rect: rect)
+    }
+
+    fileprivate func titleLayer(time: TimeInterval) -> ScoreVideoLayer? {
+        guard time < 4.5, var layer = titleCard else { return nil }
+        layer.alpha = time < 3.5 ? 1 : max(0, 1 - CGFloat(time - 3.5))
+        return layer
+    }
+
+    fileprivate func progressLayers(time: TimeInterval, onPaper: Bool = false, whiteInk: Bool = false) -> [ScoreVideoLayer] {
+        let track = CGRect(x: 0, y: frameSize.height - 6, width: frameSize.width, height: 6)
+        let fraction = min(max(time / max(timeline.endTimeSeconds, 0.001), 0), 1)
+        return [
+            ScoreVideoLayer(color: onPaper ? .black.withAlphaComponent(0.06) : .white.withAlphaComponent(0.12), rect: track),
+            ScoreVideoLayer(color: whiteInk ? .white : Self.accent,
+                            rect: CGRect(x: 0, y: track.minY, width: track.width * CGFloat(fraction), height: track.height))
+        ]
+    }
+
+    fileprivate static func overlay(size: CGSize, draw: (CGContext) -> Void) -> CGImage? {
+        guard size.width > 0, size.height > 0 else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        format.preferredRange = .standard
+        return UIGraphicsImageRenderer(size: size, format: format).image { draw($0.cgContext) }.cgImage
+    }
+
+    fileprivate func highlightLayer(rect: CGRect, alpha: CGFloat) -> ScoreVideoLayer? {
+        let bounds = rect.insetBy(dx: -8, dy: -10).integral
+        let key = OverlaySize(width: Int(bounds.width), height: Int(bounds.height))
+        var image = highlightImages[key]
+        if image == nil {
+            image = Self.overlay(size: bounds.size) { context in
+                self.drawHighlight(context, rect: rect.offsetBy(dx: -bounds.minX, dy: -bounds.minY), alpha: 1)
+            }
+            if highlightImages.count >= 8 { highlightImages.removeAll(keepingCapacity: true) }
+            highlightImages[key] = image
+        }
+        guard let image else { return nil }
+        return ScoreVideoLayer(image: image, rect: bounds, alpha: alpha)
+    }
+
+    fileprivate func playheadLayer(x: CGFloat, top: CGFloat, bottom: CGFloat, alpha: CGFloat) -> ScoreVideoLayer? {
+        let bounds = CGRect(x: x - 8, y: top - 6, width: 16, height: bottom - top + 12)
+        let key = OverlaySize(width: 16, height: Int(ceil(bounds.height)))
+        var image = playheadImages[key]
+        if image == nil {
+            image = Self.overlay(size: CGSize(width: key.width, height: key.height)) { context in
+                self.drawPlayhead(context, x: 8, top: 6, bottom: CGFloat(key.height) - 6, alpha: 1)
+            }
+            if playheadImages.count >= 8 { playheadImages.removeAll(keepingCapacity: true) }
+            playheadImages[key] = image
+        }
+        guard let image else { return nil }
+        return ScoreVideoLayer(image: image, rect: bounds, alpha: alpha)
+    }
 
     init(frameSize: CGSize, timeline: ScoreVideoTimeline, options: ScoreVideoExportOptions) {
         self.frameSize = frameSize
@@ -623,16 +824,6 @@ class ScoreVideoPainterBase {
         context.restoreGState()
     }
 
-    /// The gradient is drawn once; copying it each frame is much cheaper.
-    func drawBackground(_ context: CGContext) {
-        guard let backgroundImage else {
-            context.setFillColor(UIColor(red: 0.09, green: 0.11, blue: 0.14, alpha: 1).cgColor)
-            context.fill(CGRect(origin: .zero, size: frameSize))
-            return
-        }
-        context.draw(backgroundImage, in: CGRect(origin: .zero, size: frameSize))
-    }
-
     private func makeBackgroundImage() -> CGImage? {
         guard let context = CGContext(
             data: nil,
@@ -645,14 +836,13 @@ class ScoreVideoPainterBase {
         ) else {
             return nil
         }
-        // Dark at the top, a little lighter at the bottom once drawn into the
-        // flipped frame context.
+        // Store an upright image matching the original frame gradient.
         let colors = [
             UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 1).cgColor,
             UIColor(red: 0.07, green: 0.08, blue: 0.10, alpha: 1).cgColor
         ] as CFArray
         if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
-            context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: frameSize.height), options: [])
+            context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: frameSize.height), end: .zero, options: [])
         }
         return context.makeImage()
     }
@@ -667,20 +857,6 @@ class ScoreVideoPainterBase {
         context.setStrokeColor(Self.accent.withAlphaComponent(0.55 * alpha).cgColor)
         context.setLineWidth(2.5)
         context.strokePath()
-    }
-
-    /// Lights the playing measure and fades the previous one out.
-    func drawMeasureHighlights(_ context: CGContext, time: TimeInterval, rect: (Int) -> CGRect?) -> CGRect? {
-        guard let index = timeline.regionIndex(at: time) else { return nil }
-        if index > 0 {
-            let sinceStart = time - timeline.regions[index].startTimeSeconds
-            if sinceStart >= 0, sinceStart < Self.highlightFadeSeconds, let previous = rect(index - 1) {
-                drawHighlight(context, rect: previous, alpha: 1 - sinceStart / Self.highlightFadeSeconds)
-            }
-        }
-        guard let current = rect(index) else { return nil }
-        drawHighlight(context, rect: current, alpha: endFade(time))
-        return current
     }
 
     /// 1 while the music plays, fading to 0 over the tail.
@@ -698,19 +874,18 @@ class ScoreVideoPainterBase {
         context.strokeLineSegments(between: [CGPoint(x: x, y: top), CGPoint(x: x, y: bottom)])
     }
 
-    func drawTitle(time: TimeInterval) {
+    private func makeTitleCard() -> ScoreVideoLayer? {
         let title = options.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, time < 4.5 else { return }
-        let alpha = time < 3.5 ? 1 : max(0, 1 - (time - 3.5))
+        guard !title.isEmpty else { return nil }
         let scale = frameSize.width / 1920 * (frameSize.height > frameSize.width ? 1.6 : 1)
         let titleText = NSAttributedString(string: title, attributes: [
             .font: font(options.titleFont, size: 44 * scale),
-            .foregroundColor: UIColor.white.withAlphaComponent(alpha)
+            .foregroundColor: UIColor.white
         ])
         let composer = options.composer.trimmingCharacters(in: .whitespacesAndNewlines)
         let composerText = NSAttributedString(string: composer, attributes: [
             .font: font(options.composerFont, size: 26 * scale),
-            .foregroundColor: UIColor.white.withAlphaComponent(0.72 * alpha)
+            .foregroundColor: UIColor.white.withAlphaComponent(0.72)
         ])
         let padding = 22 * scale
         let maxTextWidth = frameSize.width - 80 * scale - padding * 2
@@ -723,24 +898,20 @@ class ScoreVideoPainterBase {
             width: min(max(titleSize.width, composerSize.width), maxTextWidth) + padding * 2,
             height: titleSize.height + (composer.isEmpty ? 0 : composerSize.height + 6 * scale) + padding * 2
         )
-        UIColor.black.withAlphaComponent(0.55 * alpha).setFill()
-        UIBezierPath(roundedRect: box, cornerRadius: 18 * scale).fill()
-        titleText.draw(with: CGRect(x: box.minX + padding, y: box.minY + padding, width: maxTextWidth, height: titleSize.height),
-                       options: .usesLineFragmentOrigin, context: nil)
-        if !composer.isEmpty {
-            composerText.draw(at: CGPoint(x: box.minX + padding, y: box.minY + padding + titleSize.height + 6 * scale))
-        }
+        let bounds = box.integral
+        let localBox = box.offsetBy(dx: -bounds.minX, dy: -bounds.minY)
+        guard let image = Self.overlay(size: bounds.size, draw: { _ in
+            UIColor.black.withAlphaComponent(0.55).setFill()
+            UIBezierPath(roundedRect: localBox, cornerRadius: 18 * scale).fill()
+            titleText.draw(with: CGRect(x: localBox.minX + padding, y: localBox.minY + padding, width: maxTextWidth, height: titleSize.height),
+                           options: .usesLineFragmentOrigin, context: nil)
+            if !composer.isEmpty {
+                composerText.draw(at: CGPoint(x: localBox.minX + padding, y: localBox.minY + padding + titleSize.height + 6 * scale))
+            }
+        }) else { return nil }
+        return ScoreVideoLayer(image: image, rect: bounds)
     }
 
-    func drawProgress(_ context: CGContext, time: TimeInterval, onPaper: Bool = false, whiteInk: Bool = false) {
-        let height: CGFloat = 6
-        let track = CGRect(x: 0, y: frameSize.height - height, width: frameSize.width, height: height)
-        context.setFillColor((onPaper ? UIColor.black.withAlphaComponent(0.06) : UIColor.white.withAlphaComponent(0.12)).cgColor)
-        context.fill(track)
-        let fraction = min(max(time / max(timeline.endTimeSeconds, 0.001), 0), 1)
-        context.setFillColor((whiteInk ? UIColor.white : Self.accent).cgColor)
-        context.fill(CGRect(x: 0, y: track.minY, width: track.width * CGFloat(fraction), height: height))
-    }
 }
 
 /// The pages stacked in a column; a camera glides to each system as it plays.
@@ -780,27 +951,32 @@ final class ScoreVideoPagesPainter: ScoreVideoPainterBase, ScoreVideoPainter {
         camera.step(toward: target, deltaTime: CGFloat(frameDuration))
         self.camera = camera
 
-        withFrameContext(pixelBuffer) { context in
-            drawBackground(context)
-            // Pages centred horizontally, the playing system held at the focus line.
-            let origin = CGPoint(
-                x: (frameSize.width - options.style.pageWidth) / 2,
-                y: frameSize.height * Self.focusFraction - camera.position
-            )
-            drawPages(context, origin: origin)
-            let current = drawMeasureHighlights(context, time: time) { index in
-                self.canvas.rect(for: self.timeline.regions[index])?.offsetBy(dx: origin.x, dy: origin.y)
+        let origin = CGPoint(x: (frameSize.width - options.style.pageWidth) / 2,
+                             y: frameSize.height * Self.focusFraction - camera.position)
+        var layers = [backgroundLayer()]
+        layers += pageLayers(origin: origin)
+        if let index = timeline.regionIndex(at: time) {
+            let sinceStart = time - timeline.regions[index].startTimeSeconds
+            if index > 0, sinceStart >= 0, sinceStart < Self.highlightFadeSeconds,
+               let previous = canvas.rect(for: timeline.regions[index - 1]),
+               let layer = highlightLayer(rect: previous.offsetBy(dx: origin.x, dy: origin.y),
+                                          alpha: CGFloat(1 - sinceStart / Self.highlightFadeSeconds)) {
+                layers.append(layer)
             }
-            if let current, let index = timeline.regionIndex(at: time) {
+            if let current = canvas.rect(for: timeline.regions[index])?.offsetBy(dx: origin.x, dy: origin.y) {
+                if let layer = highlightLayer(rect: current, alpha: CGFloat(endFade(time))) { layers.append(layer) }
                 let x = current.minX + CGFloat(timeline.progress(inRegion: index, at: time)) * current.width
-                drawPlayhead(context, x: x, top: current.minY - 10, bottom: current.maxY + 10, alpha: endFade(time))
+                if let layer = playheadLayer(x: x, top: current.minY - 10, bottom: current.maxY + 10,
+                                             alpha: CGFloat(endFade(time))) { layers.append(layer) }
             }
-            drawTitle(time: time)
-            drawProgress(context, time: time)
         }
+        if let title = titleLayer(time: time) { layers.append(title) }
+        layers += progressLayers(time: time)
+        compose(layers, into: pixelBuffer)
     }
 
-    private func drawPages(_ context: CGContext, origin: CGPoint) {
+    private func pageLayers(origin: CGPoint) -> [ScoreVideoLayer] {
+        var layers: [ScoreVideoLayer] = []
         let visible = CGRect(origin: .zero, size: frameSize).insetBy(dx: 0, dy: -40)
         for (index, pageFrame) in canvas.pageFrames.enumerated() {
             let rect = pageFrame.offsetBy(dx: origin.x, dy: origin.y)
@@ -809,18 +985,16 @@ final class ScoreVideoPagesPainter: ScoreVideoPainterBase, ScoreVideoPainter {
             // A soft layered edge reads as a shadow without a per-frame blur.
             // Each layer is only the ring outside the page, which covers the rest.
             for layer in Self.shadowLayers {
-                context.addRect(rect.insetBy(dx: -layer.spread, dy: -layer.spread).offsetBy(dx: 0, dy: layer.spread / 2))
-                context.addRect(rect)
-                context.setFillColor(UIColor.black.withAlphaComponent(layer.alpha).cgColor)
-                context.fillPath(using: .evenOdd)
+                layers.append(ScoreVideoLayer(color: UIColor.black.withAlphaComponent(layer.alpha),
+                                              rect: rect.insetBy(dx: -layer.spread, dy: -layer.spread).offsetBy(dx: 0, dy: layer.spread / 2)))
             }
             if let image = pageImage(index, size: rect.size) {
-                drawImage(image, in: rect, context: context)
+                layers.append(ScoreVideoLayer(image: image, rect: rect))
             } else {
-                context.setFillColor(UIColor.white.cgColor)
-                context.fill(rect)
+                layers.append(ScoreVideoLayer(color: .white, rect: rect))
             }
         }
+        return layers
     }
 
     private func pageImage(_ index: Int, size: CGSize) -> CGImage? {
@@ -864,6 +1038,10 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private let cursorGlowTop: CGFloat
     private var tiles: [Int: CGImage] = [:]
     private var tileOrder: [Int] = []
+    private lazy var pinnedTitle: ScoreVideoLayer? = makePinnedTitle()
+    private lazy var leftFade = makeHorizontalFade(width: Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
+    private lazy var rightFade = makeHorizontalFade(width: Self.edgeFadeWidth, startAlpha: 0, endAlpha: 1)
+    private lazy var playedFade = makeHorizontalFade(width: 24, startAlpha: 0.42, endAlpha: 0)
 
     init(frameSize: CGSize,
          page: ScoreVideoPageSource,
@@ -941,46 +1119,47 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         let playheadX = (openingTrackerX + frameSize.width * 0.18 * easedEnding).rounded()
         let offsetX = (playheadX - scoreX).rounded()
 
-        withFrameContext(pixelBuffer) { context in
-            if let photoBackground {
-                drawImage(photoBackground, in: CGRect(origin: .zero, size: frameSize), context: context)
-                context.setFillColor(UIColor.black.withAlphaComponent(0.52).cgColor)
-            } else {
-                context.setFillColor(UIColor.white.cgColor)
-            }
-            context.fill(CGRect(origin: .zero, size: frameSize))
-            drawLine(context, offsetX: offsetX)
-
-            if photoBackground == nil {
-                // Dim what has already played, easing into the playhead.
-                let dimEnd = playheadX - 28
-                context.setFillColor(UIColor.white.withAlphaComponent(0.42).cgColor)
-                context.fill(CGRect(x: band.minX, y: band.minY, width: max(0, dimEnd - band.minX), height: band.height))
-                drawHorizontalFade(context, from: dimEnd, to: playheadX - 4, startAlpha: 0.42, endAlpha: 0)
-                drawHorizontalFade(context, from: band.minX, to: band.minX + Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
-                drawHorizontalFade(context, from: band.maxX, to: band.maxX - Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
-            }
-
-            if let cursorGlow {
-                context.saveGState()
-                context.setAlpha(CGFloat(endFade(time)))
-                drawImage(cursorGlow,
-                          in: CGRect(x: playheadX - CGFloat(Self.cursorWidth) / 2,
-                                     y: cursorGlowTop,
-                                     width: CGFloat(Self.cursorWidth),
-                                     height: CGFloat(cursorGlow.height)),
-                          context: context)
-                context.restoreGState()
-            }
-            drawPinnedTitle()
-            drawProgress(context, time: time, onPaper: photoBackground == nil, whiteInk: photoBackground != nil)
+        let frame = CGRect(origin: .zero, size: frameSize)
+        var layers: [ScoreVideoLayer]
+        if let photoBackground {
+            layers = [ScoreVideoLayer(image: photoBackground, rect: frame),
+                      ScoreVideoLayer(color: .black.withAlphaComponent(0.52), rect: frame)]
+        } else {
+            layers = [ScoreVideoLayer(color: .white, rect: frame)]
         }
+        layers += lineLayers(offsetX: offsetX)
+        if photoBackground == nil {
+            let dimEnd = playheadX - 28
+            layers.append(ScoreVideoLayer(color: .white.withAlphaComponent(0.42),
+                                         rect: CGRect(x: band.minX, y: band.minY, width: max(0, dimEnd - band.minX), height: band.height)))
+            if let playedFade {
+                layers.append(ScoreVideoLayer(image: playedFade,
+                                              rect: CGRect(x: dimEnd, y: band.minY, width: 24, height: band.height)))
+            }
+            if let leftFade {
+                layers.append(ScoreVideoLayer(image: leftFade,
+                                              rect: CGRect(x: band.minX, y: band.minY, width: Self.edgeFadeWidth, height: band.height)))
+            }
+            if let rightFade {
+                layers.append(ScoreVideoLayer(image: rightFade,
+                                              rect: CGRect(x: band.maxX - Self.edgeFadeWidth, y: band.minY, width: Self.edgeFadeWidth, height: band.height)))
+            }
+        }
+        if let cursorGlow {
+            layers.append(ScoreVideoLayer(image: cursorGlow,
+                                          rect: CGRect(x: playheadX - CGFloat(Self.cursorWidth) / 2,
+                                                       y: cursorGlowTop, width: CGFloat(Self.cursorWidth),
+                                                       height: CGFloat(cursorGlow.height)), alpha: CGFloat(endFade(time))))
+        }
+        if let pinnedTitle { layers.append(pinnedTitle) }
+        layers += progressLayers(time: time, onPaper: photoBackground == nil, whiteInk: photoBackground != nil)
+        compose(layers, into: pixelBuffer)
     }
 
     /// Title and composer centred above the music for the whole video.
-    private func drawPinnedTitle() {
+    private func makePinnedTitle() -> ScoreVideoLayer? {
         let title = options.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
+        guard !title.isEmpty else { return nil }
         let composer = options.composer.trimmingCharacters(in: .whitespacesAndNewlines)
         let centered = NSMutableParagraphStyle()
         centered.alignment = .center
@@ -1001,25 +1180,31 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         let blockHeight = titleHeight + (composer.isEmpty ? 0 : 6 + composerHeight)
         // Centred in the space above the music, never closer than 40 pt to the top.
         let top = max(40, (contentTop - blockHeight) / 2)
-        titleText.draw(in: CGRect(x: 80, y: top, width: width, height: titleHeight))
-        if !composer.isEmpty {
-            composerText.draw(in: CGRect(x: 80, y: top + titleHeight + 6, width: width, height: composerHeight))
-        }
+        let bounds = CGRect(x: 80, y: top, width: width, height: blockHeight).integral
+        let localTop = top - bounds.minY
+        guard let image = Self.overlay(size: bounds.size, draw: { _ in
+            titleText.draw(in: CGRect(x: 0, y: localTop, width: width, height: titleHeight))
+            if !composer.isEmpty {
+                composerText.draw(in: CGRect(x: 0, y: localTop + titleHeight + 6, width: width, height: composerHeight))
+            }
+        }) else { return nil }
+        return ScoreVideoLayer(image: image, rect: bounds)
     }
 
     /// Draws the tiles of the line that fall inside the frame.
-    private func drawLine(_ context: CGContext, offsetX: CGFloat) {
+    private func lineLayers(offsetX: CGFloat) -> [ScoreVideoLayer] {
+        var layers: [ScoreVideoLayer] = []
         let lineWidth = Int((page.size.width * scale).rounded())
         let firstTile = max(0, Int(floor(-offsetX / CGFloat(Self.tileWidth))))
         let lastTile = min((lineWidth - 1) / Self.tileWidth, Int(floor((frameSize.width - offsetX) / CGFloat(Self.tileWidth))))
-        guard firstTile <= lastTile else { return }
+        guard firstTile <= lastTile else { return layers }
         for tileIndex in firstTile...lastTile {
             let originX = tileIndex * Self.tileWidth
             let width = min(Self.tileWidth, lineWidth - originX)
             guard let image = tile(tileIndex, width: width) else { continue }
-            drawImage(image, in: CGRect(x: offsetX + CGFloat(originX), y: band.minY, width: CGFloat(width), height: band.height),
-                      context: context)
+            layers.append(ScoreVideoLayer(image: image, rect: CGRect(x: offsetX + CGFloat(originX), y: band.minY, width: CGFloat(width), height: band.height)))
         }
+        return layers
     }
 
     private func tile(_ index: Int, width: Int) -> CGImage? {
@@ -1139,23 +1324,22 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         return context.makeImage()
     }
 
-    /// Paper-coloured fade over the band between two x positions.
-    private func drawHorizontalFade(_ context: CGContext, from startX: CGFloat, to endX: CGFloat, startAlpha: CGFloat, endAlpha: CGFloat) {
+    /// Rasterize the narrow fade strips once at their output size.
+    private func makeHorizontalFade(width: CGFloat, startAlpha: CGFloat, endAlpha: CGFloat) -> CGImage? {
         let colors = [
             UIColor.white.withAlphaComponent(startAlpha).cgColor,
             UIColor.white.withAlphaComponent(endAlpha).cgColor
         ] as CFArray
-        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) else { return }
-        context.saveGState()
-        context.clip(to: CGRect(x: min(startX, endX), y: band.minY, width: abs(endX - startX), height: band.height))
-        context.drawLinearGradient(gradient, start: CGPoint(x: startX, y: 0), end: CGPoint(x: endX, y: 0), options: [])
-        context.restoreGState()
+        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) else { return nil }
+        return Self.overlay(size: CGSize(width: width, height: band.height)) { context in
+            context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: width, y: 0), options: [])
+        }
     }
 }
 
 /// Renders the performance audio in order, adding the same reverb as in-app
 /// playback: a send of every part's signal to MuseScore's default reverb.
-final class ScoreVideoAudioStream {
+actor ScoreVideoAudioStream {
     private let liveRenderSession: LiveScoreRenderSession
     private let reverbSendLevel: Float
     private var reverb: MSRPlaybackReverb?
@@ -1170,7 +1354,8 @@ final class ScoreVideoAudioStream {
         let audioData = try await liveRenderSession.playbackAudioChunk(
             startTimeSeconds: nextStartSeconds,
             durationSeconds: durationSeconds,
-            metronomeEnabled: false
+            metronomeEnabled: false,
+            includePartSamples: false
         )
         let channelCount = max(audioData.channelCount, 1)
         let sampleRate = Double(audioData.sampleRate)
@@ -1199,7 +1384,47 @@ final class ScoreVideoAudioStream {
     }
 }
 
-struct ScoreVideoAudioChunk {
+/// A single producer, with a single buffered result. The writer polls without
+/// awaiting synthesis, so a slow chunk never blocks ready video frames.
+private actor ScoreVideoAudioPrefetch {
+    private let stream: ScoreVideoAudioStream
+    private var task: Task<Void, Never>?
+    private var result: Result<ScoreVideoAudioChunk, Error>?
+
+    init(stream: ScoreVideoAudioStream) {
+        self.stream = stream
+    }
+
+    func start() {
+        guard task == nil, result == nil else { return }
+        task = Task {
+            do {
+                let chunk = try await stream.nextChunk(durationSeconds: 1)
+                try Task.checkCancellation()
+                result = .success(chunk)
+            } catch {
+                result = .failure(error)
+            }
+        }
+    }
+
+    func takeIfReady() throws -> ScoreVideoAudioChunk? {
+        guard let result else { return nil }
+        self.result = nil
+        task = nil
+        return try result.get()
+    }
+
+    func stop() async {
+        let pending = task
+        pending?.cancel()
+        await pending?.value
+        task = nil
+        result = nil
+    }
+}
+
+struct ScoreVideoAudioChunk: Sendable {
     let samples: [Float]
     let channelCount: Int
     let sampleRate: Double

@@ -1,0 +1,72 @@
+// Standalone dependencies for the exporter pipeline checks, not app sources.
+import Foundation
+import UIKit
+
+struct ScoreNormalizedRect: Sendable, Equatable {
+    let x: Double, y: Double, width: Double, height: Double
+}
+struct ScorePlaybackMeasureRegion: Sendable, Equatable {
+    let measureIndex: Int, pageIndex: Int
+    let startTimeSeconds: TimeInterval, endTimeSeconds: TimeInterval
+    let normalizedRect: ScoreNormalizedRect
+}
+struct ScorePlaybackBeatPoint: Sendable, Equatable {
+    let pageIndex: Int
+    let timeSeconds: TimeInterval, normalizedX: Double
+    let startsSegment: Bool
+}
+struct ScorePage: Sendable {
+    let pdfData: Data?
+    func rasterizedImage() -> UIImage? { nil }
+}
+enum ScoreReaderExportError: Error { case noAudio }
+nonisolated final class MSRPlaybackReverb {
+    init(sampleRate: Double) {}
+    func processInterleavedStereo(_ samples: UnsafeMutablePointer<Float>, frameCount: Int) {}
+}
+nonisolated final class MSRPlaybackAudioData: @unchecked Sendable {
+    let sampleRate: Int, channelCount: Int
+    let interleavedFloat32Samples: Data
+    init(sampleRate: Int, channelCount: Int, samples: Data) {
+        self.sampleRate = sampleRate
+        self.channelCount = channelCount
+        interleavedFloat32Samples = samples
+    }
+}
+actor LiveScoreRenderSession {
+    enum Failure: Error { case injected }
+    enum Mode: Sendable { case normal, secondChunkFailure, formatChange, cancellation }
+    let page: Data
+    let mode: Mode
+    private(set) var continuous = false
+    private(set) var requests = 0
+    private(set) var inFlight = 0
+    private(set) var maxInFlight = 0
+    private(set) var requestedStems = false
+
+    init(page: Data, mode: Mode = .normal) { self.page = page; self.mode = mode }
+    func setContinuousLayout(_ enabled: Bool) throws -> Int { continuous = enabled; return 1 }
+    func playbackMeasureRegions() throws -> [ScorePlaybackMeasureRegion] {
+        [ScorePlaybackMeasureRegion(measureIndex: 0, pageIndex: 0, startTimeSeconds: 0, endTimeSeconds: 1,
+                                    normalizedRect: ScoreNormalizedRect(x: 0.1, y: 0.25, width: 0.35, height: 0.5)),
+         ScorePlaybackMeasureRegion(measureIndex: 1, pageIndex: 0, startTimeSeconds: 1, endTimeSeconds: 2,
+                                    normalizedRect: ScoreNormalizedRect(x: 0.45, y: 0.25, width: 0.4, height: 0.5))]
+    }
+    func playbackBeatPoints() throws -> [ScorePlaybackBeatPoint] { [] }
+    func renderPage(at index: Int, dpi: Int) throws -> ScorePage { ScorePage(pdfData: page) }
+    func playbackAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval,
+                            metronomeEnabled: Bool, includePartSamples: Bool = true) async throws -> MSRPlaybackAudioData {
+        requestedStems = requestedStems || includePartSamples
+        requests += 1
+        inFlight += 1
+        maxInFlight = max(maxInFlight, inFlight)
+        defer { inFlight -= 1 }
+        // Exercise reentrancy while the next chunk is being prepared.
+        try await Task.sleep(nanoseconds: mode == .cancellation ? 500_000_000 : 10_000_000)
+        if mode == .secondChunkFailure && requests == 2 { throw Failure.injected }
+        let sampleRate = mode == .formatChange && requests > 1 ? 44_100 : 48_000
+        let samples = [Float](repeating: 0.05, count: Int(durationSeconds * Double(sampleRate)) * 2)
+        let data = samples.withUnsafeBytes { Data($0) }
+        return MSRPlaybackAudioData(sampleRate: sampleRate, channelCount: 2, samples: data)
+    }
+}
