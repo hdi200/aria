@@ -568,6 +568,7 @@ struct ScoreReaderView: View {
                                         exportAction: exportScore,
                                         exportProgress: exportProgress,
                                         videoPreviewPage: readerState.page(at: 0) ?? readerState.currentPage,
+                                        scoreComposer: readerState.scoreMetadata.composer,
                                         exportErrorMessage: exportErrorMessage,
                                         videoExportCompleted: pendingVideoShareItems != nil,
                                         videoSheetDismissAction: {

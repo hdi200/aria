@@ -18,19 +18,29 @@ The panel's Video settings row/button reopens the sheet.
 - **Scrolling** (default, 1920×1080): a continuous score on white paper, with a wide
   blue cursor, dimmed played notation, soft left/right fades, and a blue progress
   bar. There is **no measure highlight**. Title and composer stay centered above
-  the music, with extra space above and below the notation.
+  the music, with extra space above and below the notation. A **sticky header**
+  (part names, clefs, key and time signature from the start of the line) stays at
+  the left edge while the music slides under it with a short fade; it is cut at
+  the blank gap before the first note, found by scanning the rendered strip. It
+  shows the opening clef/key only, not later changes.
 - **Photo background** (`.scrollingPhoto`, 1920×1080): scrolling with white
   notation, staves, lyrics, title, cursor, and progress over a blurred/darkened
   image chosen by the user. A photo is required before rendering. Background blur
-  and conversion to white ink are computed once per background/tile.
+  and conversion to white ink are computed once per background/tile. Tapping the
+  photo row opens the Photos picker (`PhotosPicker`); "Choose from Files" is the
+  secondary option.
 - **Pages**, landscape 16:9 or portrait 9:16 (1920×1080 / 1080×1920): pages stacked
   on a dark backdrop. A critically damped spring camera follows each system,
   looking 0.4 s ahead; measure highlights and playhead remain. A title card fades
   out during the opening 4.5 s.
 
 The sheet shows a representative preview from an actual cached score page. For
-scrolling it crops the first system; it does **not** reflow the live score or start
-audio rendering. Photo decoding and preview composition run off the main thread.
+scrolling it draws a video frame from the page's first system at the video's
+proportions: title and composer, notation at the same relative size, played
+music dimmed, cursor at the middle, edge fades and progress bar (constants mirror
+`ScoreVideoScrollingPainter` at 1080p; keep them in sync). It does **not** reflow
+the live score or start audio rendering, so spacing is the page layout's. Photo
+decoding and preview composition run off the main thread.
 The caption explains that the exported video has its own layout.
 
 During rendering, settings and dismissal are disabled and progress/errors appear

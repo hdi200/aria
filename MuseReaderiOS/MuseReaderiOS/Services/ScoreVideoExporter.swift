@@ -1025,6 +1025,9 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private static let edgeFadeWidth: CGFloat = 110
     private static let cursorWidth = 140
     private static let cursorFadeDistance: CGFloat = 84
+    private static let lineStartX: CGFloat = 100
+    private static let photoScrimAlpha: CGFloat = 0.52
+    private static let headerFadeWidth: CGFloat = 28
 
     private let page: ScoreVideoPageSource
     private let scale: CGFloat
@@ -1036,9 +1039,11 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private let photoBackground: CGImage?
     private let cursorGlow: CGImage?
     private let cursorGlowTop: CGFloat
+    private let firstBeatX: CGFloat?
     private var tiles: [Int: CGImage] = [:]
     private var tileOrder: [Int] = []
     private lazy var pinnedTitle: ScoreVideoLayer? = makePinnedTitle()
+    private lazy var stickyHeader: StickyHeader? = makeStickyHeader()
     private lazy var leftFade = makeHorizontalFade(width: Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
     private lazy var rightFade = makeHorizontalFade(width: Self.edgeFadeWidth, startAlpha: 0, endAlpha: 1)
     private lazy var playedFade = makeHorizontalFade(width: 24, startAlpha: 0.42, endAlpha: 0)
@@ -1078,12 +1083,15 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         // Start at the first playable beat rather than sweeping across the
         // clef, key and meter header. Later measures still follow bar times.
         var pathRects = lineRects
+        var firstBeatX: CGFloat?
         if let firstBeat = beatPoints.first, let first = pathRects.first {
             let beatX = CGFloat(firstBeat.normalizedX) * page.size.width
             if beatX > first.minX && beatX < first.maxX {
                 pathRects[0] = CGRect(x: beatX, y: first.minY, width: first.maxX - beatX, height: first.height)
+                firstBeatX = beatX
             }
         }
+        self.firstBeatX = firstBeatX
         path = ScoreVideoScrollPath(timeline: timeline, rects: pathRects)
         super.init(frameSize: frameSize, timeline: timeline, options: options)
     }
@@ -1098,8 +1106,7 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
             weightSum += weight
         }
         let scoreX = smoothedX / weightSum * scale
-        let initialOffset: CGFloat = 100
-        let naturalTrackerX = initialOffset + scoreX
+        let naturalTrackerX = Self.lineStartX + scoreX
         let centerX = frameSize.width * 0.5
         // The page stays still while the tracker crosses its opening. The
         // final 160 pixels ease the camera into motion without a sudden jerk.
@@ -1123,11 +1130,25 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         var layers: [ScoreVideoLayer]
         if let photoBackground {
             layers = [ScoreVideoLayer(image: photoBackground, rect: frame),
-                      ScoreVideoLayer(color: .black.withAlphaComponent(0.52), rect: frame)]
+                      ScoreVideoLayer(color: .black.withAlphaComponent(Self.photoScrimAlpha), rect: frame)]
         } else {
             layers = [ScoreVideoLayer(color: .white, rect: frame)]
         }
         layers += lineLayers(offsetX: offsetX)
+        if let stickyHeader {
+            // Stays where the line began; the music slides underneath it.
+            if let backdrop = stickyHeader.backdrop {
+                layers.append(ScoreVideoLayer(image: backdrop, rect: stickyHeader.rect))
+            }
+            layers.append(ScoreVideoLayer(image: stickyHeader.ink, rect: stickyHeader.rect))
+            let scrolled = min(max((Self.lineStartX - offsetX) / Self.headerFadeWidth, 0), 1)
+            if let fade = stickyHeader.fade, scrolled > 0 {
+                layers.append(ScoreVideoLayer(image: fade,
+                                              rect: CGRect(x: stickyHeader.rect.maxX, y: band.minY,
+                                                           width: Self.headerFadeWidth, height: band.height),
+                                              alpha: scrolled))
+            }
+        }
         if photoBackground == nil {
             let dimEnd = playheadX - 28
             layers.append(ScoreVideoLayer(color: .white.withAlphaComponent(0.42),
@@ -1189,6 +1210,86 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
             }
         }) else { return nil }
         return ScoreVideoLayer(image: image, rect: bounds)
+    }
+
+    private struct StickyHeader {
+        let ink: CGImage
+        let backdrop: CGImage?
+        let fade: CGImage?
+        let rect: CGRect
+    }
+
+    /// Part names, clefs, key and time signature from the start of the line,
+    /// kept at the left so each staff stays identifiable once they scroll off.
+    /// It ends in the blank gap before the first note.
+    private func makeStickyHeader() -> StickyHeader? {
+        guard let firstBeatX, let first = lineRects.first else { return nil }
+        let beatPixelX = Int((firstBeatX * scale).rounded())
+        let measurePixelX = Int((first.minX * scale).rounded())
+        guard beatPixelX > measurePixelX + 8,
+              let strip = page.tile(scale: scale, originX: 0, pixelWidth: beatPixelX + 1, pixelHeight: Int(band.height)),
+              let headerWidth = Self.headerEnd(in: strip, searchFrom: measurePixelX,
+                                               rows: Int(contentTop - band.minY)..<Int(contentBottom - band.minY)),
+              CGFloat(headerWidth) < frameSize.width * 0.35,
+              // From the frame's left edge, so nothing that has scrolled past shows beside it.
+              let headerStrip = page.tile(scale: scale, originX: -Self.lineStartX,
+                                          pixelWidth: Int(Self.lineStartX) + headerWidth, pixelHeight: Int(band.height))
+        else { return nil }
+        let rect = CGRect(x: 0, y: band.minY, width: Self.lineStartX + CGFloat(headerWidth), height: band.height)
+        let fadeRect = CGRect(x: rect.maxX, y: rect.minY, width: Self.headerFadeWidth, height: rect.height)
+        guard let photoBackground else {
+            // Paper tiles are opaque white, so the strip hides the music by itself.
+            return StickyHeader(ink: headerStrip, backdrop: nil, fade: makeHorizontalFade(width: Self.headerFadeWidth, startAlpha: 1, endAlpha: 0), rect: rect)
+        }
+        guard let ink = Self.whiteInkImage(from: headerStrip) else { return nil }
+        // The same blurred, darkened photo that sits behind it, so it reads as one surface.
+        let photo = UIImage(cgImage: photoBackground)
+        func backdrop(_ area: CGRect, fading: Bool) -> CGImage? {
+            Self.overlay(size: area.size) { context in
+                photo.draw(at: CGPoint(x: -area.minX, y: -area.minY))
+                UIColor.black.withAlphaComponent(Self.photoScrimAlpha).setFill()
+                context.fill(CGRect(origin: .zero, size: area.size))
+                guard fading else { return }
+                let colors = [UIColor.black.cgColor, UIColor.black.withAlphaComponent(0).cgColor] as CFArray
+                if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+                    context.setBlendMode(.destinationIn)
+                    context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: area.width, y: 0), options: [])
+                }
+            }
+        }
+        return StickyHeader(ink: ink, backdrop: backdrop(rect, fading: false), fade: backdrop(fadeRect, fading: true), rect: rect)
+    }
+
+    /// Width of the header: the middle of the blank gap left of the first note.
+    /// Columns there hold only staff lines, the fewest dark pixels in the strip.
+    private static func headerEnd(in strip: CGImage, searchFrom minimumX: Int, rows: Range<Int>) -> Int? {
+        let width = strip.width
+        let height = strip.height
+        let rowRange = max(0, rows.lowerBound)..<min(height, rows.upperBound)
+        guard width > minimumX + 2, !rowRange.isEmpty,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue),
+              let data = context.data
+        else { return nil }
+        context.draw(strip, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let pixels = data.assumingMemoryBound(to: UInt8.self)
+        var ink = [Int](repeating: 0, count: width)
+        for row in rowRange {
+            // The bitmap's first row is the top of the drawn image.
+            let line = pixels + row * width
+            for x in minimumX..<width where line[x] < 160 {
+                ink[x] += 1
+            }
+        }
+        let floor = ink[minimumX..<width].min() ?? 0
+        let blank = floor + 2 + floor / 50
+        // Walk left from the first note, past its glyph, to the gap.
+        var x = width - 1
+        while x > minimumX && ink[x] > blank { x -= 1 }
+        let gapEnd = x
+        while x > minimumX && ink[x] <= blank { x -= 1 }
+        guard x > minimumX, gapEnd - x >= 3 else { return nil }
+        return (x + gapEnd) / 2 + 1
     }
 
     /// Draws the tiles of the line that fall inside the frame.

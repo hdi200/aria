@@ -8,6 +8,7 @@ import UIKit
 import UniformTypeIdentifiers
 import CoreImage
 import ImageIO
+import PhotosUI
 
 enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
     case museScore
@@ -188,6 +189,7 @@ struct ScoreReaderExportPanel: View {
     /// Rendering progress for exports that take a while, such as video.
     var exportProgress: Double? = nil
     var videoPreviewPage: ScorePage? = nil
+    var scoreComposer = ""
     var exportErrorMessage: String? = nil
     var videoExportCompleted = false
     var videoSheetDismissAction: () -> Void = {}
@@ -329,6 +331,7 @@ struct ScoreReaderExportPanel: View {
         .sheet(isPresented: $isVideoSettingsPresented, onDismiss: videoSheetDismissAction) {
             ScoreReaderVideoExportSheet(
                 scoreTitle: scoreTitle,
+                scoreComposer: scoreComposer,
                 sharingDescription: sharingDescription,
                 previewPage: videoPreviewPage,
                 draft: $draft,
@@ -585,6 +588,7 @@ struct ScoreReaderExportPanel: View {
 private struct ScoreReaderVideoExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isChoosingBackground = false
+    @State private var backgroundPhotoItem: PhotosPickerItem?
     @State private var isLoadingBackground = false
     @State private var backgroundError: String?
     @State private var previewImages = ScoreReaderVideoPreviewImages()
@@ -594,6 +598,7 @@ private struct ScoreReaderVideoExportSheet: View {
     @State private var preferredPageStyle: ScoreVideoStyle = .pagesLandscape
 
     let scoreTitle: String
+    let scoreComposer: String
     let sharingDescription: String
     let previewPage: ScorePage?
     @Binding var draft: ScoreReaderExportDraft
@@ -712,8 +717,11 @@ private struct ScoreReaderVideoExportSheet: View {
             let style = draft.videoStyle
             let backgroundData = draft.videoBackgroundImageData
             let page = previewPage
+            let title = scoreTitle
+            let composer = scoreComposer
             let images = await Task.detached(priority: .userInitiated) {
-                ScoreReaderVideoPreviewRenderer.makeImages(page: page, style: style, backgroundData: backgroundData)
+                ScoreReaderVideoPreviewRenderer.makeImages(page: page, style: style, title: title, composer: composer,
+                                                           backgroundData: backgroundData)
             }.value
             guard !Task.isCancelled else { return }
             previewImages = images
@@ -722,30 +730,47 @@ private struct ScoreReaderVideoExportSheet: View {
         .fileImporter(isPresented: $isChoosingBackground, allowedContentTypes: [.image]) { result in
             switch result {
             case .success(let url):
-                isLoadingBackground = true
-                backgroundError = nil
-                Task {
-                    defer { isLoadingBackground = false }
-                    do {
-                        let data = try await Task.detached(priority: .userInitiated) {
-                            let canAccess = url.startAccessingSecurityScopedResource()
-                            defer { if canAccess { url.stopAccessingSecurityScopedResource() } }
-                            let data = try Data(contentsOf: url)
-                            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                                  CGImageSourceGetCount(source) > 0 else {
-                                throw ScoreReaderExportError.imageEncodingFailed
-                            }
-                            return data
-                        }.value
-                        draft.videoBackgroundImageData = data
-                        draft.videoBackgroundImageName = url.lastPathComponent
-                        previewRevision += 1
-                    } catch {
-                        backgroundError = "That image could not be opened. \(error.localizedDescription)"
-                    }
+                loadBackground(named: url.lastPathComponent) {
+                    let canAccess = url.startAccessingSecurityScopedResource()
+                    defer { if canAccess { url.stopAccessingSecurityScopedResource() } }
+                    return try Data(contentsOf: url)
                 }
             case .failure(let error):
                 backgroundError = error.localizedDescription
+            }
+        }
+        .onChange(of: backgroundPhotoItem) { item in
+            guard let item else { return }
+            backgroundPhotoItem = nil
+            loadBackground(named: "Photo from library") {
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    throw ScoreReaderExportError.imageEncodingFailed
+                }
+                return data
+            }
+        }
+    }
+
+    /// Reads the chosen image off the main thread and checks that it decodes.
+    private func loadBackground(named name: String, _ read: @escaping @Sendable () async throws -> Data) {
+        isLoadingBackground = true
+        backgroundError = nil
+        Task {
+            defer { isLoadingBackground = false }
+            do {
+                let data = try await Task.detached(priority: .userInitiated) {
+                    let data = try await read()
+                    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                          CGImageSourceGetCount(source) > 0 else {
+                        throw ScoreReaderExportError.imageEncodingFailed
+                    }
+                    return data
+                }.value
+                draft.videoBackgroundImageData = data
+                draft.videoBackgroundImageName = name
+                previewRevision += 1
+            } catch {
+                backgroundError = "That image could not be opened. \(error.localizedDescription)"
             }
         }
     }
@@ -839,9 +864,8 @@ private struct ScoreReaderVideoExportSheet: View {
 
     private var backgroundPhotoRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button {
-                isChoosingBackground = true
-            } label: {
+            // Photos first; most backgrounds come from the camera roll.
+            PhotosPicker(selection: $backgroundPhotoItem, matching: .images, photoLibrary: .shared()) {
                 HStack(spacing: 12) {
                     if let image = previewImages.backgroundThumbnail {
                         Image(uiImage: image).resizable().scaledToFill()
@@ -865,6 +889,11 @@ private struct ScoreReaderVideoExportSheet: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
+            .disabled(isLoadingBackground)
+            Button("Choose from Files") {
+                isChoosingBackground = true
+            }
+            .font(.caption)
             .disabled(isLoadingBackground)
             if let backgroundError {
                 Text(backgroundError).font(.caption).foregroundStyle(.red)
@@ -920,34 +949,21 @@ private struct ScoreReaderVideoPreviewImages: @unchecked Sendable {
 
 private nonisolated enum ScoreReaderVideoPreviewRenderer {
     private static let imageContext = CIContext(options: [.cacheIntermediates: false])
+    private static let accent = UIColor(red: 0.36, green: 0.62, blue: 1.0, alpha: 1)
 
-    static func makeImages(page: ScorePage?, style: ScoreVideoStyle, backgroundData: Data?) -> ScoreReaderVideoPreviewImages {
-        let scrolling = style == .scrolling || style == .scrollingPhoto
+    static func makeImages(page: ScorePage?, style: ScoreVideoStyle, title: String, composer: String,
+                           backgroundData: Data?) -> ScoreReaderVideoPreviewImages {
         let size = style == .pagesPortrait ? CGSize(width: 360, height: 640) : CGSize(width: 640, height: 360)
         let thumbnail = backgroundData.flatMap { downsample($0, maximumPixelSize: 960) }
         guard let page else { return ScoreReaderVideoPreviewImages(backgroundThumbnail: thumbnail) }
-        let paper = scoreImage(page: page, size: size, cropSystem: scrolling)
-        guard let paperCGImage = paper.cgImage, let backgroundCGImage = thumbnail?.cgImage else {
-            return ScoreReaderVideoPreviewImages(paper: paper, backgroundThumbnail: thumbnail)
+        guard style == .scrolling || style == .scrollingPhoto else {
+            return ScoreReaderVideoPreviewImages(paper: pageImage(page: page, size: size), backgroundThumbnail: thumbnail)
         }
-        let bounds = CGRect(origin: .zero, size: size)
-        let background = CIImage(cgImage: backgroundCGImage)
-        let scale = max(size.width / background.extent.width, size.height / background.extent.height)
-        let scaled = background.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let centered = scaled.transformed(by: CGAffineTransform(translationX: (size.width - scaled.extent.width) / 2,
-                                                                y: (size.height - scaled.extent.height) / 2))
-        let blurred = centered.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 12]).cropped(to: bounds)
-        let dim = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.4)).cropped(to: bounds).composited(over: blurred)
-        // Convert black engraving on paper to white ink with matching antialiasing.
-        let inverted = CIImage(cgImage: paperCGImage).applyingFilter("CIColorInvert")
-        let ink = inverted.applyingFilter("CIColorMatrix", parameters: [
-            "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputAVector": CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0),
-            "inputBiasVector": CIVector(x: 1, y: 1, z: 1, w: 0)
-        ])
-        let photo = imageContext.createCGImage(ink.composited(over: dim), from: bounds).map { UIImage(cgImage: $0) }
+        guard let frame = ScrollingFrame(page: page, size: size) else {
+            return ScoreReaderVideoPreviewImages(backgroundThumbnail: thumbnail)
+        }
+        let paper = frame.paperImage(title: title, composer: composer)
+        let photo = thumbnail.flatMap { frame.photoImage(title: title, composer: composer, background: $0) }
         return ScoreReaderVideoPreviewImages(paper: paper, photo: photo, backgroundThumbnail: thumbnail)
     }
 
@@ -962,51 +978,208 @@ private nonisolated enum ScoreReaderVideoPreviewRenderer {
         return UIImage(cgImage: image)
     }
 
-    private static func scoreImage(page: ScorePage, size: CGSize, cropSystem: Bool) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { rendererContext in
-            let context = rendererContext.cgContext
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            let pdf = page.pdfData.flatMap { CGDataProvider(data: $0 as CFData) }.flatMap(CGPDFDocument.init)?.page(at: 1)
-            let raster = pdf == nil ? page.imageData.flatMap { downsample($0, maximumPixelSize: 1600) } : nil
-            let sourceSize = pdf?.getBoxRect(.mediaBox).size ?? raster?.size ?? CGSize(width: 612, height: 792)
-            var crop = CGRect(origin: .zero, size: sourceSize)
-            if cropSystem, let system = page.layoutMarkers.first(where: {
-                if case .system = $0.kind { return true }
-                return false
-            }) {
-                let rect = system.normalizedRect
-                crop = CGRect(x: CGFloat(rect.x) * sourceSize.width,
-                              y: CGFloat(rect.y) * sourceSize.height,
-                              width: CGFloat(rect.width) * sourceSize.width,
-                              height: CGFloat(rect.height) * sourceSize.height)
-                    .insetBy(dx: -sourceSize.width * 0.015, dy: -sourceSize.height * 0.035)
-                    .intersection(CGRect(origin: .zero, size: sourceSize))
-            }
-            guard crop.width > 0, crop.height > 0 else { return }
-            let area = CGRect(origin: .zero, size: size).insetBy(dx: 20, dy: cropSystem ? 50 : 16)
-            let scale = min(area.width / crop.width, area.height / crop.height)
-            let drawingRect = CGRect(x: (size.width - crop.width * scale) / 2,
-                                     y: (size.height - crop.height * scale) / 2,
-                                     width: crop.width * scale, height: crop.height * scale)
+    private struct PageSource {
+        let pdf: CGPDFPage?
+        let raster: UIImage?
+        let size: CGSize
+
+        init(page: ScorePage) {
+            pdf = page.pdfData.flatMap { CGDataProvider(data: $0 as CFData) }.flatMap(CGPDFDocument.init)?.page(at: 1)
+            raster = pdf == nil ? page.imageData.flatMap { downsample($0, maximumPixelSize: 1600) } : nil
+            size = pdf?.getBoxRect(.mediaBox).size ?? raster?.size ?? CGSize(width: 612, height: 792)
+        }
+
+        /// Draws the page region `crop` (page points, top-left origin) into
+        /// `rect` of a UIKit context, clipped to `clip`.
+        func draw(_ crop: CGRect, in rect: CGRect, clip: CGRect, context: CGContext) {
+            let scale = rect.width / max(crop.width, 1)
             context.saveGState()
-            context.clip(to: drawingRect)
+            context.clip(to: clip)
             if let pdf {
                 let box = pdf.getBoxRect(.mediaBox)
-                context.translateBy(x: drawingRect.minX, y: drawingRect.maxY)
+                context.translateBy(x: rect.minX, y: rect.maxY)
                 context.scaleBy(x: scale, y: -scale)
-                context.translateBy(x: -box.minX - crop.minX, y: -box.minY - (sourceSize.height - crop.maxY))
+                context.translateBy(x: -box.minX - crop.minX, y: -box.minY - (size.height - crop.maxY))
                 context.drawPDFPage(pdf)
             } else if let raster {
-                raster.draw(in: CGRect(x: drawingRect.minX - crop.minX * scale,
-                                       y: drawingRect.minY - crop.minY * scale,
-                                       width: sourceSize.width * scale, height: sourceSize.height * scale))
+                raster.draw(in: CGRect(x: rect.minX - crop.minX * scale, y: rect.minY - crop.minY * scale,
+                                       width: size.width * scale, height: size.height * scale))
             }
             context.restoreGState()
+        }
+    }
+
+    private static func pageImage(page: ScorePage, size: CGSize) -> UIImage {
+        let source = PageSource(page: page)
+        return renderer(size: size, opaque: true).image { rendererContext in
+            UIColor.white.setFill()
+            rendererContext.fill(CGRect(origin: .zero, size: size))
+            let area = CGRect(origin: .zero, size: size).insetBy(dx: 20, dy: 16)
+            let scale = min(area.width / source.size.width, area.height / source.size.height)
+            let rect = CGRect(x: (size.width - source.size.width * scale) / 2, y: (size.height - source.size.height * scale) / 2,
+                              width: source.size.width * scale, height: source.size.height * scale)
+            source.draw(CGRect(origin: .zero, size: source.size), in: rect, clip: rect, context: rendererContext.cgContext)
+        }
+    }
+
+    private static func renderer(size: CGSize, opaque: Bool) -> UIGraphicsImageRenderer {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = opaque
+        return UIGraphicsImageRenderer(size: size, format: format)
+    }
+
+    /// One frame of the scrolling video, drawn from the displayed page's first
+    /// system: the moment the cursor reaches the middle, before the score
+    /// starts to move. Proportions follow `ScoreVideoScrollingPainter` at 1080p.
+    private struct ScrollingFrame {
+        let size: CGSize
+        let notation: UIImage
+        let contentTop: CGFloat
+        let contentBottom: CGFloat
+        let band: CGRect
+        let cursorX: CGFloat
+
+        init?(page: ScorePage, size: CGSize) {
+            let source = PageSource(page: page)
+            let systems = page.layoutMarkers.compactMap { marker -> CGRect? in
+                guard case .system = marker.kind else { return nil }
+                let rect = marker.normalizedRect
+                return CGRect(x: CGFloat(rect.x) * source.size.width, y: CGFloat(rect.y) * source.size.height,
+                              width: CGFloat(rect.width) * source.size.width, height: CGFloat(rect.height) * source.size.height)
+            }.sorted { $0.minY < $1.minY }
+            guard let system = systems.first, system.width > 0, system.height > 0 else { return nil }
+            let unit = size.height / 1080
+            // Staves fill 59% of the height, starting 19% down, as in the video.
+            let scale = min(2.2 * 1.7 * unit, size.height * 0.59 / system.height)
+            // Lyrics and markings around the staves, stopping short of the next system.
+            let below = systems.dropFirst().first.map { ($0.minY - system.maxY) * 0.6 } ?? system.height * 0.4
+            let crop = CGRect(x: system.minX, y: system.minY - system.height * 0.15,
+                              width: system.width, height: system.height * 1.15 + max(below, 0))
+            let origin = CGPoint(x: size.width * 0.09, y: size.height * 0.19 - system.height * 0.15 * scale)
+            let rect = CGRect(x: origin.x, y: origin.y, width: crop.width * scale, height: crop.height * scale)
+            band = CGRect(x: 0, y: rect.minY, width: size.width, height: rect.height)
+            contentTop = size.height * 0.19
+            contentBottom = contentTop + system.height * scale
+            self.size = size
+            cursorX = (size.width * 0.5).rounded()
+            notation = ScoreReaderVideoPreviewRenderer.renderer(size: size, opaque: true).image { rendererContext in
+                UIColor.white.setFill()
+                rendererContext.fill(CGRect(origin: .zero, size: size))
+                source.draw(crop, in: rect, clip: rect, context: rendererContext.cgContext)
+            }
+        }
+
+        func paperImage(title: String, composer: String) -> UIImage {
+            let unit = size.height / 1080
+            return ScoreReaderVideoPreviewRenderer.renderer(size: size, opaque: true).image { rendererContext in
+                let context = rendererContext.cgContext
+                notation.draw(at: .zero)
+                // Played music is dimmed; the line fades out at both edges.
+                let dimEnd = cursorX - 28 * unit
+                UIColor.white.withAlphaComponent(0.42).setFill()
+                context.fill(CGRect(x: 0, y: band.minY, width: dimEnd, height: band.height))
+                fade(context, from: 0.42, to: 0, in: CGRect(x: dimEnd, y: band.minY, width: 24 * unit, height: band.height))
+                fade(context, from: 1, to: 0, in: CGRect(x: 0, y: band.minY, width: 110 * unit, height: band.height))
+                fade(context, from: 0, to: 1, in: CGRect(x: size.width - 110 * unit, y: band.minY, width: 110 * unit, height: band.height))
+                drawOverlays(context, title: title, composer: composer, ink: UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 1),
+                             cursor: ScoreReaderVideoPreviewRenderer.accent,
+                             track: UIColor.black.withAlphaComponent(0.06), progress: ScoreReaderVideoPreviewRenderer.accent)
+            }
+        }
+
+        func photoImage(title: String, composer: String, background: UIImage) -> UIImage? {
+            guard let backgroundCGImage = background.cgImage, let notationCGImage = notation.cgImage else { return nil }
+            let bounds = CGRect(origin: .zero, size: size)
+            let photo = CIImage(cgImage: backgroundCGImage)
+            let fill = max(size.width / photo.extent.width, size.height / photo.extent.height)
+            let scaled = photo.transformed(by: CGAffineTransform(scaleX: fill, y: fill))
+            let centered = scaled.transformed(by: CGAffineTransform(translationX: (size.width - scaled.extent.width) / 2,
+                                                                    y: (size.height - scaled.extent.height) / 2))
+            let blurred = centered.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 12]).cropped(to: bounds)
+            let dim = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.52)).cropped(to: bounds).composited(over: blurred)
+            // Black engraving on paper becomes white ink with matching antialiasing.
+            let ink = CIImage(cgImage: notationCGImage).applyingFilter("CIColorInvert").applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputAVector": CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0),
+                "inputBiasVector": CIVector(x: 1, y: 1, z: 1, w: 0)
+            ])
+            guard let base = ScoreReaderVideoPreviewRenderer.imageContext.createCGImage(ink.composited(over: dim), from: bounds) else { return nil }
+            return ScoreReaderVideoPreviewRenderer.renderer(size: size, opaque: true).image { rendererContext in
+                UIImage(cgImage: base).draw(at: .zero)
+                drawOverlays(rendererContext.cgContext, title: title, composer: composer, ink: .white, cursor: .white,
+                             track: UIColor.white.withAlphaComponent(0.12), progress: .white)
+            }
+        }
+
+        private func fade(_ context: CGContext, from start: CGFloat, to end: CGFloat, in rect: CGRect) {
+            let colors = [UIColor.white.withAlphaComponent(start).cgColor, UIColor.white.withAlphaComponent(end).cgColor] as CFArray
+            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) else { return }
+            context.saveGState()
+            context.clip(to: rect)
+            context.drawLinearGradient(gradient, start: CGPoint(x: rect.minX, y: 0), end: CGPoint(x: rect.maxX, y: 0), options: [])
+            context.restoreGState()
+        }
+
+        /// Title, cursor and progress bar, as the video draws them.
+        private func drawOverlays(_ context: CGContext, title: String, composer: String, ink: UIColor, cursor: UIColor,
+                                  track: UIColor, progress: UIColor) {
+            let unit = size.height / 1080
+            // Cursor: a soft glow and a thin centre line, tapering above and below the staves.
+            let taper = 84 * unit
+            let top = contentTop - taper
+            let height = contentBottom - contentTop + 2 * taper
+            let halfWidth = 70 * unit
+            var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+            cursor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+            let rows = max(1, Int(height.rounded()))
+            for row in 0..<rows {
+                let distance = min(CGFloat(row), CGFloat(rows - 1 - row))
+                let t = min(1, distance / taper)
+                let vertical = t * t * (3 - 2 * t)
+                for column in -Int(halfWidth)...Int(halfWidth) {
+                    let d = abs(CGFloat(column)) / unit
+                    let value = min(1, (0.16 * exp(-pow(d / 38, 2)) + 0.45 * exp(-pow(d / 1.15, 2))) * vertical)
+                    guard value > 0.004 else { continue }
+                    context.setFillColor(red: red, green: green, blue: blue, alpha: value)
+                    context.fill(CGRect(x: cursorX + CGFloat(column), y: top + CGFloat(row), width: 1, height: 1))
+                }
+            }
+
+            // Title and composer centred above the music.
+            let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedComposer = composer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedTitle.isEmpty {
+                let centered = NSMutableParagraphStyle()
+                centered.alignment = .center
+                centered.lineBreakMode = .byTruncatingTail
+                func text(_ string: String, size points: CGFloat, alpha: CGFloat) -> NSAttributedString {
+                    let font = UIFont(name: "Edwin-Roman", size: points * unit) ?? UIFont(name: "Times New Roman", size: points * unit)
+                        ?? UIFont.systemFont(ofSize: points * unit)
+                    return NSAttributedString(string: string, attributes: [
+                        .font: font, .foregroundColor: ink.withAlphaComponent(alpha), .paragraphStyle: centered
+                    ])
+                }
+                let titleText = text(trimmedTitle, size: 40, alpha: 1)
+                let composerText = text(trimmedComposer, size: 24, alpha: ink == .white ? 0.78 : 0.6)
+                let titleHeight = ceil(titleText.size().height)
+                let composerHeight = trimmedComposer.isEmpty ? 0 : ceil(composerText.size().height)
+                let blockHeight = titleHeight + (trimmedComposer.isEmpty ? 0 : 6 * unit + composerHeight)
+                let top = max(40 * unit, (contentTop - blockHeight) / 2)
+                let width = size.width - 160 * unit
+                titleText.draw(in: CGRect(x: 80 * unit, y: top, width: width, height: titleHeight))
+                if !trimmedComposer.isEmpty {
+                    composerText.draw(in: CGRect(x: 80 * unit, y: top + titleHeight + 6 * unit, width: width, height: composerHeight))
+                }
+            }
+
+            let barHeight = max(2, 6 * unit)
+            track.setFill()
+            context.fill(CGRect(x: 0, y: size.height - barHeight, width: size.width, height: barHeight))
+            progress.setFill()
+            context.fill(CGRect(x: 0, y: size.height - barHeight, width: size.width * 0.3, height: barHeight))
         }
     }
 }
