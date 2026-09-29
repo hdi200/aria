@@ -574,7 +574,6 @@ struct ScoreReaderExportPanel: View {
 
 struct ScoreReaderVideoExportSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var isChoosingPhoto = false
     @State private var backgroundPhotoItem: PhotosPickerItem?
     @State private var isLoadingBackground = false
@@ -590,6 +589,11 @@ struct ScoreReaderVideoExportSheet: View {
     @State private var playingVideo: URL?
     @State private var isFullScreen = false
     @State private var videoDetails: [URL: String] = [:]
+    @State private var availableWindowSize = CGSize.zero
+    @State private var headerHeight: CGFloat = 76
+    @State private var footerHeight: CGFloat = 115
+    @State private var settingsControlsHeight: CGFloat = 300
+    @State private var summaryHeight: CGFloat = 16
 
     @Binding var draft: ScoreReaderExportDraft
     let isPreparingExport: Bool
@@ -610,12 +614,26 @@ struct ScoreReaderVideoExportSheet: View {
         draft.videoStyle == .scrollingPhoto && draft.videoBackgroundImageData == nil
     }
 
+    private var isTablet: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
     private var horizontalPadding: CGFloat {
-        horizontalSizeClass == .compact ? 16 : 24
+        isTablet ? 24 : 16
     }
 
     private var contentWidth: CGFloat {
-        horizontalSizeClass == .compact ? 560 : 752
+        isTablet ? 752 : 560
+    }
+
+    private var preferredPanelSize: CGSize? {
+        guard availableWindowSize.width > 96, availableWindowSize.height > 96 else { return nil }
+        let width = min(800, max(580, availableWindowSize.width * 0.70), availableWindowSize.width - 48)
+        let previewWidth = min(contentWidth, width - horizontalPadding * 2)
+        let aspect = draft.videoStyle == .pagesPortrait ? 9.0 / 16.0 : 16.0 / 9.0
+        let height = headerHeight + footerHeight + previewWidth / aspect
+            + summaryHeight + 10 + 24 + settingsControlsHeight + 20
+        return CGSize(width: width, height: min(ceil(height), availableWindowSize.height - 48))
     }
 
     private var previewTaskID: String {
@@ -634,10 +652,11 @@ struct ScoreReaderVideoExportSheet: View {
         VStack(spacing: 0) {
             header
                 .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
             if completedVideos.isEmpty {
                 GeometryReader { geometry in
                     ScrollView {
-                        column { settingsContent(compact: geometry.size.height < 580) }
+                        column { settingsContent(compact: geometry.size.height < settingsControlsHeight + 150) }
                             .frame(idealHeight: geometry.size.height)
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -648,9 +667,15 @@ struct ScoreReaderVideoExportSheet: View {
             }
             footer
                 .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
         }
         .background(Color(uiColor: .systemBackground).opacity(0.94))
-        .modifier(ScoreReaderVideoSheetSizing())
+        .background {
+            ScoreReaderVideoWindowSizeReader { availableWindowSize = $0 }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .modifier(ScoreReaderVideoSheetSizing(preferredSize: preferredPanelSize))
         .presentationBackground(.regularMaterial)
         .presentationCornerRadius(26)
         .presentationDragIndicator(.hidden)
@@ -845,6 +870,7 @@ struct ScoreReaderVideoExportSheet: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { summaryHeight = $0 }
             }
             .frame(maxWidth: .infinity)
 
@@ -942,6 +968,9 @@ struct ScoreReaderVideoExportSheet: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                if !compact { settingsControlsHeight = height }
+            }
         }
         .disabled(isPreparingExport)
     }
@@ -979,7 +1008,8 @@ struct ScoreReaderVideoExportSheet: View {
         }
         .animation(.easeOut(duration: 0.2), value: previewImage)
         .aspectRatio(portrait ? 9.0 / 16.0 : 16.0 / 9.0, contentMode: .fit)
-        .frame(minHeight: 100)
+        .frame(maxWidth: portrait ? nil : .infinity, minHeight: 100)
+        .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(0.08)))
         .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
@@ -995,7 +1025,7 @@ struct ScoreReaderVideoExportSheet: View {
             VStack(spacing: 10) {
                 content()
                     .frame(maxWidth: .infinity)
-                    .frame(height: height ?? (horizontalSizeClass == .compact ? 96 : 120))
+                    .frame(height: height ?? (isTablet ? 120 : 96))
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
@@ -1121,11 +1151,11 @@ struct ScoreReaderVideoExportSheet: View {
 
 /// A centered iPad panel with enough height for the preview and all settings.
 private struct ScoreReaderVideoSheetSizing: ViewModifier {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let preferredSize: CGSize?
 
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *), horizontalSizeClass == .regular {
-            content.presentationSizing(ScoreReaderVideoPanelSizing())
+        if #available(iOS 18.0, *), UIDevice.current.userInterfaceIdiom == .pad {
+            content.presentationSizing(ScoreReaderVideoPanelSizing(preferredSize: preferredSize))
         } else {
             content.presentationDetents([.large])
         }
@@ -1134,9 +1164,59 @@ private struct ScoreReaderVideoSheetSizing: ViewModifier {
 
 @available(iOS 18.0, *)
 private struct ScoreReaderVideoPanelSizing: PresentationSizing {
+    let preferredSize: CGSize?
+
     func proposedSize(for root: PresentationSizingRoot, context: PresentationSizingContext) -> ProposedViewSize {
-        let page = PagePresentationSizing.page.proposedSize(for: root, context: context)
-        return ProposedViewSize(width: page.width.map { min($0, 800) }, height: page.height)
+        if let preferredSize { return ProposedViewSize(preferredSize) }
+        return PagePresentationSizing.page.proposedSize(for: root, context: context)
+    }
+}
+
+/// Read the presenting window, including Split View and Stage Manager resizing.
+private struct ScoreReaderVideoWindowSizeReader: UIViewRepresentable {
+    let onChange: (CGSize) -> Void
+
+    func makeUIView(context: Context) -> WindowSizeView {
+        let view = WindowSizeView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateUIView(_ view: WindowSizeView, context: Context) {
+        view.onChange = onChange
+        view.publishSize()
+    }
+
+    final class WindowSizeView: UIView {
+        var onChange: ((CGSize) -> Void)?
+        private var lastSize = CGSize.zero
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            publishSize()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            publishSize()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            publishSize()
+        }
+
+        func publishSize() {
+            guard let window else { return }
+            let size = CGSize(width: window.bounds.width,
+                              height: window.bounds.height - window.safeAreaInsets.top - window.safeAreaInsets.bottom)
+            guard size != lastSize else { return }
+            lastSize = size
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.window != nil else { return }
+                self.onChange?(size)
+            }
+        }
     }
 }
 

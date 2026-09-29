@@ -238,12 +238,12 @@ struct ScoreReaderChromeBar: View {
                     }
                 }
 
-                floatingIsland(horizontalPadding: 5) {
-                    exportIslandButton(fontSize: 21, minWidth: 44)
-                }
-
                 if supportsAnnotations {
                     annotationModeIslandButton
+                }
+
+                floatingIsland(horizontalPadding: 5) {
+                    exportIslandButton(fontSize: 21, minWidth: 44)
                 }
 
                 if supportsEditing {
