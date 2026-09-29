@@ -272,6 +272,15 @@ struct ScorePlaybackMeasureRegion: Identifiable, Sendable, Equatable {
     }
 }
 
+/// A chord or rest sounding (or the end of a stretch of the line), in playback order.
+struct ScorePlaybackBeatPoint: Sendable, Equatable {
+    let pageIndex: Int
+    let timeSeconds: TimeInterval
+    let normalizedX: Double
+    /// The first point after a repeat or jump.
+    let startsSegment: Bool
+}
+
 struct ScorePlaybackMeasureHighlight: Sendable, Equatable {
     let pageIndex: Int
     let normalizedRect: ScoreNormalizedRect

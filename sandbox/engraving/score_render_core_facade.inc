@@ -142,10 +142,24 @@ bool msr::render::ScoreRenderSession::playbackEventAudioData(const std::string& 
     return m_impl->playbackEventAudioData(soundFontPath, startTimeSeconds, durationSeconds, metronomeEnabled, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::playbackCountIn(const std::string& soundFontPath,
+                                                      const double startTimeSeconds,
+                                                      PlaybackCountIn& output,
+                                                      std::string& errorMessage) const
+{
+    return m_impl->playbackCountIn(soundFontPath, startTimeSeconds, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::playbackTrackSummary(std::vector<PlaybackTrackSummary>& output,
                                                            std::string& errorMessage) const
 {
     return m_impl->playbackTrackSummary(output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::playbackBeatPoints(std::vector<PlaybackBeatPoint>& output,
+                                                         std::string& errorMessage) const
+{
+    return m_impl->playbackBeatPoints(output, errorMessage);
 }
 
 bool msr::render::ScoreRenderSession::playbackMeasureRegions(std::vector<PlaybackMeasureRegion>& output,

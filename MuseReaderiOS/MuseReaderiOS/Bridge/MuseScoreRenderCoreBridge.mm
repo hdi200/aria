@@ -671,6 +671,25 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
 @end
 
+@implementation MSRPlaybackBeatPoint
+
+- (instancetype)initWithPageIndex:(NSInteger)pageIndex
+                      timeSeconds:(NSTimeInterval)timeSeconds
+                      normalizedX:(double)normalizedX
+                    startsSegment:(BOOL)startsSegment
+{
+    self = [super init];
+    if (self) {
+        _pageIndex = pageIndex;
+        _timeSeconds = timeSeconds;
+        _normalizedX = normalizedX;
+        _startsSegment = startsSegment;
+    }
+    return self;
+}
+
+@end
+
 @implementation MSRPlaybackMeasureRegion
 
 - (instancetype)initWithMeasureIndex:(NSInteger)measureIndex
@@ -814,6 +833,40 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _durationSeconds = durationSeconds;
         _interleavedFloat32Samples = [interleavedFloat32Samples copy];
         _partSamples = [partSamples copy];
+    }
+    return self;
+}
+
+@end
+
+@implementation MSRPlaybackCountInClick
+
+- (instancetype)initWithTimeSeconds:(NSTimeInterval)timeSeconds
+                         beatNumber:(NSInteger)beatNumber
+                         isDownbeat:(BOOL)isDownbeat
+{
+    self = [super init];
+    if (self) {
+        _timeSeconds = timeSeconds;
+        _beatNumber = beatNumber;
+        _isDownbeat = isDownbeat;
+    }
+    return self;
+}
+
+@end
+
+@implementation MSRPlaybackCountIn
+
+- (instancetype)initWithAudioData:(MSRPlaybackAudioData *)audioData
+                  durationSeconds:(NSTimeInterval)durationSeconds
+                           clicks:(NSArray<MSRPlaybackCountInClick *> *)clicks
+{
+    self = [super init];
+    if (self) {
+        _audioData = audioData;
+        _durationSeconds = durationSeconds;
+        _clicks = [clicks copy];
     }
     return self;
 }
@@ -1284,6 +1337,44 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (MSRPlaybackCountIn *)playbackCountInWithSoundFontPath:(NSString *)soundFontPath
+                                         startTimeSeconds:(NSTimeInterval)startTimeSeconds
+                                                    error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::PlaybackCountIn countIn;
+    std::string errorMessage;
+    if (!_session->playbackCountIn(soundFontPath.UTF8String ?: "", startTimeSeconds, countIn, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not render the count-in."));
+        }
+        return nil;
+    }
+
+    NSMutableArray<MSRPlaybackCountInClick *> *clicks = [[NSMutableArray alloc] initWithCapacity:countIn.clicks.size()];
+    for (const auto& click : countIn.clicks) {
+        [clicks addObject:[[MSRPlaybackCountInClick alloc] initWithTimeSeconds:click.timeSeconds
+                                                                    beatNumber:click.beatNumber
+                                                                    isDownbeat:click.isDownbeat]];
+    }
+    return [[MSRPlaybackCountIn alloc] initWithAudioData:MakePlaybackAudioData(countIn.audio)
+                                         durationSeconds:countIn.durationSeconds
+                                                  clicks:clicks];
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore playback event audio support yet.");
+    }
+    return nil;
+#endif
+}
+
 - (NSArray<MSRPlaybackMeasureRegion *> *)playbackMeasureRegionsWithError:(NSError * _Nullable __autoreleasing *)error
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
@@ -1312,6 +1403,41 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #else
     if (error) {
         *error = UnavailableError(@"This build of Aria is not linked to MuseScore playback region support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (NSArray<MSRPlaybackBeatPoint *> *)playbackBeatPointsWithError:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    std::vector<msr::render::PlaybackBeatPoint> beatPoints;
+    std::string errorMessage;
+    if (!_session->playbackBeatPoints(beatPoints, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not resolve playback beats."));
+        }
+        return nil;
+    }
+
+    NSMutableArray<MSRPlaybackBeatPoint *> *points = [[NSMutableArray alloc] initWithCapacity:beatPoints.size()];
+    for (const auto& point : beatPoints) {
+        [points addObject:[[MSRPlaybackBeatPoint alloc] initWithPageIndex:point.pageIndex
+                                                              timeSeconds:point.timeSeconds
+                                                              normalizedX:point.normalizedX
+                                                            startsSegment:point.startsSegment]];
+    }
+    return points;
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore playback support yet.");
     }
     return nil;
 #endif

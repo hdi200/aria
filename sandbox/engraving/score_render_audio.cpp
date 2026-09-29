@@ -41,3 +41,21 @@
                                               output,
                                               errorMessage);
     }
+
+    bool playbackCountIn(const std::string& soundFontPath,
+                         const double startTimeSeconds,
+                         msr::render::PlaybackCountIn& output,
+                         std::string& errorMessage) const
+    {
+        if (blockDelayedSubsystemIfCorrupted(m_masterScore.get(), "count-in render", errorMessage)) {
+            output = {};
+            return false;
+        }
+
+        return renderFluidSynthCountIn(presentationScore(),
+                                       m_sessionContext->context(),
+                                       soundFontPath,
+                                       startTimeSeconds,
+                                       output,
+                                       errorMessage);
+    }

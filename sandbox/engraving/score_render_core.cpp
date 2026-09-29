@@ -116,6 +116,7 @@
 #include "engraving/infrastructure/mscreader.h"
 #include "engraving/infrastructure/mscwriter.h"
 #include "engraving/playback/playbackmodel.h"
+#include "engraving/playback/utils/arrangementutils.h"
 #include "engraving/rendering/iscorerenderer.h"
 #include "engraving/rendering/score/paint.h"
 #include "engraving/rw/mscsaver.h"

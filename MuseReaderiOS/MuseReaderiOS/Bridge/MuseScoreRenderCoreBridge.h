@@ -97,6 +97,23 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+/// A chord or rest sounding, or the end of a stretch of the line, in playback order.
+@interface MSRPlaybackBeatPoint : NSObject
+
+@property (nonatomic, readonly) NSInteger pageIndex;
+@property (nonatomic, readonly) NSTimeInterval timeSeconds;
+@property (nonatomic, readonly) double normalizedX;
+/// The first point after a repeat or jump.
+@property (nonatomic, readonly) BOOL startsSegment;
+
+- (instancetype)initWithPageIndex:(NSInteger)pageIndex
+                      timeSeconds:(NSTimeInterval)timeSeconds
+                      normalizedX:(double)normalizedX
+                    startsSegment:(BOOL)startsSegment NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+
+@end
+
 @interface MSRPlaybackMeasureRegion : NSObject
 
 @property (nonatomic, readonly) NSInteger measureIndex;
@@ -249,6 +266,39 @@ NS_ASSUME_NONNULL_BEGIN
           interleavedFloat32Samples:(NSData *)interleavedFloat32Samples
                        partSamples:(NSDictionary<NSString *, NSData *> *)partSamples NS_DESIGNATED_INITIALIZER;
 
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
+/// One click of a count-in. `timeSeconds` counts from the first click.
+@interface MSRPlaybackCountInClick : NSObject
+
+@property (nonatomic, readonly) NSTimeInterval timeSeconds;
+/// Beat within the bar, from 1.
+@property (nonatomic, readonly) NSInteger beatNumber;
+@property (nonatomic, readonly) BOOL isDownbeat;
+
+- (instancetype)initWithTimeSeconds:(NSTimeInterval)timeSeconds
+                         beatNumber:(NSInteger)beatNumber
+                         isDownbeat:(BOOL)isDownbeat NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
+/// The metronome clicks played before playback. Playback starts
+/// `durationSeconds` after the first click; the audio runs slightly longer so
+/// the last click can ring.
+@interface MSRPlaybackCountIn : NSObject
+
+@property (nonatomic, readonly) MSRPlaybackAudioData *audioData;
+@property (nonatomic, readonly) NSTimeInterval durationSeconds;
+@property (nonatomic, copy, readonly) NSArray<MSRPlaybackCountInClick *> *clicks;
+
+- (instancetype)initWithAudioData:(MSRPlaybackAudioData *)audioData
+                  durationSeconds:(NSTimeInterval)durationSeconds
+                           clicks:(NSArray<MSRPlaybackCountInClick *> *)clicks NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
 
@@ -521,7 +571,11 @@ isEditableText:(BOOL)isEditableText
                                                            durationSeconds:(NSTimeInterval)durationSeconds
                                                          metronomeEnabled:(BOOL)metronomeEnabled
                                                                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackEventAudioData(soundFontPath:startTimeSeconds:durationSeconds:metronomeEnabled:));
+- (nullable MSRPlaybackCountIn *)playbackCountInWithSoundFontPath:(NSString *)soundFontPath
+                                                  startTimeSeconds:(NSTimeInterval)startTimeSeconds
+                                                             error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackCountIn(soundFontPath:startTimeSeconds:));
 - (nullable NSArray<MSRPlaybackMeasureRegion *> *)playbackMeasureRegionsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackMeasureRegions());
+- (nullable NSArray<MSRPlaybackBeatPoint *> *)playbackBeatPointsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackBeatPoints());
 - (nullable MSRScoreCorruptionReport *)scoreCorruptionReportWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(scoreCorruptionReport());
 - (nullable NSArray<MSRLegacyRepairIssue *> *)legacyRepairIssuesWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(legacyRepairIssues());
 - (nullable MSREditState *)applyLegacyRepairsAtIndexes:(NSArray<NSNumber *> *)indexes

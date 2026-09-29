@@ -48,6 +48,16 @@ struct PlaybackMeasureRegion {
     double normalizedHeight = 0.0;
 };
 
+//! A moment of playback on the page: a beat, or the end of a stretch that
+//! plays straight through. Points follow playback order.
+struct PlaybackBeatPoint {
+    int pageIndex = 0;
+    double timeSeconds = 0.0;
+    double normalizedX = 0.0;
+    //! The first point after a repeat or jump, where playback leaves the line.
+    bool startsSegment = false;
+};
+
 struct NormalizedSelectionRect {
     double normalizedX = 0.0;
     double normalizedY = 0.0;
@@ -214,6 +224,22 @@ struct PlaybackAudioData {
     std::map<std::string, std::vector<float>> partSamples;
 };
 
+struct PlaybackCountInClick {
+    //! Seconds from the start of the count-in.
+    double timeSeconds = 0.0;
+    //! Beat within the bar, from 1.
+    int beatNumber = 1;
+    bool isDownbeat = false;
+};
+
+//! The clicks played before playback starts. Playback begins `durationSeconds`
+//! after the first click; `audio` runs a little longer so the last click rings.
+struct PlaybackCountIn {
+    PlaybackAudioData audio;
+    double durationSeconds = 0.0;
+    std::vector<PlaybackCountInClick> clicks;
+};
+
 struct PlaybackTrackSummary {
     std::string partId;
     std::string instrumentId;
@@ -279,8 +305,17 @@ public:
                                 bool metronomeEnabled,
                                 PlaybackAudioData& output,
                                 std::string& errorMessage) const;
+    //! One bar of metronome clicks leading into playback at `startTimeSeconds`.
+    //! Empty when there is no bar to count in from.
+    bool playbackCountIn(const std::string& soundFontPath,
+                         double startTimeSeconds,
+                         PlaybackCountIn& output,
+                         std::string& errorMessage) const;
     bool playbackTrackSummary(std::vector<PlaybackTrackSummary>& output, std::string& errorMessage) const;
     bool playbackMeasureRegions(std::vector<PlaybackMeasureRegion>& output, std::string& errorMessage) const;
+    //! Where each beat falls on the line and when it sounds, for a playhead
+    //! that follows the music. Includes an end point for each stretch of the line.
+    bool playbackBeatPoints(std::vector<PlaybackBeatPoint>& output, std::string& errorMessage) const;
     bool scoreCorruptionReport(ScoreCorruptionReport& output, std::string& errorMessage);
     bool legacyRepairIssues(std::vector<ScoreLegacyRepairIssue>& output, std::string& errorMessage);
     bool applyLegacyRepairs(const std::vector<int>& issueIndexes, ScoreEditState& output, std::string& errorMessage);

@@ -82,6 +82,28 @@ struct ScoreVideoExporterTests {
         #expect(path.x(at: 5) > 100 && path.x(at: 5) < 300)
     }
 
+    @Test func scrollPathFollowsNotePointsAndSplitsAtRepeats() {
+        let points = [
+            ScorePlaybackBeatPoint(pageIndex: 0, timeSeconds: 0, normalizedX: 0.10, startsSegment: true),
+            ScorePlaybackBeatPoint(pageIndex: 0, timeSeconds: 1, normalizedX: 0.12, startsSegment: false),
+            ScorePlaybackBeatPoint(pageIndex: 0, timeSeconds: 1, normalizedX: 0.13, startsSegment: false),
+            ScorePlaybackBeatPoint(pageIndex: 0, timeSeconds: 3, normalizedX: 0.30, startsSegment: false),
+            ScorePlaybackBeatPoint(pageIndex: 0, timeSeconds: 4, normalizedX: 0.40, startsSegment: false),
+            ScorePlaybackBeatPoint(pageIndex: 0, timeSeconds: 4, normalizedX: 0.10, startsSegment: true),
+            ScorePlaybackBeatPoint(pageIndex: 0, timeSeconds: 6, normalizedX: 0.40, startsSegment: false)
+        ]
+        let path = ScoreVideoScrollPath(beatPoints: points, lineWidth: 1000)
+
+        #expect(path.segments.count == 2)
+        #expect(path.segments[0].count == 4)
+        #expect(path.x(at: 0) == 100)
+        #expect(path.x(at: 1) == 120)
+        #expect(path.x(at: 3) == 300)
+        #expect(path.x(at: 3.999) > 390)
+        #expect(path.x(at: 4) == 100)
+        #expect(path.x(at: 6) == 400)
+    }
+
     @Test func cameraSettlesOnTheTargetWithoutOvershooting() {
         var camera = ScoreVideoCamera(position: 0)
         var maximum: CGFloat = 0

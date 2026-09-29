@@ -200,6 +200,22 @@ actor LiveScoreRenderSession {
         return audioData
     }
 
+    /// The metronome count-in leading into playback at `startTimeSeconds`, or
+    /// nil when there is no bar to count in from.
+    func playbackCountIn(startTimeSeconds: TimeInterval) throws -> MSRPlaybackCountIn? {
+        guard let soundFontURL = playbackSoundFontURL() else {
+            throw NativePlaybackController.PlaybackError.soundBankUnavailable(
+                "Add `MuseScore_General.sf2` to the app bundle resources."
+            )
+        }
+
+        let countIn = try bridgeSession.playbackCountIn(
+            soundFontPath: soundFontURL.path,
+            startTimeSeconds: startTimeSeconds
+        )
+        return countIn.clicks.isEmpty ? nil : countIn
+    }
+
     private func playbackSoundFontURL() -> URL? {
         if let cachedPlaybackSoundFontURL {
             return cachedPlaybackSoundFontURL
@@ -244,6 +260,24 @@ actor LiveScoreRenderSession {
 
         cachedPlaybackMeasureRegions = regions
         return regions
+    }
+
+    /// Where each chord or rest sits and when it sounds, in playback order.
+    func playbackBeatPoints() throws -> [ScorePlaybackBeatPoint] {
+        guard supportsPlayback else {
+            return []
+        }
+        let bridgePoints = try RenderCoreWorkGate.sync {
+            try bridgeSession.playbackBeatPoints()
+        }
+        return bridgePoints.map { point in
+            ScorePlaybackBeatPoint(
+                pageIndex: point.pageIndex,
+                timeSeconds: point.timeSeconds,
+                normalizedX: point.normalizedX,
+                startsSegment: point.startsSegment
+            )
+        }
     }
 
     func corruptionReport() throws -> ScoreCorruptionReport {

@@ -151,10 +151,10 @@ struct ScoreVideoCamera: Equatable {
 }
 
 /// Where the continuous line is under the playhead over time. It passes each
-/// barline exactly when that measure starts, and blends the speed between
-/// measures (monotone cubic interpolation) so tempo and width changes do not
-/// jolt. A repeat, or any jump that is not to the next measure, starts a new
-/// segment, which the video cuts to.
+/// note exactly when it sounds (or each barline, without note positions), and
+/// blends the speed between them (monotone cubic interpolation) so uneven
+/// spacing and tempo changes do not jolt. A repeat, or any jump that is not to
+/// the next measure, starts a new segment, which the video cuts to.
 struct ScoreVideoScrollPath: Equatable {
     struct Knot: Equatable {
         let time: TimeInterval
@@ -164,8 +164,28 @@ struct ScoreVideoScrollPath: Equatable {
     private(set) var segments: [[Knot]] = []
     private var tangents: [[CGFloat]] = []
 
+    /// From the engine's note positions; `lineWidth` converts them to points.
+    init(beatPoints: [ScorePlaybackBeatPoint], lineWidth: CGFloat) {
+        var segments: [[Knot]] = []
+        for point in beatPoints {
+            let knot = Knot(time: point.timeSeconds, x: CGFloat(point.normalizedX) * lineWidth)
+            if point.startsSegment || segments.isEmpty {
+                segments.append([knot])
+            } else if let last = segments[segments.count - 1].last, knot.time > last.time + 0.0005 {
+                segments[segments.count - 1].append(knot)
+            }
+        }
+        self.init(segments: segments)
+    }
+
+    private init(segments: [[Knot]]) {
+        self.segments = segments.filter { !$0.isEmpty }
+        tangents = self.segments.map(Self.monotoneTangents)
+    }
+
     /// `rects` are the regions' positions on the line, in the same order as `timeline.regions`.
     init(timeline: ScoreVideoTimeline, rects: [CGRect], barlineTolerance: CGFloat = 2) {
+        var segments: [[Knot]] = []
         var current: [Knot] = []
         for (index, region) in timeline.regions.enumerated() {
             let rect = rects[index]
@@ -186,7 +206,7 @@ struct ScoreVideoScrollPath: Equatable {
             current.append(Knot(time: last.endTimeSeconds, x: lastRect.maxX))
             segments.append(current)
         }
-        tangents = segments.map(Self.monotoneTangents)
+        self.init(segments: segments)
     }
 
     func x(at time: TimeInterval) -> CGFloat {
@@ -320,8 +340,9 @@ enum ScoreVideoExporter {
         let duration = timeline.endTimeSeconds + tailSeconds
         let frameRate = Double(options.frameRate)
         let totalFrames = Int((duration * frameRate).rounded(.up))
+        let beatPoints = options.style == .scrolling ? (try? await liveRenderSession.playbackBeatPoints()) ?? [] : []
         let painter: ScoreVideoPainter = options.style == .scrolling
-            ? ScoreVideoScrollingPainter(frameSize: frameSize, page: pages[0], timeline: timeline, options: options)
+            ? ScoreVideoScrollingPainter(frameSize: frameSize, page: pages[0], timeline: timeline, beatPoints: beatPoints, options: options)
             : ScoreVideoPagesPainter(frameSize: frameSize, pages: pages, timeline: timeline, options: options)
 
         // The first audio chunk tells us the sample rate the writer needs.
@@ -791,7 +812,11 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private var tiles: [Int: CGImage] = [:]
     private var tileOrder: [Int] = []
 
-    init(frameSize: CGSize, page: ScoreVideoPageSource, timeline: ScoreVideoTimeline, options: ScoreVideoExportOptions) {
+    init(frameSize: CGSize,
+         page: ScoreVideoPageSource,
+         timeline: ScoreVideoTimeline,
+         beatPoints: [ScorePlaybackBeatPoint],
+         options: ScoreVideoExportOptions) {
         self.page = page
         // As large as the page styles, shrinking tall scores to fit the frame.
         scale = min(Self.maximumScale, (frameSize.height - 200) / max(page.size.height, 1))
@@ -806,7 +831,9 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
                 height: CGFloat(rect.height) * page.size.height
             )
         }
-        path = ScoreVideoScrollPath(timeline: timeline, rects: lineRects)
+        // Follow the notes when the engine reports them; otherwise the barlines.
+        let notePath = ScoreVideoScrollPath(beatPoints: beatPoints, lineWidth: page.size.width)
+        path = notePath.segments.isEmpty ? ScoreVideoScrollPath(timeline: timeline, rects: lineRects) : notePath
         super.init(frameSize: frameSize, timeline: timeline, options: options)
     }
 

@@ -51,6 +51,14 @@ final class NativePlaybackController {
         let fadesOut: Bool
     }
 
+    /// A count-in that is sounding, in host time, so score time can hold at the
+    /// start position until the score player takes over.
+    private struct ActiveCountIn {
+        let countIn: MSRPlaybackCountIn
+        let startHostTime: UInt64
+        let endHostTime: UInt64
+    }
+
     private let chunkDurationSeconds: TimeInterval = 0.125
     /// Mixed audio scheduled on the player. Mixer changes reach the output within this window.
     private let mixAheadDurationSeconds: TimeInterval = 0.5
@@ -67,6 +75,11 @@ final class NativePlaybackController {
 
     private var engine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
+    /// Plays count-in clicks; the score player starts when the count-in ends.
+    private var countInNode: AVAudioPlayerNode?
+    /// Handed to `play(countIn:)` and played when the queue is ready to start.
+    private var pendingCountIn: MSRPlaybackCountIn?
+    private var activeCountIn: ActiveCountIn?
     private var reverb: MSRPlaybackReverb?
     private var renderedStemIDs: Set<String> = []
     private var nextScheduledSampleTime: AVAudioFramePosition = 0
@@ -196,8 +209,11 @@ final class NativePlaybackController {
 
         let engine = AVAudioEngine()
         let playerNode = AVAudioPlayerNode()
+        let countInNode = AVAudioPlayerNode()
         engine.attach(playerNode)
+        engine.attach(countInNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
+        engine.connect(countInNode, to: engine.mainMixerNode, format: format)
         engine.prepare()
 
         do {
@@ -212,6 +228,7 @@ final class NativePlaybackController {
 
         self.engine = engine
         self.playerNode = playerNode
+        self.countInNode = countInNode
         self.renderedStemIDs = Set(audioData.partSamples.keys)
         applyMixerSettings()
         installMeterTapsIfPossible()
@@ -247,12 +264,15 @@ final class NativePlaybackController {
         return ScorePlaybackState(isAvailable: true, status: status, positionSeconds: positionSeconds, durationSeconds: durationSeconds)
     }
 
-    func play() throws {
+    /// Starts or resumes playback. A count-in plays first, once enough audio
+    /// is queued for the score to follow it without a gap.
+    func play(countIn: MSRPlaybackCountIn? = nil) throws {
         guard let engine, let playerNode else {
             throw PlaybackError.playerUnavailable
         }
 
         streamingErrorMessage = nil
+        pendingCountIn = countIn
         try startPlaybackWhenBuffered(engine: engine, playerNode: playerNode)
         fillPlaybackQueue(revision: revision)
 
@@ -265,6 +285,7 @@ final class NativePlaybackController {
         }
         if playWhenBuffered {
             playWhenBuffered = false
+            pendingCountIn = nil
             timelineClock.pauseFallback(at: pendingStartSeconds)
             isPaused = true
             log("pause armed playback position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
@@ -276,6 +297,7 @@ final class NativePlaybackController {
 
         pendingStartSeconds = currentPositionSeconds()
         timelineClock.pauseFallback(at: pendingStartSeconds)
+        cancelCountIn()
         playerNode.pause()
         isPaused = true
         log("pause position=\(formatSeconds(pendingStartSeconds)) revision=\(revision)")
@@ -366,12 +388,14 @@ final class NativePlaybackController {
 
     func invalidate() {
         removeMeterTaps()
+        cancelCountIn()
         playerNode?.stop()
         engine?.stop()
         cancelSchedulingTask()
         streamingErrorMessage = nil
         engine = nil
         playerNode = nil
+        countInNode = nil
         reverb = nil
         liveRenderSession = nil
         revision += 1
@@ -451,7 +475,10 @@ final class NativePlaybackController {
         guard playerNode?.isPlaying == true else {
             return 0
         }
+        return outputLatencySeconds
+    }
 
+    private var outputLatencySeconds: TimeInterval {
         let audioSession = AVAudioSession.sharedInstance()
         let sessionLatency = audioSession.outputLatency + audioSession.ioBufferDuration
         let outputLatency = engine?.outputNode.presentationLatency ?? 0
@@ -460,6 +487,52 @@ final class NativePlaybackController {
 
     func setMetronomeEnabled(_ enabled: Bool) {
         metronomeEnabled = enabled
+    }
+
+    // MARK: - Count-in
+
+    /// True while count-in clicks sound and the score has not started yet.
+    var isCountingIn: Bool {
+        guard let activeCountIn else { return false }
+        return mach_absolute_time() < activeCountIn.endHostTime
+    }
+
+    /// The click most recently heard, allowing for output latency, while a
+    /// count-in sounds.
+    func currentCountInClick() -> MSRPlaybackCountInClick? {
+        guard let activeCountIn else { return nil }
+        let now = mach_absolute_time()
+        guard now < activeCountIn.endHostTime, now >= activeCountIn.startHostTime else {
+            return nil
+        }
+        let elapsed = AVAudioTime.seconds(forHostTime: now - activeCountIn.startHostTime) - outputLatencySeconds
+        return activeCountIn.countIn.clicks.last { $0.timeSeconds <= elapsed + 0.005 }
+    }
+
+    private func cancelCountIn() {
+        countInNode?.stop()
+        activeCountIn = nil
+        pendingCountIn = nil
+    }
+
+    private func makeCountInBuffer(_ audioData: MSRPlaybackAudioData) -> AVAudioPCMBuffer? {
+        let frameCount = audioData.interleavedFloat32Samples.count / MemoryLayout<Float>.size / 2
+        guard audioData.channelCount == 2,
+              Double(audioData.sampleRate) == sampleRate,
+              frameCount > 0,
+              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 2, interleaved: false),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount)),
+              let left = buffer.floatChannelData?[0],
+              let right = buffer.floatChannelData?[1] else {
+            return nil
+        }
+        buffer.frameLength = AVAudioFrameCount(frameCount)
+        audioData.interleavedFloat32Samples.withUnsafeBytes { raw in
+            let samples = raw.bindMemory(to: Float.self).baseAddress!
+            cblas_scopy(Int32(frameCount), samples, 2, left, 1)
+            cblas_scopy(Int32(frameCount), samples + 1, 2, right, 1)
+        }
+        return buffer
     }
 
     // MARK: - Queue
@@ -566,6 +639,7 @@ final class NativePlaybackController {
     private func handleStreamingFailure(_ error: Error) {
         playWhenBuffered = false
         let position = currentPositionSeconds()
+        cancelCountIn()
         playerNode?.stop()
         cancelSchedulingTask()
         revision += 1
@@ -593,10 +667,13 @@ final class NativePlaybackController {
         nextScheduledSampleTime = 0
         needsPlayerPriming = true
         playWhenBuffered = false
+        pendingCountIn = nil
+        activeCountIn = nil
         reverb?.reset()
     }
 
     private func resetPlaybackQueue(to positionSeconds: TimeInterval, wasPlaying: Bool) {
+        cancelCountIn()
         playerNode?.stop()
         cancelSchedulingTask()
         revision += 1
@@ -698,7 +775,7 @@ final class NativePlaybackController {
         // little ahead of the render position and record the silence, so the
         // score clock stays with the audio instead of running ahead of it.
         var startSampleTime = nextScheduledSampleTime
-        if playerNode.isPlaying, let playerSampleTime = currentPlayerSampleTime() {
+        if playerNode.isPlaying, !isCountingIn, let playerSampleTime = currentPlayerSampleTime() {
             let marginSeconds = AVAudioSession.sharedInstance().ioBufferDuration * 2 + 0.01
             let earliestSampleTime = playerSampleTime + AVAudioFramePosition(marginSeconds * sampleRate)
             if startSampleTime < earliestSampleTime {
@@ -783,6 +860,10 @@ final class NativePlaybackController {
 
     /// Audio-timeline position: score time, before loop wrapping and clamping.
     private func currentTimelinePositionSeconds() -> TimeInterval {
+        // The score player has a start time but no audible position yet.
+        if isCountingIn {
+            return pendingStartSeconds
+        }
         if let playerNode, playerNode.isPlaying {
             guard let playerSampleTime = currentPlayerSampleTime() else {
                 return timelineClock.positionSeconds(playerSampleTimeSeconds: nil)
@@ -811,6 +892,7 @@ final class NativePlaybackController {
     }
 
     private func stopInternally() {
+        cancelCountIn()
         playerNode?.stop()
         cancelSchedulingTask()
         revision += 1
@@ -840,7 +922,6 @@ final class NativePlaybackController {
             return
         }
 
-        timelineClock.startFallback(at: pendingStartSeconds)
         playWhenBuffered = false
         var primedFrameCount: AVAudioFrameCount = 0
         if needsPlayerPriming {
@@ -848,15 +929,31 @@ final class NativePlaybackController {
             playerNode.prepare(withFrameCount: primedFrameCount)
             needsPlayerPriming = false
         }
-        let start = AVAudioTime(hostTime: mach_absolute_time() + AVAudioTime.hostTime(forSeconds: 0.03))
-        playerNode.play(at: start)
+        let startHostTime = mach_absolute_time() + AVAudioTime.hostTime(forSeconds: 0.03)
+        var scoreStartHostTime = startHostTime
+        var countInSeconds: TimeInterval = 0
+        // Both players run on the engine's render clock, so starting them at
+        // host times one count-in apart keeps the score on the click grid.
+        if let countIn = pendingCountIn,
+           let countInNode,
+           let buffer = makeCountInBuffer(countIn.audioData) {
+            countInSeconds = countIn.durationSeconds
+            scoreStartHostTime = startHostTime + AVAudioTime.hostTime(forSeconds: countInSeconds)
+            countInNode.stop()
+            countInNode.scheduleBuffer(buffer, at: nil, options: [])
+            countInNode.play(at: AVAudioTime(hostTime: startHostTime))
+            activeCountIn = ActiveCountIn(countIn: countIn, startHostTime: startHostTime, endHostTime: scoreStartHostTime)
+        }
+        pendingCountIn = nil
+        timelineClock.startFallback(at: pendingStartSeconds, now: Date().addingTimeInterval(countInSeconds))
+        playerNode.play(at: AVAudioTime(hostTime: scoreStartHostTime))
         isPaused = false
         let audioSession = AVAudioSession.sharedInstance()
         let outputFormat = engine?.outputNode.outputFormat(forBus: 0)
         let ioBufferMilliseconds = String(format: "%.2f", audioSession.ioBufferDuration * 1_000)
         let outputLatencyMilliseconds = String(format: "%.2f", audioSession.outputLatency * 1_000)
         let meterState = isMeteringEnabled ? "on" : "off"
-        let startKind = isResumingPausedQueue ? "resume" : "fresh"
+        let startKind = (isResumingPausedQueue ? "resume" : "fresh") + (countInSeconds > 0 ? "+countIn(\(formatSeconds(countInSeconds))s)" : "")
         log("startup start kind=\(startKind) revision=\(revision) score=\(formatSeconds(pendingStartSeconds)) "
             + "queued=\(formatSeconds(queuedUntilSeconds - pendingStartSeconds))s "
             + "rendered=\(formatSeconds(renderedUntilSeconds - pendingStartSeconds))s "

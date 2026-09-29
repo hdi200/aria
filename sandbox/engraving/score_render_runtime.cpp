@@ -6237,6 +6237,171 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
     return playbackStream->render(startFrame, startTimeSeconds, durationSeconds, streamReset, started, output, errorMessage);
 }
 
+//! Renders MuseScore's count-in for playback starting at `startTimeSeconds`:
+//! the clicks desktop plays before playback, voiced like the metronome track.
+//! Starting mid-bar or on a pickup adds clicks so the last one leads into the
+//! start position, as on desktop.
+bool renderFluidSynthCountIn(mu::engraving::Score* score,
+                             const muse::modularity::ContextPtr& context,
+                             const std::string& soundFontPath,
+                             const double startTimeSeconds,
+                             msr::render::PlaybackCountIn& output,
+                             std::string& errorMessage)
+{
+    output = {};
+    if (!score) {
+        errorMessage = "Playback is unavailable because the score session is closed.";
+        return false;
+    }
+    if (soundFontPath.empty()) {
+        errorMessage = "FluidSynth playback needs a SoundFont path.";
+        return false;
+    }
+
+    const auto& repeatList = score->repeatList(true);
+    const int startTick = repeatList.utick2tick(repeatList.utime2utick(std::max(startTimeSeconds, 0.0)));
+
+    // PlaybackModel only supplies the injected articulation profiles here.
+    mu::engraving::PlaybackModel profileSource(context);
+    const auto profiles = profileSource.profilesRepository();
+    const muse::mpe::ArticulationsProfilePtr profile = profiles
+        ? profiles->defaultProfile(muse::mpe::SoundCategory::Percussions)
+        : nullptr;
+    if (!profile) {
+        errorMessage = "The metronome articulation profile is unavailable.";
+        return false;
+    }
+
+    muse::mpe::PlaybackEventsMap events;
+    muse::mpe::duration_t countInDuration = 0;
+    mu::engraving::PlaybackEventsRenderer().renderCountIn(score, startTick, 0, profile, events, countInDuration);
+    if (events.empty() || countInDuration <= 0) {
+        return true;
+    }
+
+    // The same beat grid renderCountIn uses, to number the clicks.
+    const mu::engraving::Measure* measure = score->tick2measure(mu::engraving::Fraction::fromTicks(startTick));
+    const int measureStartTick = measure ? measure->tick().ticks() : 0;
+    const mu::engraving::TimeSigFrac timeSig = score->sigmap()->timesig(measureStartTick).nominal();
+    const double bps = score->tempomap()->multipliedTempo(measureStartTick).val;
+    const int stepTicks = std::max(1, timeSig.isBeatedCompound(bps) ? timeSig.beatTicks() : timeSig.dUnitTicks());
+    const int beatsPerBar = std::max(1, timeSig.ticksPerMeasure() / stepTicks);
+    const double stepSeconds = static_cast<double>(mu::engraving::durationFromTempoAndTicks(bps, stepTicks)) / 1000000.0;
+
+    muse::mpe::PlaybackSetupData setupData;
+    mu::engraving::PlaybackSetupDataResolver().resolveMetronomeSetupData(setupData);
+    const muse::midi::Program program = midiProgramForSetup(setupData);
+    const bool useDynamicEvents = setupData.supportsSingleNoteDynamics;
+    constexpr int metronomeChannel = 9;
+
+    std::vector<SynthNoteEvent> synthEvents;
+    for (const auto& pair : events) {
+        for (const muse::mpe::PlaybackEvent& event : pair.second) {
+            if (!std::holds_alternative<muse::mpe::NoteEvent>(event)) {
+                continue;
+            }
+            const muse::mpe::NoteEvent& noteEvent = std::get<muse::mpe::NoteEvent>(event);
+            const muse::mpe::ArrangementContext& arrangement = noteEvent.arrangementCtx();
+            const int startFrame = frameForMpeTimestamp(arrangement.actualTimestamp);
+            const int durationFrames = std::max(1, static_cast<int>(std::llround(
+                (static_cast<double>(arrangement.actualDuration) / 1000000.0) * kFluidSynthSampleRate
+            )));
+            const int key = std::clamp(
+                static_cast<int>(std::llround(static_cast<double>(noteEvent.pitchCtx().nominalPitchLevel) / muse::mpe::PITCH_LEVEL_STEP))
+                + muse::mpe::ZERO_PITCH_LEVEL_MIDI_EQUIVALENT,
+                0,
+                127
+            );
+            const int velocity = velocityForNoteEvent(noteEvent, useDynamicEvents, false);
+            synthEvents.push_back(makeNoteSynthEvent(startFrame, metronomeChannel, key, velocity, true));
+            synthEvents.push_back(makeNoteSynthEvent(startFrame + durationFrames, metronomeChannel, key, 0, false));
+
+            msr::render::PlaybackCountInClick click;
+            click.timeSeconds = static_cast<double>(arrangement.actualTimestamp) / 1000000.0;
+            const int beatIndex = stepSeconds > 0.0 ? static_cast<int>(std::llround(click.timeSeconds / stepSeconds)) : 0;
+            click.beatNumber = beatIndex % beatsPerBar + 1;
+            click.isDownbeat = click.beatNumber == 1;
+            output.clicks.push_back(click);
+        }
+    }
+    std::sort(synthEvents.begin(), synthEvents.end());
+
+    std::unique_ptr<fluid_settings_t, FluidSettingsDeleter> settings(new_fluid_settings());
+    if (!settings) {
+        errorMessage = "FluidSynth could not allocate settings.";
+        return false;
+    }
+    fluid_settings_setnum(settings.get(), "synth.sample-rate", kFluidSynthSampleRate);
+    fluid_settings_setnum(settings.get(), "synth.gain", 1.0);
+    fluid_settings_setint(settings.get(), "synth.dynamic-sample-loading", 1);
+    fluid_settings_setint(settings.get(), "synth.threadsafe-api", 0);
+    fluid_settings_setint(settings.get(), "synth.lock-memory", 0);
+    fluid_settings_setint(settings.get(), "synth.reverb.active", 0);
+    fluid_settings_setint(settings.get(), "synth.chorus.active", 0);
+    std::unique_ptr<fluid_synth_t, FluidSynthDeleter> synth(new_fluid_synth(settings.get()));
+    if (!synth) {
+        errorMessage = "FluidSynth could not allocate the synthesizer.";
+        return false;
+    }
+    if (fluid_synth_sfload(synth.get(), soundFontPath.c_str(), 1) == FLUID_FAILED) {
+        errorMessage = "FluidSynth could not load the bundled SoundFont.";
+        return false;
+    }
+    fluid_synth_bank_select(synth.get(), metronomeChannel, program.bank);
+    fluid_synth_program_change(synth.get(), metronomeChannel, program.program);
+    if (useDynamicEvents) {
+        fluid_synth_cc(synth.get(), metronomeChannel, 11, expressionLevelForDynamicLevel(
+            muse::mpe::dynamicLevelFromType(muse::mpe::DynamicType::Natural)
+        ));
+    }
+
+    // Render to each event exactly, so the clicks keep the beat to the sample.
+    // The buffer runs past the count-in so the last click rings out under the score.
+    const int countInFrames = frameForMpeTimestamp(countInDuration);
+    const int totalFrames = std::max(countInFrames, synthEvents.back().frame) + kFluidSynthSampleRate / 2;
+    std::vector<float> samples(static_cast<size_t>(totalFrames) * kFluidSynthChannelCount, 0.0f);
+    int currentFrame = 0;
+    auto renderUntil = [&](const int frame) {
+        const int endFrame = std::min(frame, totalFrames);
+        while (currentFrame < endFrame) {
+            const int count = std::min(endFrame - currentFrame, kFluidSynthRenderBlockFrames);
+            float* block = samples.data() + static_cast<size_t>(currentFrame) * kFluidSynthChannelCount;
+            if (fluid_synth_write_float(synth.get(), count, block, 0, 2, block, 1, 2) != FLUID_OK) {
+                return false;
+            }
+            currentFrame += count;
+        }
+        return true;
+    };
+    for (const SynthNoteEvent& event : synthEvents) {
+        if (!renderUntil(event.frame)) {
+            errorMessage = "FluidSynth failed while rendering the count-in.";
+            return false;
+        }
+        if (event.kind == SynthNoteEvent::Kind::NoteOn) {
+            fluid_synth_noteon(synth.get(), event.channel, event.key, event.velocity);
+        } else if (event.kind == SynthNoteEvent::Kind::NoteOff) {
+            fluid_synth_noteoff(synth.get(), event.channel, event.key);
+        }
+    }
+    if (!renderUntil(totalFrames)) {
+        errorMessage = "FluidSynth failed while rendering the count-in.";
+        return false;
+    }
+
+    output.durationSeconds = static_cast<double>(countInFrames) / kFluidSynthSampleRate;
+    output.audio.sampleRate = kFluidSynthSampleRate;
+    output.audio.channelCount = kFluidSynthChannelCount;
+    output.audio.durationSeconds = static_cast<double>(totalFrames) / kFluidSynthSampleRate;
+    output.audio.interleavedSamples = std::move(samples);
+    std::cout << "MuseReader count-in render: start=" << startTimeSeconds
+              << " tick=" << startTick
+              << " clicks=" << output.clicks.size()
+              << " duration=" << output.durationSeconds
+              << "s" << std::endl;
+    return true;
+}
+
 void logSaveScoreState(mu::engraving::MasterScore* score, const char* phase)
 {
     if (!score) {
