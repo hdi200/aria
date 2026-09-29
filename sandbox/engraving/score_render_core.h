@@ -251,6 +251,9 @@ public:
     ~ScoreRenderSession();
 
     int totalPageCount() const;
+    //! Lays the displayed score out as one continuous line (one wide page), or
+    //! back to pages. Used for video export; saving is unaffected.
+    bool setContinuousLayout(bool enabled, int& totalPageCount, std::string& errorMessage);
     //! Saving is paused because every chord symbol was removed from the full score.
     bool chordSymbolRemovalNeedsApproval() const;
     //! Confirms that removal, so the next save goes ahead.

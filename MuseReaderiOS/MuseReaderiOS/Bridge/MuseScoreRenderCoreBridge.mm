@@ -919,6 +919,40 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (BOOL)setContinuousLayout:(BOOL)enabled
+             totalPageCount:(NSInteger *)totalPageCount
+                      error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return NO;
+    }
+
+    int updatedPageCount = 0;
+    std::string errorMessage;
+    if (!_session->setContinuousLayout(enabled, updatedPageCount, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not change the score layout."));
+        }
+        return NO;
+    }
+
+    _totalPageCount = updatedPageCount;
+    if (totalPageCount) {
+        *totalPageCount = updatedPageCount;
+    }
+    return YES;
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to the reusable MuseScore render core yet.");
+    }
+    return NO;
+#endif
+}
+
 - (BOOL)setFullScoreViewWithTotalPageCount:(NSInteger *)totalPageCount
                                       error:(NSError * _Nullable __autoreleasing *)error
 {

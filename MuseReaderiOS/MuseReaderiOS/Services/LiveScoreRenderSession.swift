@@ -112,6 +112,16 @@ actor LiveScoreRenderSession {
         return pageCount
     }
 
+    /// Lays the displayed score out as one continuous line (one wide page), or back to pages.
+    func setContinuousLayout(_ enabled: Bool) throws -> Int {
+        var pageCount = 0
+        try RenderCoreWorkGate.sync {
+            try bridgeSession.setContinuousLayout(enabled, totalPageCount: &pageCount)
+        }
+        invalidateCachedPlaybackArtifacts()
+        return pageCount
+    }
+
     func setActivePart(index: Int) throws -> Int {
         var pageCount = 0
         try bridgeSession.setActivePart(index: index, totalPageCount: &pageCount)

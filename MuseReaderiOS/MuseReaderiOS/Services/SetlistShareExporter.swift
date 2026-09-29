@@ -28,6 +28,8 @@ extension ScoreReaderExportFormat {
             return "wav"
         case .images:
             return "png"
+        case .video:
+            return "mp4"
         }
     }
 }
@@ -129,7 +131,7 @@ enum SetlistShareExporter {
                     shareURLs.append(
                         try write(musicXMLData, to: exportDirectory, baseName: baseName, format: format)
                     )
-                case .midi, .audio, .images:
+                case .midi, .audio, .images, .video:
                     throw SetlistShareError.unsupportedFormat(format.title)
                 }
             } catch is CancellationError {

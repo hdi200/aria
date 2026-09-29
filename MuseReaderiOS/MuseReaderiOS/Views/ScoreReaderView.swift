@@ -253,6 +253,7 @@ struct ScoreReaderView: View {
     @State private var sharedExportItems: ScoreReaderSharedExportItems?
     @State private var exportErrorMessage: String?
     @State private var isPreparingExport = false
+    @State private var exportProgress: Double?
     @State private var selectedPartID = "full-score"
     @State private var isTempoEditorPresented = false
     @State private var isTimeSignaturePresented = false
@@ -546,7 +547,8 @@ struct ScoreReaderView: View {
                                         draft: $exportDraft,
                                         isPreparingExport: isPreparingExport,
                                         cancelAction: { isExportPanelPresented = false },
-                                        exportAction: exportScore
+                                        exportAction: exportScore,
+                                        exportProgress: exportProgress
                                     )
                                 )
                             }
@@ -2243,9 +2245,23 @@ struct ScoreReaderView: View {
         }
 
         isPreparingExport = true
+        exportProgress = nil
         exportErrorMessage = nil
+        // Video renders can take minutes; keep the screen on so iOS does not suspend Aria.
+        let keepsScreenAwake = exportDraft.format == .video
+        if keepsScreenAwake {
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
 
         Task {
+            defer {
+                Task { @MainActor in
+                    exportProgress = nil
+                    if keepsScreenAwake {
+                        UIApplication.shared.isIdleTimerDisabled = false
+                    }
+                }
+            }
             do {
                 guard await readerState.savePendingChanges(
                     busyMessage: "Finish the current edit before sharing the score.",
@@ -2291,6 +2307,38 @@ struct ScoreReaderView: View {
             return try await writeAudioExports()
         case .images:
             return try await writePNGPageExports()
+        case .video:
+            return try await writeVideoExports()
+        }
+    }
+
+    private func writeVideoExports() async throws -> [URL] {
+        let style = exportDraft.videoStyle
+        let composer = readerState.scoreMetadata.composer
+        let scoreTitle = readerState.scoreTitle
+        let reportProgress: @Sendable (Double) -> Void = { value in
+            Task { @MainActor in
+                exportProgress = value
+            }
+        }
+        return try await withExportTargets { target in
+            guard let liveRenderSession = session.liveRenderSession else {
+                throw ScoreReaderExportError.unsupportedFormat("Video")
+            }
+
+            let exportURL = try Self.exportURL(baseName: exportFileName(for: target), extension: "mp4")
+            var title = scoreTitle
+            if case .part(let part, _) = target {
+                title += " – \(part.name)"
+            }
+            try await ScoreVideoExporter.export(
+                liveRenderSession: liveRenderSession,
+                pageCount: target.pageCount,
+                to: exportURL,
+                options: ScoreVideoExportOptions(style: style, title: title, composer: composer),
+                progress: reportProgress
+            )
+            return exportURL
         }
     }
 

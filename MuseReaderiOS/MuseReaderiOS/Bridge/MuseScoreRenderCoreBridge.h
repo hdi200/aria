@@ -499,6 +499,10 @@ isEditableText:(BOOL)isEditableText
                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setActivePart(index:totalPageCount:));
 - (BOOL)setFullScoreViewWithTotalPageCount:(NSInteger * _Nullable)totalPageCount
                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setFullScoreView(totalPageCount:));
+/// Lays the displayed score out as one continuous line (a single wide page), or back to pages.
+- (BOOL)setContinuousLayout:(BOOL)enabled
+             totalPageCount:(NSInteger * _Nullable)totalPageCount
+                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setContinuousLayout(_:totalPageCount:));
 - (BOOL)setViewTransposeKey:(NSInteger)targetKey
              totalPageCount:(NSInteger * _Nullable)totalPageCount
                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setViewTransposeKey(_:totalPageCount:));

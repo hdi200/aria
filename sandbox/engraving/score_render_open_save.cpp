@@ -390,6 +390,27 @@ public:
         return true;
     }
 
+    //! Lays the displayed score out as one continuous line, like desktop's
+    //! continuous view, or back to pages. Only the view changes: saving
+    //! writes the file's own layout mode either way.
+    bool setContinuousLayout(const bool enabled, int& totalPageCount, std::string& errorMessage)
+    {
+        mu::engraving::Score* score = presentationScore();
+        if (!score) {
+            errorMessage = "The MuseScore render session is no longer available.";
+            return false;
+        }
+
+        const mu::engraving::LayoutMode mode = enabled ? mu::engraving::LayoutMode::LINE : mu::engraving::LayoutMode::PAGE;
+        if (score->layoutMode() != mode) {
+            score->setLayoutMode(mode);
+            relayoutActiveScore();
+        }
+
+        totalPageCount = activePageCount();
+        return totalPageCount > 0;
+    }
+
     bool setConcertPitchEnabled(const bool enabled, int& totalPageCount, std::string& errorMessage)
     {
         if (!supportsEditing()) {

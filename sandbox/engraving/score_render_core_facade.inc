@@ -29,6 +29,11 @@ int msr::render::ScoreRenderSession::totalPageCount() const
     return m_impl->totalPageCount();
 }
 
+bool msr::render::ScoreRenderSession::setContinuousLayout(const bool enabled, int& totalPageCount, std::string& errorMessage)
+{
+    return m_impl->setContinuousLayout(enabled, totalPageCount, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::chordSymbolRemovalNeedsApproval() const
 {
     return m_impl->chordSymbolRemovalNeedsApproval();

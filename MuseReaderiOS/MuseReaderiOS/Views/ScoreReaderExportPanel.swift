@@ -13,6 +13,7 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
     case midi
     case audio
     case images
+    case video
 
     var id: String {
         rawValue
@@ -32,6 +33,8 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
             return "Audio"
         case .images:
             return "Images"
+        case .video:
+            return "Video"
         }
     }
 
@@ -49,6 +52,8 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
             return ".wav"
         case .images:
             return "PNG pages"
+        case .video:
+            return ".mp4 play-along"
         }
     }
 
@@ -66,6 +71,8 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
             return "waveform"
         case .images:
             return "photo.on.rectangle"
+        case .video:
+            return "play.rectangle"
         }
     }
 
@@ -83,19 +90,21 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
             return Color.green
         case .images:
             return Color.blue
+        case .video:
+            return Color.orange
         }
     }
 
     var isAvailable: Bool {
         switch self {
-        case .museScore, .pdf, .musicXML, .midi, .audio, .images:
+        case .museScore, .pdf, .musicXML, .midi, .audio, .images, .video:
             return true
         }
     }
 
     var exportsDisplayedView: Bool {
         switch self {
-        case .pdf, .images:
+        case .pdf, .images, .video:
             return true
         case .museScore, .musicXML, .midi, .audio:
             return false
@@ -111,6 +120,7 @@ struct ScoreReaderExportDraft {
     var fileName = ""
     var exportPartsInConcertPitch = false
     var exportPartsInOriginalKey = false
+    var videoStyle: ScoreVideoStyle = .scrolling
 
     var hasExportContent: Bool {
         includesFullScore || includesParts
@@ -169,6 +179,8 @@ struct ScoreReaderExportPanel: View {
     let isPreparingExport: Bool
     let cancelAction: () -> Void
     let exportAction: () -> Void
+    /// Rendering progress for exports that take a while, such as video.
+    var exportProgress: Double? = nil
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -233,6 +245,10 @@ struct ScoreReaderExportPanel: View {
                     .overlay(panelBorder)
                 }
 
+                if draft.format == .video {
+                    videoOrientationRow
+                }
+
                 if showsExportPartsInConcertRow {
                     exportPartsInConcertRow
                 }
@@ -251,7 +267,11 @@ struct ScoreReaderExportPanel: View {
                     .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: false, isCompact: isPhone))
 
                     Button(action: exportAction) {
-                        if isPreparingExport {
+                        if isPreparingExport, let exportProgress {
+                            Text("Rendering \(Int((exportProgress * 100).rounded()))%")
+                                .monospacedDigit()
+                                .frame(maxWidth: .infinity)
+                        } else if isPreparingExport {
                             ProgressView()
                                 .controlSize(.small)
                                 .tint(.white)
@@ -444,6 +464,26 @@ struct ScoreReaderExportPanel: View {
 
     private var showsExportPartsInOriginalKeyRow: Bool {
         isShowingTemporaryTransposedView && draft.format.exportsDisplayedView && !parts.isEmpty
+    }
+
+    private var videoOrientationRow: some View {
+        VStack(alignment: .leading, spacing: isPhone ? 5 : 8) {
+            sectionTitle("Video")
+            Picker("Video style", selection: $draft.videoStyle) {
+                ForEach(ScoreVideoStyle.allCases) { style in
+                    Text(style.title).tag(style)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(draft.videoStyle == .scrolling
+                 ? "The whole piece on one line, scrolling past the playhead in time with the music."
+                 : "The pages scroll with the music and the playing measure is highlighted.")
+                .font(.system(size: isPhone ? 11 : 12))
+                .foregroundStyle(Color.black.opacity(0.52))
+            Text("Long pieces take a while to render; keep Aria open.")
+                .font(.system(size: isPhone ? 11 : 12))
+                .foregroundStyle(Color.black.opacity(0.52))
+        }
     }
 
     private var exportPartsInConcertRow: some View {
