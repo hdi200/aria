@@ -401,8 +401,27 @@ public:
             return false;
         }
 
+        // Continuous layout is used for video. Widen short-duration events in
+        // that presentation only, so bar-timed camera motion is nearly linear.
+        // Restore the score's own spacing before returning to the reader.
+        bool spacingChanged = false;
+        if (enabled) {
+            if (m_videoSpacingScore != score) {
+                m_videoSpacingScore = score;
+                m_videoOriginalSpacing = score->style().styleD(mu::engraving::Sid::measureSpacing);
+            }
+            if (score->style().styleD(mu::engraving::Sid::measureSpacing) != 1.7) {
+                score->style().set(mu::engraving::Sid::measureSpacing, 1.7);
+                spacingChanged = true;
+            }
+        } else if (m_videoSpacingScore == score) {
+            score->style().set(mu::engraving::Sid::measureSpacing, m_videoOriginalSpacing);
+            m_videoSpacingScore = nullptr;
+            spacingChanged = true;
+        }
+
         const mu::engraving::LayoutMode mode = enabled ? mu::engraving::LayoutMode::LINE : mu::engraving::LayoutMode::PAGE;
-        if (score->layoutMode() != mode) {
+        if (score->layoutMode() != mode || spacingChanged) {
             score->setLayoutMode(mode);
             relayoutActiveScore();
         }

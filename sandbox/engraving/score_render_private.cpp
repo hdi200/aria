@@ -142,6 +142,8 @@ private:
     int m_totalPageCount = 0;
     int m_maxObservedMasterHarmonyCount = 0;
     std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> m_persistedLayoutModes;
+    mu::engraving::Score* m_videoSpacingScore = nullptr;
+    double m_videoOriginalSpacing = 0;
     // The opened file was last saved by the pre-4.7.5 engine; see scoreFileSavedByOldAriaEngine.
     bool m_savedByOldAriaEngine = false;
     // Part-only chord symbols in a file not saved by the pre-4.7.5 engine, as

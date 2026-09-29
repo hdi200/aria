@@ -5,6 +5,7 @@
 
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
     case museScore
@@ -121,6 +122,8 @@ struct ScoreReaderExportDraft {
     var exportPartsInConcertPitch = false
     var exportPartsInOriginalKey = false
     var videoStyle: ScoreVideoStyle = .scrolling
+    var videoBackgroundImageData: Data? = nil
+    var videoBackgroundImageName: String? = nil
 
     var hasExportContent: Bool {
         includesFullScore || includesParts
@@ -171,6 +174,8 @@ enum ScoreReaderExportTarget {
 }
 
 struct ScoreReaderExportPanel: View {
+    @State private var isChoosingVideoBackground = false
+    @State private var videoBackgroundError: String? = nil
     let scoreTitle: String
     let sharingDescription: String
     let parts: [ScorePart]
@@ -282,7 +287,9 @@ struct ScoreReaderExportPanel: View {
                         }
                     }
                     .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: true, isCompact: isPhone))
-                    .disabled(isPreparingExport || !draft.format.isAvailable || !draft.hasExportContent)
+                    .disabled(isPreparingExport || !draft.format.isAvailable || !draft.hasExportContent
+                              || (draft.format == .video && draft.videoStyle == .scrollingPhoto
+                                  && draft.videoBackgroundImageData == nil))
                 }
             }
             .padding(isPhone ? 14 : 22)
@@ -303,6 +310,23 @@ struct ScoreReaderExportPanel: View {
             }
             if draft.selectedPartIDs.isEmpty {
                 draft.selectedPartIDs = Set(parts.map(\.id))
+            }
+        }
+        .fileImporter(isPresented: $isChoosingVideoBackground, allowedContentTypes: [.image]) { result in
+            do {
+                let url = try result.get()
+                let canAccess = url.startAccessingSecurityScopedResource()
+                defer { if canAccess { url.stopAccessingSecurityScopedResource() } }
+                let data = try Data(contentsOf: url)
+                guard UIImage(data: data) != nil else {
+                    videoBackgroundError = "That image could not be opened."
+                    return
+                }
+                draft.videoBackgroundImageData = data
+                draft.videoBackgroundImageName = url.lastPathComponent
+                videoBackgroundError = nil
+            } catch {
+                videoBackgroundError = error.localizedDescription
             }
         }
     }
@@ -477,9 +501,41 @@ struct ScoreReaderExportPanel: View {
             .pickerStyle(.segmented)
             Text(draft.videoStyle == .scrolling
                  ? "The whole piece on one line, scrolling past the playhead in time with the music."
+                 : draft.videoStyle == .scrollingPhoto
+                 ? "White notation over a blurred photo you choose."
                  : "The pages scroll with the music and the playing measure is highlighted.")
                 .font(.system(size: isPhone ? 11 : 12))
                 .foregroundStyle(Color.black.opacity(0.52))
+            if draft.videoStyle == .scrollingPhoto {
+                Button {
+                    isChoosingVideoBackground = true
+                } label: {
+                    HStack(spacing: 10) {
+                        if let data = draft.videoBackgroundImageData, let image = UIImage(data: data) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 42, height: 34)
+                                .clipShape(RoundedRectangle(cornerRadius: 5))
+                        } else {
+                            Image(systemName: "photo")
+                        }
+                        Text(draft.videoBackgroundImageName ?? "Choose background photo")
+                            .lineLimit(1)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .padding(10)
+                    .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
+                .disabled(isPreparingExport)
+                if let videoBackgroundError {
+                    Text(videoBackgroundError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
             Text("Long pieces take a while to render; keep Aria open.")
                 .font(.system(size: isPhone ? 11 : 12))
                 .foregroundStyle(Color.black.opacity(0.52))

@@ -2331,6 +2331,7 @@ struct ScoreReaderView: View {
 
     private func writeVideoExports() async throws -> [URL] {
         let style = exportDraft.videoStyle
+        let backgroundImageData = exportDraft.videoBackgroundImageData
         let composer = readerState.scoreMetadata.composer
         let scoreTitle = readerState.scoreTitle
         let reportProgress: @Sendable (Double) -> Void = { value in
@@ -2352,7 +2353,8 @@ struct ScoreReaderView: View {
                 liveRenderSession: liveRenderSession,
                 pageCount: target.pageCount,
                 to: exportURL,
-                options: ScoreVideoExportOptions(style: style, title: title, composer: composer),
+                options: ScoreVideoExportOptions(style: style, title: title, composer: composer,
+                                                 backgroundImageData: backgroundImageData),
                 progress: reportProgress
             )
             return exportURL

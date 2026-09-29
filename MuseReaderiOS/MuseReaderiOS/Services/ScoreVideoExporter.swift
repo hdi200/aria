@@ -4,6 +4,7 @@
 //
 
 import AVFoundation
+import Accelerate
 import CoreGraphics
 import CoreMedia
 import UIKit
@@ -11,6 +12,7 @@ import UIKit
 enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
     /// The whole piece on one continuous line that scrolls past a fixed playhead.
     case scrolling
+    case scrollingPhoto
     case pagesLandscape
     case pagesPortrait
 
@@ -22,6 +24,8 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .scrolling:
             return "Scrolling"
+        case .scrollingPhoto:
+            return "Photo"
         case .pagesLandscape:
             return "Pages 16:9"
         case .pagesPortrait:
@@ -31,7 +35,7 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
 
     var frameSize: CGSize {
         switch self {
-        case .scrolling, .pagesLandscape:
+        case .scrolling, .scrollingPhoto, .pagesLandscape:
             return CGSize(width: 1920, height: 1080)
         case .pagesPortrait:
             return CGSize(width: 1080, height: 1920)
@@ -44,7 +48,7 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .pagesPortrait:
             return 1000
-        case .scrolling, .pagesLandscape:
+        case .scrolling, .scrollingPhoto, .pagesLandscape:
             return 1240
         }
     }
@@ -57,6 +61,7 @@ struct ScoreVideoExportOptions: Sendable {
     var frameRate: Int32 = 30
     /// Desktop MuseScore's default reverb send, matching in-app playback.
     var reverbSendLevel: Float = 0.3
+    var backgroundImageData: Data? = nil
 }
 
 /// Which measure is playing at a moment of the performance, and how far
@@ -270,6 +275,7 @@ enum ScoreVideoExportError: LocalizedError {
     case noPlayback
     case noPages
     case writerFailed(String)
+    case missingBackgroundImage
 
     var errorDescription: String? {
         switch self {
@@ -279,6 +285,8 @@ enum ScoreVideoExportError: LocalizedError {
             return "The score has no pages to put in a video."
         case .writerFailed(let message):
             return "The video could not be written: \(message)"
+        case .missingBackgroundImage:
+            return "Choose a background photo for the white notation video."
         }
     }
 }
@@ -298,8 +306,11 @@ enum ScoreVideoExporter {
         options: ScoreVideoExportOptions,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
+        if options.style == .scrollingPhoto, options.backgroundImageData == nil {
+            throw ScoreVideoExportError.missingBackgroundImage
+        }
         try await Task.detached(priority: .userInitiated) {
-            guard options.style == .scrolling else {
+            guard options.style == .scrolling || options.style == .scrollingPhoto else {
                 try await render(liveRenderSession: liveRenderSession, pageCount: pageCount, to: url, options: options, progress: progress)
                 return
             }
@@ -340,8 +351,9 @@ enum ScoreVideoExporter {
         let duration = timeline.endTimeSeconds + tailSeconds
         let frameRate = Double(options.frameRate)
         let totalFrames = Int((duration * frameRate).rounded(.up))
-        let beatPoints = options.style == .scrolling ? (try? await liveRenderSession.playbackBeatPoints()) ?? [] : []
-        let painter: ScoreVideoPainter = options.style == .scrolling
+        let isScrolling = options.style == .scrolling || options.style == .scrollingPhoto
+        let beatPoints = isScrolling ? (try? await liveRenderSession.playbackBeatPoints()) ?? [] : []
+        let painter: ScoreVideoPainter = isScrolling
             ? ScoreVideoScrollingPainter(frameSize: frameSize, page: pages[0], timeline: timeline, beatPoints: beatPoints, options: options)
             : ScoreVideoPagesPainter(frameSize: frameSize, pages: pages, timeline: timeline, options: options)
 
@@ -685,13 +697,13 @@ class ScoreVideoPainterBase {
         }
     }
 
-    func drawProgress(_ context: CGContext, time: TimeInterval, onPaper: Bool = false) {
+    func drawProgress(_ context: CGContext, time: TimeInterval, onPaper: Bool = false, whiteInk: Bool = false) {
         let height: CGFloat = 6
         let track = CGRect(x: 0, y: frameSize.height - height, width: frameSize.width, height: height)
         context.setFillColor((onPaper ? UIColor.black.withAlphaComponent(0.06) : UIColor.white.withAlphaComponent(0.12)).cgColor)
         context.fill(track)
         let fraction = min(max(time / max(timeline.endTimeSeconds, 0.001), 0), 1)
-        context.setFillColor(Self.accent.cgColor)
+        context.setFillColor((whiteInk ? UIColor.white : Self.accent).cgColor)
         context.fill(CGRect(x: 0, y: track.minY, width: track.width * CGFloat(fraction), height: height))
     }
 }
@@ -798,7 +810,6 @@ final class ScoreVideoPagesPainter: ScoreVideoPainterBase, ScoreVideoPainter {
 /// The music slides past a fixed playhead; what has played is dimmed and the
 /// line fades out at the frame's edges.
 final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter {
-    private static let playheadFraction: CGFloat = 0.32
     private static let maximumScale: CGFloat = 2.2
     private static let tileWidth = 1024
     private static let tileCacheLimit = 6
@@ -807,8 +818,11 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private let page: ScoreVideoPageSource
     private let scale: CGFloat
     private let band: CGRect
+    private let contentTop: CGFloat
+    private let contentBottom: CGFloat
     private let lineRects: [CGRect]
     private let path: ScoreVideoScrollPath
+    private let photoBackground: CGImage?
     private var tiles: [Int: CGImage] = [:]
     private var tileOrder: [Int] = []
 
@@ -818,10 +832,18 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
          beatPoints: [ScorePlaybackBeatPoint],
          options: ScoreVideoExportOptions) {
         self.page = page
-        // As large as the page styles, shrinking tall scores to fit the frame.
-        scale = min(Self.maximumScale, (frameSize.height - 200) / max(page.size.height, 1))
+        photoBackground = options.style == .scrollingPhoto
+            ? Self.makePhotoBackground(options.backgroundImageData, size: frameSize) : nil
+        // Use the notation bounds, not the generous PDF margins, to size the line.
+        let top = timeline.regions.map { CGFloat($0.normalizedRect.y) * page.size.height }.min() ?? 0
+        let bottom = timeline.regions.map { CGFloat($0.normalizedRect.y + $0.normalizedRect.height) * page.size.height }.max() ?? page.size.height
+        let baseScale = min(Self.maximumScale, (frameSize.height - 200) / max(page.size.height, 1))
+        scale = min(baseScale * 1.7, (frameSize.height * 0.59) / max(bottom - top, 1))
         let bandHeight = (page.size.height * scale).rounded()
-        band = CGRect(x: 0, y: ((frameSize.height - bandHeight) / 2).rounded(), width: frameSize.width, height: bandHeight)
+        let bandY = frameSize.height * 0.19 - top * scale
+        band = CGRect(x: 0, y: bandY.rounded(), width: frameSize.width, height: bandHeight)
+        contentTop = bandY + top * scale
+        contentBottom = bandY + bottom * scale
         lineRects = timeline.regions.map { region in
             let rect = region.normalizedRect
             return CGRect(
@@ -831,40 +853,93 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
                 height: CGFloat(rect.height) * page.size.height
             )
         }
-        // Follow the notes when the engine reports them; otherwise the barlines.
-        let notePath = ScoreVideoScrollPath(beatPoints: beatPoints, lineWidth: page.size.width)
-        path = notePath.segments.isEmpty ? ScoreVideoScrollPath(timeline: timeline, rects: lineRects) : notePath
+        // Start at the first playable beat rather than sweeping across the
+        // clef, key and meter header. Later measures still follow bar times.
+        var pathRects = lineRects
+        if let firstBeat = beatPoints.first, let first = pathRects.first {
+            let beatX = CGFloat(firstBeat.normalizedX) * page.size.width
+            if beatX > first.minX && beatX < first.maxX {
+                pathRects[0] = CGRect(x: beatX, y: first.minY, width: first.maxX - beatX, height: first.height)
+            }
+        }
+        path = ScoreVideoScrollPath(timeline: timeline, rects: pathRects)
         super.init(frameSize: frameSize, timeline: timeline, options: options)
     }
 
     func draw(into pixelBuffer: CVPixelBuffer, at time: TimeInterval, frameDuration: TimeInterval) {
-        let playheadX = (frameSize.width * Self.playheadFraction).rounded()
-        // Frame x of the line's left edge; the line position `path.x` sits under the playhead.
-        let offsetX = (playheadX - path.x(at: time) * scale).rounded()
+        // Average a short span so bar-to-bar speed shifts are less perceptible.
+        var smoothedX: CGFloat = 0
+        var weightSum: CGFloat = 0
+        for sample in -6...6 {
+            let weight = CGFloat(7 - abs(sample))
+            smoothedX += weight * path.x(at: time + Double(sample) * 0.1)
+            weightSum += weight
+        }
+        let scoreX = smoothedX / weightSum * scale
+        let initialOffset: CGFloat = 100
+        let naturalTrackerX = initialOffset + scoreX
+        let centerX = frameSize.width * 0.5
+        // The page stays still while the tracker crosses its opening. The
+        // final 160 pixels ease the camera into motion without a sudden jerk.
+        let handoffStart = centerX - 80
+        let handoffEnd = centerX + 80
+        let openingTrackerX: CGFloat
+        if naturalTrackerX <= handoffStart {
+            openingTrackerX = naturalTrackerX
+        } else if naturalTrackerX >= handoffEnd {
+            openingTrackerX = centerX
+        } else {
+            let u = (naturalTrackerX - handoffStart) / (handoffEnd - handoffStart)
+            openingTrackerX = handoffStart + 160 * u - 80 * u * u
+        }
+        let ending = min(max((time - (timeline.endTimeSeconds - 8)) / 8, 0), 1)
+        let easedEnding = ending * ending * (3 - 2 * ending)
+        let playheadX = (openingTrackerX + frameSize.width * 0.18 * easedEnding).rounded()
+        let offsetX = (playheadX - scoreX).rounded()
 
         withFrameContext(pixelBuffer) { context in
-            context.setFillColor(UIColor.white.cgColor)
+            if let photoBackground {
+                drawImage(photoBackground, in: CGRect(origin: .zero, size: frameSize), context: context)
+                context.setFillColor(UIColor.black.withAlphaComponent(0.52).cgColor)
+            } else {
+                context.setFillColor(UIColor.white.cgColor)
+            }
             context.fill(CGRect(origin: .zero, size: frameSize))
             drawLine(context, offsetX: offsetX)
 
-            // Dim what has already played, easing into the playhead.
-            let dimEnd = playheadX - 28
-            context.setFillColor(UIColor.white.withAlphaComponent(0.42).cgColor)
-            context.fill(CGRect(x: band.minX, y: band.minY, width: max(0, dimEnd - band.minX), height: band.height))
-            drawHorizontalFade(context, from: dimEnd, to: playheadX - 4, startAlpha: 0.42, endAlpha: 0)
-            drawHorizontalFade(context, from: band.minX, to: band.minX + Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
-            drawHorizontalFade(context, from: band.maxX, to: band.maxX - Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
-
-            let current = drawMeasureHighlights(context, time: time) { index in
-                let rect = self.lineRects[index]
-                return CGRect(x: offsetX + rect.minX * self.scale, y: self.band.minY + rect.minY * self.scale,
-                              width: rect.width * self.scale, height: rect.height * self.scale)
+            if photoBackground == nil {
+                // Dim what has already played, easing into the playhead.
+                let dimEnd = playheadX - 28
+                context.setFillColor(UIColor.white.withAlphaComponent(0.42).cgColor)
+                context.fill(CGRect(x: band.minX, y: band.minY, width: max(0, dimEnd - band.minX), height: band.height))
+                drawHorizontalFade(context, from: dimEnd, to: playheadX - 4, startAlpha: 0.42, endAlpha: 0)
+                drawHorizontalFade(context, from: band.minX, to: band.minX + Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
+                drawHorizontalFade(context, from: band.maxX, to: band.maxX - Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
             }
-            let top = (current?.minY ?? band.minY) - 12
-            let bottom = (current?.maxY ?? band.maxY) + 12
-            drawPlayhead(context, x: playheadX, top: top, bottom: bottom, alpha: endFade(time))
+
+            let cursorColor = photoBackground == nil ? Self.accent : UIColor.white
+            let cursorColors = [
+                cursorColor.withAlphaComponent(0).cgColor,
+                cursorColor.withAlphaComponent(0.10 * endFade(time)).cgColor,
+                cursorColor.withAlphaComponent(0.16 * endFade(time)).cgColor,
+                cursorColor.withAlphaComponent(0.10 * endFade(time)).cgColor,
+                cursorColor.withAlphaComponent(0).cgColor
+            ] as CFArray
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: cursorColors,
+                                         locations: [0, 0.25, 0.5, 0.75, 1]) {
+                context.saveGState()
+                context.clip(to: CGRect(x: playheadX - 70, y: contentTop - 12, width: 140, height: contentBottom - contentTop + 24))
+                context.drawLinearGradient(gradient,
+                    start: CGPoint(x: playheadX - 70, y: band.midY),
+                    end: CGPoint(x: playheadX + 70, y: band.midY), options: [])
+                context.restoreGState()
+            }
+            context.setStrokeColor(cursorColor.withAlphaComponent(0.45 * endFade(time)).cgColor)
+            context.setLineWidth(2)
+            context.strokeLineSegments(between: [CGPoint(x: playheadX, y: contentTop - 12),
+                                                 CGPoint(x: playheadX, y: contentBottom + 12)])
             drawPinnedTitle()
-            drawProgress(context, time: time, onPaper: true)
+            drawProgress(context, time: time, onPaper: photoBackground == nil, whiteInk: photoBackground != nil)
         }
     }
 
@@ -878,12 +953,12 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         centered.lineBreakMode = .byTruncatingTail
         let titleText = NSAttributedString(string: title, attributes: [
             .font: UIFont.systemFont(ofSize: 40, weight: .semibold),
-            .foregroundColor: UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 1),
+            .foregroundColor: photoBackground == nil ? UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 1) : UIColor.white,
             .paragraphStyle: centered
         ])
         let composerText = NSAttributedString(string: composer, attributes: [
             .font: UIFont.systemFont(ofSize: 24, weight: .medium),
-            .foregroundColor: UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 0.6),
+            .foregroundColor: photoBackground == nil ? UIColor(red: 0.12, green: 0.14, blue: 0.18, alpha: 0.6) : UIColor.white.withAlphaComponent(0.78),
             .paragraphStyle: centered
         ])
         let width = frameSize.width - 160
@@ -891,7 +966,7 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         let composerHeight = composer.isEmpty ? 0 : ceil(composerText.size().height)
         let blockHeight = titleHeight + (composer.isEmpty ? 0 : 6 + composerHeight)
         // Centred in the space above the music, never closer than 40 pt to the top.
-        let top = max(40, (band.minY - blockHeight) / 2)
+        let top = max(40, (contentTop - blockHeight) / 2)
         titleText.draw(in: CGRect(x: 80, y: top, width: width, height: titleHeight))
         if !composer.isEmpty {
             composerText.draw(in: CGRect(x: 80, y: top + titleHeight + 6, width: width, height: composerHeight))
@@ -917,9 +992,16 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         if let image = tiles[index] {
             return image
         }
-        guard let image = page.tile(scale: scale, originX: CGFloat(index * Self.tileWidth),
+        guard let sourceImage = page.tile(scale: scale, originX: CGFloat(index * Self.tileWidth),
                                     pixelWidth: width, pixelHeight: Int(band.height)) else {
             return nil
+        }
+        let image: CGImage
+        if photoBackground != nil {
+            guard let converted = Self.whiteInkImage(from: sourceImage) else { return nil }
+            image = converted
+        } else {
+            image = sourceImage
         }
         tiles[index] = image
         tileOrder.append(index)
@@ -927,6 +1009,64 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
             tiles[tileOrder.removeFirst()] = nil
         }
         return image
+    }
+
+    private static func makePhotoBackground(_ data: Data?, size: CGSize) -> CGImage? {
+        guard let data, let photo = UIImage(data: data) else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            let fill = max(size.width / photo.size.width, size.height / photo.size.height)
+            let photoSize = CGSize(width: photo.size.width * fill, height: photo.size.height * fill)
+            photo.draw(in: CGRect(x: (size.width - photoSize.width) / 2,
+                                  y: (size.height - photoSize.height) / 2,
+                                  width: photoSize.width, height: photoSize.height))
+        }
+        guard let base = image.cgImage else { return nil }
+        let width = Int(size.width)
+        let height = Int(size.height)
+        let rowBytes = width * 4
+        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let input = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                    bytesPerRow: rowBytes, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo),
+              let scratch = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: rowBytes, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo),
+              let output = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                     bytesPerRow: rowBytes, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo),
+              let inputData = input.data, let scratchData = scratch.data, let outputData = output.data
+        else { return nil }
+        input.draw(base, in: CGRect(origin: .zero, size: size))
+        var source = vImage_Buffer(data: inputData, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: rowBytes)
+        var middle = vImage_Buffer(data: scratchData, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: rowBytes)
+        var destination = vImage_Buffer(data: outputData, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: rowBytes)
+        let flags = vImage_Flags(kvImageEdgeExtend)
+        guard vImageBoxConvolve_ARGB8888(&source, &middle, nil, 0, 0, 41, 41, nil, flags) == kvImageNoError,
+              vImageBoxConvolve_ARGB8888(&middle, &destination, nil, 0, 0, 41, 41, nil, flags) == kvImageNoError
+        else { return nil }
+        return output.makeImage()
+    }
+
+    private static func whiteInkImage(from source: CGImage) -> CGImage? {
+        let width = source.width
+        let height = source.height
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue),
+              let data = context.data else { return nil }
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let bytes = data.assumingMemoryBound(to: UInt8.self)
+        for pixel in 0..<(width * height) {
+            let index = pixel * 4
+            let luminance = (19 * Int(bytes[index]) + 183 * Int(bytes[index + 1])
+                             + 54 * Int(bytes[index + 2]) + 128) >> 8
+            let ink = UInt8(255 - luminance)
+            bytes[index] = ink
+            bytes[index + 1] = ink
+            bytes[index + 2] = ink
+            bytes[index + 3] = ink
+        }
+        return context.makeImage()
     }
 
     /// Paper-coloured fade over the band between two x positions.
