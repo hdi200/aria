@@ -6,6 +6,8 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import CoreImage
+import ImageIO
 
 enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
     case museScore
@@ -174,8 +176,7 @@ enum ScoreReaderExportTarget {
 }
 
 struct ScoreReaderExportPanel: View {
-    @State private var isChoosingVideoBackground = false
-    @State private var videoBackgroundError: String? = nil
+    @State private var isVideoSettingsPresented = false
     let scoreTitle: String
     let sharingDescription: String
     let parts: [ScorePart]
@@ -186,6 +187,10 @@ struct ScoreReaderExportPanel: View {
     let exportAction: () -> Void
     /// Rendering progress for exports that take a while, such as video.
     var exportProgress: Double? = nil
+    var videoPreviewPage: ScorePage? = nil
+    var exportErrorMessage: String? = nil
+    var videoExportCompleted = false
+    var videoSheetDismissAction: () -> Void = {}
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -251,7 +256,7 @@ struct ScoreReaderExportPanel: View {
                 }
 
                 if draft.format == .video {
-                    videoOrientationRow
+                    videoSettingsRow
                 }
 
                 if showsExportPartsInConcertRow {
@@ -271,7 +276,13 @@ struct ScoreReaderExportPanel: View {
                     }
                     .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: false, isCompact: isPhone))
 
-                    Button(action: exportAction) {
+                    Button {
+                        if draft.format == .video {
+                            isVideoSettingsPresented = true
+                        } else {
+                            exportAction()
+                        }
+                    } label: {
                         if isPreparingExport, let exportProgress {
                             Text("Rendering \(Int((exportProgress * 100).rounded()))%")
                                 .monospacedDigit()
@@ -282,14 +293,12 @@ struct ScoreReaderExportPanel: View {
                                 .tint(.white)
                                 .frame(maxWidth: .infinity)
                         } else {
-                            Text("Export")
+                            Text(draft.format == .video ? "Video settings…" : "Export")
                                 .frame(maxWidth: .infinity)
                         }
                     }
                     .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: true, isCompact: isPhone))
-                    .disabled(isPreparingExport || !draft.format.isAvailable || !draft.hasExportContent
-                              || (draft.format == .video && draft.videoStyle == .scrollingPhoto
-                                  && draft.videoBackgroundImageData == nil))
+                    .disabled(isPreparingExport || !draft.format.isAvailable || !draft.hasExportContent)
                 }
             }
             .padding(isPhone ? 14 : 22)
@@ -312,22 +321,22 @@ struct ScoreReaderExportPanel: View {
                 draft.selectedPartIDs = Set(parts.map(\.id))
             }
         }
-        .fileImporter(isPresented: $isChoosingVideoBackground, allowedContentTypes: [.image]) { result in
-            do {
-                let url = try result.get()
-                let canAccess = url.startAccessingSecurityScopedResource()
-                defer { if canAccess { url.stopAccessingSecurityScopedResource() } }
-                let data = try Data(contentsOf: url)
-                guard UIImage(data: data) != nil else {
-                    videoBackgroundError = "That image could not be opened."
-                    return
-                }
-                draft.videoBackgroundImageData = data
-                draft.videoBackgroundImageName = url.lastPathComponent
-                videoBackgroundError = nil
-            } catch {
-                videoBackgroundError = error.localizedDescription
+        .onChange(of: videoExportCompleted) { completed in
+            if completed {
+                isVideoSettingsPresented = false
             }
+        }
+        .sheet(isPresented: $isVideoSettingsPresented, onDismiss: videoSheetDismissAction) {
+            ScoreReaderVideoExportSheet(
+                scoreTitle: scoreTitle,
+                sharingDescription: sharingDescription,
+                previewPage: videoPreviewPage,
+                draft: $draft,
+                isPreparingExport: isPreparingExport,
+                exportProgress: exportProgress,
+                exportErrorMessage: exportErrorMessage,
+                exportAction: exportAction
+            )
         }
     }
 
@@ -413,6 +422,9 @@ struct ScoreReaderExportPanel: View {
                 return
             }
             draft.format = format
+            if format == .video {
+                isVideoSettingsPresented = true
+            }
         } label: {
             HStack(spacing: isPhone ? 9 : 12) {
                 Image(systemName: format.systemImage)
@@ -490,56 +502,26 @@ struct ScoreReaderExportPanel: View {
         isShowingTemporaryTransposedView && draft.format.exportsDisplayedView && !parts.isEmpty
     }
 
-    private var videoOrientationRow: some View {
-        VStack(alignment: .leading, spacing: isPhone ? 5 : 8) {
-            sectionTitle("Video")
-            Picker("Video style", selection: $draft.videoStyle) {
-                ForEach(ScoreVideoStyle.allCases) { style in
-                    Text(style.title).tag(style)
-                }
+    private var videoSettingsRow: some View {
+        Button {
+            isVideoSettingsPresented = true
+        } label: {
+            HStack {
+                Text("Video settings")
+                Spacer()
+                Text(draft.videoStyle.title)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
             }
-            .pickerStyle(.segmented)
-            Text(draft.videoStyle == .scrolling
-                 ? "The whole piece on one line, scrolling past the playhead in time with the music."
-                 : draft.videoStyle == .scrollingPhoto
-                 ? "White notation over a blurred photo you choose."
-                 : "The pages scroll with the music and the playing measure is highlighted.")
-                .font(.system(size: isPhone ? 11 : 12))
-                .foregroundStyle(Color.black.opacity(0.52))
-            if draft.videoStyle == .scrollingPhoto {
-                Button {
-                    isChoosingVideoBackground = true
-                } label: {
-                    HStack(spacing: 10) {
-                        if let data = draft.videoBackgroundImageData, let image = UIImage(data: data) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 42, height: 34)
-                                .clipShape(RoundedRectangle(cornerRadius: 5))
-                        } else {
-                            Image(systemName: "photo")
-                        }
-                        Text(draft.videoBackgroundImageName ?? "Choose background photo")
-                            .lineLimit(1)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                    }
-                    .padding(10)
-                    .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9))
-                }
-                .buttonStyle(.plain)
-                .disabled(isPreparingExport)
-                if let videoBackgroundError {
-                    Text(videoBackgroundError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
-            Text("Long pieces take a while to render; keep Aria open.")
-                .font(.system(size: isPhone ? 11 : 12))
-                .foregroundStyle(Color.black.opacity(0.52))
+            .padding(.horizontal, isPhone ? 12 : 16)
+            .frame(height: isPhone ? 42 : 54)
+            .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(panelBorder)
         }
+        .buttonStyle(.plain)
+        .disabled(isPreparingExport)
     }
 
     private var exportPartsInConcertRow: some View {
@@ -596,6 +578,435 @@ struct ScoreReaderExportPanel: View {
             }
         } else {
             draft.selectedPartIDs.insert(id)
+        }
+    }
+}
+
+private struct ScoreReaderVideoExportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var isChoosingBackground = false
+    @State private var isLoadingBackground = false
+    @State private var backgroundError: String?
+    @State private var previewImages = ScoreReaderVideoPreviewImages()
+    @State private var previewRevision = 0
+    @State private var isLoadingPreview = true
+    @State private var preferredScrollingStyle: ScoreVideoStyle = .scrolling
+    @State private var preferredPageStyle: ScoreVideoStyle = .pagesLandscape
+
+    let scoreTitle: String
+    let sharingDescription: String
+    let previewPage: ScorePage?
+    @Binding var draft: ScoreReaderExportDraft
+    let isPreparingExport: Bool
+    let exportProgress: Double?
+    let exportErrorMessage: String?
+    let exportAction: () -> Void
+
+    private var isScrolling: Bool {
+        draft.videoStyle == .scrolling || draft.videoStyle == .scrollingPhoto
+    }
+
+    private var layoutSelection: Binding<Bool> {
+        Binding(get: { isScrolling }, set: { scrolling in
+            if scrolling {
+                preferredPageStyle = draft.videoStyle
+                draft.videoStyle = preferredScrollingStyle
+            } else {
+                preferredScrollingStyle = draft.videoStyle
+                draft.videoStyle = preferredPageStyle
+            }
+        })
+    }
+
+    private var appearanceSelection: Binding<Bool> {
+        Binding(get: { draft.videoStyle == .scrollingPhoto }, set: { photo in
+            draft.videoStyle = photo ? .scrollingPhoto : .scrolling
+        })
+    }
+
+    private var previewTaskID: String {
+        "\(draft.videoStyle.rawValue)-\(previewPage?.id ?? "none")-\(previewRevision)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    preview
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Layout").font(.subheadline.weight(.semibold))
+                        Picker("Layout", selection: layoutSelection) {
+                            Text("Scrolling").tag(true)
+                            Text("Pages").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        Text(isScrolling
+                             ? "A continuous score moves smoothly past the playhead."
+                             : "Follow the playing measure as the score pages move.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if isScrolling {
+                        appearanceOptions
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Orientation").font(.subheadline.weight(.semibold))
+                            Picker("Orientation", selection: $draft.videoStyle) {
+                                Text("Landscape 16:9").tag(ScoreVideoStyle.pagesLandscape)
+                                Text("Portrait 9:16").tag(ScoreVideoStyle.pagesPortrait)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                    }
+
+                    if draft.videoStyle == .scrollingPhoto {
+                        backgroundPhotoRow
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(scoreTitle) · \(sharingDescription)")
+                            .font(.subheadline)
+                        Text("Full HD · 30 fps · Score audio included")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(isPreparingExport)
+                .frame(maxWidth: 560)
+                .padding(20)
+                .frame(maxWidth: .infinity)
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("Video export")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.semibold))
+                    }
+                    .accessibilityLabel("Close video export")
+                    .disabled(isPreparingExport)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                renderFooter
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.hidden)
+        .interactiveDismissDisabled(isPreparingExport)
+        .onAppear {
+            if isScrolling {
+                preferredScrollingStyle = draft.videoStyle
+            } else {
+                preferredPageStyle = draft.videoStyle
+            }
+        }
+        .task(id: previewTaskID) {
+            isLoadingPreview = true
+            let style = draft.videoStyle
+            let backgroundData = draft.videoBackgroundImageData
+            let page = previewPage
+            let images = await Task.detached(priority: .userInitiated) {
+                ScoreReaderVideoPreviewRenderer.makeImages(page: page, style: style, backgroundData: backgroundData)
+            }.value
+            guard !Task.isCancelled else { return }
+            previewImages = images
+            isLoadingPreview = false
+        }
+        .fileImporter(isPresented: $isChoosingBackground, allowedContentTypes: [.image]) { result in
+            switch result {
+            case .success(let url):
+                isLoadingBackground = true
+                backgroundError = nil
+                Task {
+                    defer { isLoadingBackground = false }
+                    do {
+                        let data = try await Task.detached(priority: .userInitiated) {
+                            let canAccess = url.startAccessingSecurityScopedResource()
+                            defer { if canAccess { url.stopAccessingSecurityScopedResource() } }
+                            let data = try Data(contentsOf: url)
+                            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                                  CGImageSourceGetCount(source) > 0 else {
+                                throw ScoreReaderExportError.imageEncodingFailed
+                            }
+                            return data
+                        }.value
+                        draft.videoBackgroundImageData = data
+                        draft.videoBackgroundImageName = url.lastPathComponent
+                        previewRevision += 1
+                    } catch {
+                        backgroundError = "That image could not be opened. \(error.localizedDescription)"
+                    }
+                }
+            case .failure(let error):
+                backgroundError = error.localizedDescription
+            }
+        }
+    }
+
+    private var preview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .secondarySystemGroupedBackground))
+                if let image = draft.videoStyle == .scrollingPhoto ? previewImages.photo : previewImages.paper {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                } else if draft.videoStyle == .scrollingPhoto && draft.videoBackgroundImageData == nil {
+                    VStack(spacing: 8) {
+                        Image(systemName: "photo")
+                        Text("Choose a photo to preview white notation").font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                } else if isLoadingPreview {
+                    ProgressView()
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "doc.richtext")
+                        Text("Score preview unavailable").font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .aspectRatio(draft.videoStyle == .pagesPortrait ? 9.0 / 16.0 : 16.0 / 9.0, contentMode: .fit)
+            .frame(maxHeight: draft.videoStyle == .pagesPortrait ? 300 : 260)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityLabel("Representative score appearance preview")
+            HStack {
+                Text("Score preview")
+                Spacer()
+                Text(draft.videoStyle == .pagesPortrait ? "9:16 · Pages" : isScrolling ? "16:9 · Scrolling" : "16:9 · Pages")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            Text("Appearance preview from the displayed score; video uses its own layout.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var appearanceOptions: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Appearance").font(.subheadline.weight(.semibold))
+            HStack(spacing: 12) {
+                appearanceCard(title: "White paper", photo: false, image: previewImages.paper)
+                appearanceCard(title: "Photo background", photo: true, image: previewImages.photo)
+            }
+        }
+    }
+
+    private func appearanceCard(title: String, photo: Bool, image: UIImage?) -> some View {
+        let selected = appearanceSelection.wrappedValue == photo
+        return Button {
+            appearanceSelection.wrappedValue = photo
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    Color(uiColor: photo ? .darkGray : .white)
+                    if let image {
+                        Image(uiImage: image).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: photo ? "photo" : "doc.richtext")
+                            .foregroundStyle(photo ? Color.white : Color.secondary)
+                    }
+                }
+                .frame(height: 68)
+                .clipped()
+                HStack(spacing: 5) {
+                    Text(title).font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: selected ? 2 : 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var backgroundPhotoRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                isChoosingBackground = true
+            } label: {
+                HStack(spacing: 12) {
+                    if let image = previewImages.backgroundThumbnail {
+                        Image(uiImage: image).resizable().scaledToFill()
+                            .frame(width: 46, height: 38)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        Image(systemName: "photo").frame(width: 46, height: 38)
+                    }
+                    Text(draft.videoBackgroundImageName ?? "Choose background photo")
+                        .lineLimit(1)
+                    Spacer()
+                    if isLoadingBackground {
+                        ProgressView()
+                    } else {
+                        Text(draft.videoBackgroundImageData == nil ? "Choose" : "Change")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .font(.subheadline)
+                .padding(12)
+                .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .disabled(isLoadingBackground)
+            if let backgroundError {
+                Text(backgroundError).font(.caption).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var renderFooter: some View {
+        VStack(spacing: 10) {
+            if let exportErrorMessage {
+                Text(exportErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if isPreparingExport {
+                if let exportProgress {
+                    ProgressView(value: min(max(exportProgress, 0), 1))
+                    Text("Rendering \(Int((min(max(exportProgress, 0), 1) * 100).rounded()))%")
+                        .monospacedDigit()
+                } else {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Preparing video…")
+                    }
+                }
+            }
+            Button(action: exportAction) {
+                Text(isPreparingExport ? "Rendering…" : "Render video")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: true))
+            .disabled(isPreparingExport || isLoadingBackground || !draft.hasExportContent
+                      || (draft.videoStyle == .scrollingPhoto && draft.videoBackgroundImageData == nil))
+            Text("Keep Aria open while rendering.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .font(.subheadline)
+        .frame(maxWidth: 560)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial)
+    }
+}
+
+/// Immutable thumbnails cross back from the worker task after PDF/photo decoding.
+private struct ScoreReaderVideoPreviewImages: @unchecked Sendable {
+    var paper: UIImage?
+    var photo: UIImage?
+    var backgroundThumbnail: UIImage?
+}
+
+private nonisolated enum ScoreReaderVideoPreviewRenderer {
+    private static let imageContext = CIContext(options: [.cacheIntermediates: false])
+
+    static func makeImages(page: ScorePage?, style: ScoreVideoStyle, backgroundData: Data?) -> ScoreReaderVideoPreviewImages {
+        let scrolling = style == .scrolling || style == .scrollingPhoto
+        let size = style == .pagesPortrait ? CGSize(width: 360, height: 640) : CGSize(width: 640, height: 360)
+        let thumbnail = backgroundData.flatMap { downsample($0, maximumPixelSize: 960) }
+        guard let page else { return ScoreReaderVideoPreviewImages(backgroundThumbnail: thumbnail) }
+        let paper = scoreImage(page: page, size: size, cropSystem: scrolling)
+        guard let paperCGImage = paper.cgImage, let backgroundCGImage = thumbnail?.cgImage else {
+            return ScoreReaderVideoPreviewImages(paper: paper, backgroundThumbnail: thumbnail)
+        }
+        let bounds = CGRect(origin: .zero, size: size)
+        let background = CIImage(cgImage: backgroundCGImage)
+        let scale = max(size.width / background.extent.width, size.height / background.extent.height)
+        let scaled = background.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let centered = scaled.transformed(by: CGAffineTransform(translationX: (size.width - scaled.extent.width) / 2,
+                                                                y: (size.height - scaled.extent.height) / 2))
+        let blurred = centered.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 12]).cropped(to: bounds)
+        let dim = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.4)).cropped(to: bounds).composited(over: blurred)
+        // Convert black engraving on paper to white ink with matching antialiasing.
+        let inverted = CIImage(cgImage: paperCGImage).applyingFilter("CIColorInvert")
+        let ink = inverted.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputAVector": CIVector(x: 0.2126, y: 0.7152, z: 0.0722, w: 0),
+            "inputBiasVector": CIVector(x: 1, y: 1, z: 1, w: 0)
+        ])
+        let photo = imageContext.createCGImage(ink.composited(over: dim), from: bounds).map { UIImage(cgImage: $0) }
+        return ScoreReaderVideoPreviewImages(paper: paper, photo: photo, backgroundThumbnail: thumbnail)
+    }
+
+    private static func downsample(_ data: Data, maximumPixelSize: Int) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize,
+                kCGImageSourceShouldCacheImmediately: true
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
+    }
+
+    private static func scoreImage(page: ScorePage, size: CGSize, cropSystem: Bool) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { rendererContext in
+            let context = rendererContext.cgContext
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            let pdf = page.pdfData.flatMap { CGDataProvider(data: $0 as CFData) }.flatMap(CGPDFDocument.init)?.page(at: 1)
+            let raster = pdf == nil ? page.imageData.flatMap { downsample($0, maximumPixelSize: 1600) } : nil
+            let sourceSize = pdf?.getBoxRect(.mediaBox).size ?? raster?.size ?? CGSize(width: 612, height: 792)
+            var crop = CGRect(origin: .zero, size: sourceSize)
+            if cropSystem, let system = page.layoutMarkers.first(where: {
+                if case .system = $0.kind { return true }
+                return false
+            }) {
+                let rect = system.normalizedRect
+                crop = CGRect(x: CGFloat(rect.x) * sourceSize.width,
+                              y: CGFloat(rect.y) * sourceSize.height,
+                              width: CGFloat(rect.width) * sourceSize.width,
+                              height: CGFloat(rect.height) * sourceSize.height)
+                    .insetBy(dx: -sourceSize.width * 0.015, dy: -sourceSize.height * 0.035)
+                    .intersection(CGRect(origin: .zero, size: sourceSize))
+            }
+            guard crop.width > 0, crop.height > 0 else { return }
+            let area = CGRect(origin: .zero, size: size).insetBy(dx: 20, dy: cropSystem ? 50 : 16)
+            let scale = min(area.width / crop.width, area.height / crop.height)
+            let drawingRect = CGRect(x: (size.width - crop.width * scale) / 2,
+                                     y: (size.height - crop.height * scale) / 2,
+                                     width: crop.width * scale, height: crop.height * scale)
+            context.saveGState()
+            context.clip(to: drawingRect)
+            if let pdf {
+                let box = pdf.getBoxRect(.mediaBox)
+                context.translateBy(x: drawingRect.minX, y: drawingRect.maxY)
+                context.scaleBy(x: scale, y: -scale)
+                context.translateBy(x: -box.minX - crop.minX, y: -box.minY - (sourceSize.height - crop.maxY))
+                context.drawPDFPage(pdf)
+            } else if let raster {
+                raster.draw(in: CGRect(x: drawingRect.minX - crop.minX * scale,
+                                       y: drawingRect.minY - crop.minY * scale,
+                                       width: sourceSize.width * scale, height: sourceSize.height * scale))
+            }
+            context.restoreGState()
         }
     }
 }

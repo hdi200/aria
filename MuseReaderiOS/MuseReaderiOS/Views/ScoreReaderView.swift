@@ -251,6 +251,7 @@ struct ScoreReaderView: View {
     @State private var isExportPanelPresented = false
     @State private var exportDraft = ScoreReaderExportDraft()
     @State private var sharedExportItems: ScoreReaderSharedExportItems?
+    @State private var pendingVideoShareItems: ScoreReaderSharedExportItems?
     @State private var exportErrorMessage: String?
     @State private var isPreparingExport = false
     @State private var exportProgress: Double?
@@ -565,7 +566,16 @@ struct ScoreReaderView: View {
                                         isPreparingExport: isPreparingExport,
                                         cancelAction: { isExportPanelPresented = false },
                                         exportAction: exportScore,
-                                        exportProgress: exportProgress
+                                        exportProgress: exportProgress,
+                                        videoPreviewPage: readerState.page(at: 0) ?? readerState.currentPage,
+                                        exportErrorMessage: exportErrorMessage,
+                                        videoExportCompleted: pendingVideoShareItems != nil,
+                                        videoSheetDismissAction: {
+                                            guard let items = pendingVideoShareItems else { return }
+                                            pendingVideoShareItems = nil
+                                            isExportPanelPresented = false
+                                            sharedExportItems = items
+                                        }
                                     )
                                 )
                             }
@@ -2264,6 +2274,7 @@ struct ScoreReaderView: View {
         isPreparingExport = true
         exportProgress = nil
         exportErrorMessage = nil
+        pendingVideoShareItems = nil
         // Video renders can take minutes; keep the screen on so iOS does not suspend Aria.
         let keepsScreenAwake = exportDraft.format == .video
         if keepsScreenAwake {
@@ -2296,9 +2307,16 @@ struct ScoreReaderView: View {
                 }
                 let urls = try await prepareExportURLs()
                 await MainActor.run {
-                    sharedExportItems = ScoreReaderSharedExportItems(urls: urls)
+                    let items = ScoreReaderSharedExportItems(urls: urls)
                     isPreparingExport = false
-                    isExportPanelPresented = false
+                    if keepsScreenAwake {
+                        // Let the video sheet finish dismissing before the
+                        // system share sheet is presented from the reader.
+                        pendingVideoShareItems = items
+                    } else {
+                        sharedExportItems = items
+                        isExportPanelPresented = false
+                    }
                 }
             } catch {
                 await MainActor.run {
