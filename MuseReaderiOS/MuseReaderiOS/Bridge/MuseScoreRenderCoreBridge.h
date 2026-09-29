@@ -128,6 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MSRPlaybackMeasureRegion : NSObject
 
+@property (nonatomic, copy, readonly) NSString *measureEID;
 @property (nonatomic, readonly) NSInteger measureIndex;
 @property (nonatomic, readonly) NSInteger pageIndex;
 @property (nonatomic, readonly) NSTimeInterval startTimeSeconds;
@@ -137,7 +138,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) double normalizedWidth;
 @property (nonatomic, readonly) double normalizedHeight;
 
-- (instancetype)initWithMeasureIndex:(NSInteger)measureIndex
+- (instancetype)initWithMeasureEID:(NSString *)measureEID
+                       measureIndex:(NSInteger)measureIndex
                            pageIndex:(NSInteger)pageIndex
                     startTimeSeconds:(NSTimeInterval)startTimeSeconds
                       endTimeSeconds:(NSTimeInterval)endTimeSeconds

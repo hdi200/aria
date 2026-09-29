@@ -93,7 +93,8 @@ NSArray<MSRScorePartInfo *> *MakeScorePartInfos(const std::vector<msr::render::S
 
 MSRPlaybackMeasureRegion *MakePlaybackMeasureRegion(const msr::render::PlaybackMeasureRegion& region)
 {
-    return [[MSRPlaybackMeasureRegion alloc] initWithMeasureIndex:region.measureIndex
+    return [[MSRPlaybackMeasureRegion alloc] initWithMeasureEID:[NSString stringWithUTF8String:region.measureEid.c_str()]
+                                                    measureIndex:region.measureIndex
                                                         pageIndex:region.pageIndex
                                                  startTimeSeconds:region.startTimeSeconds
                                                    endTimeSeconds:region.endTimeSeconds
@@ -705,7 +706,8 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
 @implementation MSRPlaybackMeasureRegion
 
-- (instancetype)initWithMeasureIndex:(NSInteger)measureIndex
+- (instancetype)initWithMeasureEID:(NSString *)measureEID
+                       measureIndex:(NSInteger)measureIndex
                            pageIndex:(NSInteger)pageIndex
                     startTimeSeconds:(NSTimeInterval)startTimeSeconds
                       endTimeSeconds:(NSTimeInterval)endTimeSeconds
@@ -716,6 +718,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 {
     self = [super init];
     if (self) {
+        _measureEID = [measureEID copy];
         _measureIndex = measureIndex;
         _pageIndex = pageIndex;
         _startTimeSeconds = startTimeSeconds;

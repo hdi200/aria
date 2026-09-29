@@ -89,6 +89,22 @@ struct ScoreReaderPageLayoutPolicy: Equatable {
     }
 }
 
+struct ScoreAnnotationPageConfiguration {
+    let strokes: [ScoreRenderedAnnotationStroke]
+    let selectedStrokeIDs: Set<UUID>
+    let isActive: Bool
+    let isVisible: Bool
+    let allowsInteraction: Bool
+    let tool: ScoreAnnotationTool
+    let color: ScoreAnnotationColor
+    let width: Double
+    let interactionStartAction: () -> Void
+    let strokeCommitAction: ([CGPoint]) -> Void
+    let eraseAction: ([CGPoint]) -> Void
+    let lassoAction: (CGRect) -> Void
+    let moveSelectionAction: (CGPoint) -> Void
+}
+
 struct ScoreReaderPageCanvas: View {
     static func activeNotationAnchorID(for pageIndex: Int) -> String {
         "active-notation-anchor-\(pageIndex)"
@@ -157,6 +173,7 @@ struct ScoreReaderPageCanvas: View {
     var loopFromHereAction: () -> Void = {}
     var togglePlaybackLoopAction: () -> Void = {}
     var manualScrollAction: () -> Void = {}
+    var annotationConfiguration: ScoreAnnotationPageConfiguration?
 
     var body: some View {
         let fittedPageSize = fittedPageSize
@@ -237,7 +254,8 @@ struct ScoreReaderPageCanvas: View {
                 playFromHereAction: playFromHereAction,
                 loopFromHereAction: loopFromHereAction,
                 togglePlaybackLoopAction: togglePlaybackLoopAction,
-                manualScrollAction: manualScrollAction
+                manualScrollAction: manualScrollAction,
+                annotationConfiguration: annotationConfiguration
             )
             // CATiledLayer renders PDF tiles asynchronously. A viewport-size
             // identity prevents tiles produced with pre-rotation bounds from
@@ -445,6 +463,7 @@ struct ScoreReaderPageSurface: View {
     let loopFromHereAction: () -> Void
     let togglePlaybackLoopAction: () -> Void
     let manualScrollAction: () -> Void
+    let annotationConfiguration: ScoreAnnotationPageConfiguration?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -492,7 +511,20 @@ struct ScoreReaderPageSurface: View {
                         onSwipePreviousPage: swipePreviousPageAction,
                         onSwipeNextPage: swipeNextPageAction,
                         onReadingCenterLongPress: viewModeLongPressAction,
-                        onManualScroll: manualScrollAction
+                        onManualScroll: manualScrollAction,
+                        annotationStrokes: annotationConfiguration?.strokes ?? [],
+                        selectedAnnotationStrokeIDs: annotationConfiguration?.selectedStrokeIDs ?? [],
+                        annotationModeActive: annotationConfiguration?.isActive ?? false,
+                        annotationsVisible: annotationConfiguration?.isVisible ?? true,
+                        allowsAnnotationInteraction: annotationConfiguration?.allowsInteraction ?? false,
+                        annotationTool: annotationConfiguration?.tool ?? .pen,
+                        annotationColor: annotationConfiguration?.color ?? .black,
+                        annotationWidth: annotationConfiguration?.width ?? 4,
+                        onAnnotationInteractionStart: annotationConfiguration?.interactionStartAction,
+                        onAnnotationStrokeCommit: annotationConfiguration?.strokeCommitAction,
+                        onAnnotationErase: annotationConfiguration?.eraseAction,
+                        onAnnotationLasso: annotationConfiguration?.lassoAction,
+                        onAnnotationMoveSelection: annotationConfiguration?.moveSelectionAction
                     )
                 } else {
                     ScoreReaderPagePlaceholder(

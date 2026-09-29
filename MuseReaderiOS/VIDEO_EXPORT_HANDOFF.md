@@ -9,11 +9,28 @@ SDK; **the new UI and optimized pipeline still need an iPad run**.
 
 ## Approved UI and styles
 
-Selecting Video opens a dedicated **Video export** sheet. It has an × at the top
-right and a full-width **Render video** button at the bottom. Layout, appearance,
-background photo, and page orientation are configured here. Content/part selection,
-filename, and existing part export options remain in the general export panel.
-The panel's Video settings row/button reopens the sheet.
+Selecting Video opens a dedicated **Video export** sheet (`ScoreReaderVideoExportSheet`),
+styled after the user's mockup: large bold title with a circled ×; a preview card
+with "16:9 • Scrolling" under it; **Layout** as an accent-outlined segmented control
+(`ScoreReaderVideoSegmentedControl`) with a one-line description; for scrolling,
+**Appearance** as two picture cards, "Score only" (the paper frame) and "Photo"
+(the chosen photo); for pages, **Orientation**. Choosing Photo without a photo
+opens the Photos picker; once chosen, "Change photo" sits above the photo card
+(Photos only, no Files route for now). The sheet uses the page-sized
+presentation on iOS 18 and tries a full then a smaller preview before scrolling. Footer: "Keep Aria open
+while rendering." and **Render video** (reads "Choose photo" until there is one;
+disabled while the preview loads). While rendering: percentage, bar and **Cancel**
+(cancels the stored export task quietly). When done: **Video ready** with the
+system player, a list for several parts, **Full screen** and **Share**, and a back
+button to the settings. Closing returns to the score.
+
+**The preview is a real frame** (`ScoreVideoExporter.previewMaterial` +
+`previewFrame`), drawn by the same painters as the export, at time 0 (the video's first frame). Scrolling material switches
+the score to one line and back, like the export; `ScoreVideoPreviewCache` in
+`ScoreReaderView` loads each layout once per sheet, never twice at once, and is
+reset when the sheet closes. Render is disabled while a preview loads so the two
+layout switches cannot overlap. (The previous hand-drawn preview, and its use of
+layout-break markers as system positions, is gone.)
 
 - **Scrolling** (default, 1920×1080): a continuous score on white paper, with a wide
   blue cursor, dimmed played notation, soft left/right fades, and a blue progress
@@ -34,19 +51,19 @@ The panel's Video settings row/button reopens the sheet.
   looking 0.4 s ahead; measure highlights and playhead remain. A title card fades
   out during the opening 4.5 s.
 
-The sheet shows a representative preview from an actual cached score page. For
-scrolling it draws a video frame from the page's first system at the video's
-proportions: title and composer, notation at the same relative size, played
-music dimmed, cursor at the middle, edge fades and progress bar (constants mirror
-`ScoreVideoScrollingPainter` at 1080p; keep them in sync). It does **not** reflow
-the live score or start audio rendering, so spacing is the page layout's. Photo
-decoding and preview composition run off the main thread.
-The caption explains that the exported video has its own layout.
-
-During rendering, settings and dismissal are disabled and progress/errors appear
-inside the sheet. On success, `pendingVideoShareItems` and the sheet's `onDismiss`
-callback ensure the video sheet closes before the system share sheet opens. Aria
-keeps the screen awake during export.
+Scrolling layout details: notation fits 59% of the height, but a staff space is
+capped at 2.4% of it (measured from staff lines in a measure), so one-staff scores
+are large rather than tiny. Short music is centred on the frame; the title sits
+20% of the height above it (full scores keep the title centred above 19%). The
+pinned header is on only when the video has several parts
+(`ScoreVideoExportOptions.pinsStaffHeader`: off for part exports and one-part
+scores; the preview also turns it off while the reader shows a part). With it
+off, the clef and first-bar text scroll away with the music. When on, the
+pinned header covers the full band. Loose text that reaches into it (not
+connected to the staves: a rehearsal mark, tempo), plus loose shapes within 4 px
+of that text, is `OpeningText`: it is painted out of the header and the scrolling
+tiles and drawn as its own layer that fades out, finishing 0.4 s before the score
+starts to move (never before 0.6 s). Other text scrolls and passes under the header.
 
 ## Scroll timing: current decision
 

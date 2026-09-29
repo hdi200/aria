@@ -99,6 +99,9 @@ int main(int argc, char* argv[])
         if (!session->playbackMeasureRegions(regions, error) || regions.size() < 3) {
             fail("measure regions unavailable: " + error);
         }
+        for (const auto& region : regions) {
+            expect(!region.measureEid.empty(), "measure region is missing its persistent EID");
+        }
         const double quarter = 0.5;
 
         // A 1/4 pickup counts a full 4/4 bar, then leads into beat 4.

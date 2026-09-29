@@ -61,6 +61,8 @@ struct ScoreReaderChromeBar: View {
     let isEditingBusy: Bool
     let isPlaybackBusy: Bool
     let isExportBusy: Bool
+    let supportsAnnotations: Bool
+    let annotationModeActive: Bool
     let playbackPreparationMessage: String?
     let closeAction: () -> Void
     let selectModeAction: () -> Void
@@ -72,6 +74,7 @@ struct ScoreReaderChromeBar: View {
     let toggleMixerAction: () -> Void
     let isMixerPresented: Bool
     let exportAction: () -> Void
+    let annotationAction: () -> Void
     let editDoneAction: () -> Void
     let selectPartAction: (Int?) -> Void
     let managePartsAction: () -> Void
@@ -237,6 +240,10 @@ struct ScoreReaderChromeBar: View {
 
                 floatingIsland(horizontalPadding: 5) {
                     exportIslandButton(fontSize: 21, minWidth: 44)
+                }
+
+                if supportsAnnotations {
+                    annotationModeIslandButton
                 }
 
                 if supportsEditing {
@@ -486,6 +493,21 @@ struct ScoreReaderChromeBar: View {
         .accessibilityLabel(interactionMode == .edit ? "Done editing" : "Edit score")
     }
 
+    private var annotationModeIslandButton: some View {
+        Button(action: annotationAction) {
+            Image(systemName: "pencil.tip")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(annotationModeActive ? Color.white : Color.black.opacity(0.78))
+                .frame(width: 54, height: 44)
+                .scoreReaderChromeIslandBackground(cornerRadius: 18, isSelected: annotationModeActive)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isEditingBusy || interactionMode != .view)
+        .accessibilityLabel(annotationModeActive ? "Exit annotation mode" : "Annotate score")
+        .accessibilityAddTraits(annotationModeActive ? .isSelected : [])
+    }
+
     private var partsPanelContent: some View {
         ScoreReaderPartsPanel(
             parts: parts,
@@ -660,10 +682,14 @@ private extension View {
     }
 
     @ViewBuilder
-    func scoreReaderChromeIslandBackground(cornerRadius: CGFloat) -> some View {
+    func scoreReaderChromeIslandBackground(cornerRadius: CGFloat, isSelected: Bool = false) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
-        if #available(iOS 26.0, *) {
+        if isSelected {
+            self
+                .background(Color.blue, in: shape)
+                .shadow(color: Color.black.opacity(0.09), radius: 18, y: 8)
+        } else if #available(iOS 26.0, *) {
             self
                 .background(Color.white.opacity(0.26), in: shape)
                 .glassEffect(.regular.interactive(true), in: shape)

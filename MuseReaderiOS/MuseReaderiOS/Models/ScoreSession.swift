@@ -261,14 +261,31 @@ struct ScoreNormalizedRect: Sendable, Equatable {
 }
 
 struct ScorePlaybackMeasureRegion: Identifiable, Sendable, Equatable {
+    let measureEID: String
     let measureIndex: Int
     let pageIndex: Int
     let startTimeSeconds: TimeInterval
     let endTimeSeconds: TimeInterval
     let normalizedRect: ScoreNormalizedRect
 
+    init(
+        measureEID: String = "",
+        measureIndex: Int,
+        pageIndex: Int,
+        startTimeSeconds: TimeInterval,
+        endTimeSeconds: TimeInterval,
+        normalizedRect: ScoreNormalizedRect
+    ) {
+        self.measureEID = measureEID
+        self.measureIndex = measureIndex
+        self.pageIndex = pageIndex
+        self.startTimeSeconds = startTimeSeconds
+        self.endTimeSeconds = endTimeSeconds
+        self.normalizedRect = normalizedRect
+    }
+
     var id: String {
-        "\(measureIndex)-\(pageIndex)-\(Int((startTimeSeconds * 1000).rounded()))"
+        "\(measureEID)-\(measureIndex)-\(pageIndex)-\(Int((startTimeSeconds * 1000).rounded()))"
     }
 }
 

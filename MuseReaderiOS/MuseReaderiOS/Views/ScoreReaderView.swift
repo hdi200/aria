@@ -212,6 +212,7 @@ struct ScoreReaderView: View {
     private let initialRememberedState: ScoreReaderRememberedState
 
     @StateObject private var readerState: ScoreReaderState
+    @StateObject private var annotationController: ScoreAnnotationController
     @State private var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
     @State private var lastPhoneLandscapeZoomMode: Bool?
     @State private var selectedToolCategory: ScoreReaderToolCategory
@@ -251,7 +252,10 @@ struct ScoreReaderView: View {
     @State private var isExportPanelPresented = false
     @State private var exportDraft = ScoreReaderExportDraft()
     @State private var sharedExportItems: ScoreReaderSharedExportItems?
-    @State private var pendingVideoShareItems: ScoreReaderSharedExportItems?
+    /// Finished videos, shown in the video sheet to watch and share.
+    @State private var completedVideoURLs: [URL] = []
+    @State private var exportTask: Task<Void, Never>?
+    @State private var videoPreviewCache = ScoreVideoPreviewCache()
     @State private var exportErrorMessage: String?
     @State private var isPreparingExport = false
     @State private var exportProgress: Double?
@@ -284,6 +288,14 @@ struct ScoreReaderView: View {
     @State private var savedViewModeConfirmationIsVisible = false
     @State private var readingStyle: ScoreReaderReadingStyle = .pageTurn
     @State private var viewModeSaveErrorMessage: String?
+    @State private var isAnnotationModeActive = false
+    @State private var annotationsVisible = true
+    @State private var annotationTool = ScoreAnnotationTool.pen
+    @AppStorage("ScoreReaderAnnotationMarkerColor") private var annotationMarkerColor = ScoreAnnotationColor.black
+    @AppStorage("ScoreReaderAnnotationMarkerWidth") private var annotationMarkerWidth: Double = 4
+    @AppStorage("ScoreReaderAnnotationHighlighterColor") private var annotationHighlighterColor = ScoreAnnotationColor.yellow
+    @AppStorage("ScoreReaderAnnotationHighlighterWidth") private var annotationHighlighterWidth: Double = 4
+    @State private var readingStyleBeforeAnnotation: ScoreReaderReadingStyle?
 
     private let setlistNavigation: ScoreReaderSetlistNavigation?
     private let readerReadyAction: (@MainActor () -> Void)?
@@ -329,6 +341,7 @@ struct ScoreReaderView: View {
                 initialViewTransposeKey: initialInteractionMode == .view ? rememberedState.viewTransposeKey : nil
             )
         )
+        _annotationController = StateObject(wrappedValue: ScoreAnnotationController(scoreID: session.document.id))
     }
 
     var body: some View {
@@ -511,6 +524,8 @@ struct ScoreReaderView: View {
                             isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isTransitioningScore || isPreparingExport,
                             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
                             isExportBusy: isPreparingExport,
+                            supportsAnnotations: !isPhoneInterface && readerState.interactionMode == .view,
+                            annotationModeActive: isAnnotationModeActive,
                             playbackPreparationMessage: readerState.playbackPreparationMessage,
                             closeAction: closeReader,
                             selectModeAction: selectModeFromToolbar,
@@ -542,7 +557,13 @@ struct ScoreReaderView: View {
                                 }
                                 isExportPanelPresented.toggle()
                             },
-                            editDoneAction: toggleInteractionMode,
+                            annotationAction: toggleAnnotationMode,
+                            editDoneAction: {
+                                if isAnnotationModeActive {
+                                    exitAnnotationMode()
+                                }
+                                toggleInteractionMode()
+                            },
                             selectPartAction: { partIndex in
                                 readerState.selectScorePart(index: partIndex)
                             },
@@ -567,15 +588,24 @@ struct ScoreReaderView: View {
                                         cancelAction: { isExportPanelPresented = false },
                                         exportAction: exportScore,
                                         exportProgress: exportProgress,
-                                        videoPreviewPage: readerState.page(at: 0) ?? readerState.currentPage,
-                                        scoreComposer: readerState.scoreMetadata.composer,
                                         exportErrorMessage: exportErrorMessage,
-                                        videoExportCompleted: pendingVideoShareItems != nil,
+                                        completedVideoURLs: completedVideoURLs,
                                         videoSheetDismissAction: {
-                                            guard let items = pendingVideoShareItems else { return }
-                                            pendingVideoShareItems = nil
+                                            videoPreviewCache.reset()
+                                            // Closing a finished video returns to the score.
+                                            guard !completedVideoURLs.isEmpty else { return }
+                                            completedVideoURLs = []
                                             isExportPanelPresented = false
-                                            sharedExportItems = items
+                                        },
+                                        videoResultsResetAction: { completedVideoURLs = [] },
+                                        videoCancelAction: { exportTask?.cancel() },
+                                        renderVideoPreview: { style, background in
+                                            guard let liveRenderSession = session.liveRenderSession else { return nil }
+                                            return await videoPreviewCache.image(
+                                                style: style, background: background, liveRenderSession: liveRenderSession,
+                                                pageCount: readerState.pageCount, title: readerState.scoreTitle,
+                                                composer: readerState.scoreMetadata.composer,
+                                                pinsStaffHeader: selectedPartID == "full-score" && pinsVideoStaffHeader)
                                         }
                                     )
                                 )
@@ -609,6 +639,27 @@ struct ScoreReaderView: View {
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
                                 }
                             }
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        if isAnnotationModeActive && !isPhoneInterface {
+                            ScoreReaderAnnotationPalette(
+                                tool: $annotationTool,
+                                color: annotationColorBinding,
+                                width: annotationWidthBinding,
+                                annotationsVisible: annotationsVisible,
+                                canUndo: annotationController.canUndo,
+                                canRedo: annotationController.canRedo,
+                                hasSelection: annotationController.hasSelection,
+                                undoAction: annotationController.undo,
+                                redoAction: annotationController.redo,
+                                toggleVisibilityAction: { annotationsVisible.toggle() },
+                                deleteSelectionAction: annotationController.deleteSelection,
+                                doneAction: exitAnnotationMode
+                            )
+                            .padding(.top, max(measuredTopChromeHeight, 62) + 8)
+                            .padding(.horizontal, 32)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
                     .overlay(alignment: .top) {
@@ -700,10 +751,26 @@ struct ScoreReaderView: View {
                     .overlay(alignment: .bottom) {
                         if readerState.interactionMode == .view,
                            isChromeVisible,
-                           !isMixerPresented
+                           !isMixerPresented,
+                           !isAnnotationModeActive
                         {
                             viewModeBottomBar
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if isAnnotationModeActive,
+                           readingStyle == .pageTurn,
+                           readerState.pageCount > 1
+                        {
+                            ScoreReaderAnnotationPageNavigator(
+                                currentPageIndex: readerState.selectedPageIndex,
+                                pageCount: readerState.pageCount,
+                                previousAction: showPreviousPage,
+                                nextAction: showNextPage
+                            )
+                            .padding(.bottom, 12)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
                     .overlay(alignment: .bottom) {
@@ -760,6 +827,7 @@ struct ScoreReaderView: View {
             )
             readerState.loadInitialPages()
             readerState.startPlaybackMonitoring()
+            await readerState.prepareAnnotationMeasureRegionsIfNeeded()
             await readerState.prepareInitialInteractionMode()
             await reportReaderReadyWhenAvailable()
             if readerState.supportsEditing, let liveRenderSession = session.liveRenderSession {
@@ -779,6 +847,7 @@ struct ScoreReaderView: View {
         .onDisappear {
             unlockPhoneOrientation()
             saveRememberedReaderState()
+            annotationController.flushSave()
             readerState.stopMIDIInput()
             readerState.shutdown()
         }
@@ -815,6 +884,9 @@ struct ScoreReaderView: View {
                 clearSelectionCommandMenu()
                 zoomScaleBeforeTextEntry = nil
             }
+            if mode != .view, isAnnotationModeActive {
+                exitAnnotationMode()
+            }
             if mode == .edit, isPhoneInterface {
                 // View mode intentionally returns to a full-page scale. Force the
                 // preferred phone edit scale again on every edit invocation,
@@ -832,6 +904,7 @@ struct ScoreReaderView: View {
             saveRememberedReaderState()
         }
         .onChangeCompatible(of: selectedPartID) { _ in
+            annotationController.clearSelection()
             saveRememberedReaderState()
         }
         .onChangeCompatible(of: zoomScale) { _ in
@@ -1420,6 +1493,9 @@ struct ScoreReaderView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
                 .onEnded { value in
+                    guard !isAnnotationModeActive else {
+                        return
+                    }
                     guard let direction = ScoreReaderPageSwipePolicy.direction(for: value.translation) else {
                         return
                     }
@@ -1681,6 +1757,94 @@ struct ScoreReaderView: View {
             manualScrollAction: {
                 readerState.suspendPlaybackFollow()
                 readerState.dismissPlayFromHere()
+            },
+            annotationConfiguration: annotationConfiguration(for: pageIndex)
+        )
+    }
+
+    private var annotationColor: ScoreAnnotationColor {
+        annotationTool == .highlighter ? annotationHighlighterColor : annotationMarkerColor
+    }
+
+    private var annotationWidth: Double {
+        annotationTool == .highlighter ? annotationHighlighterWidth : annotationMarkerWidth
+    }
+
+    private var annotationColorBinding: Binding<ScoreAnnotationColor> {
+        Binding(
+            get: { annotationColor },
+            set: { color in
+                if annotationTool == .highlighter {
+                    annotationHighlighterColor = color
+                } else {
+                    annotationMarkerColor = color
+                }
+            }
+        )
+    }
+
+    private var annotationWidthBinding: Binding<Double> {
+        Binding(
+            get: { annotationWidth },
+            set: { width in
+                if annotationTool == .highlighter {
+                    annotationHighlighterWidth = width
+                } else {
+                    annotationMarkerWidth = width
+                }
+            }
+        )
+    }
+
+    private func annotationConfiguration(for pageIndex: Int) -> ScoreAnnotationPageConfiguration {
+        let regions = readerState.playbackMeasureRegions
+        return ScoreAnnotationPageConfiguration(
+            strokes: annotationController.renderedStrokes(
+                pageIndex: pageIndex,
+                partID: selectedPartID,
+                regions: regions
+            ),
+            selectedStrokeIDs: annotationController.selectedStrokeIDs,
+            isActive: isAnnotationModeActive,
+            isVisible: annotationsVisible && readerState.interactionMode == .view,
+            allowsInteraction: !isPhoneInterface && readerState.interactionMode == .view,
+            tool: annotationTool,
+            color: annotationColor,
+            width: annotationWidth,
+            interactionStartAction: beginAnnotationFromCanvas,
+            strokeCommitAction: { pagePoints in
+                annotationController.commitStroke(
+                    pageIndex: pageIndex,
+                    partID: selectedPartID,
+                    tool: annotationTool,
+                    color: annotationColor,
+                    width: annotationWidth,
+                    pagePoints: pagePoints,
+                    regions: readerState.playbackMeasureRegions
+                )
+                finishAutomaticAnnotationEntryIfNeeded()
+            },
+            eraseAction: { pagePoints in
+                annotationController.erase(
+                    pageIndex: pageIndex,
+                    partID: selectedPartID,
+                    along: pagePoints,
+                    regions: readerState.playbackMeasureRegions
+                )
+            },
+            lassoAction: { pageRect in
+                annotationController.selectStrokes(
+                    pageIndex: pageIndex,
+                    partID: selectedPartID,
+                    in: pageRect,
+                    regions: readerState.playbackMeasureRegions
+                )
+            },
+            moveSelectionAction: { delta in
+                annotationController.moveSelectedStrokes(
+                    by: delta,
+                    regions: readerState.playbackMeasureRegions
+                )
             }
         )
     }
@@ -2176,6 +2340,61 @@ struct ScoreReaderView: View {
         }
     }
 
+    private func toggleAnnotationMode() {
+        isAnnotationModeActive ? exitAnnotationMode() : enterAnnotationMode()
+    }
+
+    private func enterAnnotationMode() {
+        guard !isPhoneInterface, readerState.interactionMode == .view else { return }
+        if !isAnnotationModeActive {
+            readingStyleBeforeAnnotation = readingStyle
+        }
+        isPartsPanelPresented = false
+        isExportPanelPresented = false
+        isMixerPresented = false
+        annotationsVisible = true
+        isChromeVisible = true
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isAnnotationModeActive = true
+            readingStyle = .pageTurn
+        }
+        Task { await readerState.prepareAnnotationMeasureRegionsIfNeeded() }
+    }
+
+    private func beginAnnotationFromCanvas() {
+        guard !isPhoneInterface, readerState.interactionMode == .view else { return }
+        if !isAnnotationModeActive {
+            readingStyleBeforeAnnotation = readingStyle
+        }
+        annotationsVisible = true
+        isChromeVisible = true
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isAnnotationModeActive = true
+        }
+        Task { await readerState.prepareAnnotationMeasureRegionsIfNeeded() }
+    }
+
+    private func finishAutomaticAnnotationEntryIfNeeded() {
+        guard isAnnotationModeActive, readingStyle != .pageTurn else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            readingStyle = .pageTurn
+        }
+    }
+
+    private func exitAnnotationMode() {
+        guard isAnnotationModeActive else { return }
+        annotationController.clearSelection()
+        annotationController.flushSave()
+        let restoredReadingStyle = readingStyleBeforeAnnotation
+        readingStyleBeforeAnnotation = nil
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isAnnotationModeActive = false
+            if let restoredReadingStyle {
+                readingStyle = restoredReadingStyle
+            }
+        }
+    }
+
     private func showPreviousPage() {
         let targetPageIndex = usesTwoPageSpread
             ? twoPageSpreadStartIndex - 2
@@ -2275,14 +2494,14 @@ struct ScoreReaderView: View {
         isPreparingExport = true
         exportProgress = nil
         exportErrorMessage = nil
-        pendingVideoShareItems = nil
+        completedVideoURLs = []
         // Video renders can take minutes; keep the screen on so iOS does not suspend Aria.
         let keepsScreenAwake = exportDraft.format == .video
         if keepsScreenAwake {
             UIApplication.shared.isIdleTimerDisabled = true
         }
 
-        Task {
+        exportTask = Task {
             defer {
                 Task { @MainActor in
                     exportProgress = nil
@@ -2307,21 +2526,23 @@ struct ScoreReaderView: View {
                     )
                 }
                 let urls = try await prepareExportURLs()
+                try Task.checkCancellation()
                 await MainActor.run {
-                    let items = ScoreReaderSharedExportItems(urls: urls)
                     isPreparingExport = false
                     if keepsScreenAwake {
-                        // Let the video sheet finish dismissing before the
-                        // system share sheet is presented from the reader.
-                        pendingVideoShareItems = items
+                        // Videos stay in their sheet to be watched, then shared.
+                        completedVideoURLs = urls
                     } else {
-                        sharedExportItems = items
+                        sharedExportItems = ScoreReaderSharedExportItems(urls: urls)
                         isExportPanelPresented = false
                     }
                 }
             } catch {
+                let cancelled = error is CancellationError || Task.isCancelled
                 await MainActor.run {
-                    exportErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    // Cancelling is not a failure; return to the settings quietly.
+                    exportErrorMessage = cancelled ? nil
+                        : (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     readerState.editingErrorMessage = nil
                     isPreparingExport = false
                 }
@@ -2365,8 +2586,10 @@ struct ScoreReaderView: View {
 
             let exportURL = try Self.exportURL(baseName: exportFileName(for: target), extension: "mp4")
             var title = scoreTitle
+            var isPart = false
             if case .part(let part, _) = target {
                 title += " – \(part.name)"
+                isPart = true
             }
             let textFonts = await liveRenderSession.videoTextFonts()
             try await ScoreVideoExporter.export(
@@ -2375,7 +2598,8 @@ struct ScoreReaderView: View {
                 to: exportURL,
                 options: ScoreVideoExportOptions(style: style, title: title, composer: composer,
                                                  titleFont: textFonts.title, composerFont: textFonts.composer,
-                                                 backgroundImageData: backgroundImageData),
+                                                 backgroundImageData: backgroundImageData,
+                                                 pinsStaffHeader: !isPart && pinsVideoStaffHeader),
                 progress: reportProgress
             )
             return exportURL
@@ -2641,6 +2865,11 @@ struct ScoreReaderView: View {
 
     private func scoreInstrumentsFromDocumentParts() -> [NewScoreInstrument] {
         displayedScoreParts.map { NewScoreInstrumentCatalog.instrument(from: $0) }
+    }
+
+    /// Scrolling videos pin the staff header only when there are several parts.
+    private var pinsVideoStaffHeader: Bool {
+        displayedScoreParts.count > 1
     }
 
     private var displayedScoreParts: [ScorePart] {
@@ -3048,5 +3277,44 @@ private struct ScoreReaderSavingHUD: View {
 private extension String {
     func nonEmptyOrFallback(_ fallback: String) -> String {
         isEmpty ? fallback : self
+    }
+}
+
+/// Preview frames for the video sheet. Loading is the slow part (scrolling
+/// switches the score to one line and back), so it happens once per sheet and
+/// never twice at the same time; each style change only redraws.
+@MainActor
+private final class ScoreVideoPreviewCache {
+    private var materials: [Bool: Task<ScoreVideoExporter.PreviewMaterial?, Never>] = [:]
+    private var fonts: (title: ScoreVideoTextFont, composer: ScoreVideoTextFont)?
+
+    func reset() {
+        materials = [:]
+        fonts = nil
+    }
+
+    func image(style: ScoreVideoStyle, background: Data?, liveRenderSession: LiveScoreRenderSession,
+               pageCount: Int, title: String, composer: String, pinsStaffHeader: Bool) async -> UIImage? {
+        let scrolling = style == .scrolling || style == .scrollingPhoto
+        let loading = materials[scrolling] ?? Task {
+            try? await ScoreVideoExporter.previewMaterial(liveRenderSession: liveRenderSession,
+                                                          pageCount: pageCount, scrolling: scrolling)
+        }
+        materials[scrolling] = loading
+        guard let material = await loading.value else {
+            materials[scrolling] = nil
+            return nil
+        }
+        if fonts == nil {
+            let loaded = await liveRenderSession.videoTextFonts()
+            fonts = (loaded.title, loaded.composer)
+        }
+        guard let fonts else { return nil }
+        let options = ScoreVideoExportOptions(style: style, title: title, composer: composer,
+                                              titleFont: fonts.title, composerFont: fonts.composer,
+                                              backgroundImageData: background, pinsStaffHeader: pinsStaffHeader)
+        return await Task.detached(priority: .userInitiated) {
+            ScoreVideoExporter.previewFrame(material, options: options).map { UIImage(cgImage: $0) }
+        }.value
     }
 }

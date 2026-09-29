@@ -6,6 +6,17 @@ private let playbackVisualSyncTrimSeconds: TimeInterval = 0.05
 
 @MainActor
 extension ScoreReaderState {
+    func prepareAnnotationMeasureRegionsIfNeeded() async {
+        guard playbackMeasureRegions.isEmpty, let liveRenderSession = session.liveRenderSession else {
+            return
+        }
+        do {
+            playbackMeasureRegions = try await liveRenderSession.playbackMeasureRegions()
+        } catch {
+            // Page-relative annotations still work when measure geometry is unavailable.
+        }
+    }
+
     func startPlaybackMonitoring() {
         guard session.capabilities.supportsPlayback, let playbackController else {
             playbackState = .unavailable

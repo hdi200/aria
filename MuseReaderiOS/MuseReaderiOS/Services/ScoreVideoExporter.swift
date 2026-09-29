@@ -72,6 +72,9 @@ struct ScoreVideoExportOptions: Sendable {
     /// Desktop MuseScore's default reverb send, matching in-app playback.
     var reverbSendLevel: Float = 0.3
     var backgroundImageData: Data? = nil
+    /// Scrolling only: keep part names, clefs and signatures at the left.
+    /// Useful with several parts; a single part reads better without it.
+    var pinsStaffHeader = true
 }
 
 /// Which measure is playing at a moment of the performance, and how far
@@ -339,6 +342,73 @@ enum ScoreVideoExporter {
         } onCancel: {
             rendering.cancel()
         }
+    }
+
+    /// What a preview frame is drawn from: the pages, timing and beat points
+    /// of either the one-line layout (scrolling) or the page layout.
+    struct PreviewMaterial: @unchecked Sendable {
+        fileprivate let pages: [ScoreVideoPageSource]
+        fileprivate let timeline: ScoreVideoTimeline
+        fileprivate let beatPoints: [ScorePlaybackBeatPoint]
+    }
+
+    /// Reads what previews need. Scrolling switches the score to one line only
+    /// while reading, and always switches it back, as the export does. Callers
+    /// must not start an export until this returns.
+    static func previewMaterial(liveRenderSession: LiveScoreRenderSession, pageCount: Int,
+                                scrolling: Bool) async throws -> PreviewMaterial {
+        guard scrolling else {
+            let timeline = ScoreVideoTimeline(regions: try await liveRenderSession.playbackMeasureRegions())
+            var pages: [ScoreVideoPageSource] = []
+            // The opening frame shows at most the first two pages.
+            for index in 0..<min(max(pageCount, 1), 2) {
+                pages.append(ScoreVideoPageSource(page: try await liveRenderSession.renderPage(at: index, dpi: 144)))
+            }
+            return PreviewMaterial(pages: pages, timeline: timeline, beatPoints: [])
+        }
+        _ = try await liveRenderSession.setContinuousLayout(true)
+        do {
+            let timeline = ScoreVideoTimeline(regions: try await liveRenderSession.playbackMeasureRegions())
+            let page = ScoreVideoPageSource(page: try await liveRenderSession.renderPage(at: 0, dpi: 144))
+            let beatPoints = (try? await liveRenderSession.playbackBeatPoints()) ?? []
+            _ = try await liveRenderSession.setContinuousLayout(false)
+            return PreviewMaterial(pages: [page], timeline: timeline, beatPoints: beatPoints)
+        } catch {
+            _ = try? await liveRenderSession.setContinuousLayout(false)
+            throw error
+        }
+    }
+
+    /// The first frame of the video, drawn by the painter the export uses.
+    static func previewFrame(_ material: PreviewMaterial, options: ScoreVideoExportOptions) -> CGImage? {
+        guard material.timeline.endTimeSeconds > 0, let firstPage = material.pages.first else { return nil }
+        let frameSize = options.style.frameSize
+        let painter: ScoreVideoPainter
+        let time: TimeInterval
+        switch options.style {
+        case .scrolling, .scrollingPhoto:
+            let scrolling = ScoreVideoScrollingPainter(frameSize: frameSize, page: firstPage, timeline: material.timeline,
+                                                       beatPoints: material.beatPoints, options: options)
+            painter = scrolling
+            time = 0
+        case .pagesLandscape, .pagesPortrait:
+            painter = ScoreVideoPagesPainter(frameSize: frameSize, pages: material.pages, timeline: material.timeline, options: options)
+            time = 0
+        }
+        var buffer: CVPixelBuffer?
+        let attributes: [String: Any] = [kCVPixelBufferMetalCompatibilityKey as String: true,
+                                         kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+        CVPixelBufferCreate(nil, Int(frameSize.width), Int(frameSize.height), kCVPixelFormatType_32BGRA,
+                            attributes as CFDictionary, &buffer)
+        guard let buffer else { return nil }
+        painter.draw(into: buffer, at: time, frameDuration: 1 / 30)
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        return CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: Int(frameSize.width), height: Int(frameSize.height),
+                         bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+                         space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                         bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)?
+            .makeImage()
     }
 
     private static func render(
@@ -1027,7 +1097,6 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private static let cursorFadeDistance: CGFloat = 84
     private static let lineStartX: CGFloat = 100
     private static let photoScrimAlpha: CGFloat = 0.52
-    private static let headerFadeWidth: CGFloat = 28
 
     private let page: ScoreVideoPageSource
     private let scale: CGFloat
@@ -1043,7 +1112,11 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private var tiles: [Int: CGImage] = [:]
     private var tileOrder: [Int] = []
     private lazy var pinnedTitle: ScoreVideoLayer? = makePinnedTitle()
+    private lazy var headerWidth: Int? = findHeaderWidth()
+    private lazy var openingText: OpeningText? = makeOpeningText()
     private lazy var stickyHeader: StickyHeader? = makeStickyHeader()
+    /// When the first-bar text has faded out: just before the score moves.
+    private let openingTextFade: ClosedRange<TimeInterval>
     private lazy var leftFade = makeHorizontalFade(width: Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
     private lazy var rightFade = makeHorizontalFade(width: Self.edgeFadeWidth, startAlpha: 0, endAlpha: 1)
     private lazy var playedFade = makeHorizontalFade(width: 24, startAlpha: 0.42, endAlpha: 0)
@@ -1059,10 +1132,24 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         // Use the notation bounds, not the generous PDF margins, to size the line.
         let top = timeline.regions.map { CGFloat($0.normalizedRect.y) * page.size.height }.min() ?? 0
         let bottom = timeline.regions.map { CGFloat($0.normalizedRect.y + $0.normalizedRect.height) * page.size.height }.max() ?? page.size.height
-        let baseScale = min(Self.maximumScale, (frameSize.height - 200) / max(page.size.height, 1))
-        scale = min(baseScale * 1.7, (frameSize.height * 0.59) / max(bottom - top, 1))
+        // Fit the staves into 59% of the height, but never let a staff space
+        // exceed 2.4% of it: a single staff would otherwise fill the frame.
+        let fitScale = (frameSize.height * 0.59) / max(bottom - top, 1)
+        let sampleRegion = timeline.regions.count > 1 ? timeline.regions[1] : timeline.regions.first
+        if let sampleRegion,
+           let staffSpace = Self.staffSpace(in: page, region: sampleRegion.normalizedRect) {
+            scale = min(fitScale, frameSize.height * 0.024 / staffSpace)
+        } else {
+            let baseScale = min(Self.maximumScale, (frameSize.height - 200) / max(page.size.height, 1))
+            scale = min(baseScale * 1.7, fitScale)
+        }
         let bandHeight = (page.size.height * scale).rounded()
-        let bandY = frameSize.height * 0.19 - top * scale
+        // Full systems start 19% down; short ones are centred on the frame,
+        // never ending lower than 78% of the height.
+        let contentHeight = (bottom - top) * scale
+        let staffTop = max(frameSize.height * 0.19,
+                           min(frameSize.height * 0.5 - contentHeight / 2, frameSize.height * 0.78 - contentHeight))
+        let bandY = staffTop - top * scale
         band = CGRect(x: 0, y: bandY.rounded(), width: frameSize.width, height: bandHeight)
         contentTop = bandY + top * scale
         contentBottom = bandY + bottom * scale
@@ -1093,6 +1180,13 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         }
         self.firstBeatX = firstBeatX
         path = ScoreVideoScrollPath(timeline: timeline, rects: pathRects)
+        var scrollStart: TimeInterval = 0
+        while scrollStart < timeline.endTimeSeconds,
+              Self.lineStartX + path.x(at: scrollStart) * scale < frameSize.width * 0.5 - 80 {
+            scrollStart += 0.05
+        }
+        let fadeEnd = max(0.6, scrollStart - 0.4)
+        openingTextFade = max(0, fadeEnd - 1.2)...fadeEnd
         super.init(frameSize: frameSize, timeline: timeline, options: options)
     }
 
@@ -1141,12 +1235,14 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
                 layers.append(ScoreVideoLayer(image: backdrop, rect: stickyHeader.rect))
             }
             layers.append(ScoreVideoLayer(image: stickyHeader.ink, rect: stickyHeader.rect))
-            let scrolled = min(max((Self.lineStartX - offsetX) / Self.headerFadeWidth, 0), 1)
-            if let fade = stickyHeader.fade, scrolled > 0 {
-                layers.append(ScoreVideoLayer(image: fade,
-                                              rect: CGRect(x: stickyHeader.rect.maxX, y: band.minY,
-                                                           width: Self.headerFadeWidth, height: band.height),
-                                              alpha: scrolled))
+            // Rehearsal marks, tempo and other text on the first bar fade out
+            // before the score moves; they are drawn with the score, not pinned.
+            let fade = (time - openingTextFade.lowerBound) / max(0.01, openingTextFade.upperBound - openingTextFade.lowerBound)
+            let alpha = 1 - min(max(fade, 0), 1)
+            if let openingText, alpha > 0 {
+                layers.append(ScoreVideoLayer(image: openingText.ink,
+                                              rect: openingText.bounds.offsetBy(dx: offsetX, dy: band.minY),
+                                              alpha: CGFloat(alpha)))
             }
         }
         if photoBackground == nil {
@@ -1199,8 +1295,11 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         let titleHeight = ceil(titleText.size().height)
         let composerHeight = composer.isEmpty ? 0 : ceil(composerText.size().height)
         let blockHeight = titleHeight + (composer.isEmpty ? 0 : 6 + composerHeight)
-        // Centred in the space above the music, never closer than 40 pt to the top.
-        let top = max(40, (contentTop - blockHeight) / 2)
+        // Centred above where full-height music starts, never closer than 40 pt
+        // to the top. When short music sits lower, the title follows it,
+        // keeping room for chord symbols and markings above the staff.
+        let top = max(40, (frameSize.height * 0.19 - blockHeight) / 2,
+                      contentTop - frameSize.height * 0.2 - blockHeight)
         let bounds = CGRect(x: 80, y: top, width: width, height: blockHeight).integral
         let localTop = top - bounds.minY
         guard let image = Self.overlay(size: bounds.size, draw: { _ in
@@ -1213,51 +1312,246 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     }
 
     private struct StickyHeader {
+        /// Clefs, signatures, part names and brackets.
         let ink: CGImage
         let backdrop: CGImage?
-        let fade: CGImage?
         let rect: CGRect
     }
 
     /// Part names, clefs, key and time signature from the start of the line,
     /// kept at the left so each staff stays identifiable once they scroll off.
-    /// It ends in the blank gap before the first note.
-    private func makeStickyHeader() -> StickyHeader? {
-        guard let firstBeatX, let first = lineRects.first else { return nil }
+    /// It ends in the blank gap before the first note. Loose text in it, such
+    /// as a rehearsal mark, is left out and fades separately (`OpeningText`).
+    private func findHeaderWidth() -> Int? {
+        guard options.pinsStaffHeader, let firstBeatX, let first = lineRects.first else { return nil }
         let beatPixelX = Int((firstBeatX * scale).rounded())
         let measurePixelX = Int((first.minX * scale).rounded())
         guard beatPixelX > measurePixelX + 8,
               let strip = page.tile(scale: scale, originX: 0, pixelWidth: beatPixelX + 1, pixelHeight: Int(band.height)),
               let headerWidth = Self.headerEnd(in: strip, searchFrom: measurePixelX,
                                                rows: Int(contentTop - band.minY)..<Int(contentBottom - band.minY)),
-              CGFloat(headerWidth) < frameSize.width * 0.35,
-              // From the frame's left edge, so nothing that has scrolled past shows beside it.
-              let headerStrip = page.tile(scale: scale, originX: -Self.lineStartX,
-                                          pixelWidth: Int(Self.lineStartX) + headerWidth, pixelHeight: Int(band.height))
+              CGFloat(headerWidth) < frameSize.width * 0.35
+        else { return nil }
+        return headerWidth
+    }
+
+    private func makeStickyHeader() -> StickyHeader? {
+        // From the frame's left edge, so nothing that has scrolled past shows beside it.
+        guard let headerWidth,
+              let source = page.tile(scale: scale, originX: -Self.lineStartX,
+                                     pixelWidth: Int(Self.lineStartX) + headerWidth, pixelHeight: Int(band.height)),
+              let headerStrip = eraseOpeningText(from: source, originX: -Int(Self.lineStartX))
         else { return nil }
         let rect = CGRect(x: 0, y: band.minY, width: Self.lineStartX + CGFloat(headerWidth), height: band.height)
-        let fadeRect = CGRect(x: rect.maxX, y: rect.minY, width: Self.headerFadeWidth, height: rect.height)
         guard let photoBackground else {
             // Paper tiles are opaque white, so the strip hides the music by itself.
-            return StickyHeader(ink: headerStrip, backdrop: nil, fade: makeHorizontalFade(width: Self.headerFadeWidth, startAlpha: 1, endAlpha: 0), rect: rect)
+            return StickyHeader(ink: headerStrip, backdrop: nil, rect: rect)
         }
         guard let ink = Self.whiteInkImage(from: headerStrip) else { return nil }
         // The same blurred, darkened photo that sits behind it, so it reads as one surface.
         let photo = UIImage(cgImage: photoBackground)
-        func backdrop(_ area: CGRect, fading: Bool) -> CGImage? {
-            Self.overlay(size: area.size) { context in
-                photo.draw(at: CGPoint(x: -area.minX, y: -area.minY))
-                UIColor.black.withAlphaComponent(Self.photoScrimAlpha).setFill()
-                context.fill(CGRect(origin: .zero, size: area.size))
-                guard fading else { return }
-                let colors = [UIColor.black.cgColor, UIColor.black.withAlphaComponent(0).cgColor] as CFArray
-                if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
-                    context.setBlendMode(.destinationIn)
-                    context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: area.width, y: 0), options: [])
+        let backdrop = Self.overlay(size: rect.size) { context in
+            photo.draw(at: CGPoint(x: -rect.minX, y: -rect.minY))
+            UIColor.black.withAlphaComponent(Self.photoScrimAlpha).setFill()
+            context.fill(CGRect(origin: .zero, size: rect.size))
+        }
+        return StickyHeader(ink: ink, backdrop: backdrop, rect: rect)
+    }
+
+    /// Text on the first bar that is not attached to the staves (a rehearsal
+    /// mark, tempo, chord symbol) and reaches into the pinned header. In
+    /// score pixels: x = 0 is the left edge of the line.
+    private struct OpeningText {
+        let ink: CGImage
+        let bounds: CGRect
+        /// Row-major over `bounds`: pixels that belong to the text.
+        let mask: [Bool]
+    }
+
+    private func makeOpeningText() -> OpeningText? {
+        guard let headerWidth else { return nil }
+        let lineWidth = Int((page.size.width * scale).rounded())
+        // Wide enough to take in a long tempo marking that starts in the header.
+        let width = min(lineWidth, headerWidth + 900)
+        let height = Int(band.height)
+        guard width > 0, height > 0,
+              let source = page.tile(scale: scale, originX: 0, pixelWidth: width, pixelHeight: height),
+              let gray = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                                   space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue),
+              let grayData = gray.data
+        else { return nil }
+        gray.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let luminance = grayData.assumingMemoryBound(to: UInt8.self)
+        let staffRows = max(0, Int(contentTop - band.minY))..<min(height, Int(contentBottom - band.minY))
+        guard !staffRows.isEmpty else { return nil }
+
+        // 0: unvisited, 1: attached to the staves, 2: loose component being read.
+        var label = [UInt8](repeating: 0, count: width * height)
+        var stack: [Int] = []
+        func fill(from seeds: [Int], as value: UInt8) -> [Int] {
+            var visited: [Int] = []
+            stack = seeds
+            for seed in seeds { label[seed] = value }
+            while let index = stack.popLast() {
+                visited.append(index)
+                let x = index % width
+                let y = index / width
+                for ny in max(0, y - 1)...min(height - 1, y + 1) {
+                    for nx in max(0, x - 1)...min(width - 1, x + 1) {
+                        let neighbor = ny * width + nx
+                        if label[neighbor] == 0 && luminance[neighbor] < 170 {
+                            label[neighbor] = value
+                            stack.append(neighbor)
+                        }
+                    }
+                }
+            }
+            return visited
+        }
+        var seeds: [Int] = []
+        for row in staffRows {
+            for x in 0..<width where luminance[row * width + x] < 170 { seeds.append(row * width + x) }
+        }
+        _ = fill(from: seeds, as: 1)
+
+        // Loose shapes that reach into the header.
+        var textPixels: [Int] = []
+        for y in 0..<height {
+            for x in 0..<headerWidth {
+                let index = y * width + x
+                guard label[index] == 0 && luminance[index] < 170 else { continue }
+                textPixels += fill(from: [index], as: 2)
+            }
+        }
+        guard !textPixels.isEmpty else { return nil }
+        // Letters that sit wholly past the header ("o" in a boxed "Intro") belong
+        // to the same text: take in loose shapes within 4 px of it until none remain.
+        var minX = width, minY = height, maxX = 0, maxY = 0
+        var measured = 0
+        while measured < textPixels.count {
+            for index in textPixels[measured...] {
+                minX = min(minX, index % width); maxX = max(maxX, index % width)
+                minY = min(minY, index / width); maxY = max(maxY, index / width)
+            }
+            measured = textPixels.count
+            for y in max(0, minY - 4)...min(height - 1, maxY + 4) {
+                for x in max(0, minX - 4)...min(width - 1, maxX + 4) {
+                    let index = y * width + x
+                    if label[index] == 0 && luminance[index] < 170 {
+                        textPixels += fill(from: [index], as: 2)
+                    }
                 }
             }
         }
-        return StickyHeader(ink: ink, backdrop: backdrop(rect, fading: false), fade: backdrop(fadeRect, fading: true), rect: rect)
+        // Grow by two pixels so the antialiased fringe goes with the text.
+        minX = max(0, minX - 2); minY = max(0, minY - 2)
+        maxX = min(width - 1, maxX + 2); maxY = min(height - 1, maxY + 2)
+        let boxWidth = maxX - minX + 1
+        let boxHeight = maxY - minY + 1
+        var mask = [Bool](repeating: false, count: boxWidth * boxHeight)
+        for index in textPixels {
+            let x = index % width - minX
+            let y = index / width - minY
+            for dy in max(0, y - 2)...min(boxHeight - 1, y + 2) {
+                for dx in max(0, x - 2)...min(boxWidth - 1, x + 2) {
+                    mask[dy * boxWidth + dx] = true
+                }
+            }
+        }
+        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let context = CGContext(data: nil, width: boxWidth, height: boxHeight, bitsPerComponent: 8,
+                                      bytesPerRow: boxWidth * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo),
+              let data = context.data
+        else { return nil }
+        let bytes = data.assumingMemoryBound(to: UInt8.self)
+        let whiteInk = photoBackground != nil
+        for y in 0..<boxHeight {
+            for x in 0..<boxWidth where mask[y * boxWidth + x] {
+                let alpha = 255 - luminance[(y + minY) * width + x + minX]
+                let byte = (y * boxWidth + x) * 4
+                // Premultiplied: white ink stores its alpha in each channel, black stores 0.
+                let channel = whiteInk ? alpha : 0
+                bytes[byte] = channel
+                bytes[byte + 1] = channel
+                bytes[byte + 2] = channel
+                bytes[byte + 3] = alpha
+            }
+        }
+        guard let ink = context.makeImage() else { return nil }
+        return OpeningText(ink: ink, bounds: CGRect(x: minX, y: minY, width: boxWidth, height: boxHeight), mask: mask)
+    }
+
+    /// The score image with the opening text painted out in paper white.
+    /// `originX` is the image's left edge in score pixels.
+    private func eraseOpeningText(from image: CGImage, originX: Int) -> CGImage? {
+        guard let openingText else { return image }
+        let bounds = openingText.bounds
+        let left = max(Int(bounds.minX), originX)
+        let right = min(Int(bounds.maxX), originX + image.width)
+        guard left < right else { return image }
+        let width = image.width
+        let height = image.height
+        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo),
+              let data = context.data
+        else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let bytes = data.assumingMemoryBound(to: UInt8.self)
+        let boxWidth = Int(bounds.width)
+        for y in Int(bounds.minY)..<min(height, Int(bounds.maxY)) {
+            let maskRow = (y - Int(bounds.minY)) * boxWidth
+            for x in left..<right where openingText.mask[maskRow + x - Int(bounds.minX)] {
+                // The bitmap's first row is the top of the drawn image.
+                let byte = (y * width + x - originX) * 4
+                bytes[byte] = 255
+                bytes[byte + 1] = 255
+                bytes[byte + 2] = 255
+                bytes[byte + 3] = 255
+            }
+        }
+        return context.makeImage()
+    }
+
+    /// Distance between staff lines in page points, measured from a measure:
+    /// rows that are dark across most of it are staff lines.
+    private static func staffSpace(in page: ScoreVideoPageSource, region: ScoreNormalizedRect) -> CGFloat? {
+        let probeScale: CGFloat = 3
+        let rect = CGRect(x: CGFloat(region.x) * page.size.width, y: CGFloat(region.y) * page.size.height,
+                          width: CGFloat(region.width) * page.size.width, height: CGFloat(region.height) * page.size.height)
+        let pixelWidth = Int((rect.width * probeScale).rounded())
+        let pixelHeight = Int((page.size.height * probeScale).rounded())
+        guard pixelWidth > 8, pixelHeight > 8,
+              let image = page.tile(scale: probeScale, originX: rect.minX * probeScale,
+                                    pixelWidth: pixelWidth, pixelHeight: pixelHeight),
+              let gray = CGContext(data: nil, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8,
+                                   bytesPerRow: pixelWidth, space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGImageAlphaInfo.none.rawValue),
+              let data = gray.data
+        else { return nil }
+        gray.draw(image, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+        let pixels = data.assumingMemoryBound(to: UInt8.self)
+        let firstRow = max(0, Int((rect.minY * probeScale).rounded()) - 2)
+        let lastRow = min(pixelHeight - 1, Int((rect.maxY * probeScale).rounded()) + 2)
+        guard firstRow < lastRow else { return nil }
+        var lines: [CGFloat] = []
+        var runStart: Int?
+        for row in firstRow...lastRow {
+            var dark = 0
+            let line = pixels + row * pixelWidth
+            for x in 0..<pixelWidth where line[x] < 160 { dark += 1 }
+            let isStaffLine = dark * 10 >= pixelWidth * 6
+            if isStaffLine, runStart == nil { runStart = row }
+            if !isStaffLine, let start = runStart {
+                lines.append(CGFloat(start + row - 1) / 2)
+                runStart = nil
+            }
+        }
+        guard lines.count >= 5 else { return nil }
+        // Within a staff the gaps are the smallest; gaps between staves are larger.
+        let gaps = zip(lines.dropFirst(), lines).map { $0 - $1 }.sorted()
+        let space = gaps[min(gaps.count - 1, gaps.count / 4)] / probeScale
+        return space > 0.5 ? space : nil
     }
 
     /// Width of the header: the middle of the blank gap left of the first note.
@@ -1312,8 +1606,9 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         if let image = tiles[index] {
             return image
         }
-        guard let sourceImage = page.tile(scale: scale, originX: CGFloat(index * Self.tileWidth),
-                                    pixelWidth: width, pixelHeight: Int(band.height)) else {
+        guard let renderedImage = page.tile(scale: scale, originX: CGFloat(index * Self.tileWidth),
+                                            pixelWidth: width, pixelHeight: Int(band.height)),
+              let sourceImage = eraseOpeningText(from: renderedImage, originX: index * Self.tileWidth) else {
             return nil
         }
         let image: CGImage

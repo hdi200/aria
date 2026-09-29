@@ -179,7 +179,7 @@ final class ScoreReaderState: ObservableObject {
     var measureRangePreviewRevision = 0
     var autosaveRevision = 0
     var playbackWarmupRevision = 0
-    var playbackMeasureRegions: [ScorePlaybackMeasureRegion] = []
+    @Published var playbackMeasureRegions: [ScorePlaybackMeasureRegion] = []
     var playbackWasExplicitlyStopped = false
     var pendingPlaybackSelectionStartPoint: CGPoint?
     var pendingPlaybackSelectionEndPoint: CGPoint?

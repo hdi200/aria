@@ -246,6 +246,7 @@ actor LiveScoreRenderSession {
         }
         let regions = bridgeRegions.map { region in
             ScorePlaybackMeasureRegion(
+                measureEID: region.measureEID,
                 measureIndex: region.measureIndex,
                 pageIndex: region.pageIndex,
                 startTimeSeconds: region.startTimeSeconds,

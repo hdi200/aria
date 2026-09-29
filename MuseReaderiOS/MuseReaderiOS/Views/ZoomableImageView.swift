@@ -149,6 +149,19 @@ struct ZoomableImageView: UIViewRepresentable {
     var onSwipeNextPage: (() -> Void)? = nil
     var onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)? = nil
     var onManualScroll: (() -> Void)? = nil
+    var annotationStrokes: [ScoreRenderedAnnotationStroke] = []
+    var selectedAnnotationStrokeIDs: Set<UUID> = []
+    var annotationModeActive = false
+    var annotationsVisible = true
+    var allowsAnnotationInteraction = false
+    var annotationTool: ScoreAnnotationTool = .pen
+    var annotationColor: ScoreAnnotationColor = .black
+    var annotationWidth: Double = 4
+    var onAnnotationInteractionStart: (() -> Void)? = nil
+    var onAnnotationStrokeCommit: (([CGPoint]) -> Void)? = nil
+    var onAnnotationErase: (([CGPoint]) -> Void)? = nil
+    var onAnnotationLasso: ((CGRect) -> Void)? = nil
+    var onAnnotationMoveSelection: ((CGPoint) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -185,6 +198,7 @@ struct ZoomableImageView: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.backgroundColor = .clear
         scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.panGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
 
         let containerView = ScorePageZoomContainerView()
         containerView.translatesAutoresizingMaskIntoConstraints = false
@@ -203,8 +217,12 @@ struct ZoomableImageView: UIViewRepresentable {
         overlayView.translatesAutoresizingMaskIntoConstraints = false
         overlayView.backgroundColor = .clear
 
+        let annotationOverlayView = ScoreAnnotationOverlayView()
+        annotationOverlayView.translatesAutoresizingMaskIntoConstraints = false
+
         containerView.addSubview(contentView)
         containerView.addSubview(overlayView)
+        containerView.addSubview(annotationOverlayView)
         scrollView.addSubview(containerView)
 
         let pageWidthConstraint = containerView.widthAnchor.constraint(equalToConstant: max(displayedPageSize.width, 1))
@@ -225,12 +243,25 @@ struct ZoomableImageView: UIViewRepresentable {
             overlayView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             overlayView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             overlayView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            overlayView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+            overlayView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            annotationOverlayView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            annotationOverlayView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            annotationOverlayView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            annotationOverlayView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
         ])
 
         let tapGestureRecognizer = ScorePageTapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         tapGestureRecognizer.onPencilInteractionStart = context.coordinator.onPencilInteractionStart
         overlayView.addGestureRecognizer(tapGestureRecognizer)
+
+        let annotationGestureRecognizer = ScoreAnnotationGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleAnnotationGesture(_:))
+        )
+        annotationGestureRecognizer.delegate = context.coordinator
+        annotationGestureRecognizer.cancelsTouchesInView = true
+        overlayView.addGestureRecognizer(annotationGestureRecognizer)
+        tapGestureRecognizer.require(toFail: annotationGestureRecognizer)
 
         let doubleTapGestureRecognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleReadingDoubleTap(_:)))
         doubleTapGestureRecognizer.numberOfTapsRequired = 2
@@ -280,6 +311,8 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.pageHeightConstraint = pageHeightConstraint
         context.coordinator.contentView = contentView
         context.coordinator.overlayView = overlayView
+        context.coordinator.annotationOverlayView = annotationOverlayView
+        context.coordinator.annotationGestureRecognizer = annotationGestureRecognizer
         context.coordinator.tapGestureRecognizer = tapGestureRecognizer
         context.coordinator.noteDragGestureRecognizer = noteDragGestureRecognizer
         context.coordinator.pencilHoverGestureRecognizer = pencilHoverGestureRecognizer
@@ -312,14 +345,27 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.onSwipeNextPage = onSwipeNextPage
         context.coordinator.onReadingCenterLongPress = onReadingCenterLongPress
         context.coordinator.onManualScroll = onManualScroll
+        context.coordinator.onAnnotationInteractionStart = onAnnotationInteractionStart
+        context.coordinator.onAnnotationStrokeCommit = onAnnotationStrokeCommit
+        context.coordinator.onAnnotationErase = onAnnotationErase
+        context.coordinator.onAnnotationLasso = onAnnotationLasso
+        context.coordinator.onAnnotationMoveSelection = onAnnotationMoveSelection
+        context.coordinator.annotationTool = annotationTool
+        context.coordinator.annotationColor = annotationColor
+        context.coordinator.annotationWidth = annotationWidth
         context.coordinator.allowsPlaybackFollow = allowsPlaybackFollow
         context.coordinator.noteDragGestureRecognizer?.isEnabled = allowsEditingInteractions
         context.coordinator.pencilHoverGestureRecognizer?.isEnabled = allowsEditingInteractions
-        context.coordinator.pencilInteraction?.isEnabled = allowsEditingInteractions
-        context.coordinator.doubleTapGestureRecognizer?.isEnabled = Self.allowsReadingDoubleTapZoom && !allowsEditingInteractions
-        context.coordinator.swipeLeftGestureRecognizer?.isEnabled = !allowsEditingInteractions
-        context.coordinator.swipeRightGestureRecognizer?.isEnabled = !allowsEditingInteractions
-        context.coordinator.readingLongPressGestureRecognizer?.isEnabled = !allowsEditingInteractions
+        context.coordinator.pencilInteraction?.isEnabled = allowsEditingInteractions || annotationModeActive
+        context.coordinator.annotationGestureRecognizer?.isEnabled = allowsAnnotationInteraction
+        context.coordinator.annotationGestureRecognizer?.allowedTouchTypes = annotationModeActive
+            ? [NSNumber(value: UITouch.TouchType.direct.rawValue), NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+            : [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        context.coordinator.tapGestureRecognizer?.isEnabled = !annotationModeActive
+        context.coordinator.doubleTapGestureRecognizer?.isEnabled = Self.allowsReadingDoubleTapZoom && !allowsEditingInteractions && !annotationModeActive
+        context.coordinator.swipeLeftGestureRecognizer?.isEnabled = !allowsEditingInteractions && !annotationModeActive
+        context.coordinator.swipeRightGestureRecognizer?.isEnabled = !allowsEditingInteractions && !annotationModeActive
+        context.coordinator.readingLongPressGestureRecognizer?.isEnabled = !allowsEditingInteractions && !annotationModeActive
         context.coordinator.activeNotationAutoScrollRevision = activeNotationAutoScrollRevision
         context.coordinator.activeNotationTopInset = activeNotationTopInset
         context.coordinator.activeNotationBottomInset = activeNotationBottomInset
@@ -348,17 +394,21 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.overlayView?.noteEntryPreviewIsRest = noteEntryPreviewIsRest
         context.coordinator.overlayView?.noteEntryPreviewDuration = noteEntryPreviewDuration
         context.coordinator.overlayView?.showsLayoutMarkers = showsLayoutMarkers
+        context.coordinator.annotationOverlayView?.strokes = annotationStrokes
+        context.coordinator.annotationOverlayView?.selectedStrokeIDs = selectedAnnotationStrokeIDs
+        context.coordinator.annotationOverlayView?.annotationsVisible = annotationsVisible
         context.coordinator.pageWidthConstraint?.constant = max(displayedPageSize.width, 1)
         context.coordinator.pageHeightConstraint?.constant = max(displayedPageSize.height, 1)
         let clampedZoomScale = min(max(zoomScale, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
-        let allowsReadingAtRest = !allowsEditingInteractions && clampedZoomScale <= 1.01
+        let allowsReadingAtRest = !allowsEditingInteractions && !annotationModeActive && clampedZoomScale <= 1.01
         context.coordinator.swipeLeftGestureRecognizer?.isEnabled = allowsReadingAtRest
         context.coordinator.swipeRightGestureRecognizer?.isEnabled = allowsReadingAtRest
         context.coordinator.readingLongPressGestureRecognizer?.isEnabled = allowsReadingAtRest
         let allowsInnerPanning = clampedZoomScale > 1.01
         let usesActiveNotationFocus = context.coordinator.usesActiveNotationFocus
 
-        scrollView.isScrollEnabled = allowsInnerPanning || usesActiveNotationFocus
+        scrollView.panGestureRecognizer.minimumNumberOfTouches = annotationModeActive ? 2 : 1
+        scrollView.isScrollEnabled = annotationModeActive || allowsInnerPanning || usesActiveNotationFocus
 
         if !context.coordinator.isUserZooming, abs(scrollView.zoomScale - clampedZoomScale) > 0.01 {
             scrollView.setZoomScale(clampedZoomScale, animated: false)
@@ -388,6 +438,14 @@ struct ZoomableImageView: UIViewRepresentable {
         var onSwipeNextPage: (() -> Void)?
         var onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)?
         var onManualScroll: (() -> Void)?
+        var onAnnotationInteractionStart: (() -> Void)?
+        var onAnnotationStrokeCommit: (([CGPoint]) -> Void)?
+        var onAnnotationErase: (([CGPoint]) -> Void)?
+        var onAnnotationLasso: ((CGRect) -> Void)?
+        var onAnnotationMoveSelection: ((CGPoint) -> Void)?
+        var annotationTool: ScoreAnnotationTool = .pen
+        var annotationColor: ScoreAnnotationColor = .black
+        var annotationWidth: Double = 4
         var allowsPlaybackFollow = true
         var allowsPencilInsertionFineTune = false
         var activeNotationAutoScrollRevision = 0
@@ -410,6 +468,8 @@ struct ZoomableImageView: UIViewRepresentable {
         var pageHeightConstraint: NSLayoutConstraint?
         weak var contentView: ScorePageContentView?
         weak var overlayView: ScorePageOverlayView?
+        weak var annotationOverlayView: ScoreAnnotationOverlayView?
+        weak var annotationGestureRecognizer: ScoreAnnotationGestureRecognizer?
         weak var tapGestureRecognizer: ScorePageTapGestureRecognizer?
         weak var noteDragGestureRecognizer: ScorePageLongPressGestureRecognizer?
         weak var pencilHoverGestureRecognizer: UIHoverGestureRecognizer?
@@ -432,6 +492,8 @@ struct ZoomableImageView: UIViewRepresentable {
         private var readingLongPressStartPoint: CGPoint?
         private var insertionDragStartPoint: CGPoint?
         private var lastPencilHoverPoint: CGPoint?
+        private var annotationMoveStartPoint: CGPoint?
+        private var annotationIsMovingSelection = false
         private let pencilHoverPreviewMovementThreshold: CGFloat = 4
 
         init(
@@ -1041,6 +1103,88 @@ struct ZoomableImageView: UIViewRepresentable {
             }
         }
 
+        @objc
+        func handleAnnotationGesture(_ gestureRecognizer: ScoreAnnotationGestureRecognizer) {
+            guard let overlayView, let annotationOverlayView else { return }
+            let normalizedPoints = gestureRecognizer.locations.compactMap { overlayView.normalizedPoint(at: $0) }
+            guard !normalizedPoints.isEmpty else {
+                if gestureRecognizer.state == .ended || gestureRecognizer.state == .cancelled || gestureRecognizer.state == .failed {
+                    annotationOverlayView.clearPreview()
+                }
+                return
+            }
+
+            switch gestureRecognizer.state {
+            case .began:
+                onAnnotationInteractionStart?()
+                annotationMoveStartPoint = normalizedPoints.first
+                if annotationTool == .lasso,
+                   let selectionBounds = annotationOverlayView.normalizedSelectionBounds,
+                   let firstLocation = gestureRecognizer.locations.first,
+                   selectionBounds.insetBy(dx: -14, dy: -14).contains(firstLocation) {
+                    annotationIsMovingSelection = true
+                } else {
+                    annotationIsMovingSelection = false
+                }
+                updateAnnotationPreview(with: normalizedPoints)
+
+            case .changed:
+                updateAnnotationPreview(with: normalizedPoints)
+
+            case .ended:
+                if annotationTool == .lasso {
+                    if annotationIsMovingSelection,
+                       let start = annotationMoveStartPoint,
+                       let end = normalizedPoints.last {
+                        onAnnotationMoveSelection?(CGPoint(x: end.x - start.x, y: end.y - start.y))
+                    } else if let first = normalizedPoints.first, let last = normalizedPoints.last {
+                        onAnnotationLasso?(
+                            CGRect(
+                                x: min(first.x, last.x),
+                                y: min(first.y, last.y),
+                                width: abs(last.x - first.x),
+                                height: abs(last.y - first.y)
+                            )
+                        )
+                    }
+                } else if annotationTool == .eraser {
+                    onAnnotationErase?(normalizedPoints)
+                } else {
+                    onAnnotationStrokeCommit?(normalizedPoints)
+                }
+                annotationOverlayView.clearPreview()
+                annotationMoveStartPoint = nil
+                annotationIsMovingSelection = false
+
+            case .cancelled, .failed:
+                annotationOverlayView.clearPreview()
+                annotationMoveStartPoint = nil
+                annotationIsMovingSelection = false
+
+            default:
+                break
+            }
+        }
+
+        private func updateAnnotationPreview(with normalizedPoints: [CGPoint]) {
+            guard let annotationOverlayView else { return }
+            let translation: CGPoint
+            if annotationIsMovingSelection,
+               let start = annotationMoveStartPoint,
+               let end = normalizedPoints.last {
+                translation = CGPoint(x: end.x - start.x, y: end.y - start.y)
+            } else {
+                translation = .zero
+            }
+            annotationOverlayView.setPreview(
+                tool: annotationIsMovingSelection ? nil : annotationTool,
+                color: annotationColor.rgba,
+                width: annotationWidth,
+                points: normalizedPoints,
+                selectionTranslation: translation
+            )
+        }
+
         func shouldBeginPagePan(_ panGestureRecognizer: UIPanGestureRecognizer, in scrollView: UIScrollView) -> Bool {
             guard usesActiveNotationFocus, scrollView.zoomScale <= 1.01 else {
                 return true
@@ -1057,7 +1201,11 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            false
+            guard gestureRecognizer === annotationGestureRecognizer || otherGestureRecognizer === annotationGestureRecognizer else {
+                return false
+            }
+            let companion = gestureRecognizer === annotationGestureRecognizer ? otherGestureRecognizer : gestureRecognizer
+            return companion === zoomScrollView?.panGestureRecognizer || companion === zoomScrollView?.pinchGestureRecognizer
         }
 
         func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {

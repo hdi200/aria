@@ -75,6 +75,11 @@
                         const double bottom = clampUnitInterval((y + height) / pageHeight);
 
                         msr::render::PlaybackMeasureRegion region;
+                        mu::engraving::EID measureEid = measure->eid();
+                        if (!measureEid.isValid()) {
+                            measureEid = measure->assignNewEID();
+                        }
+                        region.measureEid = measureEid.toStdString();
                         region.measureIndex = measureIndexIt->second;
                         region.pageIndex = static_cast<int>(score->pageIdx(page));
                         region.startTimeSeconds = std::max(repeatList.utick2utime(measure->tick().ticks() + tickOffset), 0.0);

@@ -38,6 +38,7 @@ struct RenderedDocument {
 };
 
 struct PlaybackMeasureRegion {
+    std::string measureEid;
     int measureIndex = 0;
     int pageIndex = 0;
     double startTimeSeconds = 0.0;
