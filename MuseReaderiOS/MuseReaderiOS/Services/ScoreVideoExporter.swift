@@ -849,6 +849,8 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private static let tileWidth = 1024
     private static let tileCacheLimit = 6
     private static let edgeFadeWidth: CGFloat = 110
+    private static let cursorWidth = 140
+    private static let cursorFadeDistance: CGFloat = 84
 
     private let page: ScoreVideoPageSource
     private let scale: CGFloat
@@ -858,6 +860,8 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private let lineRects: [CGRect]
     private let path: ScoreVideoScrollPath
     private let photoBackground: CGImage?
+    private let cursorGlow: CGImage?
+    private let cursorGlowTop: CGFloat
     private var tiles: [Int: CGImage] = [:]
     private var tileOrder: [Int] = []
 
@@ -879,6 +883,11 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         band = CGRect(x: 0, y: bandY.rounded(), width: frameSize.width, height: bandHeight)
         contentTop = bandY + top * scale
         contentBottom = bandY + bottom * scale
+        cursorGlowTop = contentTop - Self.cursorFadeDistance
+        cursorGlow = Self.makeCursorGlow(
+            color: options.style == .scrollingPhoto ? .white : Self.accent,
+            height: contentBottom - contentTop + 2 * Self.cursorFadeDistance
+        )
         lineRects = timeline.regions.map { region in
             let rect = region.normalizedRect
             return CGRect(
@@ -952,27 +961,17 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
                 drawHorizontalFade(context, from: band.maxX, to: band.maxX - Self.edgeFadeWidth, startAlpha: 1, endAlpha: 0)
             }
 
-            let cursorColor = photoBackground == nil ? Self.accent : UIColor.white
-            let cursorColors = [
-                cursorColor.withAlphaComponent(0).cgColor,
-                cursorColor.withAlphaComponent(0.10 * endFade(time)).cgColor,
-                cursorColor.withAlphaComponent(0.16 * endFade(time)).cgColor,
-                cursorColor.withAlphaComponent(0.10 * endFade(time)).cgColor,
-                cursorColor.withAlphaComponent(0).cgColor
-            ] as CFArray
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: cursorColors,
-                                         locations: [0, 0.25, 0.5, 0.75, 1]) {
+            if let cursorGlow {
                 context.saveGState()
-                context.clip(to: CGRect(x: playheadX - 70, y: contentTop - 12, width: 140, height: contentBottom - contentTop + 24))
-                context.drawLinearGradient(gradient,
-                    start: CGPoint(x: playheadX - 70, y: band.midY),
-                    end: CGPoint(x: playheadX + 70, y: band.midY), options: [])
+                context.setAlpha(CGFloat(endFade(time)))
+                drawImage(cursorGlow,
+                          in: CGRect(x: playheadX - CGFloat(Self.cursorWidth) / 2,
+                                     y: cursorGlowTop,
+                                     width: CGFloat(Self.cursorWidth),
+                                     height: CGFloat(cursorGlow.height)),
+                          context: context)
                 context.restoreGState()
             }
-            context.setStrokeColor(cursorColor.withAlphaComponent(0.45 * endFade(time)).cgColor)
-            context.setLineWidth(2)
-            context.strokeLineSegments(between: [CGPoint(x: playheadX, y: contentTop - 12),
-                                                 CGPoint(x: playheadX, y: contentBottom + 12)])
             drawPinnedTitle()
             drawProgress(context, time: time, onPaper: photoBackground == nil, whiteInk: photoBackground != nil)
         }
@@ -1100,6 +1099,42 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
             bytes[index + 1] = ink
             bytes[index + 2] = ink
             bytes[index + 3] = ink
+        }
+        return context.makeImage()
+    }
+
+    /// A cached cursor with a vertical taper, so its glow has no hard edge
+    /// just above or below the staff. Both the soft band and center line fade.
+    private static func makeCursorGlow(color: UIColor, height: CGFloat) -> CGImage? {
+        let width = cursorWidth
+        let pixelHeight = max(1, Int(ceil(height)))
+        guard let context = CGContext(data: nil, width: width, height: pixelHeight,
+                                      bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+                                          | CGBitmapInfo.byteOrder32Little.rawValue),
+              let data = context.data else { return nil }
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var colorAlpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &colorAlpha)
+        let bytes = data.assumingMemoryBound(to: UInt8.self)
+        for y in 0..<pixelHeight {
+            let distanceFromEnd = min(CGFloat(y), CGFloat(pixelHeight - 1 - y))
+            let fraction = min(1, distanceFromEnd / cursorFadeDistance)
+            let verticalFade = Double(fraction * fraction * (3 - 2 * fraction))
+            for x in 0..<width {
+                let distance = abs(Double(x) - Double(width - 1) / 2)
+                let broadGlow = 0.16 * exp(-pow(distance / 38, 2))
+                let centerLine = 0.45 * exp(-pow(distance / 1.15, 2))
+                let alpha = min(1, (broadGlow + centerLine) * verticalFade)
+                let index = (y * width + x) * 4
+                bytes[index] = UInt8((blue * alpha * 255).rounded())
+                bytes[index + 1] = UInt8((green * alpha * 255).rounded())
+                bytes[index + 2] = UInt8((red * alpha * 255).rounded())
+                bytes[index + 3] = UInt8((alpha * 255).rounded())
+            }
         }
         return context.makeImage()
     }
