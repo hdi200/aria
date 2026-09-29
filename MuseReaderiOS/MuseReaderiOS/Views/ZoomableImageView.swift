@@ -1179,7 +1179,7 @@ struct ZoomableImageView: UIViewRepresentable {
             annotationOverlayView.setPreview(
                 tool: annotationIsMovingSelection ? nil : annotationTool,
                 color: annotationColor.rgba,
-                width: annotationWidth,
+                width: annotationTool.lineWidth(forPaletteWidth: annotationWidth),
                 points: normalizedPoints,
                 selectionTranslation: translation
             )

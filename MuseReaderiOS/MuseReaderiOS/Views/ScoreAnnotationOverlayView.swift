@@ -63,18 +63,20 @@ final class ScoreAnnotationGestureRecognizer: UIGestureRecognizer {
 }
 
 final class ScoreAnnotationOverlayView: UIView {
+    // SwiftUI reassigns these on every update, so only redraw on real changes.
     var strokes: [ScoreRenderedAnnotationStroke] = [] {
-        didSet { setNeedsDisplay() }
+        didSet { if strokes != oldValue { setNeedsDisplay() } }
     }
     var selectedStrokeIDs: Set<UUID> = [] {
-        didSet { setNeedsDisplay() }
+        didSet { if selectedStrokeIDs != oldValue { setNeedsDisplay() } }
     }
     var annotationsVisible = true {
-        didSet { setNeedsDisplay() }
+        didSet { if annotationsVisible != oldValue { setNeedsDisplay() } }
     }
     var previewTool: ScoreAnnotationTool?
     var previewColor = ScoreAnnotationColor.red.rgba
-    var previewWidth: Double = 4
+    /// Line width as a fraction of the page width.
+    var previewWidth: Double = 0
     var previewPoints: [CGPoint] = []
     var selectionTranslation = CGPoint.zero
 
@@ -91,21 +93,49 @@ final class ScoreAnnotationOverlayView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private static let highlighterAlpha: CGFloat = 0.30
+
     override func draw(_ rect: CGRect) {
         guard annotationsVisible, let context = UIGraphicsGetCurrentContext() else { return }
-        for stroke in strokes {
-            let translation = selectedStrokeIDs.contains(stroke.id) ? selectionTranslation : .zero
+
+        // Highlighters go opaque into one transparency layer that is then
+        // composited at a fixed alpha, so overlaps (including the joins where a
+        // gesture is split at barlines) never build up darker spots.
+        let highlighterStrokes = strokes.filter { $0.tool == .highlighter }
+        let previewsHighlighter = previewTool == .highlighter && !previewPoints.isEmpty
+        if !highlighterStrokes.isEmpty || previewsHighlighter {
+            context.saveGState()
+            context.setAlpha(Self.highlighterAlpha)
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
+            for stroke in highlighterStrokes {
+                draw(
+                    points: stroke.points,
+                    color: stroke.color,
+                    alpha: 1,
+                    width: stroke.width,
+                    translation: translation(for: stroke),
+                    in: context
+                )
+            }
+            if previewsHighlighter {
+                draw(points: previewPoints, color: previewColor, alpha: 1, width: previewWidth, translation: .zero, in: context)
+            }
+            context.endTransparencyLayer()
+            context.restoreGState()
+        }
+
+        for stroke in strokes where stroke.tool != .highlighter {
             draw(
                 points: stroke.points,
-                tool: stroke.tool,
                 color: stroke.color,
+                alpha: CGFloat(stroke.color.alpha),
                 width: stroke.width,
-                translation: translation,
+                translation: translation(for: stroke),
                 in: context
             )
-            if stroke.isOrphaned {
-                drawOrphanIndicator(for: stroke.points, translation: translation, in: context)
-            }
+        }
+        for stroke in strokes where stroke.isOrphaned {
+            drawOrphanIndicator(for: stroke.points, translation: translation(for: stroke), in: context)
         }
 
         if let previewTool, !previewPoints.isEmpty {
@@ -113,11 +143,11 @@ final class ScoreAnnotationOverlayView: UIView {
                 drawLassoPreview(in: context)
             } else if previewTool == .eraser {
                 drawEraserPreview(in: context)
-            } else if previewTool.createsStroke {
+            } else if previewTool == .pen {
                 draw(
                     points: previewPoints,
-                    tool: previewTool,
                     color: previewColor,
+                    alpha: CGFloat(previewColor.alpha),
                     width: previewWidth,
                     translation: .zero,
                     in: context
@@ -180,42 +210,44 @@ final class ScoreAnnotationOverlayView: UIView {
         setNeedsDisplay()
     }
 
+    private func translation(for stroke: ScoreRenderedAnnotationStroke) -> CGPoint {
+        selectedStrokeIDs.contains(stroke.id) ? selectionTranslation : .zero
+    }
+
     private func draw(
         points: [CGPoint],
-        tool: ScoreAnnotationTool,
         color: ScoreAnnotationRGBA,
+        alpha: CGFloat,
         width: Double,
         translation: CGPoint,
         in context: CGContext
     ) {
-        guard let first = points.first else { return }
+        guard !points.isEmpty else { return }
         let projected = points.map {
             CGPoint(
                 x: ($0.x + translation.x) * bounds.width,
                 y: ($0.y + translation.y) * bounds.height
             )
         }
+        let lineWidth = max(CGFloat(width) * bounds.width, 0.5)
         let uiColor = UIColor(
             red: CGFloat(color.red),
             green: CGFloat(color.green),
             blue: CGFloat(color.blue),
-            alpha: CGFloat(tool == .highlighter ? 0.30 : color.alpha)
+            alpha: alpha
         )
         context.saveGState()
         context.setStrokeColor(uiColor.cgColor)
         context.setFillColor(uiColor.cgColor)
         context.setLineCap(.round)
         context.setLineJoin(.round)
-        context.setLineWidth(tool == .highlighter ? max(width * 3.2, 14) : width)
+        context.setLineWidth(lineWidth)
         if projected.count == 1 {
-            let radius = max(CGFloat(width) * 0.5, 1)
+            let radius = lineWidth / 2
             context.fillEllipse(in: CGRect(x: projected[0].x - radius, y: projected[0].y - radius, width: radius * 2, height: radius * 2))
         } else {
             context.beginPath()
-            context.move(to: CGPoint(x: first.x * bounds.width + translation.x * bounds.width, y: first.y * bounds.height + translation.y * bounds.height))
-            for point in projected.dropFirst() {
-                context.addLine(to: point)
-            }
+            context.addLines(between: projected)
             context.strokePath()
         }
         context.restoreGState()

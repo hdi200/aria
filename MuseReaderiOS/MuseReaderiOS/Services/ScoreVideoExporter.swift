@@ -227,6 +227,20 @@ struct ScoreVideoScrollPath: Equatable {
         self.init(segments: segments)
     }
 
+    /// The times of the stretch playing at `time`, from its first note to the
+    /// next jump. Smoothing stays inside it, so a repeat cuts instead of rewinding.
+    func segmentTimes(at time: TimeInterval) -> ClosedRange<TimeInterval> {
+        guard let segmentIndex = segments.lastIndex(where: { $0[0].time <= time }) else {
+            let start = segments.first?.first?.time ?? 0
+            let end = segments.count > 1 ? segments[1][0].time : .greatestFiniteMagnitude
+            return -.greatestFiniteMagnitude...max(start, end)
+        }
+        let start = segments[segmentIndex][0].time
+        let end = segmentIndex + 1 < segments.count ? segments[segmentIndex + 1][0].time : .greatestFiniteMagnitude
+        // Just before the next stretch starts, so clamped samples stay in this one.
+        return start...max(start, end - 0.0001)
+    }
+
     func x(at time: TimeInterval) -> CGFloat {
         guard let first = segments.first?.first else { return 0 }
         if time <= first.time { return first.x }
@@ -1103,6 +1117,8 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     private let band: CGRect
     private let contentTop: CGFloat
     private let contentBottom: CGFloat
+    /// Top of everything drawn on the line, markings above the staves included.
+    private let musicTop: CGFloat
     private let lineRects: [CGRect]
     private let path: ScoreVideoScrollPath
     private let photoBackground: CGImage?
@@ -1132,9 +1148,15 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         // Use the notation bounds, not the generous PDF margins, to size the line.
         let top = timeline.regions.map { CGFloat($0.normalizedRect.y) * page.size.height }.min() ?? 0
         let bottom = timeline.regions.map { CGFloat($0.normalizedRect.y + $0.normalizedRect.height) * page.size.height }.max() ?? page.size.height
-        // Fit the staves into 59% of the height, but never let a staff space
-        // exceed 2.4% of it: a single staff would otherwise fill the frame.
-        let fitScale = (frameSize.height * 0.59) / max(bottom - top, 1)
+        // Text above and below the staves: tempo, rehearsal marks, chords, lyrics.
+        let ink = Self.inkRows(in: page, staffTop: top, staffBottom: bottom)
+        let inkTop = min(top, ink?.lowerBound ?? top)
+        let inkBottom = max(bottom, ink?.upperBound ?? bottom)
+        // Fit the staves into 59% of the height and everything into 72%, but
+        // never let a staff space exceed 2.4% of it: a single staff would
+        // otherwise fill the frame.
+        let fitScale = min((frameSize.height * 0.59) / max(bottom - top, 1),
+                           (frameSize.height * 0.72) / max(inkBottom - inkTop, 1))
         let sampleRegion = timeline.regions.count > 1 ? timeline.regions[1] : timeline.regions.first
         if let sampleRegion,
            let staffSpace = Self.staffSpace(in: page, region: sampleRegion.normalizedRect) {
@@ -1144,12 +1166,12 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
             scale = min(baseScale * 1.7, fitScale)
         }
         let bandHeight = (page.size.height * scale).rounded()
-        // Full systems start 19% down; short ones are centred on the frame,
-        // never ending lower than 78% of the height.
-        let contentHeight = (bottom - top) * scale
-        let staffTop = max(frameSize.height * 0.19,
-                           min(frameSize.height * 0.5 - contentHeight / 2, frameSize.height * 0.78 - contentHeight))
-        let bandY = staffTop - top * scale
+        // The music, text included, is centred on the frame but starts no
+        // higher than 17% down, leaving the top for the title.
+        let inkHeight = (inkBottom - inkTop) * scale
+        let inkTopY = max(frameSize.height * 0.17, frameSize.height * 0.5 - inkHeight / 2)
+        let bandY = inkTopY - inkTop * scale
+        musicTop = inkTopY
         band = CGRect(x: 0, y: bandY.rounded(), width: frameSize.width, height: bandHeight)
         contentTop = bandY + top * scale
         contentBottom = bandY + bottom * scale
@@ -1191,12 +1213,15 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     }
 
     func draw(into pixelBuffer: CVPixelBuffer, at time: TimeInterval, frameDuration: TimeInterval) {
-        // Average a short span so bar-to-bar speed shifts are less perceptible.
+        // Average a short span so bar-to-bar speed shifts are less perceptible,
+        // but never across a repeat or jump: those cut straight to the new place.
+        let segment = path.segmentTimes(at: time)
         var smoothedX: CGFloat = 0
         var weightSum: CGFloat = 0
         for sample in -6...6 {
             let weight = CGFloat(7 - abs(sample))
-            smoothedX += weight * path.x(at: time + Double(sample) * 0.1)
+            let sampleTime = min(max(time + Double(sample) * 0.1, segment.lowerBound), segment.upperBound)
+            smoothedX += weight * path.x(at: sampleTime)
             weightSum += weight
         }
         let scoreX = smoothedX / weightSum * scale
@@ -1295,11 +1320,8 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         let titleHeight = ceil(titleText.size().height)
         let composerHeight = composer.isEmpty ? 0 : ceil(composerText.size().height)
         let blockHeight = titleHeight + (composer.isEmpty ? 0 : 6 + composerHeight)
-        // Centred above where full-height music starts, never closer than 40 pt
-        // to the top. When short music sits lower, the title follows it,
-        // keeping room for chord symbols and markings above the staff.
-        let top = max(40, (frameSize.height * 0.19 - blockHeight) / 2,
-                      contentTop - frameSize.height * 0.2 - blockHeight)
+        // Just above the music with a clear gap, never closer than 40 pt to the top.
+        let top = max(40, musicTop - frameSize.height * 0.05 - blockHeight)
         let bounds = CGRect(x: 80, y: top, width: width, height: blockHeight).integral
         let localTop = top - bounds.minY
         guard let image = Self.overlay(size: bounds.size, draw: { _ in
@@ -1511,6 +1533,43 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
             }
         }
         return context.makeImage()
+    }
+
+    /// The rows of the line, in page points, that hold any ink near the staves:
+    /// markings above them and lyrics below. Rendered in chunks at 1 px per point.
+    private static func inkRows(in page: ScoreVideoPageSource, staffTop: CGFloat,
+                                staffBottom: CGFloat) -> ClosedRange<CGFloat>? {
+        let margin = max(60, (staffBottom - staffTop) * 0.6)
+        let firstRow = max(0, Int(staffTop - margin))
+        let lastRow = min(Int(page.size.height) - 1, Int(staffBottom + margin))
+        let lineWidth = Int(page.size.width.rounded(.up))
+        guard firstRow < lastRow, lineWidth > 0 else { return nil }
+        let pageHeight = Int(page.size.height.rounded(.up))
+        let chunk = 4096
+        var top = Int.max
+        var bottom = Int.min
+        var originX = 0
+        while originX < lineWidth {
+            let width = min(chunk, lineWidth - originX)
+            guard let image = page.tile(scale: 1, originX: CGFloat(originX), pixelWidth: width, pixelHeight: pageHeight),
+                  let gray = CGContext(data: nil, width: width, height: pageHeight, bitsPerComponent: 8, bytesPerRow: width,
+                                       space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue),
+                  let data = gray.data
+            else { return nil }
+            gray.draw(image, in: CGRect(x: 0, y: 0, width: width, height: pageHeight))
+            let pixels = data.assumingMemoryBound(to: UInt8.self)
+            for row in firstRow...lastRow where row < top || row > bottom {
+                let line = pixels + row * width
+                for x in 0..<width where line[x] < 160 {
+                    top = min(top, row)
+                    bottom = max(bottom, row)
+                    break
+                }
+            }
+            originX += width
+        }
+        guard top <= bottom else { return nil }
+        return CGFloat(top)...CGFloat(bottom + 1)
     }
 
     /// Distance between staff lines in page points, measured from a measure:

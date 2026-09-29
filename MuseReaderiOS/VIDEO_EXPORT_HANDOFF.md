@@ -9,15 +9,21 @@ SDK; **the new UI and optimized pipeline still need an iPad run**.
 
 ## Approved UI and styles
 
-Selecting Video opens a dedicated **Video export** sheet (`ScoreReaderVideoExportSheet`),
+Selecting Video closes the export popover and the reader presents a dedicated
+**Video export** sheet (`ScoreReaderVideoExportSheet`; a sheet presented from the
+popover stays small on iPad). Closing it without a finished video reopens the popover.
+The sheet is
 styled after the user's mockup: large bold title with a circled ×; a preview card
 with "16:9 • Scrolling" under it; **Layout** as an accent-outlined segmented control
 (`ScoreReaderVideoSegmentedControl`) with a one-line description; for scrolling,
 **Appearance** as two picture cards, "Score only" (the paper frame) and "Photo"
 (the chosen photo); for pages, **Orientation**. Choosing Photo without a photo
 opens the Photos picker; once chosen, "Change photo" sits above the photo card
-(Photos only, no Files route for now). The sheet uses the page-sized
-presentation on iOS 18 and tries a full then a smaller preview before scrolling. Footer: "Keep Aria open
+(Photos only, no Files route for now). On iPad (iOS 18) the sheet is
+page height and at most 800 pt wide (`ScoreReaderVideoPanelSizing`), on a material
+background. `ScoreReaderVideoSettingsLayout` measures the controls first and gives
+the preview the remaining height (minimum 100 pt); below 580 pt it switches to
+compact spacing and shorter appearance cards, and only then scrolls. Footer: "Keep Aria open
 while rendering." and **Render video** (reads "Choose photo" until there is one;
 disabled while the preview loads). While rendering: percentage, bar and **Cancel**
 (cancels the stored export task quietly). When done: **Video ready** with the
@@ -51,10 +57,16 @@ layout-break markers as system positions, is gone.)
   looking 0.4 s ahead; measure highlights and playhead remain. A title card fades
   out during the opening 4.5 s.
 
+Repeats and jumps cut: the scrolling camera's 1.2 s smoothing window is clamped to
+the current path segment (`ScoreVideoScrollPath.segmentTimes`), so it never
+averages across a jump and slides backward.
+
 Scrolling layout details: notation fits 59% of the height, but a staff space is
 capped at 2.4% of it (measured from staff lines in a measure), so one-staff scores
-are large rather than tiny. Short music is centred on the frame; the title sits
-20% of the height above it (full scores keep the title centred above 19%). The
+are large rather than tiny. Vertical placement uses the measured ink of the line (`inkRows`:
+markings above the staves and lyrics below, not just the staves): everything is
+centred, starting no higher than 17% down, and the title sits 5% of the height
+above the topmost ink. Everything must also fit in 72% of the height. The
 pinned header is on only when the video has several parts
 (`ScoreVideoExportOptions.pinsStaffHeader`: off for part exports and one-part
 scores; the preview also turns it off while the reader shows a part). With it

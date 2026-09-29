@@ -256,6 +256,7 @@ struct ScoreReaderView: View {
     @State private var completedVideoURLs: [URL] = []
     @State private var exportTask: Task<Void, Never>?
     @State private var videoPreviewCache = ScoreVideoPreviewCache()
+    @State private var isVideoSheetPresented = false
     @State private var exportErrorMessage: String?
     @State private var isPreparingExport = false
     @State private var exportProgress: Double?
@@ -341,7 +342,7 @@ struct ScoreReaderView: View {
                 initialViewTransposeKey: initialInteractionMode == .view ? rememberedState.viewTransposeKey : nil
             )
         )
-        _annotationController = StateObject(wrappedValue: ScoreAnnotationController(scoreID: session.document.id))
+        _annotationController = StateObject(wrappedValue: ScoreAnnotationController(documentURL: session.document.url))
     }
 
     var body: some View {
@@ -524,7 +525,7 @@ struct ScoreReaderView: View {
                             isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isTransitioningScore || isPreparingExport,
                             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
                             isExportBusy: isPreparingExport,
-                            supportsAnnotations: !isPhoneInterface && readerState.interactionMode == .view,
+                            supportsAnnotations: !isPhoneInterface && readerState.interactionMode == .view && annotationController.isEditable,
                             annotationModeActive: isAnnotationModeActive,
                             playbackPreparationMessage: readerState.playbackPreparationMessage,
                             closeAction: closeReader,
@@ -589,23 +590,13 @@ struct ScoreReaderView: View {
                                         exportAction: exportScore,
                                         exportProgress: exportProgress,
                                         exportErrorMessage: exportErrorMessage,
-                                        completedVideoURLs: completedVideoURLs,
-                                        videoSheetDismissAction: {
-                                            videoPreviewCache.reset()
-                                            // Closing a finished video returns to the score.
-                                            guard !completedVideoURLs.isEmpty else { return }
-                                            completedVideoURLs = []
+                                        openVideoSettingsAction: {
+                                            // A sheet shown from the popover stays small on iPad.
                                             isExportPanelPresented = false
-                                        },
-                                        videoResultsResetAction: { completedVideoURLs = [] },
-                                        videoCancelAction: { exportTask?.cancel() },
-                                        renderVideoPreview: { style, background in
-                                            guard let liveRenderSession = session.liveRenderSession else { return nil }
-                                            return await videoPreviewCache.image(
-                                                style: style, background: background, liveRenderSession: liveRenderSession,
-                                                pageCount: readerState.pageCount, title: readerState.scoreTitle,
-                                                composer: readerState.scoreMetadata.composer,
-                                                pinsStaffHeader: selectedPartID == "full-score" && pinsVideoStaffHeader)
+                                            Task { @MainActor in
+                                                try? await Task.sleep(for: .milliseconds(350))
+                                                isVideoSheetPresented = true
+                                            }
                                         }
                                     )
                                 )
@@ -907,6 +898,9 @@ struct ScoreReaderView: View {
             annotationController.clearSelection()
             saveRememberedReaderState()
         }
+        .onChangeCompatible(of: readerState.playbackMeasureRegions) { regions in
+            annotationController.anchorPendingStrokes(partID: selectedPartID, regions: regions)
+        }
         .onChangeCompatible(of: zoomScale) { _ in
             saveRememberedReaderState()
         }
@@ -975,6 +969,36 @@ struct ScoreReaderView: View {
         }
         .sheet(item: $sharedExportItems) { export in
             ScoreReaderShareSheetView(activityItems: export.urls)
+        }
+        .sheet(isPresented: $isVideoSheetPresented, onDismiss: {
+            videoPreviewCache.reset()
+            // A finished video returns to the score; otherwise back to the export options.
+            if completedVideoURLs.isEmpty {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    isExportPanelPresented = true
+                }
+            }
+            completedVideoURLs = []
+        }) {
+            ScoreReaderVideoExportSheet(
+                draft: $exportDraft,
+                isPreparingExport: isPreparingExport,
+                exportProgress: exportProgress,
+                exportErrorMessage: exportErrorMessage,
+                exportAction: exportScore,
+                cancelAction: { exportTask?.cancel() },
+                completedVideos: completedVideoURLs,
+                resetResultsAction: { completedVideoURLs = [] },
+                renderPreview: { style, background in
+                    guard let liveRenderSession = session.liveRenderSession else { return nil }
+                    return await videoPreviewCache.image(
+                        style: style, background: background, liveRenderSession: liveRenderSession,
+                        pageCount: readerState.pageCount, title: readerState.scoreTitle,
+                        composer: readerState.scoreMetadata.composer,
+                        pinsStaffHeader: selectedPartID == "full-score" && pinsVideoStaffHeader)
+                }
+            )
         }
         .sheet(isPresented: $isTempoEditorPresented) {
             ScoreReaderTempoEditorSheet(
@@ -1807,7 +1831,7 @@ struct ScoreReaderView: View {
             selectedStrokeIDs: annotationController.selectedStrokeIDs,
             isActive: isAnnotationModeActive,
             isVisible: annotationsVisible && readerState.interactionMode == .view,
-            allowsInteraction: !isPhoneInterface && readerState.interactionMode == .view,
+            allowsInteraction: !isPhoneInterface && readerState.interactionMode == .view && annotationController.isEditable,
             tool: annotationTool,
             color: annotationColor,
             width: annotationWidth,
@@ -2345,7 +2369,7 @@ struct ScoreReaderView: View {
     }
 
     private func enterAnnotationMode() {
-        guard !isPhoneInterface, readerState.interactionMode == .view else { return }
+        guard !isPhoneInterface, readerState.interactionMode == .view, annotationController.isEditable else { return }
         if !isAnnotationModeActive {
             readingStyleBeforeAnnotation = readingStyle
         }

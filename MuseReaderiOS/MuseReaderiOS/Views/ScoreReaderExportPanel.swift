@@ -178,7 +178,6 @@ enum ScoreReaderExportTarget {
 }
 
 struct ScoreReaderExportPanel: View {
-    @State private var isVideoSettingsPresented = false
     let scoreTitle: String
     let sharingDescription: String
     let parts: [ScorePart]
@@ -190,11 +189,9 @@ struct ScoreReaderExportPanel: View {
     /// Rendering progress for exports that take a while, such as video.
     var exportProgress: Double? = nil
     var exportErrorMessage: String? = nil
-    var completedVideoURLs: [URL] = []
-    var videoSheetDismissAction: () -> Void = {}
-    var videoResultsResetAction: () -> Void = {}
-    var videoCancelAction: () -> Void = {}
-    var renderVideoPreview: (ScoreVideoStyle, Data?) async -> UIImage? = { _, _ in nil }
+    /// Opens the video sheet. The reader presents it, not this popover, so it
+    /// can take the full height of the screen on iPad.
+    var openVideoSettingsAction: () -> Void = {}
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -282,7 +279,7 @@ struct ScoreReaderExportPanel: View {
 
                     Button {
                         if draft.format == .video {
-                            isVideoSettingsPresented = true
+                            openVideoSettingsAction()
                         } else {
                             exportAction()
                         }
@@ -324,19 +321,6 @@ struct ScoreReaderExportPanel: View {
             if draft.selectedPartIDs.isEmpty {
                 draft.selectedPartIDs = Set(parts.map(\.id))
             }
-        }
-        .sheet(isPresented: $isVideoSettingsPresented, onDismiss: videoSheetDismissAction) {
-            ScoreReaderVideoExportSheet(
-                draft: $draft,
-                isPreparingExport: isPreparingExport,
-                exportProgress: exportProgress,
-                exportErrorMessage: exportErrorMessage,
-                exportAction: exportAction,
-                cancelAction: videoCancelAction,
-                completedVideos: completedVideoURLs,
-                resetResultsAction: videoResultsResetAction,
-                renderPreview: renderVideoPreview
-            )
         }
     }
 
@@ -425,7 +409,7 @@ struct ScoreReaderExportPanel: View {
             }
             draft.format = format
             if format == .video {
-                isVideoSettingsPresented = true
+                openVideoSettingsAction()
             }
         } label: {
             HStack(spacing: isPhone ? 9 : 12) {
@@ -507,7 +491,7 @@ struct ScoreReaderExportPanel: View {
 
     private var videoSettingsRow: some View {
         Button {
-            isVideoSettingsPresented = true
+            openVideoSettingsAction()
         } label: {
             HStack {
                 Text("Video settings")
@@ -588,7 +572,7 @@ struct ScoreReaderExportPanel: View {
     }
 }
 
-private struct ScoreReaderVideoExportSheet: View {
+struct ScoreReaderVideoExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var isChoosingPhoto = false
@@ -627,7 +611,11 @@ private struct ScoreReaderVideoExportSheet: View {
     }
 
     private var horizontalPadding: CGFloat {
-        horizontalSizeClass == .compact ? 16 : 28
+        horizontalSizeClass == .compact ? 16 : 24
+    }
+
+    private var contentWidth: CGFloat {
+        horizontalSizeClass == .compact ? 560 : 752
     }
 
     private var previewTaskID: String {
@@ -645,23 +633,26 @@ private struct ScoreReaderVideoExportSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+                .fixedSize(horizontal: false, vertical: true)
             if completedVideos.isEmpty {
-                // Everything fits without scrolling where possible: a smaller
-                // preview is tried before falling back to a scroll view.
-                ViewThatFits(in: .vertical) {
-                    column { settingsContent(previewHeight: 300) }
-                    column { settingsContent(previewHeight: 220) }
-                    ScrollView { column { settingsContent(previewHeight: 300) } }
+                GeometryReader { geometry in
+                    ScrollView {
+                        column { settingsContent(compact: geometry.size.height < 580) }
+                            .frame(idealHeight: geometry.size.height)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
             } else {
                 ScrollView { column { resultContent } }
             }
             footer
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .systemBackground).opacity(0.94))
         .modifier(ScoreReaderVideoSheetSizing())
-        .presentationDetents([.large])
+        .presentationBackground(.regularMaterial)
+        .presentationCornerRadius(26)
         .presentationDragIndicator(.hidden)
         .interactiveDismissDisabled(isPreparingExport)
         .onAppear {
@@ -724,7 +715,7 @@ private struct ScoreReaderVideoExportSheet: View {
 
     private func column<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         content()
-            .frame(maxWidth: 560)
+            .frame(maxWidth: contentWidth)
             .padding(.horizontal, horizontalPadding)
             .padding(.bottom, 20)
             .frame(maxWidth: .infinity)
@@ -757,13 +748,16 @@ private struct ScoreReaderVideoExportSheet: View {
                         .frame(width: 40, height: 40)
                         .background(Color(uiColor: .secondarySystemBackground), in: Circle())
                         .overlay(Circle().stroke(Color.black.opacity(0.06)))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close video export")
                 .disabled(isPreparingExport)
             }
         }
+        .frame(maxWidth: contentWidth)
         .padding(.horizontal, horizontalPadding)
+        .frame(maxWidth: .infinity)
         .padding(.top, 20)
         .padding(.bottom, 16)
     }
@@ -834,120 +828,125 @@ private struct ScoreReaderVideoExportSheet: View {
                     }
                 }
             }
-            .frame(maxWidth: 560)
-            .padding(.horizontal, horizontalPadding)
-            .frame(maxWidth: .infinity)
         }
-        .padding(.bottom, 16)
-        .background(Color(uiColor: .systemBackground))
+        .frame(maxWidth: contentWidth)
+        .padding(.horizontal, horizontalPadding)
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 22)
     }
 
     // MARK: Settings
 
-    private func settingsContent(previewHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
+    private func settingsContent(compact: Bool = false) -> some View {
+        ScoreReaderVideoSettingsLayout(spacing: compact ? 16 : 24) {
             VStack(spacing: 10) {
-                preview(maxHeight: previewHeight)
+                preview
                 Text(styleSummary)
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity)
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Layout").font(.title3.weight(.semibold))
-                ScoreReaderVideoSegmentedControl(
-                    options: [("Scrolling", true), ("Pages", false)],
-                    selection: Binding(get: { isScrolling }, set: { scrolling in
-                        guard scrolling != isScrolling else { return }
-                        if scrolling {
-                            preferredPageStyle = draft.videoStyle
-                            draft.videoStyle = preferredScrollingStyle
-                        } else {
-                            preferredScrollingStyle = draft.videoStyle
-                            draft.videoStyle = preferredPageStyle
-                        }
-                    })
-                )
-                Text(isScrolling
-                     ? "A continuous score moves smoothly past the playhead."
-                     : "The camera follows the playing measure through the pages.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            if isScrolling {
+            VStack(alignment: .leading, spacing: compact ? 16 : 24) {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline, spacing: 14) {
-                        Text("Appearance").font(.title3.weight(.semibold))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        // Sits above the photo card once there is a photo.
-                        Group {
-                            if draft.videoBackgroundImageData != nil {
-                                HStack(spacing: 8) {
-                                    if isLoadingBackground {
-                                        ProgressView()
-                                    }
-                                    PhotosPicker(selection: $backgroundPhotoItem, matching: .images, photoLibrary: .shared()) {
-                                        Label("Change photo", systemImage: "photo")
-                                            .font(.subheadline.weight(.medium))
-                                    }
-                                    .disabled(isLoadingBackground)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                    HStack(alignment: .top, spacing: 14) {
-                        appearanceCard(title: "Score only", selected: draft.videoStyle == .scrolling) {
-                            draft.videoStyle = .scrolling
-                        } content: {
-                            if let paperThumbnail {
-                                Image(uiImage: paperThumbnail).resizable().scaledToFill()
-                            } else {
-                                Color.white
-                            }
-                        }
-                        appearanceCard(title: "Photo", selected: draft.videoStyle == .scrollingPhoto) {
-                            draft.videoStyle = .scrollingPhoto
-                            // Choosing Photo without one goes straight to the library.
-                            if draft.videoBackgroundImageData == nil {
-                                isChoosingPhoto = true
-                            }
-                        } content: {
-                            if let photoThumbnail {
-                                Image(uiImage: photoThumbnail).resizable().scaledToFill()
-                            } else {
-                                VStack(spacing: 6) {
-                                    Image(systemName: "photo.on.rectangle").font(.title2)
-                                    Text("Choose a photo").font(.footnote)
-                                }
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(Color(uiColor: .secondarySystemBackground))
-                            }
-                        }
-                    }
-                    if let backgroundError {
-                        Text(backgroundError)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Orientation").font(.title3.weight(.semibold))
+                    Text("Layout").font(.headline)
                     ScoreReaderVideoSegmentedControl(
-                        options: [("Landscape", ScoreVideoStyle.pagesLandscape), ("Portrait", ScoreVideoStyle.pagesPortrait)],
-                        selection: $draft.videoStyle
+                        options: [("Scrolling", true), ("Pages", false)],
+                        selection: Binding(get: { isScrolling }, set: { scrolling in
+                            guard scrolling != isScrolling else { return }
+                            if scrolling {
+                                preferredPageStyle = draft.videoStyle
+                                draft.videoStyle = preferredScrollingStyle
+                            } else {
+                                preferredScrollingStyle = draft.videoStyle
+                                draft.videoStyle = preferredPageStyle
+                            }
+                        })
                     )
+                    Text(isScrolling
+                         ? "A continuous score moves smoothly past the playhead."
+                         : "The camera follows the playing measure through the pages.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                if isScrolling {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                            Text("Appearance").font(.headline)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            // Sits above the photo card once there is a photo.
+                            Group {
+                                if draft.videoBackgroundImageData != nil {
+                                    HStack(spacing: 8) {
+                                        if isLoadingBackground {
+                                            ProgressView()
+                                        }
+                                        PhotosPicker(selection: $backgroundPhotoItem, matching: .images, photoLibrary: .shared()) {
+                                            Label("Change photo", systemImage: "photo")
+                                                .font(.subheadline.weight(.medium))
+                                        }
+                                        .disabled(isLoadingBackground)
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                        HStack(alignment: .top, spacing: 14) {
+                            appearanceCard(title: "Score only", selected: draft.videoStyle == .scrolling,
+                                           height: compact ? 72 : nil) {
+                                draft.videoStyle = .scrolling
+                            } content: {
+                                if let paperThumbnail {
+                                    Image(uiImage: paperThumbnail).resizable().scaledToFill()
+                                } else {
+                                    Color.white
+                                }
+                            }
+                            appearanceCard(title: "Photo", selected: draft.videoStyle == .scrollingPhoto,
+                                           height: compact ? 72 : nil) {
+                                draft.videoStyle = .scrollingPhoto
+                                // Choosing Photo without one goes straight to the library.
+                                if draft.videoBackgroundImageData == nil {
+                                    isChoosingPhoto = true
+                                }
+                            } content: {
+                                if let photoThumbnail {
+                                    Image(uiImage: photoThumbnail).resizable().scaledToFill()
+                                } else {
+                                    VStack(spacing: 6) {
+                                        Image(systemName: "photo.on.rectangle").font(.title2)
+                                        Text("Choose a photo").font(.footnote)
+                                    }
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(Color(uiColor: .secondarySystemBackground))
+                                }
+                            }
+                        }
+                        if let backgroundError {
+                            Text(backgroundError)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Orientation").font(.headline)
+                        ScoreReaderVideoSegmentedControl(
+                            options: [("Landscape", ScoreVideoStyle.pagesLandscape), ("Portrait", ScoreVideoStyle.pagesPortrait)],
+                            selection: $draft.videoStyle
+                        )
+                    }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .disabled(isPreparingExport)
     }
 
-    private func preview(maxHeight: CGFloat) -> some View {
+    private var preview: some View {
         let portrait = draft.videoStyle == .pagesPortrait
         return ZStack {
             Color.white
@@ -980,7 +979,7 @@ private struct ScoreReaderVideoExportSheet: View {
         }
         .animation(.easeOut(duration: 0.2), value: previewImage)
         .aspectRatio(portrait ? 9.0 / 16.0 : 16.0 / 9.0, contentMode: .fit)
-        .frame(maxHeight: portrait ? maxHeight + 60 : maxHeight)
+        .frame(minHeight: 100)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(0.08)))
         .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
@@ -989,13 +988,14 @@ private struct ScoreReaderVideoExportSheet: View {
         .accessibilityLabel("Video preview, \(styleSummary)")
     }
 
-    private func appearanceCard<Content: View>(title: String, selected: Bool, action: @escaping () -> Void,
+    private func appearanceCard<Content: View>(title: String, selected: Bool, height: CGFloat? = nil,
+                                               action: @escaping () -> Void,
                                                @ViewBuilder content: () -> Content) -> some View {
         Button(action: action) {
             VStack(spacing: 10) {
                 content()
                     .frame(maxWidth: .infinity)
-                    .frame(height: horizontalSizeClass == .compact ? 96 : 120)
+                    .frame(height: height ?? (horizontalSizeClass == .compact ? 96 : 120))
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
@@ -1003,7 +1003,7 @@ private struct ScoreReaderVideoExportSheet: View {
                             .stroke(selected ? Color.accentColor : Color.black.opacity(0.08), lineWidth: selected ? 2.5 : 1)
                     )
                 Text(title)
-                    .font(.body.weight(selected ? .semibold : .regular))
+                    .font(.subheadline.weight(selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Color.accentColor : .primary)
             }
             .contentShape(Rectangle())
@@ -1119,14 +1119,51 @@ private struct ScoreReaderVideoExportSheet: View {
     }
 }
 
-/// On iPad, the taller page-sized sheet (iOS 18) so the settings fit without scrolling.
+/// A centered iPad panel with enough height for the preview and all settings.
 private struct ScoreReaderVideoSheetSizing: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.presentationSizing(.page)
+        if #available(iOS 18.0, *), horizontalSizeClass == .regular {
+            content.presentationSizing(ScoreReaderVideoPanelSizing())
         } else {
-            content
+            content.presentationDetents([.large])
         }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct ScoreReaderVideoPanelSizing: PresentationSizing {
+    func proposedSize(for root: PresentationSizingRoot, context: PresentationSizingContext) -> ProposedViewSize {
+        let page = PagePresentationSizing.page.proposedSize(for: root, context: context)
+        return ProposedViewSize(width: page.width.map { min($0, 800) }, height: page.height)
+    }
+}
+
+/// Measure the controls first and give the preview the remaining height.
+private struct ScoreReaderVideoSettingsLayout: Layout {
+    let spacing: CGFloat
+
+    private func heights(proposal: ProposedViewSize, subviews: Subviews) -> (preview: CGFloat, controls: CGFloat) {
+        let width = proposal.width ?? 592
+        let controls = subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let remaining = proposal.height.map { max(0, $0 - controls - spacing) }
+        let preview = subviews[0].sizeThatFits(ProposedViewSize(width: width, height: remaining)).height
+        return (preview, controls)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let heights = heights(proposal: proposal, subviews: subviews)
+        return CGSize(width: proposal.width ?? 592, height: heights.preview + spacing + heights.controls)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let heights = heights(proposal: ProposedViewSize(bounds.size), subviews: subviews)
+        subviews[0].place(at: bounds.origin, anchor: .topLeading,
+                          proposal: ProposedViewSize(width: bounds.width, height: heights.preview))
+        subviews[1].place(at: CGPoint(x: bounds.minX, y: bounds.minY + heights.preview + spacing),
+                          anchor: .topLeading,
+                          proposal: ProposedViewSize(width: bounds.width, height: heights.controls))
     }
 }
 
@@ -1143,7 +1180,7 @@ private struct ScoreReaderVideoSegmentedControl<Value: Hashable>: View {
                     selection = option.value
                 } label: {
                     Text(option.title)
-                        .font(.body.weight(selected ? .semibold : .medium))
+                        .font(.subheadline.weight(selected ? .semibold : .medium))
                         .foregroundStyle(selected ? Color.accentColor : .primary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background {

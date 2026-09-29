@@ -35,6 +35,14 @@ enum ScoreAnnotationTool: String, Codable, CaseIterable, Sendable {
     var createsStroke: Bool {
         self == .pen || self == .highlighter
     }
+
+    /// Converts a palette width, in points on a page shown at the reference
+    /// width, to a line width stored as a fraction of the page width. Ink then
+    /// keeps its size relative to the notation in every page layout.
+    func lineWidth(forPaletteWidth paletteWidth: Double) -> Double {
+        let points = self == .highlighter ? max(paletteWidth * 3.2, 14) : paletteWidth
+        return points / ScoreAnnotationStroke.referencePageWidth
+    }
 }
 
 enum ScoreAnnotationColor: String, Codable, CaseIterable, Sendable {
@@ -98,25 +106,38 @@ struct ScoreAnnotationMeasureAnchor: Codable, Equatable, Sendable {
     let measureEID: String
     let fallbackMeasureIndex: Int
     let fallbackPageIndex: Int
+    /// The measure's page rect when the stroke was drawn.
     let sourceRect: ScoreAnnotationRect
-    let previousMeasureEID: String?
-    let nextMeasureEID: String?
+    /// Page point the stroke's shape hangs from. After reflow it keeps its
+    /// relative position in the measure, and the shape around it scales
+    /// uniformly with the measure height so ink is never stretched.
+    var origin: ScoreAnnotationPoint
 }
 
 struct ScoreAnnotationStroke: Identifiable, Codable, Equatable, Sendable {
+    /// Page width, in points, at which palette widths are drawn at face value.
+    static let referencePageWidth: Double = 800
+
     let id: UUID
+    /// Shared by the per-measure pieces of one gesture so they select, move
+    /// and delete together.
+    var groupID: UUID
     let partID: String
     let fallbackPageIndex: Int
     var tool: ScoreAnnotationTool
     var color: ScoreAnnotationRGBA
+    /// Line width as a fraction of the page width.
     var width: Double
     var anchor: ScoreAnnotationMeasureAnchor?
+    /// Normalized page points in the layout the stroke was drawn in.
     var points: [ScoreAnnotationPoint]
     var createdAt: Date
 }
 
 struct ScoreAnnotationDocument: Codable, Equatable, Sendable {
-    var version = 1
+    static let currentVersion = 2
+
+    var version = currentVersion
     var strokes: [ScoreAnnotationStroke] = []
 }
 
@@ -124,62 +145,268 @@ struct ScoreRenderedAnnotationStroke: Identifiable, Equatable, Sendable {
     let id: UUID
     let tool: ScoreAnnotationTool
     let color: ScoreAnnotationRGBA
+    /// Line width as a fraction of the page width.
     let width: Double
     let points: [CGPoint]
     let isOrphaned: Bool
 }
 
+private struct ScoreAnnotationLoadResult {
+    var document = ScoreAnnotationDocument()
+    var isWritable = true
+    var needsSave = false
+    var message: String?
+}
+
 private struct ScoreAnnotationStore {
-    let scoreID: String
+    let fileURL: URL
+    /// Files written before annotations were keyed by library-relative path.
+    let legacyFileURL: URL
     private let fileManager = FileManager.default
 
-    func load() -> ScoreAnnotationDocument {
-        guard
-            let data = try? Data(contentsOf: fileURL()),
-            let document = try? JSONDecoder().decode(ScoreAnnotationDocument.self, from: data)
-        else {
-            return ScoreAnnotationDocument()
+    init(documentURL: URL) {
+        let documentPath = documentURL.standardizedFileURL.path
+        let key: String
+        if let relativePath = try? ManagedScoreLibrary().relativePath(for: documentURL), !relativePath.isEmpty {
+            // Library-relative, so the key survives app container path changes.
+            key = "library:" + relativePath
+        } else {
+            key = "file:" + documentPath
         }
-        return document
+
+        let rootURL = (try? ManagedScoreLibraryPaths.privateRootURL())
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent(ManagedScoreLibraryPaths.privateRootDirectoryName, isDirectory: true)
+        let directoryURL = rootURL.appendingPathComponent("Annotations", isDirectory: true)
+        fileURL = directoryURL.appendingPathComponent(Self.fileName(for: key), isDirectory: false)
+        legacyFileURL = directoryURL.appendingPathComponent(Self.fileName(for: documentPath), isDirectory: false)
+    }
+
+    func load() -> ScoreAnnotationLoadResult {
+        let sourceURL: URL
+        let isLegacy: Bool
+        if fileManager.fileExists(atPath: fileURL.path) {
+            sourceURL = fileURL
+            isLegacy = false
+        } else if fileManager.fileExists(atPath: legacyFileURL.path) {
+            sourceURL = legacyFileURL
+            isLegacy = true
+        } else {
+            return ScoreAnnotationLoadResult()
+        }
+
+        let data: Data
+        do {
+            data = try Data(contentsOf: sourceURL)
+        } catch {
+            // The file may still be fine; never overwrite what could not be read.
+            return ScoreAnnotationLoadResult(isWritable: false, message: "Annotations could not be read, so changes won't be saved.")
+        }
+
+        let decoder = JSONDecoder()
+        guard let version = try? decoder.decode(VersionProbe.self, from: data).version else {
+            return setAside(sourceURL)
+        }
+        if version > ScoreAnnotationDocument.currentVersion {
+            return ScoreAnnotationLoadResult(
+                isWritable: false,
+                message: "These annotations were made by a newer version of Aria and can't be edited here."
+            )
+        }
+
+        let document: ScoreAnnotationDocument
+        do {
+            if version == 1 {
+                document = try decoder.decode(LegacyDocumentV1.self, from: data).migrated()
+            } else {
+                document = try decoder.decode(ScoreAnnotationDocument.self, from: data)
+            }
+        } catch {
+            return setAside(sourceURL)
+        }
+        return ScoreAnnotationLoadResult(document: document, needsSave: isLegacy || version != ScoreAnnotationDocument.currentVersion)
     }
 
     func save(_ document: ScoreAnnotationDocument) throws {
-        let destinationURL = fileURL()
         try fileManager.createDirectory(
-            at: destinationURL.deletingLastPathComponent(),
+            at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true,
             attributes: nil
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        try encoder.encode(document).write(to: destinationURL, options: .atomic)
+        try encoder.encode(document).write(to: fileURL, options: .atomic)
+        if legacyFileURL != fileURL, fileManager.fileExists(atPath: legacyFileURL.path) {
+            try? fileManager.removeItem(at: legacyFileURL)
+        }
     }
 
-    private func fileURL() -> URL {
-        let digest = SHA256.hash(data: Data(scoreID.utf8))
-        let fileName = digest.map { String(format: "%02x", $0) }.joined() + ".json"
-        let rootURL = (try? ManagedScoreLibraryPaths.privateRootURL())
-            ?? fileManager.temporaryDirectory.appendingPathComponent(ManagedScoreLibraryPaths.privateRootDirectoryName, isDirectory: true)
-        return rootURL
-            .appendingPathComponent("Annotations", isDirectory: true)
-            .appendingPathComponent(fileName, isDirectory: false)
+    /// Keeps an undecodable file next to the store instead of overwriting it.
+    private func setAside(_ url: URL) -> ScoreAnnotationLoadResult {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let keptURL = url.deletingPathExtension()
+            .appendingPathExtension("unreadable-\(formatter.string(from: Date()))")
+            .appendingPathExtension("json")
+        do {
+            try fileManager.moveItem(at: url, to: keptURL)
+        } catch {
+            return ScoreAnnotationLoadResult(isWritable: false, message: "Annotations could not be read, so changes won't be saved.")
+        }
+        return ScoreAnnotationLoadResult(message: "Earlier annotations could not be read and were kept aside.")
+    }
+
+    private static func fileName(for key: String) -> String {
+        SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined() + ".json"
+    }
+
+    private struct VersionProbe: Decodable {
+        let version: Int
+    }
+}
+
+/// Version 1 stored measure-relative points and widths in screen points.
+private struct LegacyDocumentV1: Decodable {
+    struct Anchor: Decodable {
+        let measureEID: String
+        let fallbackMeasureIndex: Int
+        let fallbackPageIndex: Int
+        let sourceRect: ScoreAnnotationRect
+    }
+
+    struct Stroke: Decodable {
+        let id: UUID
+        let partID: String
+        let fallbackPageIndex: Int
+        let tool: ScoreAnnotationTool
+        let color: ScoreAnnotationRGBA
+        let width: Double
+        let anchor: Anchor?
+        let points: [ScoreAnnotationPoint]
+        let createdAt: Date
+    }
+
+    let strokes: [Stroke]
+
+    func migrated() -> ScoreAnnotationDocument {
+        ScoreAnnotationDocument(strokes: strokes.map { stroke in
+            let source = stroke.anchor?.sourceRect
+            let pagePoints = stroke.points.map { point -> CGPoint in
+                guard let source, source.width > 0, source.height > 0 else { return point.cgPoint }
+                return CGPoint(x: source.x + point.x * source.width, y: source.y + point.y * source.height)
+            }
+            return ScoreAnnotationStroke(
+                id: stroke.id,
+                groupID: stroke.id,
+                partID: stroke.partID,
+                fallbackPageIndex: stroke.fallbackPageIndex,
+                tool: stroke.tool,
+                color: stroke.color,
+                width: stroke.tool.lineWidth(forPaletteWidth: stroke.width),
+                anchor: stroke.anchor.map { anchor in
+                    ScoreAnnotationMeasureAnchor(
+                        measureEID: anchor.measureEID,
+                        fallbackMeasureIndex: anchor.fallbackMeasureIndex,
+                        fallbackPageIndex: anchor.fallbackPageIndex,
+                        sourceRect: anchor.sourceRect,
+                        origin: ScoreAnnotationPoint(ScoreAnnotationGeometry.boundsCenter(of: pagePoints))
+                    )
+                },
+                points: pagePoints.map(ScoreAnnotationPoint.init),
+                createdAt: stroke.createdAt
+            )
+        })
+    }
+}
+
+/// Measure regions deduplicated across repeats, with lookups for anchors.
+private struct ScoreAnnotationRegionIndex {
+    let regions: [ScorePlaybackMeasureRegion]
+    private let regionsByEID: [String: ScorePlaybackMeasureRegion]
+    private let regionsByMeasureIndex: [Int: ScorePlaybackMeasureRegion]
+
+    init(_ playbackRegions: [ScorePlaybackMeasureRegion]) {
+        var seen: Set<String> = []
+        regions = playbackRegions
+            .sorted { lhs, rhs in
+                lhs.measureIndex == rhs.measureIndex
+                    ? lhs.startTimeSeconds < rhs.startTimeSeconds
+                    : lhs.measureIndex < rhs.measureIndex
+            }
+            .filter { seen.insert(Self.identity(of: $0)).inserted }
+        regionsByEID = Dictionary(
+            regions.filter { !$0.measureEID.isEmpty }.map { ($0.measureEID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        regionsByMeasureIndex = Dictionary(
+            regions.map { ($0.measureIndex, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    static func identity(of region: ScorePlaybackMeasureRegion) -> String {
+        region.measureEID.isEmpty ? "index:\(region.measureIndex)" : "eid:\(region.measureEID)"
+    }
+
+    func regions(onPage pageIndex: Int) -> [ScorePlaybackMeasureRegion] {
+        regions.filter { $0.pageIndex == pageIndex }
+    }
+
+    func region(for anchor: ScoreAnnotationMeasureAnchor) -> (region: ScorePlaybackMeasureRegion?, isExact: Bool) {
+        if !anchor.measureEID.isEmpty, let exact = regionsByEID[anchor.measureEID] {
+            return (exact, true)
+        }
+        return (regionsByMeasureIndex[anchor.fallbackMeasureIndex], false)
+    }
+}
+
+private enum ScoreAnnotationGeometry {
+    static func boundsCenter(of points: [CGPoint]) -> CGPoint {
+        guard let first = points.first else { return .zero }
+        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
+        for point in points.dropFirst() {
+            minX = min(minX, point.x)
+            maxX = max(maxX, point.x)
+            minY = min(minY, point.y)
+            maxY = max(maxY, point.y)
+        }
+        return CGPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2)
     }
 }
 
 @MainActor
 final class ScoreAnnotationController: ObservableObject {
-    @Published private(set) var document: ScoreAnnotationDocument
+    @Published private(set) var document: ScoreAnnotationDocument {
+        didSet { renderCache = nil }
+    }
     @Published private(set) var selectedStrokeIDs: Set<UUID> = []
     @Published private(set) var saveErrorMessage: String?
+    /// False when the stored file can't be safely overwritten.
+    let isEditable: Bool
 
     private let store: ScoreAnnotationStore
     private var undoStack: [[ScoreAnnotationStroke]] = []
     private var redoStack: [[ScoreAnnotationStroke]] = []
     private var saveTask: Task<Void, Never>?
+    /// Strokes drawn before measure geometry arrived; anchored once it does.
+    private var unanchoredStrokeIDs: Set<UUID> = []
+    private var renderCache: RenderCache?
 
-    init(scoreID: String) {
-        store = ScoreAnnotationStore(scoreID: scoreID)
-        document = store.load()
+    private struct RenderCache {
+        let partID: String
+        let regions: [ScorePlaybackMeasureRegion]
+        let strokesByPage: [Int: [ScoreRenderedAnnotationStroke]]
+    }
+
+    init(documentURL: URL) {
+        store = ScoreAnnotationStore(documentURL: documentURL)
+        let result = store.load()
+        document = result.document
+        isEditable = result.isWritable
+        saveErrorMessage = result.message
+        if result.needsSave {
+            saveNow()
+        }
     }
 
     deinit {
@@ -195,20 +422,27 @@ final class ScoreAnnotationController: ObservableObject {
         partID: String,
         regions: [ScorePlaybackMeasureRegion]
     ) -> [ScoreRenderedAnnotationStroke] {
-        let visualRegions = Self.visualRegions(from: regions)
-        return document.strokes.compactMap { stroke in
-            guard stroke.partID == partID else { return nil }
-            let resolved = Self.resolve(stroke: stroke, in: visualRegions)
-            guard resolved.pageIndex == pageIndex else { return nil }
-            return ScoreRenderedAnnotationStroke(
-                id: stroke.id,
-                tool: stroke.tool,
-                color: stroke.color,
-                width: stroke.width,
-                points: resolved.points,
-                isOrphaned: resolved.isOrphaned
+        if let renderCache, renderCache.partID == partID, renderCache.regions == regions {
+            return renderCache.strokesByPage[pageIndex] ?? []
+        }
+
+        let regionIndex = ScoreAnnotationRegionIndex(regions)
+        var strokesByPage: [Int: [ScoreRenderedAnnotationStroke]] = [:]
+        for stroke in document.strokes where stroke.partID == partID {
+            let resolved = Self.resolve(stroke: stroke, in: regionIndex)
+            strokesByPage[resolved.pageIndex, default: []].append(
+                ScoreRenderedAnnotationStroke(
+                    id: stroke.id,
+                    tool: stroke.tool,
+                    color: stroke.color,
+                    width: stroke.width * resolved.scale,
+                    points: resolved.points,
+                    isOrphaned: resolved.isOrphaned
+                )
             )
         }
+        renderCache = RenderCache(partID: partID, regions: regions, strokesByPage: strokesByPage)
+        return strokesByPage[pageIndex] ?? []
     }
 
     func commitStroke(
@@ -220,61 +454,52 @@ final class ScoreAnnotationController: ObservableObject {
         pagePoints: [CGPoint],
         regions: [ScorePlaybackMeasureRegion]
     ) {
-        guard tool.createsStroke, !pagePoints.isEmpty else { return }
-        let pageRegions = Self.visualRegions(from: regions).filter { $0.pageIndex == pageIndex }
-        let allRegions = Self.visualRegions(from: regions)
-        var groups: [(region: ScorePlaybackMeasureRegion?, points: [CGPoint])] = []
-
-        for point in pagePoints {
-            let region = Self.region(containingOrNearest: point, in: pageRegions)
-            let currentIdentity = region.map(Self.regionIdentity)
-            if let last = groups.indices.last,
-               groups[last].region.map(Self.regionIdentity) == currentIdentity {
-                groups[last].points.append(point)
-            } else {
-                if let previousPoint = groups.last?.points.last {
-                    groups.append((region, [previousPoint, point]))
-                } else {
-                    groups.append((region, [point]))
-                }
-            }
-        }
+        guard isEditable, tool.createsStroke, !pagePoints.isEmpty else { return }
+        let template = ScoreAnnotationStroke(
+            id: UUID(),
+            groupID: UUID(),
+            partID: partID,
+            fallbackPageIndex: pageIndex,
+            tool: tool,
+            color: color.rgba,
+            width: tool.lineWidth(forPaletteWidth: width),
+            anchor: nil,
+            points: pagePoints.map(ScoreAnnotationPoint.init),
+            createdAt: Date()
+        )
+        let strokes = Self.anchoredPieces(of: template, in: ScoreAnnotationRegionIndex(regions))
 
         recordUndoSnapshot()
-        let rgba = color.rgba
-        for group in groups where !group.points.isEmpty {
-            let anchor = group.region.map { region in
-                Self.anchor(for: region, allRegions: allRegions)
-            }
-            let localPoints = group.points.map { point -> ScoreAnnotationPoint in
-                guard let sourceRect = anchor?.sourceRect.normalizedRect,
-                      sourceRect.width > 0,
-                      sourceRect.height > 0
-                else {
-                    return ScoreAnnotationPoint(point)
-                }
-                return ScoreAnnotationPoint(
-                    CGPoint(
-                        x: (point.x - sourceRect.x) / sourceRect.width,
-                        y: (point.y - sourceRect.y) / sourceRect.height
-                    )
-                )
-            }
-            document.strokes.append(
-                ScoreAnnotationStroke(
-                    id: UUID(),
-                    partID: partID,
-                    fallbackPageIndex: pageIndex,
-                    tool: tool,
-                    color: rgba,
-                    width: width,
-                    anchor: anchor,
-                    points: localPoints,
-                    createdAt: Date()
-                )
-            )
+        document.strokes.append(contentsOf: strokes)
+        if regions.isEmpty {
+            unanchoredStrokeIDs.formUnion(strokes.map(\.id))
         }
         selectedStrokeIDs.removeAll()
+        scheduleSave()
+    }
+
+    /// Anchors strokes drawn before the measure geometry finished loading.
+    func anchorPendingStrokes(partID: String, regions: [ScorePlaybackMeasureRegion]) {
+        guard isEditable, !unanchoredStrokeIDs.isEmpty, !regions.isEmpty else { return }
+        let regionIndex = ScoreAnnotationRegionIndex(regions)
+        var anchoredIDs: Set<UUID> = []
+        func anchorPending(in strokes: [ScoreAnnotationStroke]) -> [ScoreAnnotationStroke] {
+            strokes.flatMap { stroke -> [ScoreAnnotationStroke] in
+                guard unanchoredStrokeIDs.contains(stroke.id), stroke.anchor == nil, stroke.partID == partID else {
+                    return [stroke]
+                }
+                anchoredIDs.insert(stroke.id)
+                return Self.anchoredPieces(of: stroke, in: regionIndex)
+            }
+        }
+
+        // Rewrite history too, so undo never brings back an unanchored copy.
+        document.strokes = anchorPending(in: document.strokes)
+        undoStack = undoStack.map(anchorPending)
+        redoStack = redoStack.map(anchorPending)
+        guard !anchoredIDs.isEmpty else { return }
+        unanchoredStrokeIDs.subtract(anchoredIDs)
+        selectedStrokeIDs.subtract(anchoredIDs)
         scheduleSave()
     }
 
@@ -284,7 +509,7 @@ final class ScoreAnnotationController: ObservableObject {
         along pagePoints: [CGPoint],
         regions: [ScorePlaybackMeasureRegion]
     ) {
-        guard !pagePoints.isEmpty else { return }
+        guard isEditable, !pagePoints.isEmpty else { return }
         let renderedByID = Dictionary(
             uniqueKeysWithValues: renderedStrokes(pageIndex: pageIndex, partID: partID, regions: regions)
                 .map { ($0.id, $0.points) }
@@ -338,9 +563,11 @@ final class ScoreAnnotationController: ObservableObject {
                 retainedPointGroups.append(currentGroup)
             }
 
+            // Fragments keep the anchor origin so they stay aligned after reflow.
             replacements[stroke.id] = retainedPointGroups.map { retainedPoints in
                 ScoreAnnotationStroke(
                     id: UUID(),
+                    groupID: stroke.groupID,
                     partID: stroke.partID,
                     fallbackPageIndex: stroke.fallbackPageIndex,
                     tool: stroke.tool,
@@ -368,13 +595,20 @@ final class ScoreAnnotationController: ObservableObject {
         in pageRect: CGRect,
         regions: [ScorePlaybackMeasureRegion]
     ) {
-        guard pageRect.width > 0.002, pageRect.height > 0.002 else {
+        guard isEditable, pageRect.width > 0.002, pageRect.height > 0.002 else {
             selectedStrokeIDs.removeAll()
             return
         }
-        selectedStrokeIDs = Set(
+        let hitIDs = Set(
             renderedStrokes(pageIndex: pageIndex, partID: partID, regions: regions)
                 .filter { stroke in stroke.points.contains(where: { pageRect.contains($0) }) }
+                .map(\.id)
+        )
+        // Select whole gestures, including pieces in other measures.
+        let hitGroupIDs = Set(document.strokes.filter { hitIDs.contains($0.id) }.map(\.groupID))
+        selectedStrokeIDs = Set(
+            document.strokes
+                .filter { $0.partID == partID && hitGroupIDs.contains($0.groupID) }
                 .map(\.id)
         )
     }
@@ -383,34 +617,39 @@ final class ScoreAnnotationController: ObservableObject {
         by pageDelta: CGPoint,
         regions: [ScorePlaybackMeasureRegion]
     ) {
-        guard !selectedStrokeIDs.isEmpty, pageDelta != .zero else { return }
-        let visualRegions = Self.visualRegions(from: regions)
+        guard isEditable, !selectedStrokeIDs.isEmpty, pageDelta != .zero else { return }
+        let regionIndex = ScoreAnnotationRegionIndex(regions)
         recordUndoSnapshot()
         for index in document.strokes.indices where selectedStrokeIDs.contains(document.strokes[index].id) {
-            if let anchor = document.strokes[index].anchor,
-               let region = Self.region(for: anchor, in: visualRegions),
-               region.normalizedRect.width > 0,
-               region.normalizedRect.height > 0 {
-                let localDelta = CGPoint(
-                    x: pageDelta.x / region.normalizedRect.width,
-                    y: pageDelta.y / region.normalizedRect.height
-                )
-                for pointIndex in document.strokes[index].points.indices {
-                    document.strokes[index].points[pointIndex].x += localDelta.x
-                    document.strokes[index].points[pointIndex].y += localDelta.y
+            var stroke = document.strokes[index]
+            // Stored points are in the drawing-time layout. Convert the on-screen
+            // delta back through the measure's current-to-source size ratio.
+            var storedDelta = pageDelta
+            if var anchor = stroke.anchor {
+                let source = anchor.sourceRect.normalizedRect
+                if let region = regionIndex.region(for: anchor).region,
+                   region.normalizedRect.width > 0,
+                   region.normalizedRect.height > 0 {
+                    storedDelta = CGPoint(
+                        x: pageDelta.x * source.width / region.normalizedRect.width,
+                        y: pageDelta.y * source.height / region.normalizedRect.height
+                    )
                 }
-            } else {
-                for pointIndex in document.strokes[index].points.indices {
-                    document.strokes[index].points[pointIndex].x += pageDelta.x
-                    document.strokes[index].points[pointIndex].y += pageDelta.y
-                }
+                anchor.origin.x += storedDelta.x
+                anchor.origin.y += storedDelta.y
+                stroke.anchor = anchor
             }
+            for pointIndex in stroke.points.indices {
+                stroke.points[pointIndex].x += storedDelta.x
+                stroke.points[pointIndex].y += storedDelta.y
+            }
+            document.strokes[index] = stroke
         }
         scheduleSave()
     }
 
     func deleteSelection() {
-        guard !selectedStrokeIDs.isEmpty else { return }
+        guard isEditable, !selectedStrokeIDs.isEmpty else { return }
         recordUndoSnapshot()
         document.strokes.removeAll { selectedStrokeIDs.contains($0.id) }
         selectedStrokeIDs.removeAll()
@@ -438,6 +677,7 @@ final class ScoreAnnotationController: ObservableObject {
     }
 
     func flushSave() {
+        guard saveTask != nil else { return }
         saveTask?.cancel()
         saveTask = nil
         saveNow()
@@ -456,11 +696,13 @@ final class ScoreAnnotationController: ObservableObject {
         saveTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 350_000_000)
             guard !Task.isCancelled else { return }
+            self?.saveTask = nil
             self?.saveNow()
         }
     }
 
     private func saveNow() {
+        guard isEditable else { return }
         do {
             try store.save(document)
             saveErrorMessage = nil
@@ -469,21 +711,49 @@ final class ScoreAnnotationController: ObservableObject {
         }
     }
 
-    private static func visualRegions(from regions: [ScorePlaybackMeasureRegion]) -> [ScorePlaybackMeasureRegion] {
-        var seen: Set<String> = []
-        return regions
-            .sorted { lhs, rhs in
-                lhs.measureIndex == rhs.measureIndex
-                    ? lhs.startTimeSeconds < rhs.startTimeSeconds
-                    : lhs.measureIndex < rhs.measureIndex
-            }
-            .filter { region in
-                seen.insert(regionIdentity(region)).inserted
-            }
-    }
+    /// Splits a page-relative stroke into one anchored piece per measure it
+    /// crosses. Pieces share the stroke's group, width and creation time.
+    private static func anchoredPieces(
+        of stroke: ScoreAnnotationStroke,
+        in regionIndex: ScoreAnnotationRegionIndex
+    ) -> [ScoreAnnotationStroke] {
+        let pageRegions = regionIndex.regions(onPage: stroke.fallbackPageIndex)
+        guard !pageRegions.isEmpty else { return [stroke] }
 
-    private static func regionIdentity(_ region: ScorePlaybackMeasureRegion) -> String {
-        region.measureEID.isEmpty ? "index:\(region.measureIndex)" : "eid:\(region.measureEID)"
+        var groups: [(region: ScorePlaybackMeasureRegion, points: [CGPoint])] = []
+        for point in stroke.points.map(\.cgPoint) {
+            guard let region = region(containingOrNearest: point, in: pageRegions) else { continue }
+            if let last = groups.indices.last,
+               ScoreAnnotationRegionIndex.identity(of: groups[last].region) == ScoreAnnotationRegionIndex.identity(of: region) {
+                groups[last].points.append(point)
+            } else if let previousPoint = groups.last?.points.last {
+                // Start at the previous point so the pieces join without a gap.
+                groups.append((region, [previousPoint, point]))
+            } else {
+                groups.append((region, [point]))
+            }
+        }
+
+        return groups.map { group in
+            ScoreAnnotationStroke(
+                id: UUID(),
+                groupID: stroke.groupID,
+                partID: stroke.partID,
+                fallbackPageIndex: stroke.fallbackPageIndex,
+                tool: stroke.tool,
+                color: stroke.color,
+                width: stroke.width,
+                anchor: ScoreAnnotationMeasureAnchor(
+                    measureEID: group.region.measureEID,
+                    fallbackMeasureIndex: group.region.measureIndex,
+                    fallbackPageIndex: group.region.pageIndex,
+                    sourceRect: ScoreAnnotationRect(group.region.normalizedRect),
+                    origin: ScoreAnnotationPoint(ScoreAnnotationGeometry.boundsCenter(of: group.points))
+                ),
+                points: group.points.map(ScoreAnnotationPoint.init),
+                createdAt: stroke.createdAt
+            )
+        }
     }
 
     private static func region(containingOrNearest point: CGPoint, in regions: [ScorePlaybackMeasureRegion]) -> ScorePlaybackMeasureRegion? {
@@ -498,55 +768,38 @@ final class ScoreAnnotationController: ObservableObject {
         }
     }
 
-    private static func anchor(
-        for region: ScorePlaybackMeasureRegion,
-        allRegions: [ScorePlaybackMeasureRegion]
-    ) -> ScoreAnnotationMeasureAnchor {
-        let previous = allRegions.last { $0.measureIndex < region.measureIndex }
-        let next = allRegions.first { $0.measureIndex > region.measureIndex }
-        return ScoreAnnotationMeasureAnchor(
-            measureEID: region.measureEID,
-            fallbackMeasureIndex: region.measureIndex,
-            fallbackPageIndex: region.pageIndex,
-            sourceRect: ScoreAnnotationRect(region.normalizedRect),
-            previousMeasureEID: previous?.measureEID.trimmedToNil,
-            nextMeasureEID: next?.measureEID.trimmedToNil
-        )
-    }
-
-    private static func region(
-        for anchor: ScoreAnnotationMeasureAnchor,
-        in regions: [ScorePlaybackMeasureRegion]
-    ) -> ScorePlaybackMeasureRegion? {
-        if !anchor.measureEID.isEmpty,
-           let exact = regions.first(where: { $0.measureEID == anchor.measureEID }) {
-            return exact
-        }
-        return regions.first(where: { $0.measureIndex == anchor.fallbackMeasureIndex })
-    }
-
     private static func resolve(
         stroke: ScoreAnnotationStroke,
-        in regions: [ScorePlaybackMeasureRegion]
-    ) -> (pageIndex: Int, points: [CGPoint], isOrphaned: Bool) {
+        in regionIndex: ScoreAnnotationRegionIndex
+    ) -> (pageIndex: Int, points: [CGPoint], scale: Double, isOrphaned: Bool) {
+        let storedPoints = stroke.points.map(\.cgPoint)
         guard let anchor = stroke.anchor else {
-            return (stroke.fallbackPageIndex, stroke.points.map(\.cgPoint), false)
+            return (stroke.fallbackPageIndex, storedPoints, 1, false)
         }
 
-        let exactRegion = !anchor.measureEID.isEmpty
-            ? regions.first(where: { $0.measureEID == anchor.measureEID })
-            : nil
-        let fallbackRegion = regions.first(where: { $0.measureIndex == anchor.fallbackMeasureIndex })
-        let region = exactRegion ?? fallbackRegion
-        let rect = region?.normalizedRect ?? anchor.sourceRect.normalizedRect
-        let pageIndex = region?.pageIndex ?? anchor.fallbackPageIndex
-        let points = stroke.points.map { point in
+        let match = regionIndex.region(for: anchor)
+        let isOrphaned = !match.isExact && !anchor.measureEID.isEmpty
+        let source = anchor.sourceRect.normalizedRect
+        guard let region = match.region, source.width > 0, source.height > 0, region.normalizedRect.height > 0 else {
+            return (anchor.fallbackPageIndex, storedPoints, 1, isOrphaned)
+        }
+
+        // The origin follows the measure proportionally, so a mark over beat 3
+        // stays over beat 3. The shape scales uniformly with the measure height.
+        let rect = region.normalizedRect
+        let scale = rect.height / source.height
+        let origin = anchor.origin.cgPoint
+        let movedOrigin = CGPoint(
+            x: rect.x + (origin.x - source.x) / source.width * rect.width,
+            y: rect.y + (origin.y - source.y) / source.height * rect.height
+        )
+        let points = storedPoints.map { point in
             CGPoint(
-                x: rect.x + point.x * rect.width,
-                y: rect.y + point.y * rect.height
+                x: movedOrigin.x + (point.x - origin.x) * scale,
+                y: movedOrigin.y + (point.y - origin.y) * scale
             )
         }
-        return (pageIndex, points, exactRegion == nil && !anchor.measureEID.isEmpty)
+        return (region.pageIndex, points, scale, isOrphaned)
     }
 
     private static func distance(from point: CGPoint, to polyline: [CGPoint]) -> CGFloat {
