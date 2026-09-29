@@ -11,6 +11,11 @@ failure propagation, partial-file cleanup, cancellation, and layout restoration.
 Metal/IOSurface and video encoder access are required. This is a correctness
 check, not a performance benchmark. All generated outputs are temporary.
 
+`--run` also checks the Piano style: MIDI note reading and timing, the keyboard
+range, and a short export. Add `--piano-midi file.mid --piano-output dir` to draw
+stills and a (silent) MP4 from a real score's playback MIDI, e.g. one written by
+`build-aria-475-host/score_render_playback_export score.mscz out.mid`.
+
 The stubs isolate the Swift writer/prefetch pipeline. Native PCM equivalence is
 covered separately by `sandbox/engraving/tests/score_render_audio_mix_tests.cpp`,
 which compares actual FluidSynth output with stems enabled and disabled.

@@ -17,9 +17,33 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
     case scrollingPhoto
     case pagesLandscape
     case pagesPortrait
+    /// Notes falling onto a piano keyboard, drawn from the playback MIDI:
+    /// neon on black, the light piano roll, or over a blurred photo.
+    case piano
+    case pianoLight
+    case pianoPhoto
+
+    enum Layout: Hashable, Sendable {
+        case scrolling
+        case pages
+        case piano
+    }
 
     var id: String {
         rawValue
+    }
+
+    var layout: Layout {
+        switch self {
+        case .scrolling, .scrollingPhoto: return .scrolling
+        case .pagesLandscape, .pagesPortrait: return .pages
+        case .piano, .pianoLight, .pianoPhoto: return .piano
+        }
+    }
+
+    /// Styles drawn over a photo the user chooses.
+    var usesPhoto: Bool {
+        self == .scrollingPhoto || self == .pianoPhoto
     }
 
     var title: String {
@@ -32,12 +56,18 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
             return "Pages 16:9"
         case .pagesPortrait:
             return "Pages 9:16"
+        case .piano:
+            return "Piano"
+        case .pianoLight:
+            return "Piano light"
+        case .pianoPhoto:
+            return "Piano photo"
         }
     }
 
     var frameSize: CGSize {
         switch self {
-        case .scrolling, .scrollingPhoto, .pagesLandscape:
+        case .scrolling, .scrollingPhoto, .pagesLandscape, .piano, .pianoLight, .pianoPhoto:
             return CGSize(width: 1920, height: 1080)
         case .pagesPortrait:
             return CGSize(width: 1080, height: 1920)
@@ -50,7 +80,7 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .pagesPortrait:
             return 1000
-        case .scrolling, .scrollingPhoto, .pagesLandscape:
+        case .scrolling, .scrollingPhoto, .pagesLandscape, .piano, .pianoLight, .pianoPhoto:
             return 1240
         }
     }
@@ -303,6 +333,7 @@ enum ScoreVideoExportError: LocalizedError {
     case noPages
     case writerFailed(String)
     case missingBackgroundImage
+    case noPianoNotes
 
     var errorDescription: String? {
         switch self {
@@ -313,7 +344,9 @@ enum ScoreVideoExportError: LocalizedError {
         case .writerFailed(let message):
             return "The video could not be written: \(message)"
         case .missingBackgroundImage:
-            return "Choose a background photo for the white notation video."
+            return "Choose a background photo for this video."
+        case .noPianoNotes:
+            return "This score has no pitched notes to show on a piano."
         }
     }
 }
@@ -333,7 +366,7 @@ enum ScoreVideoExporter {
         options: ScoreVideoExportOptions,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
-        if options.style == .scrollingPhoto, options.backgroundImageData == nil {
+        if options.style.usesPhoto, options.backgroundImageData == nil {
             throw ScoreVideoExportError.missingBackgroundImage
         }
         let rendering = Task.detached(priority: .userInitiated) {
@@ -364,14 +397,20 @@ enum ScoreVideoExporter {
         fileprivate let pages: [ScoreVideoPageSource]
         fileprivate let timeline: ScoreVideoTimeline
         fileprivate let beatPoints: [ScorePlaybackBeatPoint]
+        fileprivate var pianoNotes: [ScoreVideoPianoNote] = []
     }
 
     /// Reads what previews need. Scrolling switches the score to one line only
     /// while reading, and always switches it back, as the export does. Callers
     /// must not start an export until this returns.
     static func previewMaterial(liveRenderSession: LiveScoreRenderSession, pageCount: Int,
-                                scrolling: Bool) async throws -> PreviewMaterial {
-        guard scrolling else {
+                                layout: ScoreVideoStyle.Layout) async throws -> PreviewMaterial {
+        switch layout {
+        case .piano:
+            let timeline = ScoreVideoTimeline(regions: try await liveRenderSession.playbackMeasureRegions())
+            let notes = ScoreVideoPianoNotes.notes(fromMIDI: try await liveRenderSession.playbackMIDIData())
+            return PreviewMaterial(pages: [], timeline: timeline, beatPoints: [], pianoNotes: notes)
+        case .pages:
             let timeline = ScoreVideoTimeline(regions: try await liveRenderSession.playbackMeasureRegions())
             var pages: [ScoreVideoPageSource] = []
             // The opening frame shows at most the first two pages.
@@ -379,6 +418,8 @@ enum ScoreVideoExporter {
                 pages.append(ScoreVideoPageSource(page: try await liveRenderSession.renderPage(at: index, dpi: 144)))
             }
             return PreviewMaterial(pages: pages, timeline: timeline, beatPoints: [])
+        case .scrolling:
+            break
         }
         _ = try await liveRenderSession.setContinuousLayout(true)
         do {
@@ -394,18 +435,27 @@ enum ScoreVideoExporter {
     }
 
     /// The first frame of the video, drawn by the painter the export uses.
+    /// The piano shows the moment its first note sounds, with its key lit.
     static func previewFrame(_ material: PreviewMaterial, options: ScoreVideoExportOptions) -> CGImage? {
-        guard material.timeline.endTimeSeconds > 0, let firstPage = material.pages.first else { return nil }
+        guard material.timeline.endTimeSeconds > 0 else { return nil }
         let frameSize = options.style.frameSize
         let painter: ScoreVideoPainter
         let time: TimeInterval
         switch options.style {
+        case .piano, .pianoLight, .pianoPhoto:
+            guard !material.pianoNotes.isEmpty else { return nil }
+            let piano = ScoreVideoPianoPainter(frameSize: frameSize, notes: material.pianoNotes,
+                                               timeline: material.timeline, options: options)
+            painter = piano
+            time = piano.firstNoteSeconds
         case .scrolling, .scrollingPhoto:
+            guard let firstPage = material.pages.first else { return nil }
             let scrolling = ScoreVideoScrollingPainter(frameSize: frameSize, page: firstPage, timeline: material.timeline,
                                                        beatPoints: material.beatPoints, options: options)
             painter = scrolling
             time = 0
         case .pagesLandscape, .pagesPortrait:
+            guard !material.pages.isEmpty else { return nil }
             painter = ScoreVideoPagesPainter(frameSize: frameSize, pages: material.pages, timeline: material.timeline, options: options)
             time = 0
         }
@@ -436,25 +486,33 @@ enum ScoreVideoExporter {
         guard timeline.endTimeSeconds > 0 else {
             throw ScoreVideoExportError.noPlayback
         }
-        guard pageCount > 0 else {
-            throw ScoreVideoExportError.noPages
-        }
-
-        var pages: [ScoreVideoPageSource] = []
-        for pageIndex in 0..<pageCount {
-            try Task.checkCancellation()
-            pages.append(ScoreVideoPageSource(page: try await liveRenderSession.renderPage(at: pageIndex, dpi: 144)))
-        }
-
         let frameSize = options.style.frameSize
         let duration = timeline.endTimeSeconds + tailSeconds
         let frameRate = Double(options.frameRate)
         let totalFrames = Int((duration * frameRate).rounded(.up))
-        let isScrolling = options.style == .scrolling || options.style == .scrollingPhoto
-        let beatPoints = isScrolling ? (try? await liveRenderSession.playbackBeatPoints()) ?? [] : []
-        let painter: ScoreVideoPainter = isScrolling
-            ? ScoreVideoScrollingPainter(frameSize: frameSize, page: pages[0], timeline: timeline, beatPoints: beatPoints, options: options)
-            : ScoreVideoPagesPainter(frameSize: frameSize, pages: pages, timeline: timeline, options: options)
+        let painter: ScoreVideoPainter
+        if options.style.layout == .piano {
+            // The piano needs only the notes, not the pages.
+            let notes = ScoreVideoPianoNotes.notes(fromMIDI: try await liveRenderSession.playbackMIDIData())
+            guard !notes.isEmpty else {
+                throw ScoreVideoExportError.noPianoNotes
+            }
+            painter = ScoreVideoPianoPainter(frameSize: frameSize, notes: notes, timeline: timeline, options: options)
+        } else {
+            guard pageCount > 0 else {
+                throw ScoreVideoExportError.noPages
+            }
+            var pages: [ScoreVideoPageSource] = []
+            for pageIndex in 0..<pageCount {
+                try Task.checkCancellation()
+                pages.append(ScoreVideoPageSource(page: try await liveRenderSession.renderPage(at: pageIndex, dpi: 144)))
+            }
+            let isScrolling = options.style.layout == .scrolling
+            let beatPoints = isScrolling ? (try? await liveRenderSession.playbackBeatPoints()) ?? [] : []
+            painter = isScrolling
+                ? ScoreVideoScrollingPainter(frameSize: frameSize, page: pages[0], timeline: timeline, beatPoints: beatPoints, options: options)
+                : ScoreVideoPagesPainter(frameSize: frameSize, pages: pages, timeline: timeline, options: options)
+        }
 
         // The first audio chunk tells us the sample rate the writer needs.
         let audio = ScoreVideoAudioStream(liveRenderSession: liveRenderSession, reverbSendLevel: options.reverbSendLevel)

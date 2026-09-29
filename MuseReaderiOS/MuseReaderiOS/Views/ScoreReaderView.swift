@@ -3309,7 +3309,7 @@ private extension String {
 /// never twice at the same time; each style change only redraws.
 @MainActor
 private final class ScoreVideoPreviewCache {
-    private var materials: [Bool: Task<ScoreVideoExporter.PreviewMaterial?, Never>] = [:]
+    private var materials: [ScoreVideoStyle.Layout: Task<ScoreVideoExporter.PreviewMaterial?, Never>] = [:]
     private var fonts: (title: ScoreVideoTextFont, composer: ScoreVideoTextFont)?
 
     func reset() {
@@ -3319,14 +3319,14 @@ private final class ScoreVideoPreviewCache {
 
     func image(style: ScoreVideoStyle, background: Data?, liveRenderSession: LiveScoreRenderSession,
                pageCount: Int, title: String, composer: String, pinsStaffHeader: Bool) async -> UIImage? {
-        let scrolling = style == .scrolling || style == .scrollingPhoto
-        let loading = materials[scrolling] ?? Task {
+        let layout = style.layout
+        let loading = materials[layout] ?? Task {
             try? await ScoreVideoExporter.previewMaterial(liveRenderSession: liveRenderSession,
-                                                          pageCount: pageCount, scrolling: scrolling)
+                                                          pageCount: pageCount, layout: layout)
         }
-        materials[scrolling] = loading
+        materials[layout] = loading
         guard let material = await loading.value else {
-            materials[scrolling] = nil
+            materials[layout] = nil
             return nil
         }
         if fonts == nil {

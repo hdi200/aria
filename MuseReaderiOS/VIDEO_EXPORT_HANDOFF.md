@@ -57,6 +57,23 @@ layout-break markers as system positions, is gone.)
   looking 0.4 s ahead; measure highlights and playhead remain. A title card fades
   out during the opening 4.5 s.
 
+- **Piano** (`.piano`, `.pianoLight`, `.pianoPhoto`; 1920×1080): a piano-roll
+  visualizer modeled on the Transcription app's `PianoRoll`. Notes fall onto a
+  keyboard fitted to the music's range (at least three octaves, ending on white
+  keys) and light their keys while sounding. Notes come from the engine's playback
+  MIDI (`playbackMIDIData`, repeats expanded), converted to seconds with
+  AudioToolbox's `MusicSequence`; percussion (channel 10) is left out of the
+  picture but still heard. Each note-bearing MIDI track (one per staff) gets its
+  own colour, so a piano's treble and bass staves differ. No pages are rendered
+  and the layout is not switched; audio is the usual engine playback.
+  Appearance: **Dark** (default: neon notes with a soft glow, a lit keyboard rail
+  and flares where notes meet keys), **Light** (the piano-roll look with lanes,
+  bar lines and a scrubber), and **Photo** (white-rimmed notes over the chosen
+  photo, blurred once behind a light veil). `ScoreVideoPianoPainter.swift` draws
+  notes and keyboard with Core Graphics, then Core Image (Metal) blurs the notes
+  into a glow and composes the frame: about 8–15 ms per 1080p frame on the Mac,
+  unmeasured on iPad. The preview shows the first note sounding.
+
 Repeats and jumps cut: the scrolling camera's 1.2 s smoothing window is clamped to
 the current path segment (`ScoreVideoScrollPath.segmentTimes`), so it never
 averages across a jump and slides backward.

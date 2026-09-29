@@ -581,10 +581,13 @@ struct ScoreReaderVideoExportSheet: View {
     @State private var previewImage: UIImage?
     @State private var paperThumbnail: UIImage?
     @State private var photoThumbnail: UIImage?
+    @State private var pianoDarkThumbnail: UIImage?
+    @State private var pianoLightThumbnail: UIImage?
     @State private var previewRevision = 0
     @State private var isLoadingPreview = true
     @State private var preferredScrollingStyle: ScoreVideoStyle = .scrolling
     @State private var preferredPageStyle: ScoreVideoStyle = .pagesLandscape
+    @State private var preferredPianoStyle: ScoreVideoStyle = .piano
     @State private var player = AVPlayer()
     @State private var playingVideo: URL?
     @State private var isFullScreen = false
@@ -607,11 +610,15 @@ struct ScoreReaderVideoExportSheet: View {
     let renderPreview: (ScoreVideoStyle, Data?) async -> UIImage?
 
     private var isScrolling: Bool {
-        draft.videoStyle == .scrolling || draft.videoStyle == .scrollingPhoto
+        draft.videoStyle.layout == .scrolling
+    }
+
+    private var isPiano: Bool {
+        draft.videoStyle.layout == .piano
     }
 
     private var needsPhoto: Bool {
-        draft.videoStyle == .scrollingPhoto && draft.videoBackgroundImageData == nil
+        draft.videoStyle.usesPhoto && draft.videoBackgroundImageData == nil
     }
 
     private var isTablet: Bool {
@@ -645,6 +652,7 @@ struct ScoreReaderVideoExportSheet: View {
         case .scrolling, .scrollingPhoto: return "16:9 • Scrolling"
         case .pagesLandscape: return "16:9 • Pages"
         case .pagesPortrait: return "9:16 • Pages"
+        case .piano, .pianoLight, .pianoPhoto: return "16:9 • Piano"
         }
     }
 
@@ -681,10 +689,10 @@ struct ScoreReaderVideoExportSheet: View {
         .presentationDragIndicator(.hidden)
         .interactiveDismissDisabled(isPreparingExport)
         .onAppear {
-            if isScrolling {
-                preferredScrollingStyle = draft.videoStyle
-            } else {
-                preferredPageStyle = draft.videoStyle
+            switch draft.videoStyle.layout {
+            case .scrolling: preferredScrollingStyle = draft.videoStyle
+            case .pages: preferredPageStyle = draft.videoStyle
+            case .piano: preferredPianoStyle = draft.videoStyle
             }
         }
         .onDisappear { player.pause() }
@@ -701,10 +709,24 @@ struct ScoreReaderVideoExportSheet: View {
                     previewImage = paper
                 }
             }
-            if style != .scrolling {
-                let image = style == .scrollingPhoto && background == nil ? nil : await renderPreview(style, background)
+            if style != .scrolling, style != .piano, style != .pianoLight {
+                let image = style.usesPhoto && background == nil ? nil : await renderPreview(style, background)
                 guard !Task.isCancelled else { return }
                 previewImage = image
+            }
+            // The dark and light frames double as the piano's appearance cards.
+            if isPiano {
+                let dark = await renderPreview(.piano, nil)
+                guard !Task.isCancelled else { return }
+                pianoDarkThumbnail = dark ?? pianoDarkThumbnail
+                let light = await renderPreview(.pianoLight, nil)
+                guard !Task.isCancelled else { return }
+                pianoLightThumbnail = light ?? pianoLightThumbnail
+                if style == .piano {
+                    previewImage = dark
+                } else if style == .pianoLight {
+                    previewImage = light
+                }
             }
             photoThumbnail = await Task.detached(priority: .userInitiated) {
                 background.flatMap { ScoreReaderVideoThumbnail.make(from: $0, maximumPixelSize: 720) }
@@ -878,26 +900,34 @@ struct ScoreReaderVideoExportSheet: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Layout").font(.headline)
                     ScoreReaderVideoSegmentedControl(
-                        options: [("Scrolling", true), ("Pages", false)],
-                        selection: Binding(get: { isScrolling }, set: { scrolling in
-                            guard scrolling != isScrolling else { return }
-                            if scrolling {
-                                preferredPageStyle = draft.videoStyle
-                                draft.videoStyle = preferredScrollingStyle
-                            } else {
-                                preferredScrollingStyle = draft.videoStyle
-                                draft.videoStyle = preferredPageStyle
+                        options: [("Scrolling", ScoreVideoStyle.Layout.scrolling), ("Pages", .pages), ("Piano", .piano)],
+                        selection: Binding(get: { draft.videoStyle.layout }, set: { layout in
+                            guard layout != draft.videoStyle.layout else { return }
+                            // Each layout remembers its own style while another is shown.
+                            switch draft.videoStyle.layout {
+                            case .scrolling: preferredScrollingStyle = draft.videoStyle
+                            case .pages: preferredPageStyle = draft.videoStyle
+                            case .piano: preferredPianoStyle = draft.videoStyle
+                            }
+                            switch layout {
+                            case .scrolling: draft.videoStyle = preferredScrollingStyle
+                            case .pages: draft.videoStyle = preferredPageStyle
+                            case .piano: draft.videoStyle = preferredPianoStyle
                             }
                         })
                     )
-                    Text(isScrolling
-                         ? "A continuous score moves smoothly past the playhead."
-                         : "The camera follows the playing measure through the pages.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Group {
+                        switch draft.videoStyle.layout {
+                        case .scrolling: Text("A continuous score moves smoothly past the playhead.")
+                        case .pages: Text("The camera follows the playing measure through the pages.")
+                        case .piano: Text("Notes fall onto a piano keyboard and light each key as it plays.")
+                        }
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 }
 
-                if isScrolling {
+                if isScrolling || isPiano {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(alignment: .firstTextBaseline, spacing: 14) {
                             Text("Appearance").font(.headline)
@@ -920,19 +950,42 @@ struct ScoreReaderVideoExportSheet: View {
                             .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                         HStack(alignment: .top, spacing: 14) {
-                            appearanceCard(title: "Score only", selected: draft.videoStyle == .scrolling,
-                                           height: compact ? 72 : nil) {
-                                draft.videoStyle = .scrolling
-                            } content: {
-                                if let paperThumbnail {
-                                    Image(uiImage: paperThumbnail).resizable().scaledToFill()
-                                } else {
-                                    Color.white
+                            if isPiano {
+                                appearanceCard(title: "Dark", selected: draft.videoStyle == .piano,
+                                               height: compact ? 72 : nil) {
+                                    draft.videoStyle = .piano
+                                } content: {
+                                    if let pianoDarkThumbnail {
+                                        Image(uiImage: pianoDarkThumbnail).resizable().scaledToFill()
+                                    } else {
+                                        Color.black
+                                    }
+                                }
+                                appearanceCard(title: "Light", selected: draft.videoStyle == .pianoLight,
+                                               height: compact ? 72 : nil) {
+                                    draft.videoStyle = .pianoLight
+                                } content: {
+                                    if let pianoLightThumbnail {
+                                        Image(uiImage: pianoLightThumbnail).resizable().scaledToFill()
+                                    } else {
+                                        Color.white
+                                    }
+                                }
+                            } else {
+                                appearanceCard(title: "Score only", selected: draft.videoStyle == .scrolling,
+                                               height: compact ? 72 : nil) {
+                                    draft.videoStyle = .scrolling
+                                } content: {
+                                    if let paperThumbnail {
+                                        Image(uiImage: paperThumbnail).resizable().scaledToFill()
+                                    } else {
+                                        Color.white
+                                    }
                                 }
                             }
-                            appearanceCard(title: "Photo", selected: draft.videoStyle == .scrollingPhoto,
+                            appearanceCard(title: "Photo", selected: draft.videoStyle.usesPhoto,
                                            height: compact ? 72 : nil) {
-                                draft.videoStyle = .scrollingPhoto
+                                draft.videoStyle = isPiano ? .pianoPhoto : .scrollingPhoto
                                 // Choosing Photo without one goes straight to the library.
                                 if draft.videoBackgroundImageData == nil {
                                     isChoosingPhoto = true
@@ -957,7 +1010,7 @@ struct ScoreReaderVideoExportSheet: View {
                                 .foregroundStyle(.red)
                         }
                     }
-                } else {
+                } else if draft.videoStyle.layout == .pages {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Orientation").font(.headline)
                         ScoreReaderVideoSegmentedControl(
@@ -1140,7 +1193,7 @@ struct ScoreReaderVideoExportSheet: View {
                 }.value
                 draft.videoBackgroundImageData = data
                 draft.videoBackgroundImageName = name
-                draft.videoStyle = .scrollingPhoto
+                draft.videoStyle = isPiano ? .pianoPhoto : .scrollingPhoto
                 previewRevision += 1
             } catch {
                 backgroundError = "That image couldn't be opened. Try another one."

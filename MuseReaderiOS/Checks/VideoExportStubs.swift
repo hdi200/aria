@@ -38,20 +38,30 @@ actor LiveScoreRenderSession {
     enum Mode: Sendable { case normal, secondChunkFailure, formatChange, cancellation }
     let page: Data
     let mode: Mode
+    let midi: Data
+    let regionCount: Int
+    let barSeconds: TimeInterval
     private(set) var continuous = false
     private(set) var requests = 0
     private(set) var inFlight = 0
     private(set) var maxInFlight = 0
     private(set) var requestedStems = false
 
-    init(page: Data, mode: Mode = .normal) { self.page = page; self.mode = mode }
-    func setContinuousLayout(_ enabled: Bool) throws -> Int { continuous = enabled; return 1 }
-    func playbackMeasureRegions() throws -> [ScorePlaybackMeasureRegion] {
-        [ScorePlaybackMeasureRegion(measureIndex: 0, pageIndex: 0, startTimeSeconds: 0, endTimeSeconds: 1,
-                                    normalizedRect: ScoreNormalizedRect(x: 0.1, y: 0.25, width: 0.35, height: 0.5)),
-         ScorePlaybackMeasureRegion(measureIndex: 1, pageIndex: 0, startTimeSeconds: 1, endTimeSeconds: 2,
-                                    normalizedRect: ScoreNormalizedRect(x: 0.45, y: 0.25, width: 0.4, height: 0.5))]
+    init(page: Data, mode: Mode = .normal, midi: Data = Data(), regionCount: Int = 2, barSeconds: TimeInterval = 1) {
+        self.page = page; self.mode = mode; self.midi = midi; self.regionCount = regionCount; self.barSeconds = barSeconds
     }
+    func setContinuousLayout(_ enabled: Bool) throws -> Int { continuous = enabled; return 1 }
+    /// Evenly timed bars (one second by default) across the page.
+    func playbackMeasureRegions() throws -> [ScorePlaybackMeasureRegion] {
+        (0..<regionCount).map { index in
+            let width = 0.8 / Double(regionCount)
+            return ScorePlaybackMeasureRegion(measureIndex: index, pageIndex: 0, startTimeSeconds: Double(index) * barSeconds,
+                                              endTimeSeconds: Double(index + 1) * barSeconds,
+                                              normalizedRect: ScoreNormalizedRect(x: 0.1 + width * Double(index), y: 0.25,
+                                                                                  width: width, height: 0.5))
+        }
+    }
+    func playbackMIDIData() throws -> Data { midi }
     func playbackBeatPoints() throws -> [ScorePlaybackBeatPoint] { [] }
     func renderPage(at index: Int, dpi: Int) throws -> ScorePage { ScorePage(pdfData: page) }
     func playbackAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval,
