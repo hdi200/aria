@@ -593,16 +593,22 @@ struct ScoreReaderView: View {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundStyle(.red)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Not Saved")
+                                    Text(readerState.saveNeedsChordSymbolRemovalApproval ? "Chord Symbols Removed" : "Not Saved")
                                         .font(.system(size: 13, weight: .bold))
                                     Text(visibleSaveFailureMessage)
                                         .font(.system(size: 12, weight: .medium))
                                         .lineLimit(2)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                Button("Retry Save", action: retryVisibleSaveFailure)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .disabled(readerState.isEditingActionInFlight)
+                                if readerState.saveNeedsChordSymbolRemovalApproval {
+                                    Button("Save Without Chords", action: saveWithoutChordSymbols)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .disabled(readerState.isEditingActionInFlight)
+                                } else {
+                                    Button("Retry Save", action: retryVisibleSaveFailure)
+                                        .font(.system(size: 13, weight: .bold))
+                                        .disabled(readerState.isEditingActionInFlight)
+                                }
                             }
                             .foregroundStyle(Color.black.opacity(0.84))
                             .padding(.horizontal, 14)
@@ -2067,6 +2073,13 @@ struct ScoreReaderView: View {
 
     private var visibleSaveFailureMessage: String? {
         viewModeSaveErrorMessage ?? readerState.autosaveFailureMessage
+    }
+
+    private func saveWithoutChordSymbols() {
+        Task { @MainActor in
+            await readerState.approveChordSymbolRemoval()
+            retryVisibleSaveFailure()
+        }
     }
 
     private func retryVisibleSaveFailure() {

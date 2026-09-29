@@ -301,6 +301,18 @@ extension ScoreReaderState {
     func recordSaveFailure(_ error: Error) {
         hasUnsavedAutosaveChanges = true
         autosaveFailureMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        let bridgeError = error as NSError
+        saveNeedsChordSymbolRemovalApproval = bridgeError.domain == MSRBridgeErrorDomain
+            && bridgeError.code == MSRBridgeError.Code.chordSymbolRemovalNeedsApproval.rawValue
+    }
+
+    /// The user confirmed saving the score without any chord symbols.
+    func approveChordSymbolRemoval() async {
+        guard let liveRenderSession = session.liveRenderSession else {
+            return
+        }
+        await liveRenderSession.acceptChordSymbolRemoval()
+        saveNeedsChordSymbolRemovalApproval = false
     }
 
     func saveRecoverySnapshotForBackground() {

@@ -389,7 +389,38 @@ std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::Mas
     return candidates;
 }
 
+//! Chord symbols in parts that have no linked copy in the full score.
+std::unordered_set<const mu::engraving::EngravingItem*> unlinkedPartHarmonies(mu::engraving::MasterScore* masterScore)
+{
+    std::unordered_set<const mu::engraving::EngravingItem*> result;
+    if (!masterScore) {
+        return result;
+    }
+
+    for (mu::engraving::Excerpt* excerpt : masterScore->excerpts()) {
+        mu::engraving::Score* excerptScore = excerpt ? excerpt->excerptScore() : nullptr;
+        if (!excerptScore) {
+            continue;
+        }
+        for (mu::engraving::Measure* measure = excerptScore->firstMeasure(); measure; measure = measure->nextMeasure()) {
+            for (mu::engraving::Segment* segment = measure->first(); segment && segment->measure() == measure; segment = segment->next()) {
+                for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
+                    if (annotation && annotation->isHarmony() && !linkedItemInScore(annotation, masterScore)) {
+                        result.insert(annotation);
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+//! Blocks saving when a part has a chord symbol with no linked copy in the full
+//! score, which the pre-4.7.5 engine produced when editing parts. Chord symbols
+//! that were already part-only in a file desktop MuseScore saved are legitimate
+//! and passed in `fileUnlinkedHarmonies`.
 bool validatePartHarmonyLinksBeforeSave(mu::engraving::MasterScore* masterScore,
+                                        const std::unordered_set<const mu::engraving::EngravingItem*>& fileUnlinkedHarmonies,
                                         std::string& errorMessage)
 {
     if (!masterScore) {
@@ -411,7 +442,7 @@ bool validatePartHarmonyLinksBeforeSave(mu::engraving::MasterScore* masterScore,
                         continue;
                     }
 
-                    if (linkedItemInScore(annotation, masterScore)) {
+                    if (linkedItemInScore(annotation, masterScore) || fileUnlinkedHarmonies.count(annotation) > 0) {
                         continue;
                     }
 
@@ -433,17 +464,24 @@ bool validatePartHarmonyLinksBeforeSave(mu::engraving::MasterScore* masterScore,
     return true;
 }
 
+//! The full score had several chord symbols and now has none. The pre-4.7.5
+//! engine could lose them this way, so saving asks the user to confirm it.
+bool masterHarmoniesCollapsed(mu::engraving::MasterScore* masterScore, const int maxObservedMasterHarmonyCount)
+{
+    return maxObservedMasterHarmonyCount >= 3 && harmonyCountInScore(masterScore) == 0;
+}
+
 bool validateMasterHarmonyRetainedBeforeSave(mu::engraving::MasterScore* masterScore,
                                              const int maxObservedMasterHarmonyCount,
                                              std::string& errorMessage)
 {
     const int currentHarmonyCount = harmonyCountInScore(masterScore);
-    if (maxObservedMasterHarmonyCount >= 3 && currentHarmonyCount == 0) {
+    if (masterHarmoniesCollapsed(masterScore, maxObservedMasterHarmonyCount)) {
         std::cout << "Aria save guard: blocked master chord symbol collapse"
                   << " maxObserved=" << maxObservedMasterHarmonyCount
                   << " current=" << currentHarmonyCount
                   << std::endl;
-        errorMessage = "Save was paused because the score's chord symbols were not available. Reopen the score or switch to Full Score, then try saving again.";
+        errorMessage = "All chord symbols were removed from the full score. Save without them, or use Undo to keep them.";
         return false;
     }
 

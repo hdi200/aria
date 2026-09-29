@@ -4005,7 +4005,12 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
     std::string errorMessage;
     if (!_session->saveToPath(url.path.UTF8String ?: "", errorMessage)) {
         if (error) {
-            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not save this score."));
+            NSString *message = FailureMessage(errorMessage, @"The MuseScore render core could not save this score.");
+            *error = _session->chordSymbolRemovalNeedsApproval()
+                ? [NSError errorWithDomain:MSRBridgeErrorDomain
+                                      code:MSRBridgeErrorCodeChordSymbolRemovalNeedsApproval
+                                  userInfo:@{ NSLocalizedDescriptionKey: message }]
+                : FailureError(message);
         }
         return NO;
     }
@@ -4016,6 +4021,15 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         *error = UnavailableError(@"This build of Aria is not linked to MuseScore save support yet.");
     }
     return NO;
+#endif
+}
+
+- (void)acceptChordSymbolRemoval
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (_session) {
+        _session->acceptChordSymbolRemoval();
+    }
 #endif
 }
 

@@ -18,6 +18,8 @@ typedef NS_ERROR_ENUM(MSRBridgeErrorDomain, MSRBridgeErrorCode) {
     MSRBridgeErrorCodeInvalidScoreEncoding = 5,
     MSRBridgeErrorCodeRenderCoreUnavailable = 6,
     MSRBridgeErrorCodeRenderCoreFailure = 7,
+    /// Saving paused because every chord symbol was removed from the full score.
+    MSRBridgeErrorCodeChordSymbolRemovalNeedsApproval = 8,
 };
 
 typedef NS_ENUM(NSInteger, MSRDocumentFormat) {

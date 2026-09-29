@@ -1256,6 +1256,13 @@ actor LiveScoreRenderSession {
         }
     }
 
+    /// Confirms that removing every chord symbol was intended, so the next save goes ahead.
+    func acceptChordSymbolRemoval() {
+        RenderCoreWorkGate.sync {
+            bridgeSession.acceptChordSymbolRemoval()
+        }
+    }
+
     private func makeEditingState(from editState: MSREditState, refreshScope: ScoreEditRefreshScope = .local) throws -> ScoreEditingState {
         guard let duration = ScoreNoteDuration(rawValue: editState.durationCode) else {
             throw ScoreDocumentServiceError.bridgeFailure("Aria received an unsupported note duration from the score engine.")

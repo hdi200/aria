@@ -93,6 +93,13 @@ public:
         if (m_masterScore) {
             m_activeScore = m_masterScore.get();
             m_maxObservedMasterHarmonyCount = std::max(sourceHarmonyCount, harmonyCountInScore(m_masterScore.get()));
+            if (!m_savedByOldAriaEngine) {
+                m_fileUnlinkedPartHarmonies = unlinkedPartHarmonies(m_masterScore.get());
+                if (!m_fileUnlinkedPartHarmonies.empty()) {
+                    std::cout << "Aria save guard: file has part-only chord symbols="
+                              << m_fileUnlinkedPartHarmonies.size() << std::endl;
+                }
+            }
             std::cout << "Aria save guard: loaded master harmonies="
                       << m_maxObservedMasterHarmonyCount
                       << " source=" << sourceHarmonyCount
@@ -108,6 +115,17 @@ public:
     int totalPageCount() const
     {
         return m_totalPageCount;
+    }
+
+    bool chordSymbolRemovalNeedsApproval() const
+    {
+        return masterHarmoniesCollapsed(m_masterScore.get(), m_maxObservedMasterHarmonyCount);
+    }
+
+    //! The user confirmed that removing every chord symbol was intended.
+    void acceptChordSymbolRemoval()
+    {
+        m_maxObservedMasterHarmonyCount = harmonyCountInScore(m_masterScore.get());
     }
 
     bool supportsPlayback() const
@@ -582,7 +600,7 @@ public:
                       << "s" << std::endl;
             return false;
         }
-        if (!validatePartHarmonyLinksBeforeSave(m_masterScore.get(), errorMessage)) {
+        if (!validatePartHarmonyLinksBeforeSave(m_masterScore.get(), m_fileUnlinkedPartHarmonies, errorMessage)) {
             std::cout << "Aria save guard: save blocked"
                       << " elapsed=" << elapsedSecondsSince(started)
                       << "s" << std::endl;

@@ -1079,6 +1079,81 @@ void testOldAriaPartOnlyTempoRequiresApproval(const std::filesystem::path& testR
     expect(countOccurrences(part, "<Tempo>") == 1, "The repair duplicated the tempo in the part");
 }
 
+// Desktop MuseScore allows chord symbols that exist only in a part, so files it saved
+// must stay saveable. The pre-4.7.5 engine produced the same shape by mistake when
+// editing parts, so in files it saved the save guard keeps blocking them.
+void testPartOnlyChordSymbolsFromDesktopCanBeSaved(const std::filesystem::path& testRoot)
+{
+    const std::filesystem::path root = testRoot / "part-only-chords";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "part-only-chords", scoreXml(0, { { 60, 14 } }, 0));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error), "Could not create the linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pageCount, error), "Could not return to the full score: " + error);
+    msr::render::ScoreEditState state;
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->addText("chord", state, error), "Could not add a chord symbol: " + error);
+    expect(session->setSelectedText("C7", state, error), "Could not set the chord symbol: " + error);
+    saveSnapshot(*session, root, "part-only-chords-saved");
+    session.reset();
+
+    // As desktop writes it: the chord symbol only in the part, with no link to the full score.
+    const std::filesystem::path scorePath = root / "part-only-chords-saved.mscx";
+    writeFile(scorePath, removeBlocks(readFile(scorePath), "Harmony"));
+    const std::filesystem::path partPath = savedExcerptPath(root);
+    writeFile(partPath, std::regex_replace(readFile(partPath), std::regex("<linkedTo>[^<]*</linkedTo>"), ""));
+    expect(countOccurrences(savedExcerptXml(root), "<Harmony") == 1, "The part lost its chord symbol before the test");
+
+    auto reopened = msr::render::ScoreRenderSession::open(scorePath.string(), error);
+    expect(reopened != nullptr, "Could not reopen the desktop-style file: " + error);
+    const std::string resaved = saveSnapshot(*reopened, root, "part-only-chords-resaved");
+    expect(countOccurrences(resaved, "<Harmony") == 0, "Saving copied the part-only chord symbol into the full score");
+    expect(countOccurrences(savedExcerptXml(root), "<Harmony") == 1, "Saving dropped the part-only chord symbol");
+    reopened.reset();
+
+    markSavedByOldAria(root, "part-only-chords-resaved");
+    auto oldEngineFile = msr::render::ScoreRenderSession::open((root / "part-only-chords-resaved.mscx").string(), error);
+    expect(oldEngineFile != nullptr, "Could not reopen the old-engine file: " + error);
+    error.clear();
+    expect(!oldEngineFile->saveToPath((root / "part-only-chords-blocked.mscx").string(), error),
+           "A part-only chord symbol in a file saved by the old engine was not blocked");
+    expect(error.find("chord symbol") != std::string::npos, "The old-engine file was blocked for another reason: " + error);
+}
+
+// Deleting every chord symbol looks like the pre-4.7.5 engine losing them, so the
+// save pauses; once the user confirms, it saves without them.
+void testRemovingAllChordSymbolsNeedsApproval(const std::filesystem::path& testRoot)
+{
+    const std::filesystem::path root = testRoot / "chord-removal";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "chord-removal", scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 } }, 0));
+    msr::render::ScoreEditState state;
+    std::string error;
+    for (const int pitch : { 60, 62, 64 }) {
+        selectAt(*session, noteWithPitch(scanScore(*session, { 60, 62, 64 }, 0), pitch));
+        expect(session->addText("chord", state, error), "Could not add a chord symbol: " + error);
+        expect(session->setSelectedText("C", state, error), "Could not set the chord symbol: " + error);
+    }
+    expect(countOccurrences(saveSnapshot(*session, root, "chord-removal-with-chords"), "<Harmony") == 3,
+           "The three chord symbols were not saved");
+
+    for (const int pitch : { 60, 62, 64 }) {
+        selectAt(*session, noteWithPitch(scanScore(*session, { 60, 62, 64 }, 0), pitch));
+        expect(session->selectAttachedChordText(state, error), "Could not select the chord symbol: " + error);
+        expect(session->deleteSelection(state, error), "Could not delete the chord symbol: " + error);
+    }
+    const std::string blockedPath = (root / "chord-removal-blocked.mscx").string();
+    error.clear();
+    expect(!session->saveToPath(blockedPath, error), "Removing every chord symbol saved without confirmation");
+    expect(session->chordSymbolRemovalNeedsApproval(), "The paused save did not ask for approval");
+
+    session->acceptChordSymbolRemoval();
+    expect(!session->chordSymbolRemovalNeedsApproval(), "Approval was still requested after confirming");
+    expect(countOccurrences(saveSnapshot(*session, root, "chord-removal-confirmed"), "<Harmony") == 0,
+           "The confirmed save still contains chord symbols");
+}
+
 void testOldAriaPartNamesRequireApproval(const std::filesystem::path& testRoot)
 {
     const std::filesystem::path root = testRoot / "old-part-names";
@@ -1154,5 +1229,9 @@ int main()
                       [&] { testOldAriaMissingRepeatsRequireApproval(testDirectory.path); });
     passed &= runTest("old Aria part-only tempo requires approval", [&] { testOldAriaPartOnlyTempoRequiresApproval(testDirectory.path); });
     passed &= runTest("old Aria double-escaped part names require approval", [&] { testOldAriaPartNamesRequireApproval(testDirectory.path); });
+    passed &= runTest("part-only chord symbols from desktop can be saved",
+                      [&] { testPartOnlyChordSymbolsFromDesktopCanBeSaved(testDirectory.path); });
+    passed &= runTest("removing all chord symbols needs approval",
+                      [&] { testRemovingAllChordSymbolsNeedsApproval(testDirectory.path); });
     return passed ? 0 : 1;
 }

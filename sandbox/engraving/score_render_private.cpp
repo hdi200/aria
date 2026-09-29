@@ -144,6 +144,9 @@ private:
     std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> m_persistedLayoutModes;
     // The opened file was last saved by the pre-4.7.5 engine; see scoreFileSavedByOldAriaEngine.
     bool m_savedByOldAriaEngine = false;
+    // Part-only chord symbols in a file not saved by the pre-4.7.5 engine, as
+    // desktop MuseScore allows. The save guard only blocks unlinked ones outside this set.
+    std::unordered_set<const mu::engraving::EngravingItem*> m_fileUnlinkedPartHarmonies;
     mutable std::unique_ptr<FluidSynthPlaybackStream> m_playbackStream;
     int m_playbackStreamRevision = 0;
     // 4.7.5 declares the renderer per-context; the render core registers it globally.

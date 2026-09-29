@@ -741,6 +741,8 @@ isEditableText:(BOOL)isEditableText
                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(updateInitialKeySignature(_:));
 - (BOOL)saveToURL:(NSURL *)url
             error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(save(to:));
+/// Confirms that removing every chord symbol was intended, so the next save goes ahead.
+- (void)acceptChordSymbolRemoval;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;

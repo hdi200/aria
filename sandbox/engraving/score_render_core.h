@@ -251,6 +251,10 @@ public:
     ~ScoreRenderSession();
 
     int totalPageCount() const;
+    //! Saving is paused because every chord symbol was removed from the full score.
+    bool chordSymbolRemovalNeedsApproval() const;
+    //! Confirms that removal, so the next save goes ahead.
+    void acceptChordSymbolRemoval();
     bool supportsPlayback() const;
     bool supportsEditing() const;
     bool concertPitchEnabled() const;

@@ -111,7 +111,15 @@ final class ScoreReaderState: ObservableObject {
     @Published var editingState: ScoreEditingState = .inactive
     @Published var measureRangePreviewSelection: ScoreSelectedElement?
     @Published var editingErrorMessage: String?
-    @Published var autosaveFailureMessage: String?
+    @Published var autosaveFailureMessage: String? {
+        didSet {
+            if autosaveFailureMessage == nil {
+                saveNeedsChordSymbolRemovalApproval = false
+            }
+        }
+    }
+    /// The last save paused because every chord symbol was removed from the full score.
+    @Published var saveNeedsChordSymbolRemovalApproval = false
     @Published var hasUnsavedAutosaveChanges = false
     @Published var isEditingActionInFlight = false
     //! NOTE Live score info. session.document is a snapshot from when the score was opened,

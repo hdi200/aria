@@ -29,6 +29,16 @@ int msr::render::ScoreRenderSession::totalPageCount() const
     return m_impl->totalPageCount();
 }
 
+bool msr::render::ScoreRenderSession::chordSymbolRemovalNeedsApproval() const
+{
+    return m_impl->chordSymbolRemovalNeedsApproval();
+}
+
+void msr::render::ScoreRenderSession::acceptChordSymbolRemoval()
+{
+    m_impl->acceptChordSymbolRemoval();
+}
+
 bool msr::render::ScoreRenderSession::supportsPlayback() const
 {
     return m_impl->supportsPlayback();
