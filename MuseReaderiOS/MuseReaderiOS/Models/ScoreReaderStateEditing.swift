@@ -479,6 +479,8 @@ extension ScoreReaderState {
             let liveRenderSession = session.liveRenderSession,
             !isEditingActionInFlight
         else {
+            // Don't leave a preview on screen that looks like a selection that never happened.
+            clearMeasureRangePreview()
             return
         }
 
@@ -535,10 +537,8 @@ extension ScoreReaderState {
                 }
                 self?.measureRangePreviewSelection = previewState.selection
             } catch {
-                guard !Task.isCancelled, self?.measureRangePreviewRevision == revision else {
-                    return
-                }
-                self?.measureRangePreviewSelection = nil
+                // Keep the last good preview while the finger passes over a spot with no measure,
+                // so the highlight doesn't flicker away mid-drag.
             }
         }
     }

@@ -561,7 +561,7 @@ struct ScoreReaderPageSurface: View {
                 )
             }
 
-            if let selectedElement, selectedElement.kind == .dynamic || selectedElement.kind == .tie || selectedElement.kind == .layoutBreak || selectedElement.kind == .marker {
+            if let selectedElement, selectedElement.kind == .dynamic || selectedElement.kind == .tie || selectedElement.kind == .layoutBreak || selectedElement.kind == .marker || selectedElement.kind == .other {
                 ScoreReaderSelectedDynamicActions(
                     selectedElement: selectedElement,
                     imageSize: page?.displaySize,

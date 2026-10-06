@@ -1292,6 +1292,17 @@ bool isDirectlySelectable(const mu::engraving::EngravingItem* item)
         || item->isKeySig()
         || item->isTempoText()
         || item->isHarmony()
+        || item->isArticulationOrFermata()
+        || item->isBreath()
+        || item->isClef()
+        || item->isArpeggio()
+        || item->isChordLine()
+        || item->type() == mu::engraving::ElementType::TREMOLO_SINGLECHORD
+        || item->type() == mu::engraving::ElementType::TREMOLO_TWOCHORD
+        || item->isTuplet()
+        || item->isFretDiagram()
+        || item->isHarpPedalDiagram()
+        || item->isBSymbol()
         || item->isLyrics()
         || item->isText()
         || item->isStaffText()
@@ -1337,6 +1348,7 @@ bool isDirectlyDraggableTextItem(const mu::engraving::EngravingItem* item)
     case mu::engraving::ElementType::MARKER:
     case mu::engraving::ElementType::JUMP:
     case mu::engraving::ElementType::REHEARSAL_MARK:
+    case mu::engraving::ElementType::FERMATA:
         return true;
     default:
         return false;
@@ -1382,6 +1394,42 @@ mu::engraving::EngravingItem* noteOrRestSelectionItem(mu::engraving::EngravingIt
     }
 
     return nullptr;
+}
+
+// Taps on parts of a note or chord (stem, flag, beam, dot, accidental) select the note itself.
+mu::engraving::EngravingItem* selectableTargetForItem(mu::engraving::EngravingItem* item, const mu::engraving::PointF& point)
+{
+    if (!item) {
+        return nullptr;
+    }
+
+    if (item->isBeam()) {
+        mu::engraving::ChordRest* nearest = nullptr;
+        double nearestDistance = std::numeric_limits<double>::max();
+        for (mu::engraving::ChordRest* chordRest : mu::engraving::toBeam(item)->elements()) {
+            if (!chordRest || !chordRest->isChord()) {
+                continue;
+            }
+            const double distance = std::abs(chordRest->pageBoundingRect().center().x() - point.x());
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearest = chordRest;
+            }
+        }
+        return nearest ? editableNoteForItem(nearest) : nullptr;
+    }
+
+    if (item->isAccidental() || item->isNoteDot()) {
+        mu::engraving::EngravingItem* parent = item->parentItem();
+        return parent && (parent->isNote() || parent->isRest()) && isDirectlySelectable(parent) ? parent : nullptr;
+    }
+
+    if (item->isStem() || item->isHook() || item->isStemSlash()) {
+        mu::engraving::EngravingItem* parent = item->parentItem();
+        return parent && parent->isChord() ? editableNoteForItem(parent) : nullptr;
+    }
+
+    return isDirectlySelectable(item) ? item : nullptr;
 }
 
 double distanceToRect(const mu::engraving::RectF& rect, const mu::engraving::PointF& point)
@@ -1463,14 +1511,15 @@ mu::engraving::EngravingItem* selectBestCandidate(const std::vector<mu::engravin
     SelectionCandidateScore bestScore;
 
     for (mu::engraving::EngravingItem* item : items) {
-        if (!isDirectlySelectable(item)) {
+        mu::engraving::EngravingItem* target = selectableTargetForItem(item, point);
+        if (!target) {
             continue;
         }
 
         const SelectionCandidateScore score = selectionDistanceScore(item, point);
         if (score < bestScore) {
             bestScore = score;
-            bestItem = item;
+            bestItem = target;
         }
     }
 
@@ -1553,14 +1602,15 @@ mu::engraving::EngravingItem* nearbySelectableItemAtPoint(mu::engraving::Page* p
     appendLayoutBreakCandidates(page, point, maxEdgeDistance, items);
 
     for (mu::engraving::EngravingItem* item : items) {
-        if (!isDirectlySelectable(item)) {
+        mu::engraving::EngravingItem* target = selectableTargetForItem(item, point);
+        if (!target) {
             continue;
         }
 
         const SelectionCandidateScore score = selectionDistanceScore(item, point);
         if (score.edgeDistance <= maxEdgeDistance && score < bestScore) {
             bestScore = score;
-            bestItem = item;
+            bestItem = target;
         }
     }
 
@@ -1571,6 +1621,17 @@ struct MeasureHit {
     mu::engraving::Measure* measure = nullptr;
     mu::engraving::staff_idx_t staffIdx = 0;
 };
+
+double distanceToRange(const double value, const double minimum, const double maximum)
+{
+    if (value < minimum) {
+        return minimum - value;
+    }
+    if (value > maximum) {
+        return value - maximum;
+    }
+    return 0.0;
+}
 
 mu::engraving::staff_idx_t nearestVisibleStaff(mu::engraving::Score* score,
                                                mu::engraving::System* system,
@@ -1589,7 +1650,8 @@ mu::engraving::staff_idx_t nearestVisibleStaff(mu::engraving::Score* score,
             continue;
         }
 
-        const double distance = std::abs(system->staffYpage(staffIdx) - pagePoint.y());
+        const double staffTop = system->staffYpage(staffIdx);
+        const double distance = distanceToRange(pagePoint.y(), staffTop, staffTop + staff->staffHeight(system->tick()));
         if (distance < bestDistance) {
             bestDistance = distance;
             bestStaff = staffIdx;
@@ -1597,17 +1659,6 @@ mu::engraving::staff_idx_t nearestVisibleStaff(mu::engraving::Score* score,
     }
 
     return bestStaff;
-}
-
-double distanceToRange(const double value, const double minimum, const double maximum)
-{
-    if (value < minimum) {
-        return minimum - value;
-    }
-    if (value > maximum) {
-        return value - maximum;
-    }
-    return 0.0;
 }
 
 double systemVerticalDistance(mu::engraving::Score* score,
@@ -1630,7 +1681,7 @@ double systemVerticalDistance(mu::engraving::Score* score,
 
         const double staffY = system->staffYpage(staffIdx);
         top = std::min(top, staffY - padding);
-        bottom = std::max(bottom, staffY + padding);
+        bottom = std::max(bottom, staffY + staff->staffHeight(system->tick()) + padding);
     }
 
     if (top > bottom) {
@@ -1640,8 +1691,10 @@ double systemVerticalDistance(mu::engraving::Score* score,
     return distanceToRange(pagePoint.y(), top, bottom);
 }
 
+// With clampToNearest, points in margins or gaps resolve to the nearest measure instead of nothing.
 MeasureHit measureAtPoint(mu::engraving::Page* page,
-                          const mu::engraving::PointF& point)
+                          const mu::engraving::PointF& point,
+                          const bool clampToNearest = false)
 {
     if (!page) {
         return {};
@@ -1660,7 +1713,7 @@ MeasureHit measureAtPoint(mu::engraving::Page* page,
         }
     }
 
-    if (!bestSystem || bestSystemDistance > std::max(spatium * 8.0, 64.0)) {
+    if (!bestSystem || (!clampToNearest && bestSystemDistance > std::max(spatium * 8.0, 64.0))) {
         return {};
     }
 
@@ -1695,7 +1748,7 @@ MeasureHit measureAtPoint(mu::engraving::Page* page,
             }
     }
 
-    if (bestDistance <= std::max(spatium * 6.0, 48.0)) {
+    if (bestMeasure && (clampToNearest || bestDistance <= std::max(spatium * 6.0, 48.0))) {
         return { bestMeasure, bestStaff };
     }
 
@@ -1918,12 +1971,11 @@ bool selectMeasureRange(mu::engraving::Score* score,
     if (startSegment->tick() > endSegment->tick()) {
         std::swap(startSegment, endSegment);
     }
-    if (startSegment == endSegment) {
-        if (mu::engraving::Segment* nextSegment = endSegment->next1(mu::engraving::SegmentType::ChordRest)) {
-            endSegment = nextSegment;
-        } else if (mu::engraving::Measure* measure = endSegment->measure()) {
-            endSegment = measure->last();
-        }
+    // Selection ranges stop before their end segment, so step past the segment the drag ended on.
+    if (mu::engraving::Segment* nextSegment = endSegment->next(mu::engraving::SegmentType::ChordRest)) {
+        endSegment = nextSegment;
+    } else if (mu::engraving::Measure* measure = endSegment->measure()) {
+        endSegment = measure->last();
     }
 
     score->deselectAll();
@@ -3316,7 +3368,9 @@ mu::engraving::Page* pageForItem(mu::engraving::EngravingItem* item)
 
     mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(item);
     if (!chordRest) {
-        return nullptr;
+        // Anything else laid out on a page (fermatas, articulations, clefs, tuplets, glissando segments, ...).
+        mu::engraving::EngravingItem* page = item->findAncestor(mu::engraving::ElementType::PAGE);
+        return page ? mu::engraving::toPage(page) : nullptr;
     }
 
     mu::engraving::Segment* segment = chordRest->segment();
@@ -3880,7 +3934,8 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             if (!fullSingleMeasureSelection && selectionStartSegment && selectionStartSegment->measure() == measure) {
                 left = chordRestSegmentSelectionBoundaryPageX(selectionStartSegment);
             }
-            if (!fullSingleMeasureSelection && selectionEndSegment && selectionEndSegment->measure() == measure) {
+            if (!fullSingleMeasureSelection && selectionEndSegment && selectionEndSegment->measure() == measure
+                && selectionEndSegment->tick() < measure->endTick()) {
                 right = chordRestSegmentSelectionBoundaryPageX(selectionEndSegment);
             }
             if (right <= left) {

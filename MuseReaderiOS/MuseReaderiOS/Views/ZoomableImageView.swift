@@ -955,7 +955,7 @@ struct ZoomableImageView: UIViewRepresentable {
                     measureRangeDragStartPoint = startPoint
                     measureRangeDragAnchorFrame = overlayView.measureRangeDragAnchorFrame(at: startPoint)
                     insertionDragStartPoint = nil
-                } else if overlayView.containsSelectedNote(at: point) {
+                } else if overlayView.containsSelectedNote(at: startPoint) {
                     selectedNoteDragStartPoint = startPoint
                     selectedMovableElementDragStartPoint = nil
                     expressionEndpointDragIsStart = nil
@@ -963,7 +963,7 @@ struct ZoomableImageView: UIViewRepresentable {
                     measureRangeDragAnchorFrame = nil
                     insertionDragStartPoint = nil
                     overlayView.updateSelectedNoteDrag(startPoint: startPoint, currentPoint: point)
-                } else if overlayView.containsSelectedMovableElement(at: point) {
+                } else if overlayView.containsSelectedMovableElement(at: startPoint) {
                     selectedNoteDragStartPoint = nil
                     selectedMovableElementDragStartPoint = startPoint
                     expressionEndpointDragIsStart = nil
@@ -971,7 +971,7 @@ struct ZoomableImageView: UIViewRepresentable {
                     measureRangeDragAnchorFrame = nil
                     insertionDragStartPoint = nil
                     overlayView.updateSelectedMovableElementDrag(startPoint: startPoint, currentPoint: point)
-                } else if let endpointIsStart = overlayView.expressionEndpoint(at: point) {
+                } else if let endpointIsStart = overlayView.expressionEndpoint(at: startPoint) {
                     selectedNoteDragStartPoint = nil
                     selectedMovableElementDragStartPoint = nil
                     expressionEndpointDragIsStart = endpointIsStart
@@ -1952,7 +1952,9 @@ final class ScorePageOverlayView: UIView {
             return normalizedPoint(at: startPoint)
         }
 
-        let anchorX = currentPoint.x >= anchorFrame.midX ? anchorFrame.minX : anchorFrame.maxX
+        // Stay just inside the selected measure; its exact edge is shared with the neighbouring measure.
+        let edgeInset = min(2, anchorFrame.width / 4)
+        let anchorX = currentPoint.x >= anchorFrame.midX ? anchorFrame.minX + edgeInset : anchorFrame.maxX - edgeInset
         return normalizedPoint(at: CGPoint(x: anchorX, y: startPoint.y))
     }
 

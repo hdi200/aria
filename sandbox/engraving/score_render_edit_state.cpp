@@ -109,7 +109,7 @@
         const mu::engraving::PointF startPoint = pointForNormalizedPagePosition(page, startNormalizedX, startNormalizedY);
         const mu::engraving::PointF endPoint = pointForNormalizedPagePosition(page, endNormalizedX, endNormalizedY);
         const MeasureHit startHit = measureAtPoint(page, startPoint);
-        const MeasureHit endHit = measureAtPoint(page, endPoint);
+        const MeasureHit endHit = measureAtPoint(page, endPoint, true);
         if (!startHit.measure || !endHit.measure) {
             errorMessage = "Drag across measures to select a measure range.";
             return false;

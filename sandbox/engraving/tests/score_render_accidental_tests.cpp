@@ -1,10 +1,12 @@
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <optional>
 #include <regex>
@@ -175,6 +177,105 @@ std::string horizontalFrameScoreXml()
       <Measure>
         <voice>
           <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+}
+
+std::string fermataScoreXml()
+{
+    return R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="violin">
+        <trackName>Violin</trackName>
+        <instrumentId>strings.violin</instrumentId>
+        <Channel><program value="40"/></Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Clef><concertClefType>G</concertClefType></Clef>
+          <Fermata><subtype>fermataAbove</subtype></Fermata>
+          <Chord><durationType>whole</durationType><Note><pitch>72</pitch><tpc>14</tpc></Note></Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+}
+
+std::string tappableElementsScoreXml()
+{
+    return R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano">
+        <trackName>Piano</trackName>
+        <instrumentId>keyboard.piano</instrumentId>
+        <Channel><program value="0"/></Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Clef><concertClefType>G</concertClefType></Clef>
+          <Chord>
+            <durationType>quarter</durationType>
+            <Note>
+              <pitch>72</pitch><tpc>14</tpc>
+              <Spanner type="Glissando">
+                <Glissando><diagonal>1</diagonal></Glissando>
+                <next><location><fractions>1/4</fractions></location></next>
+              </Spanner>
+            </Note>
+          </Chord>
+          <Chord>
+            <durationType>quarter</durationType>
+            <Note>
+              <Spanner type="Glissando">
+                <prev><location><fractions>-1/4</fractions></location></prev>
+              </Spanner>
+              <pitch>76</pitch><tpc>18</tpc>
+            </Note>
+          </Chord>
+          <Tuplet>
+            <normalNotes>2</normalNotes>
+            <actualNotes>3</actualNotes>
+            <baseNote>eighth</baseNote>
+            <Number><style>tuplet</style><text>3</text></Number>
+          </Tuplet>
+          <Chord><durationType>eighth</durationType><Note><pitch>67</pitch><tpc>15</tpc></Note></Chord>
+          <Chord><durationType>eighth</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>
+          <Chord><durationType>eighth</durationType><Note><pitch>71</pitch><tpc>19</tpc></Note></Chord>
+          <endTuplet/>
+          <Rest><durationType>quarter</durationType></Rest>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Chord>
+            <durationType>half</durationType>
+            <Arpeggio><subtype>0</subtype></Arpeggio>
+            <Note><pitch>60</pitch><tpc>14</tpc></Note>
+            <Note><pitch>64</pitch><tpc>18</tpc></Note>
+            <Note><pitch>67</pitch><tpc>15</tpc></Note>
+          </Chord>
+          <Clef><concertClefType>F</concertClefType></Clef>
+          <Chord><durationType>half</durationType><Note><pitch>48</pitch><tpc>14</tpc></Note></Chord>
         </voice>
       </Measure>
     </Staff>
@@ -621,6 +722,11 @@ void testHorizontalFrameCanBeSelectedAndDeleted(const std::filesystem::path& roo
             }
 
             expect(session->deleteSelection(state, error), "Could not delete the selected horizontal frame: " + error);
+            if (saveSnapshot(*session, root, "horizontal-frame-probe").find("<HBox>") != std::string::npos) {
+                // Something other than the frame was hit; undo it if it changed the score, then keep looking.
+                session->undo(state, error);
+                continue;
+            }
             deletedFrame = true;
         }
     }
@@ -628,6 +734,137 @@ void testHorizontalFrameCanBeSelectedAndDeleted(const std::filesystem::path& roo
     expect(deletedFrame, "Could not select the horizontal frame through page hit testing");
     const std::string saved = saveSnapshot(*session, root, "horizontal-frame-deleted");
     expect(saved.find("<HBox>") == std::string::npos, "Deleting the horizontal-frame selection left it in the score");
+}
+
+void testFermataCanBeSelectedDraggedAndDeleted(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "fermata", fermataScoreXml());
+    expect(saveSnapshot(*session, root, "fermata-original").find("<Fermata>") != std::string::npos,
+           "The fermata test score did not load its fermata");
+    bool deletedFermata = false;
+    std::string error;
+
+    for (double y = 0.02; y <= 0.5 && !deletedFermata; y += 0.005) {
+        for (double x = 0.02; x <= 0.98 && !deletedFermata; x += 0.005) {
+            msr::render::ScoreEditState state;
+            expect(session->selectElement(0, x, y, 1.0, state, error), "Fermata hit testing failed: " + error);
+            const auto& selection = state.selection;
+            const bool isFermata = selection.hasSelection
+                && selection.canDragMovableElement
+                && !selection.isNote
+                && !selection.isRest
+                && !selection.isMeasure
+                && !selection.isEditableText;
+            if (!isFermata) {
+                continue;
+            }
+
+            const double centerX = selection.normalizedX + selection.normalizedWidth * 0.5;
+            const double centerY = selection.normalizedY + selection.normalizedHeight * 0.5;
+            expect(session->dragSelectedMovableElement(0, centerX, centerY - 0.02, state, error),
+                   "Could not drag the selected fermata: " + error);
+            expect(saveSnapshot(*session, root, "fermata-dragged").find("<offset") != std::string::npos,
+                   "Dragging the fermata did not store an offset");
+            expect(state.selection.hasSelection && state.selection.canDragMovableElement,
+                   "The fermata did not stay selected after dragging");
+            expect(session->deleteSelection(state, error), "Could not delete the selected fermata: " + error);
+            deletedFermata = true;
+        }
+    }
+
+    expect(deletedFermata, "Could not select the fermata through page hit testing");
+    const std::string saved = saveSnapshot(*session, root, "fermata-deleted");
+    expect(saved.find("<Fermata>") == std::string::npos, "Deleting the fermata selection left it in the score");
+    expect(saved.find("<Chord>") != std::string::npos, "Deleting the fermata also removed its note");
+}
+
+// Taps across the first page until deleting the tapped element removes one `tag` from the saved file.
+// Other elements that get hit along the way are deleted and undone again.
+bool deleteTappedElementUntilTagCountDrops(msr::render::ScoreRenderSession& session,
+                                           const std::filesystem::path& root,
+                                           const std::string& name,
+                                           const std::string& tag)
+{
+    const size_t originalCount = countOccurrences(saveSnapshot(session, root, name + "-original"), tag);
+    expect(originalCount > 0, name + ": the test score did not load any " + tag);
+    std::vector<std::array<double, 4>> triedRects;
+    std::string error;
+    for (double y = 0.02; y <= 0.4; y += 0.004) {
+        for (double x = 0.02; x <= 0.98; x += 0.004) {
+            msr::render::ScoreEditState state;
+            expect(session.selectElement(0, x, y, 1.0, state, error), name + ": hit testing failed: " + error);
+            const auto& selection = state.selection;
+            if (!selection.hasSelection || selection.isNote || selection.isRest || selection.isMeasure
+                || selection.isBar || selection.isTimeSignature) {
+                continue;
+            }
+            const std::array<double, 4> rect { selection.normalizedX, selection.normalizedY,
+                                               selection.normalizedWidth, selection.normalizedHeight };
+            if (std::find(triedRects.begin(), triedRects.end(), rect) != triedRects.end()) {
+                continue;
+            }
+            triedRects.push_back(rect);
+
+            expect(session.deleteSelection(state, error), name + ": could not delete the selection: " + error);
+            if (countOccurrences(saveSnapshot(session, root, name + "-probe"), tag) < originalCount) {
+                return true;
+            }
+            session.undo(state, error);
+        }
+    }
+    return false;
+}
+
+void testElementCanBeTappedAndDeleted(const std::filesystem::path& root, const std::string& name, const std::string& tag)
+{
+    auto session = openSession(root, name, tappableElementsScoreXml());
+    expect(deleteTappedElementUntilTagCountDrops(*session, root, name, tag),
+           "Could not select and delete " + tag + " through page hit testing");
+}
+
+std::map<int, LocatedItem> locateNotesByPitch(msr::render::ScoreRenderSession& session)
+{
+    std::map<int, LocatedItem> notes;
+    std::string error;
+    for (double y = 0.02; y <= 0.4; y += 0.004) {
+        for (double x = 0.02; x <= 0.98; x += 0.004) {
+            msr::render::ScoreEditState state;
+            expect(session.selectElement(0, x, y, 1.0, state, error), "Note hit testing failed: " + error);
+            if (state.selection.isNote && !notes.count(state.selection.midiPitch)) {
+                notes[state.selection.midiPitch] = locatedItem(state.selection);
+            }
+        }
+    }
+    return notes;
+}
+
+void testRangeDragIncludesTheBeatItEndsOn(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "range-drag", scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(60) && notes.count(65), "Could not locate the first and last notes");
+    const LocatedItem first = notes[60];
+    const LocatedItem last = notes[65];
+
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectElement(0, last.x, last.y, 1.0, state, error), "Could not select the last note: " + error);
+    const double lastNoteRight = state.selection.normalizedX + state.selection.normalizedWidth;
+
+    expect(session->selectMeasureRange(0, first.x, first.y, last.x, last.y, state, error),
+           "Dragging from the first to the last note failed: " + error);
+    expect(state.selection.isMeasure && !state.selection.highlightRects.empty(), "The drag did not produce a range highlight");
+    const auto& highlight = state.selection.highlightRects.front();
+    expect(highlight.normalizedX + highlight.normalizedWidth >= lastNoteRight,
+           "The range highlight stops before the last note it was dragged onto");
+
+    expect(session->deleteSelection(state, error), "Could not delete the dragged range: " + error);
+    const std::string saved = saveSnapshot(*session, root, "range-drag-deleted");
+    expect(saved.find("<Chord>") == std::string::npos, "Dragging onto the last note left it out of the range");
+
+    expect(session->selectMeasureRange(0, first.x, first.y, last.x, std::min(last.y + 0.3, 0.99), state, error),
+           "A drag that ends in the margin below the system should still select a range: " + error);
+    expect(state.selection.isMeasure, "A drag ending in the margin did not select a range");
 }
 
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
@@ -1219,6 +1456,16 @@ int main()
     passed &= runTest("point-entry key-signature accidentals", [&] { testPointEntryKeySignatures(testDirectory.path); });
     passed &= runTest("linear scores render pages and preserve their desktop view", [&] { testLinearScoresOpenInPageMode(testDirectory.path); });
     passed &= runTest("horizontal frames can be selected and deleted", [&] { testHorizontalFrameCanBeSelectedAndDeleted(testDirectory.path); });
+    passed &= runTest("fermatas can be selected, dragged and deleted", [&] { testFermataCanBeSelectedDraggedAndDeleted(testDirectory.path); });
+    for (const auto& [name, tag] : std::vector<std::pair<std::string, std::string>> {
+             { "tappable-glissando", "<Glissando" },
+             { "tappable-tuplet", "<Tuplet" },
+             { "tappable-arpeggio", "<Arpeggio" },
+             { "tappable-clef", "<Clef" } }) {
+        passed &= runTest(tag.substr(1) + " can be tapped and deleted",
+                          [&] { testElementCanBeTappedAndDeleted(testDirectory.path, name, tag); });
+    }
+    passed &= runTest("range drags include the beat they end on", [&] { testRangeDragIncludesTheBeatItEndsOn(testDirectory.path); });
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
     passed &= runTest("part names survive save and follow instrument replacement", [&] { testPartNamesSurviveSave(testDirectory.path); });
     passed &= runTest("new dynamics and text reach linked parts", [&] { testNewDynamicsAndTextReachLinkedParts(testDirectory.path); });

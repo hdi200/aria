@@ -827,7 +827,7 @@
 
         mu::engraving::EngravingItem* item = currentSelectedItem(score);
         if (!isDirectlyDraggableTextItem(item)) {
-            errorMessage = "Select a movable text, dynamic, tempo, marker, or chord symbol before dragging it.";
+            errorMessage = "Select a movable text, dynamic, tempo, marker, fermata, or chord symbol before dragging it.";
             return false;
         }
 
