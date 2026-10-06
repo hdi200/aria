@@ -62,8 +62,17 @@ actor LiveScoreRenderSession {
         }
     }
     func playbackMIDIData() throws -> Data { midi }
+    /// The real session reads these from the playback sequence; the checks
+    /// derive them from their MIDI fixture.
+    func playbackNotes() throws -> [ScoreVideoPianoNote] { ScoreVideoPianoNotes.notes(fromMIDI: midi) }
     func playbackBeatPoints() throws -> [ScorePlaybackBeatPoint] { [] }
     func renderPage(at index: Int, dpi: Int) throws -> ScorePage { ScorePage(pdfData: page) }
+    /// Export audio with the user's mix; the stub ignores the mix.
+    func playbackExportAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval,
+                                  metronomeEnabled: Bool, mixerSettings: ScoreMixerSettings) async throws -> MSRPlaybackAudioData {
+        try await playbackAudioChunk(startTimeSeconds: startTimeSeconds, durationSeconds: durationSeconds,
+                                     metronomeEnabled: metronomeEnabled, includePartSamples: false)
+    }
     func playbackAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval,
                             metronomeEnabled: Bool, includePartSamples: Bool = true) async throws -> MSRPlaybackAudioData {
         requestedStems = requestedStems || includePartSamples

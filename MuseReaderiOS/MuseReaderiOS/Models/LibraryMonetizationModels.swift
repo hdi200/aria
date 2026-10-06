@@ -108,7 +108,6 @@ enum LibraryAccessSheet: Identifiable, Equatable, Sendable {
     case paywall(LibraryPaywallContext)
     case importReview(ScoreImportReview)
     case earlySupporter
-    case updateNotice
 
     var id: String {
         switch self {
@@ -118,8 +117,6 @@ enum LibraryAccessSheet: Identifiable, Equatable, Sendable {
             return "import-review-\(review.id.uuidString)"
         case .earlySupporter:
             return "early-supporter"
-        case .updateNotice:
-            return "update-notice"
         }
     }
 }

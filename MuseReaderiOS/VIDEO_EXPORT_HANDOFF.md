@@ -60,11 +60,16 @@ layout-break markers as system positions, is gone.)
 - **Piano** (`.piano`, `.pianoLight`, `.pianoPhoto`; 1920×1080): a piano-roll
   visualizer modeled on the Transcription app's `PianoRoll`. Notes fall onto a
   keyboard fitted to the music's range (at least three octaves, ending on white
-  keys) and light their keys while sounding. Notes come from the engine's playback
-  MIDI (`playbackMIDIData`, repeats expanded), converted to seconds with
-  AudioToolbox's `MusicSequence`; percussion (channel 10) is left out of the
-  picture but still heard. Each note-bearing MIDI track (one per staff) gets its
-  own colour, so a piano's treble and bass staves differ. No pages are rendered
+  keys) and light their keys while sounding. Notes come from the audio's own
+  playback sequence (`playbackNotes()`, native `collectFluidSynthPlaybackNotes`),
+  so they match the sound exactly through repeats, pauses, fermatas and tempo
+  changes; percussion is left out of the picture but still heard. Do not use the
+  MIDI export for timing: MuseScore 4.7.5's `PauseMap::calculate` applies a
+  section break's pause and the next section's tempo to every pass of a repeat
+  ending there, so goldberg's MIDI ends 161 s late (the engine's notes start
+  every one of its 2,017 measures exactly; `score_render_playback_notes_tests`).
+  Each staff gets its own colour (numbered in score order), so a piano's treble
+  and bass staves differ. The checks still build notes from a MIDI fixture. No pages are rendered
   and the layout is not switched; audio is the usual engine playback.
   Appearance: **Dark** (default: neon notes with a soft glow, a lit keyboard rail
   and flares where notes meet keys), **Light** (the piano-roll look with lanes,
@@ -73,6 +78,12 @@ layout-break markers as system positions, is gone.)
   notes and keyboard with Core Graphics, then Core Image (Metal) blurs the notes
   into a glow and composes the frame: about 8–15 ms per 1080p frame on the Mac,
   unmeasured on iPad. The preview shows the first note sounding.
+
+The ending never scrolls backward: over the last 8 s the playhead glides right,
+and where the final bars move more slowly than it, `scrollOffset(at:)` holds the
+score still (the running minimum of the offset within the current stretch, on a
+fixed 1/30 s grid). The cursor stays on the playing note. Checked by
+`checkScrollingEnding` (a 10 s final bar).
 
 Repeats and jumps cut: the scrolling camera's 1.2 s smoothing window is clamped to
 the current path segment (`ScoreVideoScrollPath.segmentTimes`), so it never
@@ -132,13 +143,23 @@ placement without resampling the cached title at fractional positions.
 
 ## Implemented performance changes
 
-1. **Mix-only video audio.**
-   `playbackAudioChunk(..., includePartSamples: Bool = true)` now exists through
-   Swift, the bridge, and native audio rendering. Video passes `false`; existing
-   playback callers keep stems by default, and the old ObjC selector still works.
-   Native code skips per-part PCM allocation/accumulation and the bridge avoids
-   copying those arrays. Synth routing, mixed-sample summation, and sequential
-   stream reuse are unchanged. Silent output clears stale stems.
+1. **Mix-only video audio, using the user's current mix.**
+   Pressing Render snapshots `readerState.mixerSettings` before any await, and
+   reuses that snapshot for every target and chunk. Video uses the separate
+   `playbackExportAudioChunk` → `playbackMixedAudioData` API. Native rendering
+   applies each part's volume, stereo balance, mute and solo before summation,
+   without allocating/copying full stems. Solo is resolved among the target's
+   actual parts; a solo outside a selected-part export does not silence it.
+   Reverb receives the post-fader mix, and master volume/mute/balance apply after
+   dry + reverb. The video still omits the metronome.
+   Normal playback's Swift chunk method, both existing ObjC selectors, and
+   native summation arithmetic remain unchanged; the new native mix branch is
+   used only by the export API. No score/writer/settings mutation is involved.
+   **Existing master-pan limitation:** normal playback sets `mainMixerNode.pan`,
+   which had no effect in an offline AVAudioEngine check (pan applies to a
+   downstream mixer's input bus). That playback code is untouched. Video applies
+   the chosen master stereo balance explicitly, so a nonzero master pan can
+   sound different from current playback.
 2. **Cached static overlays.** Title/font lookup, title drawing, paper fades,
    cursor glow, and page highlights/playheads are cached, in addition to the
    existing score tiles, page images, and background. PDF rasterization stays at
@@ -247,6 +268,23 @@ Approved pre-optimization previews are kept locally, outside the repository:
 `amazing-grace-opening-tracker-wide-margins.mp4`,
 `amazing-grace-white-photo-soft-cursor.mp4`, and its `-still.png`.
 `video-settings-preview.html` is the approved interactive modal mockup.
+
+### Current-mix verification (2026-09-29)
+
+- Native tests compare export PCM against independently mixed playback stems for
+  default settings, volume/pan, mute, solo, muted-solo, inactive solo, sequential
+  chunks and selected parts on count-in and the two-part guitar-bends fixture.
+- Normal playback was compared with a renderer compiled from the pre-change
+  HEAD: **7,752,696 and 8,419,968 bytes identical**, including PCM, stems,
+  seeking, metronome, part selection and count-in.
+- Native host and iOS libraries rebuilt; ObjC++ syntax and imported Swift audio
+  APIs checked. The exporter was typechecked against the iOS SDK.
+- Export-to-playback checks prove that temporary gain/solo/mute settings do not
+  affect the next normal chunk or its stems. Production master-mix checks passed
+  volume, both balance directions, hard left/right, neutral PCM and master mute.
+- The compatibility fixture check matches the prior report: two pre-existing
+  `4.7.5-cannot-open-input` results. This is **not** a compatibility pass.
+- This is audio correctness verification, not an iPad performance measurement.
 
 ## Remaining verification and build guidance
 

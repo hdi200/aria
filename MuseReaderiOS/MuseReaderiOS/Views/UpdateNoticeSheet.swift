@@ -8,12 +8,12 @@ import SwiftUI
 /// Versioned so a later release can show a new notice by bumping `currentVersion`
 /// and `releaseDate`.
 struct UpdateNoticeStore {
-    static let currentVersion = 1
+    static let currentVersion = 2
 
-    // The MuseScore 4.7.5 engine update began its release on September 24, 2026 at
+    // Annotations and video export release on October 1, 2026 at
     // 12:00 PM Eastern. AppTransaction supplies Apple's signed date for when this
     // customer first acquired the app, which survives the update itself.
-    static let releaseDate = Date(timeIntervalSince1970: 1_790_265_600)
+    static let releaseDate = Date(timeIntervalSince1970: 1_790_870_400)
 
     private let defaultsKey = "UpdateNotice.seenVersion"
     private var audienceKey: String {
@@ -31,8 +31,9 @@ struct UpdateNoticeStore {
 
     /// A missing or unverified App Store transaction is left unresolved so a later
     /// launch can retry, instead of deciding the customer is new while offline.
-    func shouldPresentNotice() async -> Bool {
-        guard userDefaults.integer(forKey: defaultsKey) < Self.currentVersion else {
+    func shouldPresentNotice(now: Date = Date()) async -> Bool {
+        guard now >= Self.releaseDate,
+              userDefaults.integer(forKey: defaultsKey) < Self.currentVersion else {
             return false
         }
         if userDefaults.object(forKey: audienceKey) != nil {
@@ -84,20 +85,19 @@ struct UpdateNoticeSheet: View {
     private let items: [Item] = [
         Item(
             id: 0,
-            systemImage: "wrench.and.screwdriver",
-            title: "Fixed: markings missing from parts/full score",
-            message: "Sorry about this one! Dynamics, tempo markings, and repeat signs you added in earlier versions of "
-                + "Aria didn't carry between a part and the full score. If you now reopen a score with "
-                + "this problem, Aria will offer to fix it for you. Nothing changes until you tap Fix, "
-                + "and Aria saves a copy of the original when you do. From now on, these markings "
-                + "stay in sync between the full score and its parts."
+            systemImage: "pencil.tip.crop.circle",
+            title: "Mark up your scores",
+            message: "Tap the annotation button to write, draw, or highlight with your Apple Pencil or finger. "
+                + "Choose your colors and line widths, erase marks, and undo changes. "
+                + "Your annotations are saved with this score, ready for your next practice or rehearsal."
         ),
         Item(
             id: 1,
-            systemImage: "desktopcomputer",
-            title: "Now in sync with MuseScore Studio 4.7.5",
-            message: "Aria now uses the same engine as MuseScore Studio 4.7.5, so your scores look "
-                + "the same here as on your computer. Scores save in MuseScore 4.7 format."
+            systemImage: "film",
+            title: "Share a play-along video",
+            message: "Open Share, choose Video, then tap Video Export. Make a smoothly scrolling score "
+                + "or a video that follows the music through the pages, with playback using your saved mix. "
+                + "Keep the score on a plain background or add a photo with white notation."
         )
     ]
 
@@ -105,7 +105,7 @@ struct UpdateNoticeSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("This update fixes scores affected by earlier versions of Aria and brings Aria in line with MuseScore Studio 4.7.5.")
+                    Text("Two new ways to practice and share your music: handwritten annotations and play-along videos.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 

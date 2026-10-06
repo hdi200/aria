@@ -301,6 +301,24 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+/// One sounding note, timed exactly as the playback audio plays it.
+@interface MSRPlaybackNote : NSObject
+
+@property (nonatomic, readonly) NSInteger pitch;
+@property (nonatomic, readonly) NSTimeInterval startTimeSeconds;
+@property (nonatomic, readonly) NSTimeInterval endTimeSeconds;
+/// The staff that plays it, from 0 in score order among the staves that sound.
+@property (nonatomic, readonly) NSInteger staffIndex;
+
+- (instancetype)initWithPitch:(NSInteger)pitch
+             startTimeSeconds:(NSTimeInterval)startTimeSeconds
+               endTimeSeconds:(NSTimeInterval)endTimeSeconds
+                   staffIndex:(NSInteger)staffIndex NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
 /// The metronome clicks played before playback. Playback starts
 /// `durationSeconds` after the first click; the audio runs slightly longer so
 /// the last click can ring.
@@ -320,6 +338,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// MuseScore Studio's default reverb (the "Muse Reverb" aux channel). Feed it the
 /// reverb send in playback order; it replaces the samples with the wet signal.
+@interface MSRPlaybackPartMix : NSObject
+@property (nonatomic, readonly) float volume;
+@property (nonatomic, readonly) float pan;
+@property (nonatomic, readonly) BOOL muted;
+@property (nonatomic, readonly) BOOL solo;
+- (instancetype)initWithVolume:(float)volume pan:(float)pan muted:(BOOL)muted solo:(BOOL)solo;
+@end
+
 @interface MSRPlaybackReverb : NSObject
 
 - (instancetype)initWithSampleRate:(double)sampleRate NS_DESIGNATED_INITIALIZER;
@@ -592,10 +618,18 @@ isEditableText:(BOOL)isEditableText
                                                          metronomeEnabled:(BOOL)metronomeEnabled
                                                         includePartSamples:(BOOL)includePartSamples
                                                                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackEventAudioData(soundFontPath:startTimeSeconds:durationSeconds:metronomeEnabled:includePartSamples:));
+- (nullable MSRPlaybackAudioData *)playbackMixedAudioDataWithSoundFontPath:(NSString *)soundFontPath
+                                                          startTimeSeconds:(NSTimeInterval)startTimeSeconds
+                                                           durationSeconds:(NSTimeInterval)durationSeconds
+                                                         metronomeEnabled:(BOOL)metronomeEnabled
+                                                           partMixSettings:(NSDictionary<NSString *, MSRPlaybackPartMix *> *)partMixSettings
+                                                                     error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackMixedAudioData(soundFontPath:startTimeSeconds:durationSeconds:metronomeEnabled:partMixSettings:));
 - (nullable MSRPlaybackCountIn *)playbackCountInWithSoundFontPath:(NSString *)soundFontPath
                                                   startTimeSeconds:(NSTimeInterval)startTimeSeconds
                                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackCountIn(soundFontPath:startTimeSeconds:));
 - (nullable NSArray<MSRPlaybackMeasureRegion *> *)playbackMeasureRegionsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackMeasureRegions());
+/// Every pitched note of playback in start order, percussion left out.
+- (nullable NSArray<MSRPlaybackNote *> *)playbackNotesWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackNotes());
 - (nullable NSArray<MSRPlaybackBeatPoint *> *)playbackBeatPointsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackBeatPoints());
 - (nullable MSRScoreCorruptionReport *)scoreCorruptionReportWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(scoreCorruptionReport());
 - (nullable NSArray<MSRLegacyRepairIssue *> *)legacyRepairIssuesWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(legacyRepairIssues());

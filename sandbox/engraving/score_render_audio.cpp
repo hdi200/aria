@@ -4,7 +4,8 @@
                                 const bool metronomeEnabled,
                                 msr::render::PlaybackAudioData& output,
                                 std::string& errorMessage,
-                                const bool includePartSamples) const
+                                const bool includePartSamples,
+                                const msr::render::PlaybackMix* mix) const
     {
         if (startTimeSeconds < 0.0) {
             errorMessage = "Playback chunk start time must be non-negative.";
@@ -41,7 +42,27 @@
                                               m_playbackStream,
                                               output,
                                               errorMessage,
-                                              includePartSamples);
+                                              includePartSamples,
+                                              mix);
+    }
+
+    bool playbackNotes(std::vector<msr::render::PlaybackNote>& output, std::string& errorMessage) const
+    {
+        if (blockDelayedSubsystemIfCorrupted(m_masterScore.get(), "playback notes", errorMessage)) {
+            output.clear();
+            return false;
+        }
+        std::optional<std::uint64_t> activePartId;
+        if (m_activePartIndex.has_value() && m_masterScore) {
+            const std::vector<mu::engraving::Part*>& parts = m_masterScore->parts();
+            if (*m_activePartIndex >= 0 && *m_activePartIndex < static_cast<int>(parts.size())) {
+                if (const mu::engraving::Part* part = parts.at(static_cast<size_t>(*m_activePartIndex))) {
+                    activePartId = part->id().toUint64();
+                }
+            }
+        }
+        return collectFluidSynthPlaybackNotes(presentationScore(), m_sessionContext->context(), activePartId,
+                                              output, errorMessage);
     }
 
     bool playbackCountIn(const std::string& soundFontPath,

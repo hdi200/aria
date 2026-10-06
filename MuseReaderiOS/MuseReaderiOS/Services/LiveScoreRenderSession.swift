@@ -25,6 +25,7 @@ actor LiveScoreRenderSession {
     private let bridgeSession: MSRRenderSession
     private var cachedPlaybackMIDIData: Data?
     private var cachedPlaybackMeasureRegions: [ScorePlaybackMeasureRegion]?
+    private var cachedPlaybackNotes: [ScoreVideoPianoNote]?
     private var cachedPlaybackSoundFontURL: URL?
     private var playbackRevision = 0
 
@@ -201,6 +202,25 @@ actor LiveScoreRenderSession {
         return audioData
     }
 
+    func playbackExportAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval, metronomeEnabled: Bool, mixerSettings: ScoreMixerSettings) throws -> MSRPlaybackAudioData {
+        guard let soundFontURL = playbackSoundFontURL() else {
+            throw NativePlaybackController.PlaybackError.soundBankUnavailable(
+                "Add `MuseScore_General.sf2` to the app bundle resources."
+            )
+        }
+
+        let audioData = try bridgeSession.playbackMixedAudioData(
+            soundFontPath: soundFontURL.path,
+            startTimeSeconds: startTimeSeconds,
+            durationSeconds: durationSeconds,
+            metronomeEnabled: metronomeEnabled,
+            partMixSettings: mixerSettings.parts.mapValues {
+                MSRPlaybackPartMix(volume: $0.volume, pan: $0.pan, muted: $0.muted, solo: $0.solo)
+            }
+        )
+        return audioData
+    }
+
     /// The metronome count-in leading into playback at `startTimeSeconds`, or
     /// nil when there is no bar to count in from.
     func playbackCountIn(startTimeSeconds: TimeInterval) throws -> MSRPlaybackCountIn? {
@@ -230,6 +250,25 @@ actor LiveScoreRenderSession {
     func playbackAudioExportDurationSeconds() throws -> TimeInterval {
         let regions = try playbackMeasureRegions()
         return regions.map(\.endTimeSeconds).max() ?? 0
+    }
+
+    /// The pitched notes of playback, timed as the audio plays them.
+    func playbackNotes() throws -> [ScoreVideoPianoNote] {
+        guard supportsPlayback else {
+            return []
+        }
+        if let cachedPlaybackNotes {
+            return cachedPlaybackNotes
+        }
+        let bridgeNotes = try RenderCoreWorkGate.sync {
+            try bridgeSession.playbackNotes()
+        }
+        let notes = bridgeNotes.map { note in
+            ScoreVideoPianoNote(pitch: note.pitch, startSeconds: note.startTimeSeconds,
+                                endSeconds: note.endTimeSeconds, track: note.staffIndex)
+        }
+        cachedPlaybackNotes = notes
+        return notes
     }
 
     func playbackMeasureRegions() throws -> [ScorePlaybackMeasureRegion] {
@@ -1503,6 +1542,7 @@ actor LiveScoreRenderSession {
     private func invalidateCachedPlaybackArtifacts() {
         cachedPlaybackMIDIData = nil
         cachedPlaybackMeasureRegions = nil
+        cachedPlaybackNotes = nil
         playbackRevision += 1
         print("MuseReader playback invalidated: revision=\(playbackRevision)")
     }

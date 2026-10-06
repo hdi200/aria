@@ -14,15 +14,18 @@ struct ScoreVideoPianoNote: Equatable, Sendable {
     let pitch: Int
     let startSeconds: TimeInterval
     let endSeconds: TimeInterval
-    /// Which of the score's note-bearing MIDI tracks it came from (one per
-    /// staff), so a piano's two hands, or each part, get their own colour.
+    /// The staff that plays it, from 0 in score order, so a piano's two
+    /// hands, or each part, get their own colour.
     let track: Int
 }
 
 enum ScoreVideoPianoNotes {
-    /// The notes of the engine's playback MIDI (repeats expanded), with beats
-    /// converted to seconds through its tempo map. Percussion is left out:
-    /// it has no keys to fall onto.
+    /// The notes of a MIDI file, with beats converted to seconds through its
+    /// tempo map; percussion is left out. Used by the checks to render samples
+    /// from MIDI. Videos read `LiveScoreRenderSession.playbackNotes()`
+    /// instead: MuseScore's MIDI export applies a section break's pause and
+    /// the next section's tempo to every pass of a repeat, so it drifts from
+    /// the audio (goldberg ends 161 s late).
     static func notes(fromMIDI data: Data) -> [ScoreVideoPianoNote] {
         var sequenceRef: MusicSequence?
         guard NewMusicSequence(&sequenceRef) == noErr, let sequence = sequenceRef else { return [] }

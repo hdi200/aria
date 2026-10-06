@@ -254,6 +254,14 @@ else()
             tests/score_render_count_in_tests.cpp
         )
 
+        add_executable(score_render_playback_notes_tests tests/score_render_playback_notes_tests.cpp)
+        target_include_directories(score_render_playback_notes_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+        target_link_libraries(score_render_playback_notes_tests PRIVATE score_render_core)
+        add_test(NAME score_render_playback_notes_tests COMMAND score_render_playback_notes_tests
+            ${CMAKE_CURRENT_LIST_DIR}/../../demos/goldberg.mscz
+            ${CMAKE_CURRENT_LIST_DIR}/../../demos/Amazing_grace.mscz)
+        set_tests_properties(score_render_playback_notes_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
         add_executable(score_render_audio_mix_tests tests/score_render_audio_mix_tests.cpp)
         target_include_directories(score_render_audio_mix_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
         target_link_libraries(score_render_audio_mix_tests PRIVATE score_render_core)
@@ -261,6 +269,10 @@ else()
             ${CMAKE_CURRENT_LIST_DIR}/../../src/engraving/tests/playback/playbackeventsrenderer_data/count_in.mscx
             ${CMAKE_CURRENT_LIST_DIR}/../../MuseReaderiOS/MuseReaderiOS/Resources/MuseScore_General.sf2)
         set_tests_properties(score_render_audio_mix_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+        add_test(NAME score_render_audio_mix_parts_tests COMMAND score_render_audio_mix_tests
+            ${CMAKE_CURRENT_LIST_DIR}/../../src/engraving/tests/playback/playbackeventsrenderer_data/guitar_bends/guitar_bends.mscx
+            ${CMAKE_CURRENT_LIST_DIR}/../../MuseReaderiOS/MuseReaderiOS/Resources/MuseScore_General.sf2)
+        set_tests_properties(score_render_audio_mix_parts_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
         target_include_directories(score_render_accidental_tests PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}

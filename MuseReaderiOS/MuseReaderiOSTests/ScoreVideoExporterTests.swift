@@ -3,6 +3,28 @@ import Testing
 @testable import MuseReaderiOS
 
 struct ScoreVideoExporterTests {
+    @Test func videoMasterMixUsesVolumeAndStereoBalance() {
+        for (pan, expected): (Float, [Float]) in [
+            (0, [0.1, 0.2]), (0.4, [0.06, 0.2]), (-0.4, [0.1, 0.12]),
+            (1, [0, 0.2]), (-1, [0.1, 0])
+        ] {
+            var samples: [Float] = [0.2, 0.4]
+            ScoreVideoAudioChunk.applyMasterMix(ScoreMixerSettings(masterVolume: 0.5, masterPan: pan),
+                                               to: &samples, channelCount: 2)
+            #expect(abs(samples[0] - expected[0]) < 0.000001)
+            #expect(abs(samples[1] - expected[1]) < 0.000001)
+        }
+    }
+
+    @Test func videoMasterMuteSilencesBothChannelsAndDefaultPreservesPCM() {
+        let input: [Float] = [0.2, -0.4, 0, 0.8]
+        var samples = input
+        ScoreVideoAudioChunk.applyMasterMix(ScoreMixerSettings(), to: &samples, channelCount: 2)
+        #expect(samples == input)
+        ScoreVideoAudioChunk.applyMasterMix(ScoreMixerSettings(masterMuted: true), to: &samples, channelCount: 2)
+        #expect(samples.allSatisfy { $0 == 0 })
+    }
+
     private func region(_ measure: Int, page: Int, start: Double, end: Double, y: Double = 0.2) -> ScorePlaybackMeasureRegion {
         ScorePlaybackMeasureRegion(
             measureIndex: measure,

@@ -247,6 +247,26 @@ struct PlaybackCountIn {
     std::vector<PlaybackCountInClick> clicks;
 };
 
+//! One sounding note, timed exactly as the playback audio plays it.
+struct PlaybackNote {
+    int pitch = 60;
+    double startTimeSeconds = 0.0;
+    double endTimeSeconds = 0.0;
+    //! The staff that plays it, numbered from 0 in score order among the
+    //! staves that sound. A piano's two hands are two staves.
+    int staffIndex = 0;
+    std::string partId;
+};
+
+struct PlaybackPartMix {
+    float volume = 1.0f;
+    float pan = 0.0f;
+    bool muted = false;
+    bool solo = false;
+};
+
+using PlaybackMix = std::map<std::string, PlaybackPartMix>;
+
 struct PlaybackTrackSummary {
     std::string partId;
     std::string instrumentId;
@@ -315,6 +335,17 @@ public:
                                 PlaybackAudioData& output,
                                 std::string& errorMessage,
                                 bool includePartSamples = true) const;
+    //! Export-only mix; normal playback uses the unchanged API above.
+    bool playbackMixedAudioData(const std::string& soundFontPath,
+                                double startTimeSeconds,
+                                double durationSeconds,
+                                bool metronomeEnabled,
+                                PlaybackAudioData& output,
+                                std::string& errorMessage,
+                                const PlaybackMix& mix) const;
+    //! Every pitched note of playback (percussion left out), in start order,
+    //! with the same timing as `playbackEventAudioData`.
+    bool playbackNotes(std::vector<PlaybackNote>& output, std::string& errorMessage) const;
     //! One bar of metronome clicks leading into playback at `startTimeSeconds`.
     //! Empty when there is no bar to count in from.
     bool playbackCountIn(const std::string& soundFontPath,

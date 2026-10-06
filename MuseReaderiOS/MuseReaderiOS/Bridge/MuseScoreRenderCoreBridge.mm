@@ -798,6 +798,15 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
 @end
 
+@implementation MSRPlaybackPartMix
+- (instancetype)initWithVolume:(float)volume pan:(float)pan muted:(BOOL)muted solo:(BOOL)solo
+{
+    self = [super init];
+    if (self) { _volume = volume; _pan = pan; _muted = muted; _solo = solo; }
+    return self;
+}
+@end
+
 @implementation MSRPlaybackReverb
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
@@ -849,6 +858,25 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _durationSeconds = durationSeconds;
         _interleavedFloat32Samples = [interleavedFloat32Samples copy];
         _partSamples = [partSamples copy];
+    }
+    return self;
+}
+
+@end
+
+@implementation MSRPlaybackNote
+
+- (instancetype)initWithPitch:(NSInteger)pitch
+             startTimeSeconds:(NSTimeInterval)startTimeSeconds
+               endTimeSeconds:(NSTimeInterval)endTimeSeconds
+                   staffIndex:(NSInteger)staffIndex
+{
+    self = [super init];
+    if (self) {
+        _pitch = pitch;
+        _startTimeSeconds = startTimeSeconds;
+        _endTimeSeconds = endTimeSeconds;
+        _staffIndex = staffIndex;
     }
     return self;
 }
@@ -1377,6 +1405,50 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (MSRPlaybackAudioData *)playbackMixedAudioDataWithSoundFontPath:(NSString *)soundFontPath
+                                                 startTimeSeconds:(NSTimeInterval)startTimeSeconds
+                                                  durationSeconds:(NSTimeInterval)durationSeconds
+                                                metronomeEnabled:(BOOL)metronomeEnabled
+                                                   partMixSettings:(NSDictionary<NSString *, MSRPlaybackPartMix *> *)partMixSettings
+                                                             error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::PlaybackMix mix;
+    for (NSString *partID in partMixSettings) {
+        MSRPlaybackPartMix *part = partMixSettings[partID];
+        mix[partID.UTF8String ?: ""] = { part.volume, part.pan, bool(part.muted), bool(part.solo) };
+    }
+    msr::render::PlaybackAudioData audioData;
+    std::string errorMessage;
+    if (!_session->playbackMixedAudioData(soundFontPath.UTF8String ?: "",
+                                           startTimeSeconds,
+                                           durationSeconds,
+                                           metronomeEnabled,
+                                           audioData,
+                                           errorMessage,
+                                           mix)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not render event-driven playback audio."));
+        }
+        return nil;
+    }
+
+    return MakePlaybackAudioData(audioData);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore playback event audio support yet.");
+    }
+    return nil;
+#endif
+}
+
 - (MSRPlaybackCountIn *)playbackCountInWithSoundFontPath:(NSString *)soundFontPath
                                          startTimeSeconds:(NSTimeInterval)startTimeSeconds
                                                     error:(NSError * _Nullable __autoreleasing *)error
@@ -1410,6 +1482,41 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #else
     if (error) {
         *error = UnavailableError(@"This build of Aria is not linked to MuseScore playback event audio support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (NSArray<MSRPlaybackNote *> *)playbackNotesWithError:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    std::vector<msr::render::PlaybackNote> notes;
+    std::string errorMessage;
+    if (!_session->playbackNotes(notes, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not read the playback notes."));
+        }
+        return nil;
+    }
+
+    NSMutableArray<MSRPlaybackNote *> *result = [[NSMutableArray alloc] initWithCapacity:notes.size()];
+    for (const auto& note : notes) {
+        [result addObject:[[MSRPlaybackNote alloc] initWithPitch:note.pitch
+                                                startTimeSeconds:note.startTimeSeconds
+                                                  endTimeSeconds:note.endTimeSeconds
+                                                      staffIndex:note.staffIndex]];
+    }
+    return result;
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore playback support yet.");
     }
     return nil;
 #endif

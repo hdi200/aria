@@ -222,6 +222,19 @@ struct ScoreReaderView: View {
     @State private var isMixerPresented = false
     @State private var isFeatureTourPresented = false
     private let featureTourStore = ScoreReaderFeatureTourStore()
+    @State private var isUpdateNoticePresented = false
+    private let updateNoticeStore = UpdateNoticeStore()
+
+    @MainActor
+    private func presentReaderIntroductionIfNeeded() async {
+        guard readerState.pageCount > 0, !isClosingScore, !isTransitioningScore, !Task.isCancelled else { return }
+        if await updateNoticeStore.shouldPresentNotice() {
+            guard !Task.isCancelled, !isClosingScore, !isTransitioningScore, legacyRepairPrompt == nil else { return }
+            isUpdateNoticePresented = true
+        } else {
+            await presentFeatureTourIfNeeded()
+        }
+    }
 
     private func handleReaderAppear() {
         updatePhoneOrientation(for: readerState.interactionMode)
@@ -229,9 +242,13 @@ struct ScoreReaderView: View {
 
     @MainActor
     private func presentFeatureTourIfNeeded() async {
+        guard readerState.pageCount > 0, !isClosingScore, !isTransitioningScore,
+              legacyRepairPrompt == nil, !isUpdateNoticePresented, !Task.isCancelled else { return }
         guard await featureTourStore.shouldPresentTour() else {
             return
         }
+        guard !Task.isCancelled, !isClosingScore, !isTransitioningScore,
+              legacyRepairPrompt == nil, !isUpdateNoticePresented else { return }
         isFeatureTourPresented = true
     }
 
@@ -827,12 +844,14 @@ struct ScoreReaderView: View {
                     if !issues.isEmpty {
                         legacyRepairPrompt = ScoreLegacyRepairPrompt(issues: issues)
                     } else {
-                        await presentFeatureTourIfNeeded()
+                        await presentReaderIntroductionIfNeeded()
                     }
                 } catch {
                     // An inspection failure must never prevent the score from opening.
-                    await presentFeatureTourIfNeeded()
+                    await presentReaderIntroductionIfNeeded()
                 }
+            } else {
+                await presentReaderIntroductionIfNeeded()
             }
         }
         .onDisappear {
@@ -929,10 +948,18 @@ struct ScoreReaderView: View {
 
     private var readerSheetsBody: some View {
         readerLifecycleBody
-        .sheet(item: $legacyRepairPrompt) { prompt in
+        .sheet(item: $legacyRepairPrompt, onDismiss: {
+            Task { await presentReaderIntroductionIfNeeded() }
+        }) { prompt in
             ScoreLegacyRepairSheet(issues: prompt.issues) { selectedIndexes in
                 try await applyLegacyRepairs(selectedIndexes, from: prompt)
             }
+        }
+        .sheet(isPresented: $isUpdateNoticePresented, onDismiss: {
+            Task { await presentFeatureTourIfNeeded() }
+        }) {
+            UpdateNoticeSheet()
+                .onAppear { updateNoticeStore.markNoticeSeen() }
         }
         .sheet(isPresented: Binding(
             get: { isMixerPresented && UIDevice.current.userInterfaceIdiom == .phone },
@@ -2524,6 +2551,7 @@ struct ScoreReaderView: View {
         if keepsScreenAwake {
             UIApplication.shared.isIdleTimerDisabled = true
         }
+        let videoMixerSnapshot = readerState.mixerSettings
 
         exportTask = Task {
             defer {
@@ -2549,7 +2577,7 @@ struct ScoreReaderView: View {
                         ]
                     )
                 }
-                let urls = try await prepareExportURLs()
+                let urls = try await prepareExportURLs(videoMixerSettings: videoMixerSnapshot)
                 try Task.checkCancellation()
                 await MainActor.run {
                     isPreparingExport = false
@@ -2574,7 +2602,7 @@ struct ScoreReaderView: View {
         }
     }
 
-    private func prepareExportURLs() async throws -> [URL] {
+    private func prepareExportURLs(videoMixerSettings: ScoreMixerSettings) async throws -> [URL] {
         switch exportDraft.format {
         case .museScore:
             return [try await writeMuseScoreExport()]
@@ -2589,11 +2617,11 @@ struct ScoreReaderView: View {
         case .images:
             return try await writePNGPageExports()
         case .video:
-            return try await writeVideoExports()
+            return try await writeVideoExports(mixerSettings: videoMixerSettings)
         }
     }
 
-    private func writeVideoExports() async throws -> [URL] {
+    private func writeVideoExports(mixerSettings: ScoreMixerSettings) async throws -> [URL] {
         let style = exportDraft.videoStyle
         let backgroundImageData = exportDraft.videoBackgroundImageData
         let composer = readerState.scoreMetadata.composer
@@ -2622,6 +2650,7 @@ struct ScoreReaderView: View {
                 to: exportURL,
                 options: ScoreVideoExportOptions(style: style, title: title, composer: composer,
                                                  titleFont: textFonts.title, composerFont: textFonts.composer,
+                                                 mixerSettings: mixerSettings,
                                                  backgroundImageData: backgroundImageData,
                                                  pinsStaffHeader: !isPart && pinsVideoStaffHeader),
                 progress: reportProgress

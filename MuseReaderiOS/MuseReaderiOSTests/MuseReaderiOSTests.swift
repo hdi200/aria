@@ -40,8 +40,8 @@ struct MuseReaderiOSTests {
         #expect(UpdateNoticeStore.isExistingInstall(originalPurchaseDate: beforeRelease))
         #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: atRelease))
         #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: afterRelease))
-        // September 24, 2026, 12:00 PM Eastern (EDT, UTC-4).
-        #expect(UpdateNoticeStore.releaseDate == ISO8601DateFormatter().date(from: "2026-09-24T16:00:00Z"))
+        // October 1, 2026, 12:00 PM Eastern (EDT, UTC-4).
+        #expect(UpdateNoticeStore.releaseDate == ISO8601DateFormatter().date(from: "2026-10-01T16:00:00Z"))
     }
 
     @Test
@@ -50,6 +50,33 @@ struct MuseReaderiOSTests {
         let store = UpdateNoticeStore(userDefaults: defaults)
         store.markNoticeSeen()
         #expect(defaults.integer(forKey: "UpdateNotice.seenVersion") == UpdateNoticeStore.currentVersion)
+    }
+
+    @Test
+    func updateNoticeWaitsForReleaseAndReplacesPreviousNotice() async {
+        let suiteName = "UpdateNoticeTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(1, forKey: "UpdateNotice.seenVersion")
+        // The previous release's audience decision must not hide the new notice.
+        defaults.set(false, forKey: "UpdateNotice.v1.isExistingInstall")
+        defaults.set(true, forKey: "UpdateNotice.v2.isExistingInstall")
+        let store = UpdateNoticeStore(userDefaults: defaults)
+
+        #expect(!(await store.shouldPresentNotice(now: UpdateNoticeStore.releaseDate.addingTimeInterval(-1))))
+        #expect(await store.shouldPresentNotice(now: UpdateNoticeStore.releaseDate))
+        store.markNoticeSeen()
+        #expect(!(await store.shouldPresentNotice(now: UpdateNoticeStore.releaseDate.addingTimeInterval(1))))
+    }
+
+    @Test
+    func updateNoticeSkipsNewCustomers() async {
+        let suiteName = "UpdateNoticeTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(false, forKey: "UpdateNotice.v2.isExistingInstall")
+        let store = UpdateNoticeStore(userDefaults: defaults)
+        #expect(!(await store.shouldPresentNotice(now: UpdateNoticeStore.releaseDate)))
     }
 
     @Test

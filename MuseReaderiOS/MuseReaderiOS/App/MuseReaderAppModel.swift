@@ -148,8 +148,6 @@ final class MuseReaderAppModel: ObservableObject {
     private var isCreateScoreSlotReserved = false
     private var pendingLibraryAction: PendingLibraryAction?
     private var didPresentEarlySupporterMessageThisLaunch = false
-    private let updateNoticeStore = UpdateNoticeStore()
-    private var isUpdateNoticeDue = false
 
     private enum AccessUIKeys {
         static let earlySupporterMessageShown = "Aria.LibraryAccess.EarlySupporterMessageShown"
@@ -243,30 +241,6 @@ final class MuseReaderAppModel: ObservableObject {
             UserDefaults.standard.set(true, forKey: AccessUIKeys.earlySupporterMessageShown)
         }
         libraryAccessSheet = .earlySupporter
-    }
-
-    /// Looks up once per launch whether this install predates the update notice's
-    /// release, then shows it when the library is idle.
-    func checkForUpdateNotice() async {
-        isUpdateNoticeDue = await updateNoticeStore.shouldPresentNotice()
-        presentUpdateNoticeIfNeeded()
-    }
-
-    /// Shares the library's launch sheet with the early-supporter message, so neither
-    /// is presented over the other; the one that waits shows when the sheet closes.
-    func presentUpdateNoticeIfNeeded() {
-        guard isUpdateNoticeDue,
-              libraryAccessSheet == nil,
-              currentSession == nil,
-              !isCreateScorePresented,
-              !isImportingPresented
-        else {
-            return
-        }
-
-        isUpdateNoticeDue = false
-        updateNoticeStore.markNoticeSeen()
-        libraryAccessSheet = .updateNotice
     }
 
     func cancelPendingLibraryAction() {

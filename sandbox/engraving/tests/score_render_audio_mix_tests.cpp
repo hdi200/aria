@@ -1,5 +1,7 @@
 // Mixed-only video audio must be sample-identical to normal stem playback.
 #include <algorithm>
+#include <cmath>
+#include <set>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -58,6 +60,71 @@ void check(const std::string& scorePath, const std::string& soundFontPath, bool 
     expect(mixedOnly->playbackEventAudioData(soundFontPath, 3600.0, 0.1, metronome, switched, error, false), "silent tail: " + error);
     expect(switched.partSamples.empty(), "silent tail retained stems");
 }
+
+void checkUserMix(const std::string& scorePath, const std::string& soundFontPath, int scenario, bool part)
+{
+    std::string error;
+    auto reference = msr::render::ScoreRenderSession::open(scorePath, error);
+    auto exported = msr::render::ScoreRenderSession::open(scorePath, error);
+    expect(reference && exported, "open user mix sessions: " + error);
+    if (part) {
+        int pages = 0;
+        expect(reference->setActivePartIndex(0, pages, error), "reference part: " + error);
+        expect(exported->setActivePartIndex(0, pages, error), "export part: " + error);
+    }
+    msr::render::PlaybackMix settings;
+    double start = 0;
+    bool audible = false;
+    for (int chunk = 0; chunk < 3; ++chunk) {
+        msr::render::PlaybackAudioData stems, actual;
+        expect(reference->playbackEventAudioData(soundFontPath, start, 1, false, stems, error), "reference audio: " + error);
+        if (chunk == 0) {
+            int index = 0;
+            for (const auto& stem : stems.partSamples) {
+                auto& setting = settings[stem.first];
+                setting.volume = scenario == 0 ? 1.0f : 0.35f + 0.15f * (index % 3);
+                setting.pan = scenario == 0 ? 0.0f : (index % 2 == 0 ? 0.6f : -0.4f);
+                setting.muted = (scenario == 2 || scenario == 4) && index == 0;
+                setting.solo = (scenario == 3 || scenario == 4) && index == 0;
+                ++index;
+            }
+            // An instrument outside this target must not silence the target.
+            settings["absent-part"].solo = true;
+        }
+        expect(exported->playbackMixedAudioData(soundFontPath, start, 1, false, actual, error, settings),
+               "user mix audio: " + error);
+        expect(actual.partSamples.empty(), "user mix allocated stems");
+        expect(actual.interleavedSamples.size() == stems.interleavedSamples.size(), "user mix length changed");
+        bool hasSolo = false;
+        for (const auto& stem : stems.partSamples) { hasSolo = hasSolo || settings.at(stem.first).solo; }
+        std::vector<float> expected(actual.interleavedSamples.size(), 0.0f);
+        for (const auto& stem : stems.partSamples) {
+            const auto& setting = settings.at(stem.first);
+            const float volume = setting.muted || (hasSolo && !setting.solo) ? 0.0f : setting.volume;
+            const float leftGain = volume * (setting.pan > 0 ? 1 - setting.pan : 1);
+            const float rightGain = volume * (setting.pan < 0 ? 1 + setting.pan : 1);
+            for (size_t sample = 0; sample < expected.size(); sample += 2) {
+                expected[sample] += stem.second[sample] * leftGain;
+                expected[sample + 1] += stem.second[sample + 1] * rightGain;
+            }
+        }
+        for (size_t sample = 0; sample < expected.size(); ++sample) {
+            expect(std::abs(expected[sample] - actual.interleavedSamples[sample]) < 0.000002f,
+                   "user mix differs from stem playback, scenario " + std::to_string(scenario));
+            audible = audible || std::abs(actual.interleavedSamples[sample]) > 0.00001f;
+        }
+        start += stems.durationSeconds;
+    }
+    if (scenario == 0 || scenario == 1 || scenario == 3) { expect(audible, "user mix expected audible output"); }
+    // Returning to playback on the same stream must discard all export gains.
+    msr::render::PlaybackAudioData normalReference, normalAfterExport;
+    expect(reference->playbackEventAudioData(soundFontPath, start, 0.4, false, normalReference, error), "normal reference: " + error);
+    expect(exported->playbackEventAudioData(soundFontPath, start, 0.4, false, normalAfterExport, error), "normal after export: " + error);
+    expect(normalAfterExport.interleavedSamples == normalReference.interleavedSamples,
+           "export settings leaked into normal mixed PCM");
+    expect(normalAfterExport.partSamples == normalReference.partSamples,
+           "export settings leaked into playback stems");
+}
 }
 
 int main(int argc, char* argv[])
@@ -70,6 +137,10 @@ int main(int argc, char* argv[])
         check(argv[1], argv[2], false, false);
         check(argv[1], argv[2], true, false);
         check(argv[1], argv[2], false, true);
+        for (int scenario = 0; scenario < 5; ++scenario) {
+            checkUserMix(argv[1], argv[2], scenario, false);
+            checkUserMix(argv[1], argv[2], scenario, true);
+        }
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << '\n';
         return 1;

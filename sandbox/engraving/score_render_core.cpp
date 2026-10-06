@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstring>
 #include <limits>
+#include <deque>
 #include <map>
 #include <memory>
 #include <mutex>

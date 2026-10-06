@@ -13,6 +13,7 @@ args = parser.parse_args()
 checks = pathlib.Path(__file__).resolve().parent
 exporter = checks.parent / "MuseReaderiOS/Services/ScoreVideoExporter.swift"
 piano = checks.parent / "MuseReaderiOS/Services/ScoreVideoPianoPainter.swift"
+mixer = checks.parent / "MuseReaderiOS/Models/ScoreMixerSettings.swift"
 
 
 def sdk(name):
@@ -21,7 +22,7 @@ def sdk(name):
 
 with tempfile.TemporaryDirectory(prefix="aria-video-check-") as temporary:
     work = pathlib.Path(temporary)
-    sources = [str(checks / "VideoExportStubs.swift"), str(exporter), str(piano), str(checks / "VideoExportChecks.swift")]
+    sources = [str(checks / "VideoExportStubs.swift"), str(exporter), str(piano), str(mixer), str(checks / "VideoExportChecks.swift")]
     common = ["xcrun", "swiftc", "-swift-version", "5", "-module-cache-path", str(work / "modules")]
     subprocess.run(common + ["-typecheck", "-target", "arm64-apple-ios17.0", "-sdk", str(sdk("iphoneos"))] + sources, check=True)
     if args.run:

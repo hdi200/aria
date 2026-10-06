@@ -5984,7 +5984,8 @@ public:
                 const SteadyClock::time_point started,
                 msr::render::PlaybackAudioData& output,
                 std::string& errorMessage,
-                const bool includePartSamples)
+                const bool includePartSamples,
+                const msr::render::PlaybackMix* mix)
     {
         int startFrame = requestedStartFrame;
         if (m_currentFrame > startFrame && m_currentFrame - startFrame <= 2) {
@@ -6059,6 +6060,29 @@ public:
                 stemChannels.emplace_back(program.channel, &stem);
             }
         }
+        // Gains are computed once per chunk. The fast export path never needs
+        // per-part output buffers; sampler channels are balanced before summing.
+        std::vector<std::pair<float, float>> gains;
+        if (mix) {
+            gains.assign(channels.size() / 2, { 1.0f, 1.0f });
+            bool hasSolo = false;
+            for (const auto& program : m_sequence.channelPrograms) {
+                const auto setting = mix->find(program.partId);
+                hasSolo = hasSolo || (program.partId != "metronome" && setting != mix->end() && setting->second.solo);
+            }
+            for (const auto& program : m_sequence.channelPrograms) {
+                if (program.partId == "metronome") { continue; }
+                const auto setting = mix->find(program.partId);
+                const msr::render::PlaybackPartMix part = setting == mix->end()
+                    ? msr::render::PlaybackPartMix {} : setting->second;
+                const float volume = part.muted || (hasSolo && !part.solo) ? 0.0f : std::clamp(part.volume, 0.0f, 1.0f);
+                const float pan = std::clamp(part.pan, -1.0f, 1.0f);
+                gains.at(static_cast<size_t>(program.channel)) = {
+                    volume * (pan > 0.0f ? 1.0f - pan : 1.0f),
+                    volume * (pan < 0.0f ? 1.0f + pan : 1.0f)
+                };
+            }
+        }
         std::vector<float> samples;
         samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
 
@@ -6092,9 +6116,16 @@ public:
                     float right = 0.0f;
                     const size_t sample = static_cast<size_t>(absoluteFrame - startFrame) * 2;
                     // One program entry per sampler channel; layers sharing a part sum here.
-                    for (size_t channel = 0; channel < channels.size() / 2; ++channel) {
-                        left += channels[channel * 2][blockFrame];
-                        right += channels[channel * 2 + 1][blockFrame];
+                    if (mix) {
+                        for (size_t channel = 0; channel < channels.size() / 2; ++channel) {
+                            left += channels[channel * 2][blockFrame] * gains[channel].first;
+                            right += channels[channel * 2 + 1][blockFrame] * gains[channel].second;
+                        }
+                    } else {
+                        for (size_t channel = 0; channel < channels.size() / 2; ++channel) {
+                            left += channels[channel * 2][blockFrame];
+                            right += channels[channel * 2 + 1][blockFrame];
+                        }
                     }
                     samples.push_back(left);
                     samples.push_back(right);
@@ -6248,6 +6279,97 @@ private:
     int m_activeNotesAtRenderStart = 0;
 };
 
+//! The pitched notes of the playback sequence the audio is rendered from, so
+//! their times match the sound through repeats, pauses, fermatas and tempo.
+bool collectFluidSynthPlaybackNotes(mu::engraving::Score* score,
+                                    const muse::modularity::ContextPtr& context,
+                                    const std::optional<std::uint64_t> activePartId,
+                                    std::vector<msr::render::PlaybackNote>& output,
+                                    std::string& errorMessage)
+{
+    output.clear();
+    if (!score) {
+        errorMessage = "Playback is unavailable because the score session is closed.";
+        return false;
+    }
+    const FluidSynthPlaybackSequence sequence = makeFluidSynthPlaybackSequence(score, context, activePartId, false, 0.0, 0.0);
+
+    // Each channel is one staff and voice of a part; the first program wins,
+    // as it does for the per-part stems.
+    struct ChannelStaff {
+        std::string partId;
+        size_t staffLayer = 0;
+    };
+    std::unordered_map<int, ChannelStaff> staffByChannel;
+    for (const SynthChannelProgram& program : sequence.channelPrograms) {
+        const bool percussion = program.program.bank == 128 || program.setup.rfind("percussion", 0) == 0;
+        if (program.partId == "metronome" || percussion || staffByChannel.count(program.channel)) {
+            if (!staffByChannel.count(program.channel)) {
+                staffByChannel.emplace(program.channel, ChannelStaff {});
+            }
+            continue;
+        }
+        staffByChannel.emplace(program.channel, ChannelStaff { program.partId, program.layerIdx / muse::mpe::MAX_VOICES });
+    }
+
+    // Staves numbered in score order: by part, then by staff within it.
+    std::map<std::string, size_t> partOrder;
+    for (size_t index = 0; index < score->parts().size(); ++index) {
+        if (const mu::engraving::Part* part = score->parts().at(index)) {
+            partOrder.emplace(std::to_string(part->id().toUint64()), index);
+        }
+    }
+    std::set<std::pair<size_t, size_t>> staves;
+    for (const auto& [channel, staff] : staffByChannel) {
+        if (!staff.partId.empty()) {
+            const auto order = partOrder.find(staff.partId);
+            staves.insert({ order == partOrder.end() ? partOrder.size() : order->second, staff.staffLayer });
+        }
+    }
+    std::map<std::pair<size_t, size_t>, int> staffIndexes;
+    for (const auto& staff : staves) {
+        staffIndexes.emplace(staff, static_cast<int>(staffIndexes.size()));
+    }
+
+    // Events are sorted by frame with note-offs first, so a repeated key
+    // releases before it sounds again.
+    std::map<std::pair<int, int>, std::deque<int>> sounding;
+    for (const SynthNoteEvent& event : sequence.synthEvents) {
+        if (event.kind != SynthNoteEvent::Kind::NoteOn && event.kind != SynthNoteEvent::Kind::NoteOff) {
+            continue;
+        }
+        const auto staff = staffByChannel.find(event.channel);
+        if (staff == staffByChannel.end() || staff->second.partId.empty()) {
+            continue;
+        }
+        auto& starts = sounding[{ event.channel, event.key }];
+        if (event.kind == SynthNoteEvent::Kind::NoteOn) {
+            starts.push_back(event.frame);
+            continue;
+        }
+        if (starts.empty()) {
+            continue;
+        }
+        const int startFrame = starts.front();
+        starts.pop_front();
+        const auto order = partOrder.find(staff->second.partId);
+        const std::pair<size_t, size_t> key {
+            order == partOrder.end() ? partOrder.size() : order->second, staff->second.staffLayer
+        };
+        output.push_back({
+            event.key,
+            static_cast<double>(startFrame) / kFluidSynthSampleRate,
+            static_cast<double>(std::max(event.frame, startFrame + 1)) / kFluidSynthSampleRate,
+            staffIndexes[key],
+            staff->second.partId
+        });
+    }
+    std::stable_sort(output.begin(), output.end(), [](const msr::render::PlaybackNote& a, const msr::render::PlaybackNote& b) {
+        return a.startTimeSeconds != b.startTimeSeconds ? a.startTimeSeconds < b.startTimeSeconds : a.pitch < b.pitch;
+    });
+    return true;
+}
+
 bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
                                     const muse::modularity::ContextPtr& context,
                                     const std::string& soundFontPath,
@@ -6259,7 +6381,8 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
                                     std::unique_ptr<FluidSynthPlaybackStream>& playbackStream,
                                     msr::render::PlaybackAudioData& output,
                                     std::string& errorMessage,
-                                    const bool includePartSamples)
+                                    const bool includePartSamples,
+                const msr::render::PlaybackMix* mix)
 {
     if (!score) {
         errorMessage = "Playback is unavailable because the score session is closed.";
@@ -6298,7 +6421,7 @@ bool renderFluidSynthPlaybackEvents(mu::engraving::Score* score,
         }
     }
 
-    return playbackStream->render(startFrame, startTimeSeconds, durationSeconds, streamReset, started, output, errorMessage, includePartSamples);
+    return playbackStream->render(startFrame, startTimeSeconds, durationSeconds, streamReset, started, output, errorMessage, includePartSamples, mix);
 }
 
 //! Renders MuseScore's count-in for playback starting at `startTimeSeconds`:

@@ -99,6 +99,7 @@ struct ScoreVideoExportOptions: Sendable {
     var titleFont: ScoreVideoTextFont = ScoreVideoTextFont()
     var composerFont: ScoreVideoTextFont = ScoreVideoTextFont()
     var frameRate: Int32 = 30
+    var mixerSettings = ScoreMixerSettings()
     /// Desktop MuseScore's default reverb send, matching in-app playback.
     var reverbSendLevel: Float = 0.3
     var backgroundImageData: Data? = nil
@@ -408,7 +409,7 @@ enum ScoreVideoExporter {
         switch layout {
         case .piano:
             let timeline = ScoreVideoTimeline(regions: try await liveRenderSession.playbackMeasureRegions())
-            let notes = ScoreVideoPianoNotes.notes(fromMIDI: try await liveRenderSession.playbackMIDIData())
+            let notes = try await liveRenderSession.playbackNotes()
             return PreviewMaterial(pages: [], timeline: timeline, beatPoints: [], pianoNotes: notes)
         case .pages:
             let timeline = ScoreVideoTimeline(regions: try await liveRenderSession.playbackMeasureRegions())
@@ -492,8 +493,10 @@ enum ScoreVideoExporter {
         let totalFrames = Int((duration * frameRate).rounded(.up))
         let painter: ScoreVideoPainter
         if options.style.layout == .piano {
-            // The piano needs only the notes, not the pages.
-            let notes = ScoreVideoPianoNotes.notes(fromMIDI: try await liveRenderSession.playbackMIDIData())
+            // The piano needs only the notes, not the pages. They come from the
+            // audio's own playback sequence; MuseScore's MIDI export misplaces
+            // section-break pauses and tempos on repeats.
+            let notes = try await liveRenderSession.playbackNotes()
             guard !notes.isEmpty else {
                 throw ScoreVideoExportError.noPianoNotes
             }
@@ -515,7 +518,7 @@ enum ScoreVideoExporter {
         }
 
         // The first audio chunk tells us the sample rate the writer needs.
-        let audio = ScoreVideoAudioStream(liveRenderSession: liveRenderSession, reverbSendLevel: options.reverbSendLevel)
+        let audio = ScoreVideoAudioStream(liveRenderSession: liveRenderSession, reverbSendLevel: options.reverbSendLevel, mixerSettings: options.mixerSettings)
         var pendingAudio = try await audio.nextChunk(durationSeconds: audioChunkSeconds)
         let totalAudioFrames = Int64((duration * pendingAudio.sampleRate).rounded(.up))
 
@@ -1270,7 +1273,9 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         super.init(frameSize: frameSize, timeline: timeline, options: options)
     }
 
-    func draw(into pixelBuffer: CVPixelBuffer, at time: TimeInterval, frameDuration: TimeInterval) {
+    /// Where the music is on the line at `time` and where the playhead would
+    /// be drawn, before the ending is kept from scrolling backward.
+    private func camera(at time: TimeInterval) -> (scoreX: CGFloat, playheadX: CGFloat) {
         // Average a short span so bar-to-bar speed shifts are less perceptible,
         // but never across a repeat or jump: those cut straight to the new place.
         let segment = path.segmentTimes(at: time)
@@ -1300,8 +1305,35 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         }
         let ending = min(max((time - (timeline.endTimeSeconds - 8)) / 8, 0), 1)
         let easedEnding = ending * ending * (3 - 2 * ending)
-        let playheadX = (openingTrackerX + frameSize.width * 0.18 * easedEnding).rounded()
-        let offsetX = (playheadX - scoreX).rounded()
+        return (scoreX, openingTrackerX + frameSize.width * 0.18 * easedEnding)
+    }
+
+    /// Where the line is drawn at `time`: its left edge, in frame pixels.
+    func scrollOffset(at time: TimeInterval) -> (scoreX: CGFloat, offsetX: CGFloat) {
+        let natural = camera(at: time)
+        let scoreX = natural.scoreX
+        var offsetX = natural.playheadX - scoreX
+        // Over the last 8 s the playhead glides right. Where the final bars
+        // move more slowly than it, the score would slide backward; it holds
+        // still instead, never returning within the current stretch of music
+        // (a repeat may still jump back). Samples sit on a fixed grid so
+        // consecutive frames agree.
+        let endingStart = timeline.endTimeSeconds - 8
+        if time > endingStart {
+            let step = 1.0 / 30
+            var sample = (max(endingStart, path.segmentTimes(at: time).lowerBound) / step).rounded(.up) * step
+            while sample < time {
+                let earlier = camera(at: sample)
+                offsetX = min(offsetX, earlier.playheadX - earlier.scoreX)
+                sample += step
+            }
+        }
+        return (scoreX, offsetX.rounded())
+    }
+
+    func draw(into pixelBuffer: CVPixelBuffer, at time: TimeInterval, frameDuration: TimeInterval) {
+        let (scoreX, offsetX) = scrollOffset(at: time)
+        let playheadX = (scoreX + offsetX).rounded()
 
         let frame = CGRect(origin: .zero, size: frameSize)
         var layers: [ScoreVideoLayer]
@@ -1855,20 +1887,22 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
 actor ScoreVideoAudioStream {
     private let liveRenderSession: LiveScoreRenderSession
     private let reverbSendLevel: Float
+    private let mixerSettings: ScoreMixerSettings
     private var reverb: MSRPlaybackReverb?
     private var nextStartSeconds: TimeInterval = 0
 
-    init(liveRenderSession: LiveScoreRenderSession, reverbSendLevel: Float) {
+    init(liveRenderSession: LiveScoreRenderSession, reverbSendLevel: Float, mixerSettings: ScoreMixerSettings = ScoreMixerSettings()) {
         self.liveRenderSession = liveRenderSession
         self.reverbSendLevel = reverbSendLevel
+        self.mixerSettings = mixerSettings
     }
 
     func nextChunk(durationSeconds: TimeInterval) async throws -> ScoreVideoAudioChunk {
-        let audioData = try await liveRenderSession.playbackAudioChunk(
+        let audioData = try await liveRenderSession.playbackExportAudioChunk(
             startTimeSeconds: nextStartSeconds,
             durationSeconds: durationSeconds,
             metronomeEnabled: false,
-            includePartSamples: false
+            mixerSettings: mixerSettings
         )
         let channelCount = max(audioData.channelCount, 1)
         let sampleRate = Double(audioData.sampleRate)
@@ -1879,7 +1913,7 @@ actor ScoreVideoAudioStream {
             throw ScoreReaderExportError.noAudio
         }
 
-        // With every part at full volume, the send is the mix times the send level.
+        // The native mix is already post-fader, matching playback's reverb send.
         if channelCount == 2, reverbSendLevel > 0 {
             let reverb = self.reverb ?? MSRPlaybackReverb(sampleRate: sampleRate)
             self.reverb = reverb
@@ -1891,6 +1925,10 @@ actor ScoreVideoAudioStream {
                 samples[index] += send[index]
             }
         }
+
+        // Apply master controls after dry + reverb. Stereo balance is explicit
+        // for export; the existing playback graph remains unchanged.
+        ScoreVideoAudioChunk.applyMasterMix(mixerSettings, to: &samples, channelCount: channelCount)
 
         nextStartSeconds += Double(frameCount) / sampleRate
         return ScoreVideoAudioChunk(samples: samples, channelCount: channelCount, sampleRate: sampleRate)
@@ -1944,6 +1982,17 @@ struct ScoreVideoAudioChunk: Sendable {
 
     var frameCount: Int {
         samples.count / channelCount
+    }
+
+    static func applyMasterMix(_ settings: ScoreMixerSettings, to samples: inout [Float], channelCount: Int) {
+        let volume: Float = settings.masterMuted ? 0 : min(max(settings.masterVolume, 0), 1)
+        let pan = min(max(settings.masterPan, -1), 1)
+        let leftGain = volume * (pan > 0 ? 1 - pan : 1)
+        let rightGain = volume * (pan < 0 ? 1 + pan : 1)
+        for frame in 0..<(samples.count / channelCount) {
+            samples[frame * channelCount] *= leftGain
+            if channelCount > 1 { samples[frame * channelCount + 1] *= rightGain }
+        }
     }
 
     func sampleBuffer(frameCount: Int, startFrame: Int64) throws -> CMSampleBuffer {

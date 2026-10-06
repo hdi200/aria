@@ -58,7 +58,7 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
         case .images:
             return "PNG pages"
         case .video:
-            return ".mp4 play-along"
+            return "Scrolling score, play-along"
         }
     }
 
@@ -294,7 +294,7 @@ struct ScoreReaderExportPanel: View {
                                 .tint(.white)
                                 .frame(maxWidth: .infinity)
                         } else {
-                            Text(draft.format == .video ? "Video settings…" : "Export")
+                            Text(draft.format == .video ? "Video Export" : "Export")
                                 .frame(maxWidth: .infinity)
                         }
                     }

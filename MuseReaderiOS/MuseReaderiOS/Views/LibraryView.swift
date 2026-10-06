@@ -277,7 +277,6 @@ struct LibraryView: View {
         .task {
             await model.refreshVisibleLibrary()
             model.presentEarlySupporterMessageIfNeeded()
-            await model.checkForUpdateNotice()
         }
         .modifier(LibraryLaunchMessages(model: model, accessStatus: accessController.status))
         .onChangeCompatible(of: selectedCategory) { _ in
@@ -451,8 +450,6 @@ struct LibraryView: View {
                 ScoreImportReviewSheet(model: model, review: review)
             case .earlySupporter:
                 EarlySupporterAccessView()
-            case .updateNotice:
-                UpdateNoticeSheet()
             }
         }
         .sheet(item: $folderPendingScoreAdd) { request in
@@ -1037,7 +1034,7 @@ private enum LibraryScoreLayout: String, CaseIterable, Identifiable {
     }
 }
 
-/// Shows the launch messages (early supporter, update notice) once nothing else is in the way.
+/// Shows the early-supporter message once nothing else is in the way.
 private struct LibraryLaunchMessages: ViewModifier {
     @ObservedObject var model: MuseReaderAppModel
     let accessStatus: LibraryAccessStatus
@@ -1045,15 +1042,10 @@ private struct LibraryLaunchMessages: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChangeCompatible(of: model.libraryAccessSheet?.id) { _ in
-                // Launch messages share this sheet; whichever waited shows once the other closes.
                 guard model.libraryAccessSheet == nil else {
                     return
                 }
                 model.presentEarlySupporterMessageIfNeeded()
-                model.presentUpdateNoticeIfNeeded()
-            }
-            .onChangeCompatible(of: model.currentSession?.id) { _ in
-                model.presentUpdateNoticeIfNeeded()
             }
             .onChangeCompatible(of: accessStatus) { _ in
                 model.presentEarlySupporterMessageIfNeeded()

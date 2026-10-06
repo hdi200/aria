@@ -75,11 +75,34 @@ struct VideoExportChecks {
         }
         print("Video export pipeline checks passed: A/V tracks, quality, bounded prefetch, errors and cancellation")
 
+        try checkScrollingEnding(pdf: pdf)
         try await checkPiano(directory: directory)
         if CommandLine.arguments.count > 3 {
             try await renderPianoSamples(midi: URL(fileURLWithPath: CommandLine.arguments[2]),
                                          to: URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true))
         }
+    }
+
+    /// A slow final bar (10 s) must not make the score slide backward while
+    /// the playhead glides right over the last 8 seconds.
+    static func checkScrollingEnding(pdf: Data) throws {
+        let bars: [(start: Double, end: Double)] = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 15)]
+        let regions = bars.enumerated().map { index, bar in
+            ScorePlaybackMeasureRegion(measureIndex: index, pageIndex: 0, startTimeSeconds: bar.start, endTimeSeconds: bar.end,
+                                       normalizedRect: ScoreNormalizedRect(x: 0.1 + 0.13 * Double(index), y: 0.25,
+                                                                           width: 0.13, height: 0.5))
+        }
+        let painter = ScoreVideoScrollingPainter(frameSize: CGSize(width: 1920, height: 1080),
+                                                 page: ScoreVideoPageSource(page: ScorePage(pdfData: pdf)),
+                                                 timeline: ScoreVideoTimeline(regions: regions), beatPoints: [],
+                                                 options: ScoreVideoExportOptions(style: .scrolling, title: "", composer: ""))
+        var previous = CGFloat.infinity
+        for frame in 0...(17 * 30) {
+            let offset = painter.scrollOffset(at: Double(frame) / 30).offsetX
+            try expect(offset <= previous + 0.5, "Score scrolled backward at \(Double(frame) / 30)s")
+            previous = offset
+        }
+        print("Scrolling ending check passed: no backward scroll in a slow final bar")
     }
 
     /// One track at 120 bpm: C4, E4, G4 half a second each, plus a drum hit

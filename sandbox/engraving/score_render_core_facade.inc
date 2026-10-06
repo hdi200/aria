@@ -140,7 +140,25 @@ bool msr::render::ScoreRenderSession::playbackEventAudioData(const std::string& 
                                                              std::string& errorMessage,
                                                              const bool includePartSamples) const
 {
-    return m_impl->playbackEventAudioData(soundFontPath, startTimeSeconds, durationSeconds, metronomeEnabled, output, errorMessage, includePartSamples);
+    return m_impl->playbackEventAudioData(soundFontPath, startTimeSeconds, durationSeconds, metronomeEnabled, output, errorMessage, includePartSamples, nullptr);
+}
+
+bool msr::render::ScoreRenderSession::playbackMixedAudioData(const std::string& soundFontPath,
+                                                          const double startTimeSeconds,
+                                                          const double durationSeconds,
+                                                          const bool metronomeEnabled,
+                                                          PlaybackAudioData& output,
+                                                          std::string& errorMessage,
+                                                          const PlaybackMix& mix) const
+{
+    return m_impl->playbackEventAudioData(soundFontPath, startTimeSeconds, durationSeconds,
+                                         metronomeEnabled, output, errorMessage, false, &mix);
+}
+
+bool msr::render::ScoreRenderSession::playbackNotes(std::vector<PlaybackNote>& output,
+                                                   std::string& errorMessage) const
+{
+    return m_impl->playbackNotes(output, errorMessage);
 }
 
 bool msr::render::ScoreRenderSession::playbackCountIn(const std::string& soundFontPath,
