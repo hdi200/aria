@@ -940,26 +940,36 @@
             return false;
         }
 
-        mu::engraving::Harmony* movedHarmony = harmony->clone();
-        movedHarmony->setScore(score);
-        movedHarmony->setParent(targetSegment);
-        movedHarmony->setTrack(mu::engraving::trackZeroVoice(targetChordRest->track()));
+        // A chord symbol that names a fret diagram belongs to it: move the diagram, which carries
+        // its chord symbol, rather than pulling the symbol off and leaving the diagram unnamed.
+        mu::engraving::EngravingItem* moving = harmony;
+        if (harmony->explicitParent() && harmony->explicitParent()->isFretDiagram()) {
+            moving = mu::engraving::toFretDiagram(harmony->explicitParent());
+        }
+        mu::engraving::EngravingItem* moved = moving->clone();
+        moved->setScore(score);
+        moved->setParent(targetSegment);
+        moved->setTrack(mu::engraving::trackZeroVoice(targetChordRest->track()));
 
         const double spatium = std::max(page->spatium(), 1.0);
         const mu::engraving::PointF anchor = chordTextAttachmentAnchorForChordRest(targetChordRest);
         const mu::engraving::PointF currentCenter = harmony->pageBoundingRect().center();
         const mu::engraving::PointF offset(
-            (pagePoint.x() - anchor.x()) / spatium,
-            harmony->offset().y() + ((pagePoint.y() - currentCenter.y()) / spatium)
+            moving == harmony ? (pagePoint.x() - anchor.x()) / spatium : moving->offset().x(),
+            moving->offset().y() + ((pagePoint.y() - currentCenter.y()) / spatium)
         );
-        movedHarmony->setOffset(offset);
+        moved->setOffset(offset);
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader drag chord symbol"));
-        score->undoRemoveElement(harmony);
-        score->undoAddElement(movedHarmony);
+        score->undoRemoveElement(moving);
+        score->undoAddElement(moved);
         score->endCmd();
 
         refreshAfterEdit();
+        mu::engraving::EngravingItem* movedHarmony = moved;
+        if (moved->isFretDiagram() && mu::engraving::toFretDiagram(moved)->harmony()) {
+            movedHarmony = mu::engraving::toFretDiagram(moved)->harmony();
+        }
         score->select(movedHarmony, mu::engraving::SelectType::SINGLE, movedHarmony->staffIdx());
         output = makeEditState(score);
         return true;

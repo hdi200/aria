@@ -1675,6 +1675,49 @@ void testAddedInstrumentsMatchDesktop(const std::filesystem::path& root)
     expect(countOccurrences(all, "<concertKey>2</concertKey>") >= 2, "New instruments should keep the score's D major");
 }
 
+// A chord symbol naming a fret diagram moves with its diagram, as in desktop, instead of being
+// pulled off it.
+void testDraggingFretDiagramChordMovesTheDiagram(const std::filesystem::path& root)
+{
+    const std::vector<NoteSpec> fourNotes = { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } };
+    msr::render::ScoreEditState state;
+    std::string error;
+
+    // Write a chord symbol with Aria, then put it inside a fret diagram in the file.
+    std::string harmonyXml;
+    {
+        auto session = openSession(root, "fret-source", scoreXml(0, fourNotes, 1));
+        std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+        expect(session->selectElement(0, notes[60].x, notes[60].y, 1.0, state, error), "Could not select the first note: " + error);
+        expect(session->addText("Chord Text", state, error), "Adding a chord symbol failed: " + error);
+        expect(session->setSelectedText("G", state, error), "Setting the chord failed: " + error);
+        const std::string saved = saveSnapshot(*session, root, "fret-source");
+        const size_t start = saved.find("<Harmony>");
+        expect(start != std::string::npos, "The chord symbol was not saved");
+        harmonyXml = saved.substr(start, saved.find("</Harmony>", start) + 10 - start);
+    }
+    std::string xml = scoreXml(0, fourNotes, 1);
+    xml.insert(xml.find("<Chord>"), "<FretDiagram>" + harmonyXml + "</FretDiagram>\n          ");
+    auto session = openSession(root, "fret-drag", xml);
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+
+    bool selected = false;
+    for (double y = 0.03; y < 0.5 && !selected; y += 0.005) {
+        for (double x = 0.03; x < 0.6 && !selected; x += 0.005) {
+            selected = session->selectElement(0, x, y, 1.0, state, error) && state.selection.isChordText;
+        }
+    }
+    expect(selected, "Could not tap the diagram's chord symbol");
+    expect(session->dragSelectedChordText(0, notes[64].x, state.selection.normalizedY, state, error), "Dragging the chord failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "fret-drag");
+    const size_t diagram = saved.find("<FretDiagram>");
+    expect(diagram != std::string::npos && countOccurrences(saved, "<FretDiagram>") == 1, "The fret diagram should still be there, once");
+    expect(countOccurrences(saved, "<Harmony>") == 1, "There should still be one chord symbol");
+    expect(saved.find("<Harmony>", diagram) < saved.find("</FretDiagram>", diagram), "The chord symbol should still name the diagram");
+    const size_t secondChord = saved.find("<Chord>", saved.find("<Chord>") + 1);
+    expect(diagram > secondChord, "The diagram should have moved to the third note");
+}
+
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
 {
     auto session = openSession(root, "measure-instrument-context", scoreXml(0, { { 60, 14 } }, 1));
@@ -2291,6 +2334,8 @@ int main()
     passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
     passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
     passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
+    passed &= runTest("dragging a fret diagram's chord moves the diagram",
+                      [&] { testDraggingFretDiagramChordMovesTheDiagram(testDirectory.path); });
     passed &= runTest("added instruments match desktop", [&] { testAddedInstrumentsMatchDesktop(testDirectory.path); });
     passed &= runTest("lyrics entry matches desktop", [&] { testLyricsEntryMatchesDesktop(testDirectory.path); });
     passed &= runTest("transpose to key moves each selected staff by the same amount",
