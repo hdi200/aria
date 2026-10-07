@@ -126,8 +126,15 @@ struct ScoreReaderExportDraft {
     var exportPartsInConcertPitch = false
     var exportPartsInOriginalKey = false
     var videoStyle: ScoreVideoStyle = .scrolling
+    /// 9:16 for Reels and TikTok, for every layout (Pages uses its portrait style).
+    var videoVertical = false
     var videoBackgroundImageData: Data? = nil
     var videoBackgroundImageName: String? = nil
+    /// The built-in photo in use (`ScoreVideoBackgroundPhoto.id`), or nil for
+    /// the person's own.
+    var videoBackgroundPhotoID: String? = nil
+    /// The person's own photo, kept while a built-in one is chosen.
+    var videoCustomBackgroundData: Data? = nil
 
     var hasExportContent: Bool {
         includesFullScore || includesParts
@@ -178,6 +185,7 @@ enum ScoreReaderExportTarget {
 }
 
 struct ScoreReaderExportPanel: View {
+    @AppStorage(ScoreReaderVideoExportSheet.openedKey) private var hasOpenedVideoExport = false
     let scoreTitle: String
     let sharingDescription: String
     let parts: [ScorePart]
@@ -432,6 +440,15 @@ struct ScoreReaderExportPanel: View {
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(Color.black.opacity(0.42))
                         }
+                        // Until the video sheet has been opened once.
+                        if format == .video && !hasOpenedVideoExport {
+                            Text("New")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor, in: Capsule())
+                        }
                     }
                     if !isPhone {
                         Text(format.subtitle)
@@ -496,7 +513,7 @@ struct ScoreReaderExportPanel: View {
             HStack {
                 Text("Video settings")
                 Spacer()
-                Text(draft.videoStyle.title)
+                Text(draft.videoStyle.title + (draft.videoVertical ? " · 9:16" : ""))
                     .foregroundStyle(.secondary)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
@@ -572,7 +589,39 @@ struct ScoreReaderExportPanel: View {
     }
 }
 
+/// Nature photos bundled for photo backgrounds. All are CC0 (free for any use,
+/// no attribution); sources are listed in VIDEO_EXPORT_HANDOFF.md.
+struct ScoreVideoBackgroundPhoto: Identifiable, Sendable {
+    /// The file name in Resources/VideoBackgrounds, without ".jpg".
+    let id: String
+    let name: String
+
+    static let all: [ScoreVideoBackgroundPhoto] = [
+        ScoreVideoBackgroundPhoto(id: "mount-fuji", name: "Mount Fuji"),
+        ScoreVideoBackgroundPhoto(id: "grand-canyon", name: "Grand Canyon"),
+        ScoreVideoBackgroundPhoto(id: "moonlit-fjord", name: "Moonlit fjord"),
+        ScoreVideoBackgroundPhoto(id: "spruce-forest", name: "Spruce forest"),
+        ScoreVideoBackgroundPhoto(id: "misty-mountains", name: "Misty mountains"),
+        ScoreVideoBackgroundPhoto(id: "northern-lights", name: "Northern lights"),
+        ScoreVideoBackgroundPhoto(id: "mountain-sunset", name: "Mountain sunset"),
+        ScoreVideoBackgroundPhoto(id: "snowy-peaks", name: "Snowy peaks"),
+        ScoreVideoBackgroundPhoto(id: "pink-bay", name: "Pink bay"),
+        ScoreVideoBackgroundPhoto(id: "beach-sunset", name: "Beach sunset"),
+        ScoreVideoBackgroundPhoto(id: "forest-river", name: "Forest river"),
+        ScoreVideoBackgroundPhoto(id: "beech-ferns", name: "Beech and ferns"),
+        ScoreVideoBackgroundPhoto(id: "blue-sky", name: "Blue sky")
+    ]
+
+    var url: URL? {
+        Bundle.main.url(forResource: id, withExtension: "jpg")
+            ?? Bundle.main.url(forResource: id, withExtension: "jpg", subdirectory: "VideoBackgrounds")
+    }
+}
+
 struct ScoreReaderVideoExportSheet: View {
+    /// Set once the sheet has been opened; the export panel's "New" badge goes away.
+    static let openedKey = "VideoExport.hasOpened"
+    @AppStorage(openedKey) private var hasOpenedVideoExport = false
     @Environment(\.dismiss) private var dismiss
     @State private var isChoosingPhoto = false
     @State private var backgroundPhotoItem: PhotosPickerItem?
@@ -581,12 +630,13 @@ struct ScoreReaderVideoExportSheet: View {
     @State private var previewImage: UIImage?
     @State private var paperThumbnail: UIImage?
     @State private var photoThumbnail: UIImage?
+    @State private var builtInThumbnails: [String: UIImage] = [:]
+    @State private var customThumbnail: UIImage?
     @State private var pianoDarkThumbnail: UIImage?
     @State private var pianoLightThumbnail: UIImage?
     @State private var previewRevision = 0
     @State private var isLoadingPreview = true
     @State private var preferredScrollingStyle: ScoreVideoStyle = .scrolling
-    @State private var preferredPageStyle: ScoreVideoStyle = .pagesLandscape
     @State private var preferredPianoStyle: ScoreVideoStyle = .piano
     @State private var player = AVPlayer()
     @State private var playingVideo: URL?
@@ -596,7 +646,6 @@ struct ScoreReaderVideoExportSheet: View {
     @State private var headerHeight: CGFloat = 76
     @State private var footerHeight: CGFloat = 115
     @State private var settingsControlsHeight: CGFloat = 300
-    @State private var summaryHeight: CGFloat = 16
 
     @Binding var draft: ScoreReaderExportDraft
     let isPreparingExport: Bool
@@ -637,22 +686,22 @@ struct ScoreReaderVideoExportSheet: View {
         guard availableWindowSize.width > 96, availableWindowSize.height > 96 else { return nil }
         let width = min(800, max(580, availableWindowSize.width * 0.70), availableWindowSize.width - 48)
         let previewWidth = min(contentWidth, width - horizontalPadding * 2)
-        let aspect = draft.videoStyle == .pagesPortrait ? 9.0 / 16.0 : 16.0 / 9.0
-        let height = headerHeight + footerHeight + previewWidth / aspect
-            + summaryHeight + 10 + 24 + settingsControlsHeight + 20
+        // The preview area is 16:9 for both formats.
+        let height = headerHeight + footerHeight + previewWidth * 9 / 16
+            + 24 + settingsControlsHeight + 20
         return CGSize(width: width, height: min(ceil(height), availableWindowSize.height - 48))
     }
 
     private var previewTaskID: String {
-        "\(draft.videoStyle.rawValue)-\(previewRevision)"
+        "\(draft.videoStyle.rawValue)-\(draft.videoVertical)-\(previewRevision)"
     }
 
     private var styleSummary: String {
-        switch draft.videoStyle {
-        case .scrolling, .scrollingPhoto: return "16:9 • Scrolling"
-        case .pagesLandscape: return "16:9 • Pages"
-        case .pagesPortrait: return "9:16 • Pages"
-        case .piano, .pianoLight, .pianoPhoto: return "16:9 • Piano"
+        let aspect = draft.videoVertical ? "9:16 • Reels & TikTok" : "16:9"
+        switch draft.videoStyle.layout {
+        case .scrolling: return "\(aspect) • Scrolling"
+        case .pages: return "\(aspect) • Pages"
+        case .piano: return "\(aspect) • Piano"
         }
     }
 
@@ -689,9 +738,10 @@ struct ScoreReaderVideoExportSheet: View {
         .presentationDragIndicator(.hidden)
         .interactiveDismissDisabled(isPreparingExport)
         .onAppear {
+            hasOpenedVideoExport = true
             switch draft.videoStyle.layout {
             case .scrolling: preferredScrollingStyle = draft.videoStyle
-            case .pages: preferredPageStyle = draft.videoStyle
+            case .pages: draft.videoVertical = draft.videoStyle == .pagesPortrait
             case .piano: preferredPianoStyle = draft.videoStyle
             }
         }
@@ -886,17 +936,18 @@ struct ScoreReaderVideoExportSheet: View {
 
     private func settingsContent(compact: Bool = false) -> some View {
         ScoreReaderVideoSettingsLayout(spacing: compact ? 16 : 24) {
-            VStack(spacing: 10) {
-                preview
-                Text(styleSummary)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { summaryHeight = $0 }
-            }
-            .frame(maxWidth: .infinity)
+            preview
+                .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: compact ? 16 : 24) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Format").font(.headline)
+                    HStack(spacing: 14) {
+                        formatCard(vertical: false, title: "Landscape · 16:9", subtitle: "YouTube", compact: compact)
+                        formatCard(vertical: true, title: "Vertical · 9:16", subtitle: "Reels & TikTok", compact: compact)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Layout").font(.headline)
                     ScoreReaderVideoSegmentedControl(
@@ -906,12 +957,12 @@ struct ScoreReaderVideoExportSheet: View {
                             // Each layout remembers its own style while another is shown.
                             switch draft.videoStyle.layout {
                             case .scrolling: preferredScrollingStyle = draft.videoStyle
-                            case .pages: preferredPageStyle = draft.videoStyle
+                            case .pages: break
                             case .piano: preferredPianoStyle = draft.videoStyle
                             }
                             switch layout {
                             case .scrolling: draft.videoStyle = preferredScrollingStyle
-                            case .pages: draft.videoStyle = preferredPageStyle
+                            case .pages: draft.videoStyle = draft.videoVertical ? .pagesPortrait : .pagesLandscape
                             case .piano: draft.videoStyle = preferredPianoStyle
                             }
                         })
@@ -932,22 +983,9 @@ struct ScoreReaderVideoExportSheet: View {
                         HStack(alignment: .firstTextBaseline, spacing: 14) {
                             Text("Appearance").font(.headline)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            // Sits above the photo card once there is a photo.
-                            Group {
-                                if draft.videoBackgroundImageData != nil {
-                                    HStack(spacing: 8) {
-                                        if isLoadingBackground {
-                                            ProgressView()
-                                        }
-                                        PhotosPicker(selection: $backgroundPhotoItem, matching: .images, photoLibrary: .shared()) {
-                                            Label("Change photo", systemImage: "photo")
-                                                .font(.subheadline.weight(.medium))
-                                        }
-                                        .disabled(isLoadingBackground)
-                                    }
-                                }
+                            if isLoadingBackground {
+                                ProgressView()
                             }
-                            .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                         HStack(alignment: .top, spacing: 14) {
                             if isPiano {
@@ -986,9 +1024,9 @@ struct ScoreReaderVideoExportSheet: View {
                             appearanceCard(title: "Photo", selected: draft.videoStyle.usesPhoto,
                                            height: compact ? 72 : nil) {
                                 draft.videoStyle = isPiano ? .pianoPhoto : .scrollingPhoto
-                                // Choosing Photo without one goes straight to the library.
-                                if draft.videoBackgroundImageData == nil {
-                                    isChoosingPhoto = true
+                                // Start from the first built-in photo; the row below offers the rest.
+                                if draft.videoBackgroundImageData == nil, let first = ScoreVideoBackgroundPhoto.all.first {
+                                    selectBuiltInPhoto(first)
                                 }
                             } content: {
                                 if let photoThumbnail {
@@ -1004,19 +1042,14 @@ struct ScoreReaderVideoExportSheet: View {
                                 }
                             }
                         }
+                        if draft.videoStyle.usesPhoto {
+                            photoRow(compact: compact)
+                        }
                         if let backgroundError {
                             Text(backgroundError)
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                         }
-                    }
-                } else if draft.videoStyle.layout == .pages {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Orientation").font(.headline)
-                        ScoreReaderVideoSegmentedControl(
-                            options: [("Landscape", ScoreVideoStyle.pagesLandscape), ("Portrait", ScoreVideoStyle.pagesPortrait)],
-                            selection: $draft.videoStyle
-                        )
                     }
                 }
             }
@@ -1028,15 +1061,35 @@ struct ScoreReaderVideoExportSheet: View {
         .disabled(isPreparingExport)
     }
 
+    /// Always a 16:9 area. Vertical video shows as a tall frame in the middle,
+    /// over a blurred copy of itself.
     private var preview: some View {
-        let portrait = draft.videoStyle == .pagesPortrait
-        return ZStack {
+        ZStack {
             Color.white
             if let previewImage {
-                Image(uiImage: previewImage)
-                    .resizable()
-                    .scaledToFit()
-                    .transition(.opacity)
+                if draft.videoVertical {
+                    // An overlay, so the filled image cannot grow the 16:9 area.
+                    Color.clear
+                        .overlay {
+                            Image(uiImage: previewImage)
+                                .resizable()
+                                .scaledToFill()
+                                .blur(radius: 18)
+                                .opacity(0.85)
+                        }
+                        .clipped()
+                        .transition(.opacity)
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .scaledToFit()
+                        .shadow(color: .black.opacity(0.12), radius: 8)
+                        .transition(.opacity)
+                } else {
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .scaledToFit()
+                        .transition(.opacity)
+                }
             } else if needsPhoto {
                 Button {
                     isChoosingPhoto = true
@@ -1060,8 +1113,8 @@ struct ScoreReaderVideoExportSheet: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: previewImage)
-        .aspectRatio(portrait ? 9.0 / 16.0 : 16.0 / 9.0, contentMode: .fit)
-        .frame(maxWidth: portrait ? nil : .infinity, minHeight: 100)
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .frame(maxWidth: .infinity, minHeight: 100)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(0.08)))
@@ -1069,6 +1122,43 @@ struct ScoreReaderVideoExportSheet: View {
         .opacity(isPreparingExport ? 0.6 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Video preview, \(styleSummary)")
+    }
+
+    /// A format choice: an outline of the frame's shape, its name and where it fits.
+    private func formatCard(vertical: Bool, title: String, subtitle: String, compact: Bool) -> some View {
+        let selected = draft.videoVertical == vertical
+        return Button {
+            guard !selected else { return }
+            draft.videoVertical = vertical
+            if draft.videoStyle.layout == .pages {
+                draft.videoStyle = vertical ? .pagesPortrait : .pagesLandscape
+            }
+        } label: {
+            VStack(spacing: compact ? 4 : 6) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(selected ? Color.accentColor : Color.secondary, lineWidth: 2.5)
+                    .frame(width: vertical ? 26 : 46, height: vertical ? 42 : 28)
+                    .frame(height: compact ? 32 : 46)
+                    .scaleEffect(compact ? 0.75 : 1)
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, compact ? 10 : 16)
+            .background(selected ? Color.accentColor.opacity(0.07) : Color(uiColor: .secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(selected ? Color.accentColor : Color.black.opacity(0.06), lineWidth: selected ? 2 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.15), value: selected)
+        .accessibilityLabel("\(title), \(subtitle)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func appearanceCard<Content: View>(title: String, selected: Bool, height: CGFloat? = nil,
@@ -1099,7 +1189,7 @@ struct ScoreReaderVideoExportSheet: View {
     // MARK: Result
 
     private var resultContent: some View {
-        let portrait = draft.videoStyle == .pagesPortrait
+        let portrait = draft.videoVertical
         return VStack(alignment: .leading, spacing: 14) {
             ZStack {
                 Color.black
@@ -1176,6 +1266,114 @@ struct ScoreReaderVideoExportSheet: View {
         return parts.joined(separator: " · ")
     }
 
+    // MARK: Photo choices
+
+    /// The person's own photo first, then the built-in nature photos.
+    private func photoRow(compact: Bool) -> some View {
+        let size = compact ? CGSize(width: 64, height: 40) : CGSize(width: 96, height: 60)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                // Tapping it again while selected chooses a different photo.
+                let customSelected = draft.videoBackgroundPhotoID == nil && draft.videoBackgroundImageData != nil
+                photoTile(selected: customSelected, size: size, label: "Your photo") {
+                    if customSelected || draft.videoCustomBackgroundData == nil {
+                        isChoosingPhoto = true
+                    } else if let data = draft.videoCustomBackgroundData {
+                        draft.videoBackgroundImageData = data
+                        draft.videoBackgroundImageName = "Photo from library"
+                        draft.videoBackgroundPhotoID = nil
+                        previewRevision += 1
+                    }
+                } content: {
+                    if let customThumbnail {
+                        Image(uiImage: customThumbnail).resizable().scaledToFill()
+                    } else {
+                        VStack(spacing: 2) {
+                            Image(systemName: "photo.badge.plus").font(compact ? .footnote : .title3)
+                            if !compact {
+                                Text("Your photo").font(.caption2.weight(.medium))
+                            }
+                        }
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.accentColor.opacity(0.08))
+                    }
+                }
+                ForEach(ScoreVideoBackgroundPhoto.all) { photo in
+                    photoTile(selected: draft.videoBackgroundPhotoID == photo.id, size: size, label: photo.name) {
+                        selectBuiltInPhoto(photo)
+                    } content: {
+                        if let thumbnail = builtInThumbnails[photo.id] {
+                            Image(uiImage: thumbnail).resizable().scaledToFill()
+                        } else {
+                            Color(uiColor: .secondarySystemBackground)
+                        }
+                    }
+                }
+            }
+            .padding(3)
+        }
+        .disabled(isLoadingBackground)
+        .task {
+            guard builtInThumbnails.isEmpty else { return }
+            for photo in ScoreVideoBackgroundPhoto.all {
+                let url = photo.url
+                let thumbnail = await Task.detached(priority: .userInitiated) {
+                    url.flatMap { try? Data(contentsOf: $0) }
+                        .flatMap { ScoreReaderVideoThumbnail.make(from: $0, maximumPixelSize: 240) }
+                }.value
+                builtInThumbnails[photo.id] = thumbnail
+            }
+        }
+    }
+
+    private func photoTile<Content: View>(selected: Bool, size: CGSize, label: String, action: @escaping () -> Void,
+                                          @ViewBuilder content: () -> Content) -> some View {
+        Button(action: action) {
+            content()
+                .frame(width: size.width, height: size.height)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(selected ? Color.accentColor : Color.black.opacity(0.08), lineWidth: selected ? 2.5 : 1)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func selectBuiltInPhoto(_ photo: ScoreVideoBackgroundPhoto) {
+        guard draft.videoBackgroundPhotoID != photo.id else { return }
+        let url = photo.url
+        loadBackgroundData(named: photo.name, photoID: photo.id) {
+            guard let url else { throw ScoreReaderExportError.imageEncodingFailed }
+            return try Data(contentsOf: url)
+        }
+    }
+
+    /// Reads a built-in photo off the main thread and makes it the background.
+    private func loadBackgroundData(named name: String, photoID: String,
+                                    _ read: @escaping @Sendable () throws -> Data) {
+        isLoadingBackground = true
+        backgroundError = nil
+        Task {
+            defer { isLoadingBackground = false }
+            do {
+                let data = try await Task.detached(priority: .userInitiated) { try read() }.value
+                draft.videoBackgroundImageData = data
+                draft.videoBackgroundImageName = name
+                draft.videoBackgroundPhotoID = photoID
+                draft.videoStyle = isPiano ? .pianoPhoto : .scrollingPhoto
+                previewRevision += 1
+            } catch {
+                backgroundError = "That photo couldn't be loaded."
+            }
+        }
+    }
+
     /// Reads the chosen image off the main thread and checks that it decodes.
     private func loadBackground(named name: String, _ read: @escaping @Sendable () async throws -> Data) {
         isLoadingBackground = true
@@ -1193,8 +1391,13 @@ struct ScoreReaderVideoExportSheet: View {
                 }.value
                 draft.videoBackgroundImageData = data
                 draft.videoBackgroundImageName = name
+                draft.videoBackgroundPhotoID = nil
+                draft.videoCustomBackgroundData = data
                 draft.videoStyle = isPiano ? .pianoPhoto : .scrollingPhoto
                 previewRevision += 1
+                customThumbnail = await Task.detached(priority: .userInitiated) {
+                    ScoreReaderVideoThumbnail.make(from: data, maximumPixelSize: 240)
+                }.value
             } catch {
                 backgroundError = "That image couldn't be opened. Try another one."
             }

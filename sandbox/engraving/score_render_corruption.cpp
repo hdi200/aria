@@ -49,7 +49,7 @@
         for (int index : issueIndexes) {
             const LegacyRepairCandidate& candidate = candidates.at(static_cast<size_t>(index));
             if (candidate.issue.kind != "missingRepeat" && candidate.issue.kind != "missingTempo"
-                && candidate.issue.kind != "partName") {
+                && candidate.issue.kind != "partName" && candidate.issue.kind != "strayClef") {
                 continue;
             }
             if (!startedCommand) {
@@ -61,6 +61,10 @@
                     part->score()->undo(new mu::engraving::ChangePart(part, new mu::engraving::Instrument(*part->instrument()),
                                                                       candidate.newPartName));
                 }
+                continue;
+            }
+            if (candidate.issue.kind == "strayClef") {
+                repairStrayStartClef(m_masterScore.get(), candidate.target);
                 continue;
             }
             repairMissingSystemMarking(m_masterScore.get(), candidate.source);

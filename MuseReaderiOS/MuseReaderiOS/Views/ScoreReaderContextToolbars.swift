@@ -39,6 +39,8 @@ struct ScoreReaderArticulationTool: Identifiable {
     let token: String
     let title: String
     let symbol: String
+    /// A Bravura glyph drawn instead of `symbol` where a plain character can't show the mark.
+    var musicGlyph: String? = nil
 
     var id: String { token }
 }
@@ -50,6 +52,12 @@ enum ScoreReaderArticulationTools {
         ScoreReaderArticulationTool(token: "Tenuto", title: "Tenuto", symbol: "-"),
         ScoreReaderArticulationTool(token: "Staccato", title: "Staccato", symbol: ".")
     ]
+
+    /// Its own button, ahead of Articulations, as in MuseScore's separate Fermatas palette:
+    /// it also goes on rests, which the note-only articulations don't.
+    static let fermata = ScoreReaderArticulationTool(
+        token: "Fermata", title: "Fermata", symbol: "\u{E4C0}", musicGlyph: "\u{E4C0}"
+    )
 
     private static let bowing: [ScoreReaderArticulationTool] = [
         ScoreReaderArticulationTool(token: "String Up", title: "String Up", symbol: "∨"),
@@ -1046,6 +1054,15 @@ struct ScoreReaderExpressionContextToolbar: View {
                 ScoreReaderContextDivider()
             }
             ScoreReaderLinesMenuButton(isEnabled: hasSelection, addExpressionAction: addExpressionAction)
+            ScoreReaderContextDivider()
+            ScoreReaderPaletteButton(
+                textSymbol: ScoreReaderArticulationTools.fermata.symbol,
+                title: ScoreReaderArticulationTools.fermata.title,
+                usesMusicFont: true,
+                isSelected: false,
+                isEnabled: hasSelection,
+                action: { addExpressionAction(ScoreReaderArticulationTools.fermata.token) }
+            )
             ScoreReaderContextDivider()
             ScoreReaderArticulationMenuButton(
                 isEnabled: hasNoteSelection,

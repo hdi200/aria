@@ -264,6 +264,17 @@ MSRSelectionInfo * _Nullable MakeSelectionInfo(const msr::render::ScoreSelection
     selectionInfo.pickupActualDenominator = selectionState.pickupActualDenominator;
     selectionInfo.pickupNominalNumerator = selectionState.pickupNominalNumerator;
     selectionInfo.pickupNominalDenominator = selectionState.pickupNominalDenominator;
+    NSMutableArray<MSRNormalizedRectInfo *> *otherPageHighlightRects = [NSMutableArray arrayWithCapacity:selectionState.otherPageHighlightRects.size()];
+    NSMutableArray<NSNumber *> *otherPageHighlightPageIndexes = [NSMutableArray arrayWithCapacity:selectionState.otherPageHighlightRects.size()];
+    for (const msr::render::PageSelectionRect& pageRect : selectionState.otherPageHighlightRects) {
+        [otherPageHighlightRects addObject:[[MSRNormalizedRectInfo alloc] initWithNormalizedX:pageRect.rect.normalizedX
+                                                                                  normalizedY:pageRect.rect.normalizedY
+                                                                              normalizedWidth:pageRect.rect.normalizedWidth
+                                                                             normalizedHeight:pageRect.rect.normalizedHeight]];
+        [otherPageHighlightPageIndexes addObject:@(pageRect.pageIndex)];
+    }
+    selectionInfo.otherPageHighlightRects = otherPageHighlightRects;
+    selectionInfo.otherPageHighlightPageIndexes = otherPageHighlightPageIndexes;
     return selectionInfo;
 }
 

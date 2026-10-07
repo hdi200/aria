@@ -17,13 +17,25 @@ protocol ScoreSessionService: Sendable {
 /// rendering a thumbnail while a new score opens, two native sessions can touch
 /// that state at once and crash in allocator/tree code.
 ///
-/// The queue is deliberately only around synchronous bridge calls. Swift actors
-/// still serialize per-score mutations, and normal UI work stays off this lane.
+/// `LiveScoreRenderSession` also runs on this queue (it is the actor's executor), so a
+/// score's edits and playback can't overlap another score being opened, imported or
+/// recovered. Normal UI work stays off this lane.
 enum RenderCoreWorkGate {
-    private static let queue = DispatchQueue(label: "com.aria.render-core-work")
+    private nonisolated static let queueKey = DispatchSpecificKey<Bool>()
 
-    static func sync<T>(_ body: () throws -> T) rethrows -> T {
-        try queue.sync(execute: body)
+    nonisolated static let queue: DispatchSerialQueue = {
+        let queue = DispatchSerialQueue(label: "com.aria.render-core-work")
+        queue.setSpecific(key: queueKey, value: true)
+        return queue
+    }()
+
+    /// Runs `body` on the render-core lane. Re-entrant: code already on the lane (such as
+    /// a `LiveScoreRenderSession` method) runs it directly instead of deadlocking.
+    nonisolated static func sync<T>(_ body: () throws -> T) rethrows -> T {
+        if DispatchQueue.getSpecific(key: queueKey) == true {
+            return try body()
+        }
+        return try queue.sync(execute: body)
     }
 }
 

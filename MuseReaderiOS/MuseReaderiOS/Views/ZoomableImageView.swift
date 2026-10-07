@@ -1026,8 +1026,9 @@ struct ZoomableImageView: UIViewRepresentable {
                     }
                 } else if let expressionEndpointDragIsStart {
                     self.expressionEndpointDragIsStart = nil
+                    let dropPoint = overlayView.expressionEndpointDropPoint(at: point)
                     overlayView.clearExpressionEndpointDragPreview()
-                    if let dropPoint = overlayView.normalizedPoint(at: point) {
+                    if let dropPoint {
                         onExpressionEndpointDrag?(expressionEndpointDragIsStart, dropPoint)
                     }
                 } else if let insertionDragStartPoint {
@@ -2005,6 +2006,32 @@ final class ScorePageOverlayView: UIView {
         updateOverlayFrames()
     }
 
+    /// The note a dragged slur or hairpin end will attach to: the nearest system first (all of
+    /// a system's targets share a height), then the nearest note across. Returned in view space.
+    private func snappedExpressionEndpointTarget(near point: CGPoint) -> CGPoint? {
+        guard let selection, selection.kind == .expressionSpanner, !selection.attachmentTargets.isEmpty,
+              imageSize.width > 0, imageSize.height > 0 else {
+            return nil
+        }
+        let imageRect = AVMakeRect(aspectRatio: imageSize, insideRect: bounds)
+        let targets = selection.attachmentTargets.map { self.point(for: $0, inside: imageRect) }
+        guard let systemY = targets.min(by: { abs($0.y - point.y) < abs($1.y - point.y) })?.y else {
+            return nil
+        }
+        return targets
+            .filter { abs($0.y - systemY) < 0.5 }
+            .min { abs($0.x - point.x) < abs($1.x - point.x) }
+    }
+
+    /// The drop point to send for a dragged slur or hairpin end: exactly the note the guide
+    /// showed, so the engine attaches it where the user saw it snap.
+    func expressionEndpointDropPoint(at point: CGPoint) -> CGPoint? {
+        if let target = snappedExpressionEndpointTarget(near: point) {
+            return normalizedPoint(at: target)
+        }
+        return normalizedPoint(at: point)
+    }
+
     func selectedNoteDragSemitoneDelta(from startPoint: CGPoint, to endPoint: CGPoint) -> Int {
         guard selection?.kind == .note, let start = normalizedPoint(at: startPoint), let end = normalizedPoint(at: endPoint) else {
             return 0
@@ -2150,11 +2177,15 @@ final class ScorePageOverlayView: UIView {
         updateLayoutMarkerFrames(in: imageRect)
 
         if let selection {
-            if selectionPDFView.hasDocument,
-               selection.kind == .note || selection.kind == .rest {
+            // Notes, rests and symbols (fermatas, clefs, barlines, ...) arrive with a copy of
+            // themselves painted in the selection colour; that recoloured shape is the highlight.
+            let selectionDragOffset: CGPoint? = isDraggingSelectedNote
+                ? selectedNoteDragOffset
+                : (isDraggingSelectedMovableElement && selection.canDragMovableElement ? selectedMovableElementDragOffset : nil)
+            if selectionPDFView.hasDocument {
                 var overlayFrame = imageRect
-                if isDraggingSelectedNote {
-                    overlayFrame = overlayFrame.offsetBy(dx: selectedNoteDragOffset.x, dy: selectedNoteDragOffset.y)
+                if let selectionDragOffset {
+                    overlayFrame = overlayFrame.offsetBy(dx: selectionDragOffset.x, dy: selectionDragOffset.y)
                 }
                 let hidesOverlay = overlayFrame.width <= 1 || overlayFrame.height <= 1
                 selectionPDFView.isHidden = hidesOverlay
@@ -2168,11 +2199,10 @@ final class ScorePageOverlayView: UIView {
                     container.isHidden = true
                 }
             } else if let overlayRect = selection.overlayNormalizedRect,
-                      selection.overlayImageData != nil,
-                      selection.kind == .note || selection.kind == .rest {
+                      selection.overlayImageData != nil {
                 var overlayFrame = frame(for: overlayRect, inside: imageRect)
-                if isDraggingSelectedNote {
-                    overlayFrame = overlayFrame.offsetBy(dx: selectedNoteDragOffset.x, dy: selectedNoteDragOffset.y)
+                if let selectionDragOffset {
+                    overlayFrame = overlayFrame.offsetBy(dx: selectionDragOffset.x, dy: selectionDragOffset.y)
                 }
                 selectionPDFView.isHidden = true
                 selectionImageView.isHidden = overlayFrame.width <= 1 || overlayFrame.height <= 1
@@ -2203,6 +2233,8 @@ final class ScorePageOverlayView: UIView {
                     } else if selection.kind == .text || selection.kind == .tempo || selection.kind == .dynamic
                         || selection.kind == .instrumentName || selection.kind == .instrumentChange {
                         selectionFrame = paddedTextSelectionFrame(selectionFrame, inside: imageRect)
+                    } else if selection.kind == .other {
+                        selectionFrame = paddedSymbolSelectionFrame(selectionFrame, inside: imageRect)
                     }
                     container.isHidden = selectionFrame.width <= 1 || selectionFrame.height <= 1
                     if !container.isHidden {
@@ -2319,6 +2351,16 @@ final class ScorePageOverlayView: UIView {
         return CGRect(origin: CGPoint(x: minX, y: minY), size: padded.size)
     }
 
+    /// Symbols (fermatas, clefs, arpeggios, ...) arrive as their exact glyph box. Without room
+    /// around them the overlay's border and rounded corners paint over the symbol's edges.
+    private func paddedSymbolSelectionFrame(_ frame: CGRect, inside imageRect: CGRect) -> CGRect {
+        let padding = max(4, min(frame.width, frame.height) * 0.25)
+        let padded = frame.insetBy(dx: -padding, dy: -padding)
+        let minX = max(imageRect.minX, min(padded.minX, imageRect.maxX - padded.width))
+        let minY = max(imageRect.minY, min(padded.minY, imageRect.maxY - padded.height))
+        return CGRect(origin: CGPoint(x: minX, y: minY), size: padded.size)
+    }
+
     private func paddedTextSelectionFrame(_ frame: CGRect, inside imageRect: CGRect) -> CGRect {
         let horizontalPadding = max(frame.height * 0.16, 5)
         let verticalPadding = max(frame.height * 0.14, 3)
@@ -2334,9 +2376,25 @@ final class ScorePageOverlayView: UIView {
     }
 
     private func updateChordAttachmentGuide(in imageRect: CGRect) {
+        if let previewPoint = expressionEndpointPreviewPoint, expressionEndpointPreviewIsStart != nil {
+            // A dragged slur or hairpin end: dashed line from the finger to the note it will attach to.
+            if let target = snappedExpressionEndpointTarget(near: previewPoint) {
+                let path = UIBezierPath()
+                path.move(to: previewPoint)
+                path.addLine(to: target)
+                chordAttachmentGuideLayer.path = path.cgPath
+                chordAttachmentGuideLayer.isHidden = false
+            } else {
+                chordAttachmentGuideLayer.isHidden = true
+                chordAttachmentGuideLayer.path = nil
+            }
+            return
+        }
+
+        // Chord symbols and fermatas show which note they will attach to while being dragged.
         guard
             let selection,
-            selection.kind == .chordText,
+            selection.kind == .chordText || (selection.kind == .other && !selection.attachmentTargets.isEmpty),
             isDraggingSelectedMovableElement,
             let selectionFrame
         else {
@@ -2346,16 +2404,19 @@ final class ScorePageOverlayView: UIView {
         }
 
         let movedFrame = selectionFrame.offsetBy(dx: selectedMovableElementDragOffset.x, dy: selectedMovableElementDragOffset.y)
-        let chordPoint = CGPoint(x: movedFrame.midX, y: movedFrame.maxY + 2)
         let dragCenter = CGPoint(x: movedFrame.midX, y: movedFrame.midY)
         guard let anchorPoint = snappedChordAttachmentPoint(for: dragCenter, selection: selection, inside: imageRect) else {
             chordAttachmentGuideLayer.isHidden = true
             chordAttachmentGuideLayer.path = nil
             return
         }
+        // Start from the edge facing the note: the bottom above the staff, the top below it.
+        let elementPoint = anchorPoint.y >= movedFrame.midY
+            ? CGPoint(x: movedFrame.midX, y: movedFrame.maxY + 2)
+            : CGPoint(x: movedFrame.midX, y: movedFrame.minY - 2)
 
         let path = UIBezierPath()
-        path.move(to: chordPoint)
+        path.move(to: elementPoint)
         path.addLine(to: anchorPoint)
         chordAttachmentGuideLayer.path = path.cgPath
         chordAttachmentGuideLayer.isHidden = false
@@ -2657,6 +2718,8 @@ final class ScorePageOverlayView: UIView {
             view.layer.shadowOpacity = 0
         default:
             configureSelectionOverlay(view)
+            // Keep small selections from turning into pills whose corners cut into the symbol.
+            view.layer.cornerRadius = min(8, min(frame.width, frame.height) / 3)
         }
     }
 

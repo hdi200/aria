@@ -431,7 +431,7 @@ struct ScorePickupEditorContext: Identifiable, Sendable, Equatable {
 }
 
 struct ScoreSelectedElement: Sendable, Equatable {
-    let pageIndex: Int
+    var pageIndex: Int
     let kind: ScoreSelectedElementKind
     let canDragMovableElement: Bool
     let isSingleMeasure: Bool
@@ -463,16 +463,36 @@ struct ScoreSelectedElement: Sendable, Equatable {
     let currentTimeSignatureNumerator: Int
     let currentTimeSignatureDenominator: Int
     let layoutBreakKind: ScoreLayoutMarkerKind?
-    let normalizedRect: ScoreNormalizedRect
-    let actionRect: ScoreNormalizedRect
+    var normalizedRect: ScoreNormalizedRect
+    var actionRect: ScoreNormalizedRect
     let startHandlePoint: CGPoint?
     let endHandlePoint: CGPoint?
     let attachmentPoint: CGPoint?
     let attachmentTargets: [CGPoint]
-    let highlightRects: [ScoreNormalizedRect]
+    var highlightRects: [ScoreNormalizedRect]
     let overlayNormalizedRect: ScoreNormalizedRect?
     let overlayImageData: Data?
     let overlayPDFData: Data?
+    /// Range highlights on later pages, for ranges that cross a page break.
+    var otherPageHighlightRects: [Int: [ScoreNormalizedRect]] = [:]
+    /// A copy of the selection shown on one of those later pages: it draws the
+    /// highlight there, while the selection's actions stay on its own page.
+    var isHighlightOnly = false
+
+    func highlightOnly(onPage otherPageIndex: Int) -> ScoreSelectedElement? {
+        guard let rects = otherPageHighlightRects[otherPageIndex], let firstRect = rects.first else {
+            return nil
+        }
+
+        var copy = self
+        copy.pageIndex = otherPageIndex
+        copy.normalizedRect = firstRect
+        copy.actionRect = firstRect
+        copy.highlightRects = rects
+        copy.otherPageHighlightRects = [:]
+        copy.isHighlightOnly = true
+        return copy
+    }
 
     var tempoValue: TempoValue? {
         guard kind == .tempo, let textContent else {
@@ -752,6 +772,8 @@ struct ScoreLegacyRepairIssue: Identifiable, Sendable, Equatable {
             return "Tempo · \(location) · Measure \(measureNumber)"
         case "tempo":
             return "Tempo · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
+        case "strayClef":
+            return "Extra Clef · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
         default:
             return "Dynamic · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
         }

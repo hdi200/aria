@@ -1,3 +1,4 @@
+import AVFoundation
 import StoreKit
 import SwiftUI
 
@@ -74,76 +75,165 @@ struct UpdateNoticeStore {
 
 struct UpdateNoticeSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var page = 0
 
-    private struct Item: Identifiable {
-        let id: Int
+    private struct Page: Identifiable {
+        /// Position among the pages shown on this device.
+        var id = 0
+        /// A looping clip in Resources/WhatsNew, or a symbol when there is none.
+        let clip: String?
         let systemImage: String
         let title: String
         let message: String
+        /// Annotations are iPad-only, so iPhone skips their page.
+        var isPadOnly = false
     }
 
-    private let items: [Item] = [
-        Item(
-            id: 0,
-            systemImage: "pencil.tip.crop.circle",
-            title: "Mark up your scores",
-            message: "Tap the annotation button to write, draw, or highlight with your Apple Pencil or finger. "
-                + "Choose your colors and line widths, erase marks, and undo changes. "
-                + "Your annotations are saved with this score, ready for your next practice or rehearsal."
-        ),
-        Item(
-            id: 1,
+    // The clips are real exports: Bach's Orchestral Suite No. 2 scrolling over
+    // a photo, and the Goldberg Aria on the piano over the moonlit fjord.
+    private let pages: [Page] = [
+        Page(
+            clip: "whats-new-scrolling",
             systemImage: "film",
             title: "Share a play-along video",
-            message: "Open Share, choose Video, then tap Video Export. Make a smoothly scrolling score "
-                + "or a video that follows the music through the pages, with playback using your saved mix. "
-                + "Keep the score on a plain background or add a photo with white notation."
+            message: "Open Share and choose Video. Your score scrolls smoothly as it plays, with playback "
+                + "using your saved mix. Keep it on paper or set it over a photo, in landscape for YouTube "
+                + "or vertical for Reels and TikTok."
+        ),
+        Page(
+            clip: "whats-new-piano",
+            systemImage: "pianokeys",
+            title: "Or watch it on a piano",
+            message: "Choose the Piano layout and the notes fall onto a keyboard, lighting each key as it plays. "
+                + "Pick dark, light, or one of the nature photos."
+        ),
+        Page(
+            clip: nil,
+            systemImage: "pencil.tip.crop.circle",
+            title: "Mark up your scores",
+            message: "In View mode, tap the annotation button to write, draw, or highlight with your Apple Pencil "
+                + "or finger. Each mark stays with its spot in the music, even when the layout changes. "
+                + "Your annotations are saved with this score, ready for your next practice or rehearsal.",
+            isPadOnly: true
         )
     ]
+    .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
+    .enumerated()
+    .map { index, page in
+        var page = page
+        page.id = index
+        return page
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text("Two new ways to practice and share your music: handwritten annotations and play-along videos.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    ForEach(items) { item in
-                        HStack(alignment: .top, spacing: 14) {
-                            Image(systemName: item.systemImage)
-                                .font(.title2)
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 32)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.title).font(.headline)
-                                Text(item.message)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
+            TabView(selection: $page) {
+                ForEach(pages) { page in
+                    pageView(page)
+                        .tag(page.id)
                 }
-                .padding()
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
             .safeAreaInset(edge: .bottom) {
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Continue").frame(maxWidth: .infinity)
+                VStack(spacing: 14) {
+                    HStack(spacing: 8) {
+                        ForEach(pages) { item in
+                            Circle()
+                                .fill(item.id == page ? Color.accentColor : Color.secondary.opacity(0.3))
+                                .frame(width: 7, height: 7)
+                        }
+                    }
+                    .accessibilityHidden(true)
+                    Button {
+                        if page < pages.count - 1 {
+                            withAnimation { page += 1 }
+                        } else {
+                            dismiss()
+                        }
+                    } label: {
+                        Text(page < pages.count - 1 ? "Next" : "Continue").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("updateNoticeContinue")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
                 .padding()
-                .accessibilityIdentifier("updateNoticeContinue")
             }
             .navigationTitle("What's New in Aria")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if page < pages.count - 1 {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Skip") { dismiss() }
+                    }
+                }
+            }
         }
         .frame(maxWidth: 560)
         .presentationDetents([.large])
+    }
+
+    private func pageView(_ page: Page) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Group {
+                    if let clip = page.clip,
+                       let url = Bundle.main.url(forResource: clip, withExtension: "mp4")
+                        ?? Bundle.main.url(forResource: clip, withExtension: "mp4", subdirectory: "WhatsNew") {
+                        UpdateNoticeLoopingVideo(url: url)
+                    } else {
+                        Image(systemName: page.systemImage)
+                            .font(.system(size: 56))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.accentColor.opacity(0.08))
+                    }
+                }
+                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(page.title).font(.title3.weight(.semibold))
+                    Text(page.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            .padding()
+        }
+    }
+}
+
+/// A silent clip that loops without controls.
+private struct UpdateNoticeLoopingVideo: UIViewRepresentable {
+    let url: URL
+
+    final class PlayerView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        var looper: AVPlayerLooper?
+    }
+
+    func makeUIView(context: Context) -> PlayerView {
+        let view = PlayerView()
+        let player = AVQueuePlayer()
+        // The clips have no sound; muting also keeps other audio playing.
+        player.isMuted = true
+        player.preventsDisplaySleepDuringVideoPlayback = false
+        view.looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspectFill
+        player.play()
+        return view
+    }
+
+    func updateUIView(_ view: PlayerView, context: Context) {}
+
+    static func dismantleUIView(_ view: PlayerView, coordinator: ()) {
+        view.playerLayer.player?.pause()
+        view.looper = nil
     }
 }

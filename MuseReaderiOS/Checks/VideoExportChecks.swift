@@ -75,6 +75,16 @@ struct VideoExportChecks {
         }
         print("Video export pipeline checks passed: A/V tracks, quality, bounded prefetch, errors and cancellation")
 
+        // Reels and TikTok: 9:16 at 1080×1920.
+        var verticalOptions = options
+        verticalOptions.vertical = true
+        let verticalOutput = directory.appendingPathComponent("vertical.mp4")
+        try await ScoreVideoExporter.export(liveRenderSession: LiveScoreRenderSession(page: pdf), pageCount: 1, to: verticalOutput,
+                                            options: verticalOptions, progress: { _ in })
+        let verticalSize = try await AVURLAsset(url: verticalOutput).loadTracks(withMediaType: .video)[0].load(.naturalSize)
+        try expect(verticalSize == CGSize(width: 1080, height: 1920), "Vertical video is \(verticalSize)")
+        print("Vertical video check passed: 1080×1920")
+
         try checkScrollingEnding(pdf: pdf)
         try await checkPiano(directory: directory)
         if CommandLine.arguments.count > 3 {

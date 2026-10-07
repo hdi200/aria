@@ -262,6 +262,25 @@ else()
             ${CMAKE_CURRENT_LIST_DIR}/../../demos/Amazing_grace.mscz)
         set_tests_properties(score_render_playback_notes_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+        add_executable(score_render_new_score_tests tests/score_render_new_score_tests.cpp)
+        target_include_directories(score_render_new_score_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+        target_link_libraries(score_render_new_score_tests PRIVATE score_render_core)
+        add_test(NAME score_render_new_score_tests COMMAND score_render_new_score_tests
+            ${CMAKE_CURRENT_LIST_DIR}/../../MuseReaderiOS/MuseReaderiOS/Resources/ScoreTemplates.bundle)
+        set_tests_properties(score_render_new_score_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+        add_executable(score_render_swing_tests tests/score_render_swing_tests.cpp)
+        target_include_directories(score_render_swing_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+        target_link_libraries(score_render_swing_tests PRIVATE score_render_core)
+        add_test(NAME score_render_swing_tests COMMAND score_render_swing_tests
+            ${CMAKE_CURRENT_LIST_DIR}/tests/data/swing.mscx)
+        set_tests_properties(score_render_swing_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+        # Random-edit stress test; run through compat/fuzz_edits.py (not part of ctest).
+        add_executable(score_render_fuzz tests/score_render_fuzz.cpp)
+        target_include_directories(score_render_fuzz PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+        target_link_libraries(score_render_fuzz PRIVATE score_render_core)
+
         add_executable(score_render_audio_mix_tests tests/score_render_audio_mix_tests.cpp)
         target_include_directories(score_render_audio_mix_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})
         target_link_libraries(score_render_audio_mix_tests PRIVATE score_render_core)

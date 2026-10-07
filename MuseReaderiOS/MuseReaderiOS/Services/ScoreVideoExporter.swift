@@ -106,6 +106,14 @@ struct ScoreVideoExportOptions: Sendable {
     /// Scrolling only: keep part names, clefs and signatures at the left.
     /// Useful with several parts; a single part reads better without it.
     var pinsStaffHeader = true
+    /// Scrolling and Piano: 9:16 at 1080×1920 for Reels and TikTok. Pages has
+    /// its own portrait style.
+    var vertical = false
+
+    /// The frame size written to the file.
+    var frameSize: CGSize {
+        vertical && style.layout != .pages ? CGSize(width: 1080, height: 1920) : style.frameSize
+    }
 }
 
 /// Which measure is playing at a moment of the performance, and how far
@@ -439,7 +447,7 @@ enum ScoreVideoExporter {
     /// The piano shows the moment its first note sounds, with its key lit.
     static func previewFrame(_ material: PreviewMaterial, options: ScoreVideoExportOptions) -> CGImage? {
         guard material.timeline.endTimeSeconds > 0 else { return nil }
-        let frameSize = options.style.frameSize
+        let frameSize = options.frameSize
         let painter: ScoreVideoPainter
         let time: TimeInterval
         switch options.style {
@@ -487,7 +495,7 @@ enum ScoreVideoExporter {
         guard timeline.endTimeSeconds > 0 else {
             throw ScoreVideoExportError.noPlayback
         }
-        let frameSize = options.style.frameSize
+        let frameSize = options.frameSize
         let duration = timeline.endTimeSeconds + tailSeconds
         let frameRate = Double(options.frameRate)
         let totalFrames = Int((duration * frameRate).rounded(.up))
@@ -1216,12 +1224,19 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         // Fit the staves into 59% of the height and everything into 72%, but
         // never let a staff space exceed 2.4% of it: a single staff would
         // otherwise fill the frame.
+        // The opening header (part names, clefs, signatures, up to the first
+        // note) must fit the width, so a narrow vertical frame still shows it
+        // whole and can pin it. Landscape headers are far narrower than this.
+        let openingBeatX = beatPoints.first.map { CGFloat($0.normalizedX) * page.size.width } ?? 0
+        let headerScale = openingBeatX > 0 ? frameSize.width * 0.42 / openingBeatX : .greatestFiniteMagnitude
         let fitScale = min((frameSize.height * 0.59) / max(bottom - top, 1),
-                           (frameSize.height * 0.72) / max(inkBottom - inkTop, 1))
+                           (frameSize.height * 0.72) / max(inkBottom - inkTop, 1), headerScale)
         let sampleRegion = timeline.regions.count > 1 ? timeline.regions[1] : timeline.regions.first
         if let sampleRegion,
            let staffSpace = Self.staffSpace(in: page, region: sampleRegion.normalizedRect) {
-            scale = min(fitScale, frameSize.height * 0.024 / staffSpace)
+            // A little larger on vertical video, which is watched on phones.
+            let shortSide = min(frameSize.width, frameSize.height)
+            scale = min(fitScale, shortSide * (frameSize.height > frameSize.width ? 0.028 : 0.024) / staffSpace)
         } else {
             let baseScale = min(Self.maximumScale, (frameSize.height - 200) / max(page.size.height, 1))
             scale = min(baseScale * 1.7, fitScale)
@@ -1230,7 +1245,10 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         // The music, text included, is centred on the frame but starts no
         // higher than 17% down, leaving the top for the title.
         let inkHeight = (inkBottom - inkTop) * scale
-        let inkTopY = max(frameSize.height * 0.17, frameSize.height * 0.5 - inkHeight / 2)
+        // Vertical video sits a little above centre, clear of the captions and
+        // buttons Reels and TikTok lay over the lower part of the frame.
+        let centre = frameSize.height > frameSize.width ? 0.44 : 0.5
+        let inkTopY = max(frameSize.height * 0.17, frameSize.height * centre - inkHeight / 2)
         let bandY = inkTopY - inkTop * scale
         musicTop = inkTopY
         band = CGRect(x: 0, y: bandY.rounded(), width: frameSize.width, height: bandHeight)
@@ -1410,8 +1428,10 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         let titleHeight = ceil(titleText.size().height)
         let composerHeight = composer.isEmpty ? 0 : ceil(composerText.size().height)
         let blockHeight = titleHeight + (composer.isEmpty ? 0 : 6 + composerHeight)
-        // Just above the music with a clear gap, never closer than 40 pt to the top.
-        let top = max(40, musicTop - frameSize.height * 0.05 - blockHeight)
+        // Just above the music with a clear gap, never closer than 40 pt to the
+        // top; on vertical video, below the app bar Reels and TikTok show there.
+        let topMargin: CGFloat = frameSize.height > frameSize.width ? frameSize.height * 0.1 : 40
+        let top = max(topMargin, musicTop - frameSize.height * 0.05 - blockHeight)
         let bounds = CGRect(x: 80, y: top, width: width, height: blockHeight).integral
         let localTop = top - bounds.minY
         guard let image = Self.overlay(size: bounds.size, draw: { _ in
@@ -1442,7 +1462,8 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
               let strip = page.tile(scale: scale, originX: 0, pixelWidth: beatPixelX + 1, pixelHeight: Int(band.height)),
               let headerWidth = Self.headerEnd(in: strip, searchFrom: measurePixelX,
                                                rows: Int(contentTop - band.minY)..<Int(contentBottom - band.minY)),
-              CGFloat(headerWidth) < frameSize.width * 0.35
+              // Vertical frames are narrow; their header may take a little more.
+              CGFloat(headerWidth) < frameSize.width * (frameSize.height > frameSize.width ? 0.45 : 0.35)
         else { return nil }
         return headerWidth
     }

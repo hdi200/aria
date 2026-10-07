@@ -278,6 +278,49 @@ void scanDoubleEscapedPartNames(mu::engraving::MasterScore* masterScore, std::ve
     }
 }
 
+// A clef change at the very start of the score, right after the time signature, drawn as
+// "clef, 4/4, clef". Aria's Change Clef on the first note made these (as can desktop's clef
+// palette applied to that note). That clef change already decides the clef the notes use, so
+// making it the starting clef and removing it changes nothing musically.
+// Only the first bar of the score: after a section break desktop itself puts clef changes at
+// the start of the bar (e.g. every variation of the Goldberg demo), so those are wanted.
+void scanStrayStartClefs(mu::engraving::MasterScore* masterScore, std::vector<LegacyRepairCandidate>& candidates)
+{
+    mu::engraving::Measure* measure = masterScore->firstMeasure();
+    mu::engraving::Segment* segment = measure
+        ? measure->findSegmentR(mu::engraving::SegmentType::Clef, mu::engraving::Fraction(0, 1))
+        : nullptr;
+    if (!segment) {
+        return;
+    }
+    for (mu::engraving::staff_idx_t staffIdx = 0; staffIdx < masterScore->nstaves(); ++staffIdx) {
+        mu::engraving::EngravingItem* element = segment->element(mu::engraving::staff2track(staffIdx));
+        if (!element || !element->isClef() || element->generated()) {
+            continue;
+        }
+        msr::render::ScoreLegacyRepairIssue issue;
+        issue.index = static_cast<int>(candidates.size());
+        issue.measureNumber = measure->no() + 1;
+        issue.staffIndex = static_cast<int>(staffIdx);
+        issue.kind = "strayClef";
+        issue.location = "Full score and parts";
+        issue.message = "A second clef follows the time signature (as Change Clef on the first note made in earlier "
+                        "versions of Aria). Make it the starting clef instead; the notes keep their positions.";
+        candidates.push_back({ issue, element, nullptr, {}, {} });
+    }
+}
+
+// Make a stray start-of-bar clef change the bar's starting clef. Must run inside an undo command.
+void repairStrayStartClef(mu::engraving::MasterScore* masterScore, mu::engraving::EngravingItem* strayClef)
+{
+    mu::engraving::Clef* clef = mu::engraving::toClef(strayClef);
+    mu::engraving::Staff* staff = clef->staff();
+    mu::engraving::Measure* measure = clef->measure();
+    const mu::engraving::ClefType clefType = clef->clefType();
+    masterScore->undoRemoveElement(clef);
+    masterScore->undoChangeClef(staff, measure, clefType);
+}
+
 // Rebuild a system marking as a complete linked set: remove the incomplete set, then
 // add a copy to the full score's top staff. undoAddElement copies system markings into
 // every part (and the full score's system-object staves), as when a user adds one.
@@ -386,6 +429,8 @@ std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::Mas
         scanMissingSystemMarkings(masterScore, candidates);
         scanDoubleEscapedPartNames(masterScore, candidates);
     }
+    // Change Clef made stray starting clefs with every engine version; the repair is musically neutral.
+    scanStrayStartClefs(masterScore, candidates);
     return candidates;
 }
 
@@ -1266,6 +1311,29 @@ mu::engraving::PointF pointForNormalizedPagePosition(const mu::engraving::Page* 
     return mu::engraving::PointF(page->width() * clampedX, page->height() * clampedY);
 }
 
+// MuseScore's point lookups (Score::getPosition, Score::putNote) take canvas coordinates,
+// where every page sits at its own offset; Aria's taps arrive relative to one page.
+mu::engraving::PointF canvasPointForPagePoint(const mu::engraving::Page* page, const mu::engraving::PointF& pagePoint)
+{
+    return page ? pagePoint + page->pos() : pagePoint;
+}
+
+// Score::getPosition reports its position in canvas coordinates; bring it back to the page.
+bool getPagePosition(mu::engraving::Score* score,
+                     const mu::engraving::Page* page,
+                     mu::engraving::Position* position,
+                     const mu::engraving::PointF& pagePoint,
+                     const mu::engraving::voice_idx_t voice)
+{
+    if (!score->getPosition(position, canvasPointForPagePoint(page, pagePoint), voice)) {
+        return false;
+    }
+    if (page) {
+        position->pos -= page->pos();
+    }
+    return true;
+}
+
 mu::engraving::RectF rectAroundPoint(const mu::engraving::PointF& point, const double radius)
 {
     return mu::engraving::RectF(point.x() - radius, point.y() - radius, radius * 2.0, radius * 2.0);
@@ -1315,6 +1383,22 @@ bool isDirectlySelectable(const mu::engraving::EngravingItem* item)
         || item->isSpanner()
         || item->isSpannerSegment()
         || item->isTextBase();
+}
+
+// Selections drawn by recolouring the symbol itself in the selection blue (as notes and rests
+// are, and as desktop MuseScore does) rather than by a box: the shape is the whole object.
+bool usesSymbolSelectionHighlight(const mu::engraving::EngravingItem* item)
+{
+    return item && (item->isArticulationOrFermata()
+                    || item->isBreath()
+                    || item->isClef()
+                    || item->isKeySig()
+                    || item->isTimeSig()
+                    || item->isBarLine()
+                    || item->isArpeggio()
+                    || item->isChordLine()
+                    || item->type() == mu::engraving::ElementType::TREMOLO_SINGLECHORD
+                    || item->type() == mu::engraving::ElementType::TREMOLO_TWOCHORD);
 }
 
 bool isEditableTextItem(const mu::engraving::EngravingItem* item)
@@ -2862,45 +2946,97 @@ mu::engraving::ChordRest* chordRestAtPointForExpressionEndpoint(mu::engraving::S
                                                                const mu::engraving::staff_idx_t preferredStaff,
                                                                const bool chordOnly)
 {
-    const double radius = std::max(page ? page->spatium() * 2.5 : 0.0, 18.0);
-    mu::engraving::ChordRest* best = nullptr;
-    double bestDistance = std::numeric_limits<double>::max();
     if (!score || !page) {
         return nullptr;
     }
 
-    for (mu::engraving::Measure* measure = score->firstMeasure(); measure; measure = measure->nextMeasure()) {
-        if (!measure || measure->system() == nullptr || measure->system()->page() != page) {
+    // Lines like hairpins sit between systems, so first decide which system the finger is
+    // over (by the expression's staff), then pick the note mostly by horizontal position.
+    // Searching the whole page by straight-line distance could jump to the next system.
+    const mu::engraving::staff_idx_t staffIndex = preferredStaff == muse::nidx ? 0 : std::min(preferredStaff, score->nstaves() - 1);
+    const mu::engraving::Staff* staff = score->staff(staffIndex);
+    mu::engraving::System* bestSystem = nullptr;
+    double bestSystemDistance = std::numeric_limits<double>::max();
+    for (mu::engraving::System* system : page->systems()) {
+        if (!system || !system->firstMeasure() || !staff) {
             continue;
         }
+        const double staffTop = system->staffYpage(staffIndex);
+        const double distance = distanceToRange(pagePoint.y(), staffTop, staffTop + staff->staffHeight(system->firstMeasure()->tick()));
+        if (distance < bestSystemDistance) {
+            bestSystemDistance = distance;
+            bestSystem = system;
+        }
+    }
+    if (!bestSystem) {
+        return nullptr;
+    }
+
+    mu::engraving::ChordRest* best = nullptr;
+    double bestDistance = std::numeric_limits<double>::max();
+    for (mu::engraving::MeasureBase* measureBase : bestSystem->measures()) {
+        if (!measureBase || !measureBase->isMeasure()) {
+            continue;
+        }
+        mu::engraving::Measure* measure = mu::engraving::toMeasure(measureBase);
         for (mu::engraving::Segment* segment = measure->first(mu::engraving::SegmentType::ChordRest);
-             segment && segment->measure() == measure;
-             segment = segment->next1(mu::engraving::SegmentType::ChordRest)) {
-            const mu::engraving::staff_idx_t staffStart = preferredStaff == muse::nidx ? 0 : preferredStaff;
-            const mu::engraving::staff_idx_t staffEnd = preferredStaff == muse::nidx
-                ? score->nstaves()
-                : std::min(preferredStaff + 1, score->nstaves());
-            for (mu::engraving::staff_idx_t staffIndex = staffStart; staffIndex < staffEnd; ++staffIndex) {
-                for (mu::engraving::track_idx_t voice = 0; voice < mu::engraving::VOICES; ++voice) {
-                    const mu::engraving::track_idx_t track = staffIndex * mu::engraving::VOICES + voice;
-                    mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(segment->element(track));
-                    if (!chordRest || (chordOnly && !chordRest->isChord())) {
-                        continue;
-                    }
-                    const mu::engraving::RectF rect = chordRest->pageBoundingRect();
-                    const double dx = rect.center().x() - pagePoint.x();
-                    const double dy = rect.center().y() - pagePoint.y();
-                    const double distance = std::hypot(dx, dy);
-                    if (distance < bestDistance) {
-                        bestDistance = distance;
-                        best = chordRest;
-                    }
+             segment;
+             segment = segment->next(mu::engraving::SegmentType::ChordRest)) {
+            for (mu::engraving::track_idx_t voice = 0; voice < mu::engraving::VOICES; ++voice) {
+                mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(segment->element(staffIndex * mu::engraving::VOICES + voice));
+                if (!chordRest || (chordOnly && !chordRest->isChord())) {
+                    continue;
+                }
+                const mu::engraving::RectF rect = chordRest->pageBoundingRect();
+                const double distance = std::hypot(rect.center().x() - pagePoint.x(), (rect.center().y() - pagePoint.y()) * 0.12);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = chordRest;
                 }
             }
         }
     }
+    return best;
+}
 
-    return bestDistance <= radius ? best : nullptr;
+struct FermataAnchorTarget {
+    mu::engraving::ChordRest* chordRest = nullptr;
+    mu::engraving::PointF anchor;
+};
+
+// Every note or rest in the fermata's voice on its page, with the point a fermata attaches to:
+// centred on the note, at the top (or, placed below, the bottom) line of the staff.
+std::vector<FermataAnchorTarget> fermataAnchorTargets(const mu::engraving::Score* score, const mu::engraving::Fermata* fermata)
+{
+    std::vector<FermataAnchorTarget> targets;
+    const mu::engraving::Segment* fermataSegment = fermata ? fermata->segment() : nullptr;
+    const mu::engraving::System* fermataSystem = fermataSegment ? fermataSegment->system() : nullptr;
+    const mu::engraving::Page* page = fermataSystem ? fermataSystem->page() : nullptr;
+    if (!score || !page) {
+        return targets;
+    }
+
+    const mu::engraving::track_idx_t track = fermata->track();
+    const mu::engraving::staff_idx_t staffIdx = mu::engraving::track2staff(track);
+    const bool below = fermata->placeBelow();
+    for (mu::engraving::Measure* measure = score->firstMeasure(); measure; measure = measure->nextMeasure()) {
+        mu::engraving::System* system = measure->system();
+        if (!system || system->page() != page) {
+            continue;
+        }
+        const mu::engraving::Staff* staff = score->staff(staffIdx);
+        const double staffTop = system->staffYpage(staffIdx);
+        const double anchorY = below && staff ? staffTop + staff->staffHeight(measure->tick()) : staffTop;
+        for (mu::engraving::Segment* segment = measure->first(mu::engraving::SegmentType::ChordRest);
+             segment;
+             segment = segment->next(mu::engraving::SegmentType::ChordRest)) {
+            mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(segment->element(track));
+            if (chordRest) {
+                targets.push_back({ chordRest, mu::engraving::PointF(chordRest->pageBoundingRect().center().x(), anchorY) });
+            }
+        }
+    }
+    return targets;
 }
 
 mu::engraving::PointF chordTextAttachmentAnchorForChordRest(mu::engraving::ChordRest* chordRest)
@@ -3887,19 +4023,26 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         mu::engraving::RectF actionRect;
         bool hasSystemRect = false;
         auto appendSystemRect = [&]() {
-            if (!hasSystemRect || systemRect.width() <= 0.0 || systemRect.height() <= 0.0) {
+            mu::engraving::Page* systemPage = activeSystem ? activeSystem->page() : nullptr;
+            if (!hasSystemRect || !systemPage || systemRect.width() <= 0.0 || systemRect.height() <= 0.0
+                || systemPage->width() <= 0.0 || systemPage->height() <= 0.0) {
                 return;
             }
-            selectionState.highlightRects.push_back({
-                systemRect.left() / page->width(),
-                systemRect.top() / page->height(),
-                systemRect.width() / page->width(),
-                systemRect.height() / page->height()
-            });
+            const msr::render::NormalizedSelectionRect normalizedRect {
+                systemRect.left() / systemPage->width(),
+                systemRect.top() / systemPage->height(),
+                systemRect.width() / systemPage->width(),
+                systemRect.height() / systemPage->height()
+            };
+            if (systemPage == page) {
+                selectionState.highlightRects.push_back(normalizedRect);
+            } else {
+                selectionState.otherPageHighlightRects.push_back({ static_cast<int>(systemPage->pageNumber()), normalizedRect });
+            }
         };
         for (mu::engraving::Measure* measure = rangeStart; measure; measure = measure->nextMeasure()) {
             mu::engraving::System* measureSystem = measure->system();
-            if (!measureSystem || measureSystem->page() != page) {
+            if (!measureSystem || !measureSystem->page()) {
                 if (measure == rangeEnd) {
                     break;
                 }
@@ -3952,7 +4095,7 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             if (rect.width() > 0.0 && rect.height() > 0.0) {
                 systemRect = hasSystemRect ? systemRect.united(rect) : rect;
                 hasSystemRect = true;
-                if (measure == rangeEnd) {
+                if (measure == rangeEnd && measureSystem->page() == page) {
                     actionRect = rect;
                 }
             }
@@ -4098,6 +4241,18 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     selectionState.isEditableText = editableTextSelection;
     selectionState.isChordText = selectedItem->isHarmony();
     selectionState.canDragMovableElement = isDirectlyDraggableTextItem(selectedItem);
+    if (selectedItem->isFermata()) {
+        // Drag guide, as for chord symbols: the note it is attached to, and the notes it can move to.
+        const mu::engraving::Fermata* fermata = mu::engraving::toFermata(selectedItem);
+        for (const FermataAnchorTarget& target : fermataAnchorTargets(score, fermata)) {
+            selectionState.attachmentTargets.push_back({ target.anchor.x() / pageWidth, target.anchor.y() / pageHeight });
+            if (target.chordRest->segment() == fermata->segment()) {
+                selectionState.hasAttachmentPoint = true;
+                selectionState.attachmentNormalizedX = target.anchor.x() / pageWidth;
+                selectionState.attachmentNormalizedY = target.anchor.y() / pageHeight;
+            }
+        }
+    }
     selectionState.currentKey = currentKeyForSelection(
         score,
         measure,
@@ -4277,10 +4432,64 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             return true;
         };
 
-        if (!applyHandleForElement(expressionSpanner->startElement(), selectionState.startHandleNormalizedX, selectionState.startHandleNormalizedY)) {
+        // Handles sit where the line is actually drawn: the engine's own grips (as desktop
+        // draws them) at the start of the first segment and the end of the last one.
+        auto applyHandleForGrip = [&](const mu::engraving::SpannerSegment* segment, const mu::engraving::Grip grip, double& x, double& y) {
+            if (!segment || !segment->system() || segment->system()->page() != page) {
+                return false;
+            }
+            const std::vector<mu::engraving::PointF> grips = segment->gripsPositions(mu::engraving::EditData());
+            const size_t gripIndex = static_cast<size_t>(grip);
+            if (gripIndex >= grips.size()) {
+                return false;
+            }
+            x = clampUnitInterval(grips[gripIndex].x() / pageWidth);
+            y = clampUnitInterval(grips[gripIndex].y() / pageHeight);
+            return true;
+        };
+        // Where a dragged end can attach (for the on-screen snapping guide): each note (chords
+        // only, for slurs) on the line's staff, centred on the note at the middle of the staff,
+        // so every target of one system shares a height. The endpoint finder agrees exactly
+        // when it is handed one of these points.
+        if (!expressionSpanner->isTie()) {
+            const mu::engraving::staff_idx_t spannerStaff = std::min(mu::engraving::track2staff(expressionSpanner->track()), score->nstaves() - 1);
+            const mu::engraving::Staff* staff = score->staff(spannerStaff);
+            for (mu::engraving::System* system : page->systems()) {
+                if (!system || !system->firstMeasure() || !staff) {
+                    continue;
+                }
+                const double staffMiddle = system->staffYpage(spannerStaff) + staff->staffHeight(system->firstMeasure()->tick()) * 0.5;
+                for (mu::engraving::MeasureBase* measureBase : system->measures()) {
+                    if (!measureBase || !measureBase->isMeasure()) {
+                        continue;
+                    }
+                    for (mu::engraving::Segment* segment = mu::engraving::toMeasure(measureBase)->first(mu::engraving::SegmentType::ChordRest);
+                         segment;
+                         segment = segment->next(mu::engraving::SegmentType::ChordRest)) {
+                        for (mu::engraving::track_idx_t voice = 0; voice < mu::engraving::VOICES; ++voice) {
+                            mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(segment->element(spannerStaff * mu::engraving::VOICES + voice));
+                            if (!chordRest || (expressionSpanner->isSlurTie() && !chordRest->isChord())) {
+                                continue;
+                            }
+                            selectionState.attachmentTargets.push_back({
+                                clampUnitInterval(chordRest->pageBoundingRect().center().x() / pageWidth),
+                                clampUnitInterval(staffMiddle / pageHeight)
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        const bool hasSegments = !expressionSpanner->segmentsEmpty();
+        if (!(hasSegments && applyHandleForGrip(expressionSpanner->frontSegment(), mu::engraving::Grip::START,
+                                                selectionState.startHandleNormalizedX, selectionState.startHandleNormalizedY))
+            && !applyHandleForElement(expressionSpanner->startElement(), selectionState.startHandleNormalizedX, selectionState.startHandleNormalizedY)) {
             applyHandleForSegment(expressionSpanner->startSegment(), expressionSpanner->track(), selectionState.startHandleNormalizedX, selectionState.startHandleNormalizedY);
         }
-        if (!applyHandleForElement(expressionSpanner->endElement(), selectionState.endHandleNormalizedX, selectionState.endHandleNormalizedY)) {
+        if (!(hasSegments && applyHandleForGrip(expressionSpanner->backSegment(), mu::engraving::Grip::END,
+                                                selectionState.endHandleNormalizedX, selectionState.endHandleNormalizedY))
+            && !applyHandleForElement(expressionSpanner->endElement(), selectionState.endHandleNormalizedX, selectionState.endHandleNormalizedY)) {
             applyHandleForSegment(expressionSpanner->endSegment(), expressionSpanner->track2(), selectionState.endHandleNormalizedX, selectionState.endHandleNormalizedY);
         }
     }
@@ -4296,6 +4505,15 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     } else if (mu::engraving::Rest* rest = selectedItem->isRest() ? mu::engraving::toRest(selectedItem) : nullptr) {
         appendRestHighlightRects(selectionState, page, rest);
         appendRestOverlayItems(overlayItems, rest);
+    } else if (usesSymbolSelectionHighlight(selectedItem)) {
+        overlayItems.push_back(selectedItem);
+    } else if (expressionSpanner && (expressionSpanner->isSlurTie() || expressionSpanner->isHairpin())) {
+        // The curve or wedge itself turns blue: every piece of it on this page.
+        for (const mu::engraving::SpannerSegment* segment : expressionSpanner->spannerSegments()) {
+            if (segment && segment->system() && segment->system()->page() == page) {
+                overlayItems.push_back(segment);
+            }
+        }
     }
     renderSelectionOverlay(selectionState, page, overlayItems);
     return selectionState;
@@ -5684,6 +5902,11 @@ FluidSynthPlaybackSequence makeFluidSynthPlaybackSequence(mu::engraving::Score* 
                                                           const double startTimeSeconds,
                                                           const double durationSeconds)
 {
+    // Swing markings only reach playback through each staff's swing map. Desktop
+    // fills it when a score opens; Aria refreshes it here, as MuseScore's MIDI
+    // renderer does, so loaded, part, and transposed-view scores all swing.
+    score->updateSwing();
+
     mu::engraving::PlaybackModel playbackModel(context);
     playbackModel.setIsMetronomeEnabled(metronomeEnabled);
     playbackModel.load(score);

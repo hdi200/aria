@@ -525,7 +525,9 @@
         }
 
         commandScore->startCmd(muse::TranslatableString::untranslatable("MuseReader edit text"));
-        commandItem->undoChangeProperty(mu::engraving::Pid::TEXT, newText);
+        // The app sends plain text; the TEXT property is MuseScore's markup, so "&" or "<" typed
+        // by the user must be escaped or the saved file is not valid XML and will not open.
+        commandItem->undoChangeProperty(mu::engraving::Pid::TEXT, mu::engraving::TextBase::plainToXmlText(newText));
         //! NOTE Editing a title-frame text (title/subtitle/composer/lyricist) directly on the
         //! page must also move the matching meta tag, otherwise the score shows one value while
         //! the Score Setup sheet, the library row and the saved <metaTag> still hold the old one.
@@ -619,7 +621,7 @@
             lyrics->setPlainText(lyricText);
             score->undoAddElement(lyrics);
         } else if (lyrics && !lyricText.empty()) {
-            lyrics->undoChangeProperty(mu::engraving::Pid::TEXT, lyricText);
+            lyrics->undoChangeProperty(mu::engraving::Pid::TEXT, mu::engraving::TextBase::plainToXmlText(lyricText));
         }
         if (lyrics && !lyricText.empty()) {
             lyrics->adjustPrevious();
@@ -699,7 +701,7 @@
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader add lyrics extension line"));
         if (!lyricText.empty()) {
-            lyrics->undoChangeProperty(mu::engraving::Pid::TEXT, lyricText);
+            lyrics->undoChangeProperty(mu::engraving::Pid::TEXT, mu::engraving::TextBase::plainToXmlText(lyricText));
             lyrics->adjustPrevious();
         }
         if (lyrics->syllabic() == mu::engraving::LyricsSyllabic::BEGIN
@@ -842,6 +844,28 @@
             return false;
         }
 
+        if (item->isFermata()) {
+            // Like chord symbols: dropping a fermata nearer another note or rest moves it there.
+            // Near its own note, the drag below just nudges it.
+            mu::engraving::Fermata* fermata = mu::engraving::toFermata(item);
+            const mu::engraving::PointF fermataDropPoint = pointForNormalizedPagePosition(page, normalizedX, normalizedY);
+            mu::engraving::ChordRest* nearestChordRest = nullptr;
+            double nearestDistance = std::numeric_limits<double>::max();
+            for (const FermataAnchorTarget& target : fermataAnchorTargets(score, fermata)) {
+                // Same weighting as the on-screen guide: horizontal distance decides.
+                const double dx = target.anchor.x() - fermataDropPoint.x();
+                const double dy = (target.anchor.y() - fermataDropPoint.y()) * 0.12;
+                const double distance = std::hypot(dx, dy);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestChordRest = target.chordRest;
+                }
+            }
+            if (nearestChordRest && nearestChordRest->segment() != fermata->segment()) {
+                return moveFermataToChordRest(score, fermata, nearestChordRest, output, errorMessage);
+            }
+        }
+
         std::unique_ptr<mu::engraving::ElementGroup> dragGroup = item->getDragGroup(
             [item](const mu::engraving::EngravingItem* candidate) {
                 return candidate == item;
@@ -870,6 +894,37 @@
 
         refreshAfterEdit();
         score->select(item, mu::engraving::SelectType::SINGLE, item->staffIdx());
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool moveFermataToChordRest(mu::engraving::Score* score,
+                                mu::engraving::Fermata* fermata,
+                                mu::engraving::ChordRest* target,
+                                msr::render::ScoreEditState& output,
+                                std::string& errorMessage)
+    {
+        mu::engraving::Segment* targetSegment = target->segment();
+        for (mu::engraving::EngravingItem* annotation : targetSegment->annotations()) {
+            if (annotation && annotation->isFermata() && annotation->track() == fermata->track()) {
+                errorMessage = "That note already has a fermata.";
+                return false;
+            }
+        }
+
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader move fermata"));
+        mu::engraving::Fermata* moved = mu::engraving::Factory::createFermata(targetSegment);
+        moved->setSymId(fermata->symId());
+        moved->setTimeStretch(fermata->timeStretch());
+        moved->setPlay(fermata->play());
+        moved->setPlacement(fermata->placement());
+        moved->setTrack(fermata->track());
+        moved->setParent(targetSegment);
+        score->undoRemoveElement(fermata);
+        score->undoAddElement(moved);
+        score->endCmd();
+        refreshAfterEdit();
+        score->select(moved, mu::engraving::SelectType::SINGLE, moved->staffIdx());
         output = makeEditState(score);
         return true;
     }
@@ -1090,6 +1145,60 @@
             }
             mu::engraving::Slur* slur = score->addSlur(slurStart, slurEnd, nullptr);
             addedItem = slur;
+        } else if (key == "fermata") {
+            // Like MuseScore's palette, a fermata goes on every note or rest in a range. Tapping
+            // it again removes it, matching the articulation buttons.
+            std::vector<mu::engraving::ChordRest*> targets;
+            if (score->selection().isRange()) {
+                const mu::engraving::track_idx_t startTrack = score->selection().staffStart() * mu::engraving::VOICES;
+                const mu::engraving::track_idx_t endTrack = score->selection().staffEnd() * mu::engraving::VOICES;
+                for (mu::engraving::Segment* segment = score->selection().startSegment();
+                     segment && segment != score->selection().endSegment();
+                     segment = segment->next1(mu::engraving::SegmentType::ChordRest)) {
+                    if (score->selection().endSegment() && segment->tick() >= score->selection().endSegment()->tick()) {
+                        break;
+                    }
+                    for (mu::engraving::track_idx_t track = startTrack; track < endTrack; ++track) {
+                        mu::engraving::EngravingItem* element = segment->element(track);
+                        if (element && element->isChordRest()) {
+                            targets.push_back(mu::engraving::toChordRest(element));
+                        }
+                    }
+                }
+            } else if (chordRest) {
+                targets.push_back(chordRest);
+            }
+            if (targets.empty()) {
+                score->endCmd(true);
+                errorMessage = "Select a note or rest before adding a fermata.";
+                return false;
+            }
+
+            auto existingFermata = [](mu::engraving::ChordRest* target) -> mu::engraving::EngravingItem* {
+                for (mu::engraving::EngravingItem* annotation : target->segment()->annotations()) {
+                    if (annotation && annotation->isFermata() && annotation->track() == target->track()) {
+                        return annotation;
+                    }
+                }
+                return nullptr;
+            };
+            const bool removing = std::all_of(targets.begin(), targets.end(), [&](mu::engraving::ChordRest* target) {
+                return existingFermata(target) != nullptr;
+            });
+            for (mu::engraving::ChordRest* target : targets) {
+                mu::engraving::EngravingItem* existing = existingFermata(target);
+                if (removing) {
+                    score->undoRemoveElement(existing);
+                } else if (!existing) {
+                    mu::engraving::Fermata* fermata = mu::engraving::Factory::createFermata(target->segment());
+                    fermata->setSymIdAndTimeStretch(mu::engraving::SymId::fermataAbove);
+                    fermata->setPlacement(target->track() & 1 ? mu::engraving::PlacementV::BELOW : mu::engraving::PlacementV::ABOVE);
+                    fermata->setTrack(target->track());
+                    fermata->setParent(target->segment());
+                    score->undoAddElement(fermata);
+                }
+            }
+            addedItem = score->selection().isRange() ? rangeFirstChord : item;
         } else if (key == "accent" || key == "marcato" || key == "tenuto" || key == "staccato"
                    || key == "string up" || key == "stringup" || key == "up bow" || key == "upbow"
                    || key == "string down" || key == "stringdown" || key == "down bow" || key == "downbow") {
@@ -1146,9 +1255,16 @@
         }
 
         mu::engraving::Score* score = activeScore();
-        mu::engraving::Spanner* spanner = currentSelectedExpressionSpanner(score);
+        // Only the selected line itself: with a range selected, the lookup would pick the first
+        // tie or slur inside it. A tie's ends are notes and always neighbours; giving it chords as
+        // ends corrupted the score and crashed a later layout (found by the stress test).
+        mu::engraving::Spanner* spanner = score->selection().isRange() ? nullptr : currentSelectedExpressionSpanner(score);
         if (!spanner) {
             errorMessage = "Select an expression line before moving an endpoint.";
+            return false;
+        }
+        if (spanner->isTie()) {
+            errorMessage = "A tie always joins neighbouring notes; its ends cannot be moved.";
             return false;
         }
 
@@ -1177,23 +1293,61 @@
                 errorMessage = "MuseReader could not find both slur endpoints.";
                 return false;
             }
+            // Dragging one end onto or past the other keeps the shortest slur instead of
+            // refusing: the neighbouring chord on the other side of the fixed end.
+            auto adjacentChord = [](mu::engraving::ChordRest* from, const bool forward) -> mu::engraving::ChordRest* {
+                mu::engraving::Segment* segment = from->segment();
+                for (segment = forward ? segment->next1(mu::engraving::SegmentType::ChordRest) : segment->prev1(mu::engraving::SegmentType::ChordRest);
+                     segment;
+                     segment = forward ? segment->next1(mu::engraving::SegmentType::ChordRest) : segment->prev1(mu::engraving::SegmentType::ChordRest)) {
+                    mu::engraving::EngravingItem* element = segment->element(from->track());
+                    if (element && element->isChord()) {
+                        return mu::engraving::toChordRest(element);
+                    }
+                }
+                return nullptr;
+            };
             if (startEndpoint) {
-                start = target;
+                start = target->tick() < end->tick() ? target : adjacentChord(end, false);
             } else {
-                end = target;
+                end = target->tick() > start->tick() ? target : adjacentChord(start, true);
             }
-            if (start->tick() > end->tick()) {
+            if (!start || !end || start->tick() >= end->tick()) {
                 score->endCmd(true);
-                errorMessage = "Slur start must stay before its end.";
+                errorMessage = "A slur needs at least two notes.";
                 return false;
             }
-            score->undo(new mu::engraving::ChangeStartEndSpanner(spanner, start, end));
+            if (spanner->isSlur()) {
+                // As desktop's SlurSegment::changeAnchor does: move the slur's ticks (what layout
+                // draws from) and then its start/end chords. Changing only the chords updated the
+                // file but left the slur drawn at its old notes until the score was reopened.
+                for (mu::engraving::EngravingObject* linked : spanner->linkList()) {
+                    mu::engraving::Spanner* linkedSpanner = mu::engraving::toSpanner(linked);
+                    score->undoStack()->pushWithoutPerforming(
+                        new mu::engraving::ChangeStartEndSpanner(linkedSpanner, linkedSpanner->startElement(), linkedSpanner->endElement()));
+                }
+                spanner->undoChangeProperty(mu::engraving::Pid::SPANNER_TICK, start->tick());
+                spanner->undoChangeProperty(mu::engraving::Pid::SPANNER_TICKS, end->tick() - start->tick());
+                mu::engraving::toSlur(spanner)->undoChangeStartEndElements(start, end);
+            } else {
+                score->undo(new mu::engraving::ChangeStartEndSpanner(spanner, start, end));
+            }
         } else {
-            const mu::engraving::Fraction targetTick = startEndpoint ? target->tick() : target->endTick();
             const mu::engraving::Fraction oldStartTick = spanner->tick();
             const mu::engraving::Fraction oldEndTick = spanner->tick2();
-            const mu::engraving::Fraction newStartTick = startEndpoint ? targetTick : oldStartTick;
-            const mu::engraving::Fraction newEndTick = startEndpoint ? oldEndTick : targetTick;
+            mu::engraving::Fraction newStartTick = startEndpoint ? target->tick() : oldStartTick;
+            mu::engraving::Fraction newEndTick = startEndpoint ? oldEndTick : target->endTick();
+            // Dragging one end onto or past the other keeps the line over a single note or
+            // rest next to the fixed end, instead of refusing.
+            if (newEndTick <= newStartTick) {
+                if (startEndpoint) {
+                    mu::engraving::ChordRest* lastCovered = score->findCR(oldEndTick - mu::engraving::Fraction(1, 1920), spanner->track());
+                    newStartTick = lastCovered ? lastCovered->tick() : oldStartTick;
+                } else {
+                    mu::engraving::ChordRest* firstCovered = score->findCR(oldStartTick, spanner->track());
+                    newEndTick = firstCovered ? firstCovered->endTick() : oldEndTick;
+                }
+            }
             if (newEndTick <= newStartTick) {
                 score->endCmd(true);
                 errorMessage = "Expression line start must stay before its end.";
@@ -1526,31 +1680,6 @@
             return false;
         }
 
-        if (pageWidthMillimeters < 100.0 || pageHeightMillimeters < 100.0) {
-            errorMessage = "Page size is too small.";
-            return false;
-        }
-
-        if (marginMillimeters < 0.0 || marginMillimeters * 2.0 >= pageWidthMillimeters) {
-            errorMessage = "Page margins do not fit within the selected page size.";
-            return false;
-        }
-
-        if (staffSizeMillimeters < 1.2 || staffSizeMillimeters > 2.4) {
-            errorMessage = "Staff size must be between 1.2 mm and 2.4 mm.";
-            return false;
-        }
-
-        if (staffSpacingSpatium < 3.0 || staffSpacingSpatium > 16.0) {
-            errorMessage = "Staff spacing must be between 3 and 16 spaces.";
-            return false;
-        }
-
-        if (systemSpacingSpatium < 4.0 || systemSpacingSpatium > 24.0) {
-            errorMessage = "System spacing must be between 4 and 24 spaces.";
-            return false;
-        }
-
         const double pageWidth = pageWidthMillimeters / mu::engraving::INCH;
         const double pageHeight = pageHeightMillimeters / mu::engraving::INCH;
         const double margin = marginMillimeters / mu::engraving::INCH;
@@ -1570,6 +1699,34 @@
                                                     staffSpacingSpatium);
         const bool systemSpacingChanged = !sameValue(score->style().styleS(mu::engraving::Sid::minSystemDistance).val(),
                                                      systemSpacingSpatium);
+
+        // Only check the values being changed: a score from desktop may already use a value
+        // outside these ranges, and that must not block an unrelated change such as paper size.
+        if (pageSizeChanged && (pageWidthMillimeters < 100.0 || pageHeightMillimeters < 100.0)) {
+            errorMessage = "Page size is too small.";
+            return false;
+        }
+
+        if ((pageSizeChanged || marginChanged)
+            && (marginMillimeters < 0.0 || marginMillimeters * 2.0 >= pageWidthMillimeters)) {
+            errorMessage = "Page margins do not fit within the selected page size.";
+            return false;
+        }
+
+        if (staffSizeChanged && (staffSizeMillimeters < 1.2 || staffSizeMillimeters > 2.4)) {
+            errorMessage = "Staff size must be between 1.2 mm and 2.4 mm.";
+            return false;
+        }
+
+        if (staffSpacingChanged && (staffSpacingSpatium < 3.0 || staffSpacingSpatium > 16.0)) {
+            errorMessage = "Staff spacing must be between 3 and 16 spaces.";
+            return false;
+        }
+
+        if (systemSpacingChanged && (systemSpacingSpatium < 4.0 || systemSpacingSpatium > 24.0)) {
+            errorMessage = "System spacing must be between 4 and 24 spaces.";
+            return false;
+        }
 
         std::unordered_map<mu::engraving::Sid, mu::engraving::PropertyValue> styleValues;
         if (pageSizeChanged) {
@@ -1855,7 +2012,7 @@
 
         mu::engraving::PointF pagePoint = pointForNormalizedPagePosition(page, normalizedX, normalizedY);
         mu::engraving::Position position;
-        if (!score->getPosition(&position, pagePoint, inputState.voice())) {
+        if (!getPagePosition(score, page, &position, pagePoint, inputState.voice())) {
             return true;
         }
 
@@ -2336,7 +2493,7 @@
 
         mu::engraving::PointF pagePoint = pointForNormalizedPagePosition(page, normalizedX, normalizedY);
         mu::engraving::Position position;
-        if (!score->getPosition(&position, pagePoint, inputState.voice())) {
+        if (!getPagePosition(score, page, &position, pagePoint, inputState.voice())) {
             errorMessage = "Tap inside a staff to enter a note or rest.";
             return false;
         }
@@ -2370,7 +2527,7 @@
             : *requestedAccidentalType);
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader insert note"));
-        const muse::Ret insertResult = score->putNote(pagePoint, false, false);
+        const muse::Ret insertResult = score->putNote(canvasPointForPagePoint(page, pagePoint), false, false);
         const bool insertSucceeded = static_cast<bool>(insertResult);
         inputState.setAccidentalType(mu::engraving::AccidentalType::NONE);
         if (!insertSucceeded) {
@@ -3330,9 +3487,12 @@
         return true;
     }
 
-    bool shiftSelectionPitchBySemitones(const int semitoneDelta,
-                                        msr::render::ScoreEditState& output,
-                                        std::string& errorMessage)
+    // Moves the selection by steps of `mode`: semitones (CHROMATIC) or octaves (OCTAVE, which,
+    // as desktop's Ctrl+Up/Down, keeps the spelling; twelve chromatic steps re-spell E#, Cb, ...).
+    bool shiftSelectionPitchSteps(const int stepDelta,
+                                  const mu::engraving::UpDownMode mode,
+                                  msr::render::ScoreEditState& output,
+                                  std::string& errorMessage)
     {
         if (!supportsEditing()) {
             errorMessage = "Editing is unavailable for this score session.";
@@ -3340,13 +3500,13 @@
         }
 
         mu::engraving::Score* score = activeScore();
-        if (semitoneDelta == 0) {
+        if (stepDelta == 0) {
             output = makeEditState(score);
             return true;
         }
 
         if (score->selection().isRange()) {
-            return shiftRangeSelectionPitch(semitoneDelta, mu::engraving::UpDownMode::CHROMATIC, output, errorMessage);
+            return shiftRangeSelectionPitch(stepDelta, mode, output, errorMessage);
         }
 
         mu::engraving::Note* targetNote = currentSelectedNote(score);
@@ -3376,15 +3536,22 @@
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader change pitch"));
         score->select(targetNote, mu::engraving::SelectType::SINGLE, targetNote->staffIdx());
-        const bool movingUp = semitoneDelta > 0;
-        for (int i = 0; i < std::abs(semitoneDelta); ++i) {
-            score->upDown(movingUp, mu::engraving::UpDownMode::CHROMATIC);
+        const bool movingUp = stepDelta > 0;
+        for (int i = 0; i < std::abs(stepDelta); ++i) {
+            score->upDown(movingUp, mode);
         }
         continueNoteInputAfterChord(score, targetChord);
         score->endCmd();
         refreshAfterEdit();
         output = makeEditState(score);
         return true;
+    }
+
+    bool shiftSelectionPitchBySemitones(const int semitoneDelta,
+                                        msr::render::ScoreEditState& output,
+                                        std::string& errorMessage)
+    {
+        return shiftSelectionPitchSteps(semitoneDelta, mu::engraving::UpDownMode::CHROMATIC, output, errorMessage);
     }
 
     bool shiftSelectionPitchByOctaves(const int octaveDelta,
@@ -3402,12 +3569,8 @@
             return true;
         }
 
-        if (score->selection().isRange()) {
-            // OCTAVE mode preserves each note's spelling, like desktop Cmd+Up/Down.
-            return shiftRangeSelectionPitch(octaveDelta, mu::engraving::UpDownMode::OCTAVE, output, errorMessage);
-        }
-
-        return shiftSelectionPitchBySemitones(octaveDelta * 12, output, errorMessage);
+        // OCTAVE mode preserves each note's spelling, like desktop Cmd+Up/Down.
+        return shiftSelectionPitchSteps(octaveDelta, mu::engraving::UpDownMode::OCTAVE, output, errorMessage);
     }
 
     bool setSelectionPitchClass(const int pitchClass,
@@ -3561,7 +3724,7 @@
 
         const mu::engraving::PointF pagePoint = pointForNormalizedPagePosition(page, normalizedX, normalizedY);
         mu::engraving::Position position;
-        if (!score->getPosition(&position, pagePoint, selectedChordRestItem->track() % mu::engraving::VOICES)) {
+        if (!getPagePosition(score, page, &position, pagePoint, selectedChordRestItem->track() % mu::engraving::VOICES)) {
             errorMessage = "Drop the note on a staff position.";
             return false;
         }
@@ -4120,12 +4283,35 @@
         if (!anchor) {
             anchor = activeMeasure(score);
         }
+        // As desktop does when a clef is dropped: on the first note of a bar, the clef belongs to
+        // the bar. Anchored to that note, the first bar of the score got a second, small clef after
+        // the time signature (clef, 4/4, clef) instead of a new starting clef.
+        if (anchor && !anchor->isMeasure() && !anchor->isClef() && anchor->rtick().isZero()) {
+            if (mu::engraving::Measure* measure = anchor->findMeasure()) {
+                anchor = measure;
+            }
+        }
+        // Scores saved with that bug keep a stray clef change at the very start of the bar, which
+        // would go on overriding the bar's new clef; it is replaced too.
+        mu::engraving::Clef* strayStartClef = nullptr;
+        if (anchor && anchor->isMeasure()) {
+            mu::engraving::Measure* measure = mu::engraving::toMeasure(anchor);
+            if (mu::engraving::Segment* segment = measure->findSegmentR(mu::engraving::SegmentType::Clef, mu::engraving::Fraction(0, 1))) {
+                mu::engraving::EngravingItem* element = segment->element(mu::engraving::staff2track(staffIdx));
+                if (element && element->isClef()) {
+                    strayStartClef = mu::engraving::toClef(element);
+                }
+            }
+        }
         if (!staff || !anchor) {
             errorMessage = "Aria could not find a clef insertion point.";
             return false;
         }
 
         score->startCmd(muse::TranslatableString::untranslatable("Aria change clef"));
+        if (strayStartClef) {
+            score->undoRemoveElement(strayStartClef);
+        }
         score->undoChangeClef(staff, anchor, clefType);
         score->endCmd();
 

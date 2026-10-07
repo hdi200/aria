@@ -61,6 +61,7 @@
 #include "engraving/dom/elementgroup.h"
 #include "engraving/dom/excerpt.h"
 #include "engraving/dom/factory.h"
+#include "engraving/dom/fermata.h"
 #include "engraving/dom/fret.h"
 #include "engraving/dom/hairpin.h"
 #include "engraving/dom/harmony.h"

@@ -188,6 +188,7 @@ struct ScoreReaderPageCanvas: View {
         let topPadding = topPagePadding
         let bottomPadding: CGFloat = fitsPageToViewport ? 0 : 6
         let usesActiveNotationFocus = selectedElement?.pageIndex == pageIndex
+            && selectedElement?.isHighlightOnly == false
             && (activeNotationTopInset > 0 || activeNotationBottomInset > 0)
         let zoomActiveNotationTopInset = usesActiveNotationFocus ? activeNotationTopInset : 0
         let zoomActiveNotationBottomInset = usesActiveNotationFocus ? activeNotationBottomInset : 0
@@ -354,6 +355,7 @@ struct ScoreReaderPageCanvas: View {
         guard
             let selectedElement,
             selectedElement.pageIndex == pageIndex,
+            !selectedElement.isHighlightOnly,
             viewportSize.height > 0
         else {
             return nil
@@ -465,6 +467,11 @@ struct ScoreReaderPageSurface: View {
     let manualScrollAction: () -> Void
     let annotationConfiguration: ScoreAnnotationPageConfiguration?
 
+    /// Selection actions belong to the selection's own page, not to pages that only show its highlight.
+    private var actionableSelectedElement: ScoreSelectedElement? {
+        selectedElement?.isHighlightOnly == true ? nil : selectedElement
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Group {
@@ -551,7 +558,7 @@ struct ScoreReaderPageSurface: View {
                     .padding(18)
             }
 
-            if let selectedElement, selectedElement.kind == .text || selectedElement.kind == .chordText || selectedElement.kind == .instrumentChange {
+            if let selectedElement = actionableSelectedElement, selectedElement.kind == .text || selectedElement.kind == .chordText || selectedElement.kind == .instrumentChange {
                 ScoreReaderSelectedTextActions(
                     selectedElement: selectedElement,
                     imageSize: page?.displaySize,
@@ -561,7 +568,7 @@ struct ScoreReaderPageSurface: View {
                 )
             }
 
-            if let selectedElement, selectedElement.kind == .dynamic || selectedElement.kind == .tie || selectedElement.kind == .layoutBreak || selectedElement.kind == .marker || selectedElement.kind == .other {
+            if let selectedElement = actionableSelectedElement, selectedElement.kind == .dynamic || selectedElement.kind == .tie || selectedElement.kind == .layoutBreak || selectedElement.kind == .marker || selectedElement.kind == .other {
                 ScoreReaderSelectedDynamicActions(
                     selectedElement: selectedElement,
                     imageSize: page?.displaySize,
@@ -570,7 +577,7 @@ struct ScoreReaderPageSurface: View {
                 )
             }
 
-            if let selectedElement, selectedElement.kind == .tempo || selectedElement.kind == .timeSignature || selectedElement.kind == .keySignature {
+            if let selectedElement = actionableSelectedElement, selectedElement.kind == .tempo || selectedElement.kind == .timeSignature || selectedElement.kind == .keySignature {
                 ScoreReaderSelectedSignatureActions(
                     selectedElement: selectedElement,
                     imageSize: page?.displaySize,
@@ -579,7 +586,7 @@ struct ScoreReaderPageSurface: View {
                 )
             }
 
-            if let selectedElement, selectedElement.kind == .measure {
+            if let selectedElement = actionableSelectedElement, selectedElement.kind == .measure {
                 ScoreReaderSelectedMeasureActions(
                     selectedElement: selectedElement,
                     imageSize: page?.displaySize,
@@ -598,7 +605,7 @@ struct ScoreReaderPageSurface: View {
                 )
             }
 
-            if let selectedElement, selectedElement.kind == .note || selectedElement.kind == .rest {
+            if let selectedElement = actionableSelectedElement, selectedElement.kind == .note || selectedElement.kind == .rest {
                 ScoreReaderSelectedNoteRestActions(
                     selectedElement: selectedElement,
                     imageSize: page?.displaySize,
@@ -610,8 +617,9 @@ struct ScoreReaderPageSurface: View {
                     transposeAction: transposeSelectedMeasureRangeAction,
                     changeEnharmonicAction: changeSelectedEnharmonicSpellingAction,
                     accentAction: { expressionKind in
-                        // Articulations only attach to notes; rests still get copy/paste/transpose.
-                        if selectedElement.kind == .note {
+                        // Articulations only attach to notes (fermatas also go on rests);
+                        // rests still get copy/paste/transpose.
+                        if selectedElement.kind == .note || expressionKind == "Fermata" {
                             addExpressionAction(expressionKind)
                         }
                     }
@@ -1427,11 +1435,14 @@ private struct ScoreReaderNoteRestCommandMenu: View {
 
             ScoreReaderMeasureCommandDivider()
 
-            if isNoteSelection {
-                ForEach(ScoreReaderArticulationTools.tools(supportsBowingArticulations: supportsBowingArticulations)) { articulation in
+            let articulations = [ScoreReaderArticulationTools.fermata]
+                + (isNoteSelection ? ScoreReaderArticulationTools.tools(supportsBowingArticulations: supportsBowingArticulations) : [])
+            if !articulations.isEmpty {
+                ForEach(articulations) { articulation in
                     ScoreReaderMeasureCommandRow(
                         title: articulation.title,
                         symbolText: articulation.symbol,
+                        musicGlyph: articulation.musicGlyph,
                         action: { accentAction(articulation.token) }
                     )
                 }
@@ -1641,6 +1652,7 @@ private struct ScoreReaderMeasureCommandRow: View {
     let title: String
     var systemImage: String? = nil
     var symbolText: String? = nil
+    var musicGlyph: String? = nil
     var shortcut: String?
     var role: ButtonRole?
     let action: () -> Void
@@ -1676,6 +1688,11 @@ private struct ScoreReaderMeasureCommandRow: View {
         if let systemImage {
             Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .medium))
+        } else if let musicGlyph {
+            Image(uiImage: ScoreReaderClefImage.image(for: musicGlyph))
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
         } else if let symbolText {
             Text(symbolText)
                 .font(.system(size: symbolText.contains("\n") ? 11 : 15, weight: .bold))

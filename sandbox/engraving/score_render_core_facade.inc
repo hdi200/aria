@@ -106,6 +106,11 @@ bool msr::render::ScoreRenderSession::setConcertPitchEnabled(const bool enabled,
     return m_impl->setConcertPitchEnabled(enabled, totalPageCount, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::layoutFingerprint(std::vector<std::string>& output, std::string& errorMessage) const
+{
+    return m_impl->layoutFingerprint(output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::renderPage(const int pageIndex,
                                                  const int dpi,
                                                  RenderedPage& output,

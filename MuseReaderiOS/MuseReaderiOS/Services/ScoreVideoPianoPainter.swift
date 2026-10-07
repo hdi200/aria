@@ -182,6 +182,8 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     private let longestNote: TimeInterval
     private let keyboard: ScoreVideoPianoKeyboard
     private let keyboardTop: CGFloat
+    /// The frame's bottom, or above the caption area on vertical video.
+    private let keyboardBottom: CGFloat
     private let blackKeyHeight: CGFloat
     /// Room above the keyboard in its layer, for the flares and scrubber.
     private let flareRoom: CGFloat
@@ -208,10 +210,16 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
         case .pianoPhoto: theme = options.backgroundImageData == nil ? .dark : .photo
         default: theme = .dark
         }
-        let scale = frameSize.height / 1080
+        // Sizes follow the short side, so vertical video is not drawn oversized.
+        let scale = min(frameSize.width, frameSize.height) / 1080
         self.scale = scale
-        keyboardTop = (frameSize.height * (1 - Self.keyboardHeightFraction)).rounded()
-        blackKeyHeight = ((frameSize.height - keyboardTop) * Self.blackKeyHeightFraction).rounded()
+        // Reels and TikTok lay captions over the lower fifth of vertical video,
+        // so the keyboard sits above it; its height follows the key width.
+        let vertical = frameSize.height > frameSize.width
+        keyboardBottom = vertical ? (frameSize.height * 0.8).rounded() : frameSize.height
+        let keyboardHeight = min(frameSize.height * Self.keyboardHeightFraction, frameSize.width * 0.22)
+        keyboardTop = (keyboardBottom - keyboardHeight).rounded()
+        blackKeyHeight = ((keyboardBottom - keyboardTop) * Self.blackKeyHeightFraction).rounded()
         flareRoom = (80 * scale).rounded()
         imageContext = MTLCreateSystemDefaultDevice().map {
             CIContext(mtlDevice: $0, options: [.workingColorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -219,7 +227,7 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
                                                .cacheIntermediates: false])
         } ?? CIContext(options: [.cacheIntermediates: false])
         notesLayer = Self.layer(width: frameSize.width, height: frameSize.height)
-        keysLayer = Self.layer(width: frameSize.width, height: frameSize.height - keyboardTop + flareRoom)
+        keysLayer = Self.layer(width: frameSize.width, height: keyboardBottom - keyboardTop + flareRoom)
         super.init(frameSize: frameSize, timeline: timeline, options: options)
     }
 
@@ -276,7 +284,9 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
                 ? glow.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: frame])
                 : glow.composited(over: frame)
         }
-        frame = keys.composited(over: notes.composited(over: frame))
+        // The keys layer is drawn from the frame's bottom; lift it to the keyboard.
+        frame = keys.transformed(by: CGAffineTransform(translationX: 0, y: frameSize.height - keyboardBottom))
+            .composited(over: notes.composited(over: frame))
         if time < 4.5, let titleOverlay {
             let alpha = time < 3.5 ? 1 : max(0, 1 - CGFloat(time - 3.5))
             frame = Self.scaledAlpha(titleOverlay.image, by: alpha)
@@ -398,7 +408,7 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     private func whiteKeyRect(_ pitch: Int) -> CGRect {
         let gap = max(1, 2 * scale)
         return CGRect(x: keyboard.centerX(of: pitch) - keyboard.whiteKeyWidth / 2 + gap / 2, y: flareRoom + 3 * scale,
-                      width: keyboard.whiteKeyWidth - gap, height: frameSize.height - keyboardTop - 3 * scale)
+                      width: keyboard.whiteKeyWidth - gap, height: keyboardBottom - keyboardTop - 3 * scale)
     }
 
     private func blackKeyRect(_ pitch: Int) -> CGRect {
@@ -438,7 +448,7 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     /// The idle keyboard (`whiteKeys`), or only its black keys on a clear
     /// layer, to draw again over sounding white keys.
     private func makeKeyboardImage(whiteKeys: Bool) -> CGImage? {
-        let size = CGSize(width: frameSize.width, height: frameSize.height - keyboardTop + flareRoom)
+        let size = CGSize(width: frameSize.width, height: keyboardBottom - keyboardTop + flareRoom)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -469,7 +479,7 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     }
 
     private func drawKeysLayer(_ context: CGContext, now: TimeInterval, sounding: [Int: Int]) {
-        let size = CGSize(width: frameSize.width, height: frameSize.height - keyboardTop + flareRoom)
+        let size = CGSize(width: frameSize.width, height: keyboardBottom - keyboardTop + flareRoom)
         context.clear(CGRect(origin: .zero, size: size))
         if let idleKeyboard { drawImage(idleKeyboard, in: CGRect(origin: .zero, size: size), context: context) }
 
@@ -556,7 +566,9 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
                 ? [.white, UIColor(red: 0.97, green: 0.98, blue: 0.99, alpha: 1)]
                 : [UIColor(red: 0.03, green: 0.04, blue: 0.07, alpha: 1), UIColor(red: 0.08, green: 0.10, blue: 0.14, alpha: 1)]
             if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors.map(\.cgColor) as CFArray, locations: [0, 1]) {
-                context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: keyboardTop), options: [])
+                // Continues below a lifted keyboard.
+                context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: keyboardTop),
+                                           options: [.drawsAfterEndLocation])
             }
             guard theme == .light else { return }
             // Lanes: black keys' lanes slightly shaded, a hairline between
@@ -624,7 +636,9 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
         let titleSize = titleText.boundingRect(with: CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude),
                                                options: .usesLineFragmentOrigin, context: nil).integral.size
         let composerSize = composer.isEmpty ? .zero : composerText.size()
-        let rect = CGRect(x: 40 * scale, y: 40 * scale,
+        // On vertical video, below the app bar Reels and TikTok show at the top.
+        let top = frameSize.height > frameSize.width ? frameSize.height * 0.1 : 40 * scale
+        let rect = CGRect(x: 40 * scale, y: top,
                           width: min(max(titleSize.width, composerSize.width), maxTextWidth) + padding * 2,
                           height: titleSize.height + (composer.isEmpty ? 0 : composerSize.height + 6 * scale) + padding * 2).integral
         let format = UIGraphicsImageRendererFormat()

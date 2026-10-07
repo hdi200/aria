@@ -20,10 +20,19 @@ struct ScoreLegacyRepairSheet: View {
         _selectedIndexes = State(initialValue: Set(issues.map(\.index)))
     }
 
+    /// Most of these come from earlier versions of Aria; an extra starting clef can also come
+    /// from desktop's clef palette, so the headline only blames Aria when every issue is Aria's.
+    private var headline: String {
+        let found = "Aria found \(issues.count) issue\(issues.count == 1 ? "" : "s") in this score"
+        let allFromEarlierAria = issues.allSatisfy { $0.kind != "strayClef" }
+        let cause = allFromEarlierAria ? ", left by an earlier version of Aria," : ""
+        return "\(found)\(cause) that it can fix. Review each one below. Nothing changes unless you fix it."
+    }
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Aria found \(issues.count) issue\(issues.count == 1 ? "" : "s") in this score, left by an earlier version of Aria, that it can fix. Review each one below. Nothing changes unless you fix it.")
+                Text(headline)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)

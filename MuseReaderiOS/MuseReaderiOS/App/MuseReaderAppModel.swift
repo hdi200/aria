@@ -498,16 +498,19 @@ final class MuseReaderAppModel: ObservableObject {
             guard libraryAccessController.status.hasUnlimitedScores || isCreateScoreSlotReserved else {
                 throw LibraryAdmissionError.missingReservation
             }
+            // Instrument edits apply to every template. Quick Start templates rebuild from the
+            // Treble Clef file; catalogue templates keep their own file (and its page and staff
+            // sizing) and only swap the instrument list.
+            let instrumentsWereEdited = draft.selectedInstruments != draft.templateChoice.instruments
             let shouldReplaceQuickTemplateInstruments =
-                draft.templateChoice.replacesTemplateInstruments &&
-                draft.selectedInstruments != draft.templateChoice.instruments
+                draft.templateChoice.replacesTemplateInstruments && instrumentsWereEdited
             let sourceTemplate = shouldReplaceQuickTemplateInstruments ? NewScoreTemplate.blank.choice : draft.templateChoice
             let managedDocument = try scoreLibrary.createDocument(fromTemplate: sourceTemplate)
             createdLibraryRelativePaths.append(managedDocument.relativeMainFilePath)
             var session = try await sessionService.openSession(at: managedDocument.canonicalURL)
 
             if let liveRenderSession = session.liveRenderSession, session.capabilities.supportsEditing {
-                if shouldReplaceQuickTemplateInstruments {
+                if instrumentsWereEdited {
                     _ = try await liveRenderSession.replaceInstruments(draft.selectedInstruments.map(\.instrumentID))
                 }
                 _ = try await liveRenderSession.resetTemplateMeasures(draft.measureCount)
@@ -690,7 +693,13 @@ final class MuseReaderAppModel: ObservableObject {
         }
 
         for pendingSnapshot in pendingSnapshots {
-            let sourceURL = URL(fileURLWithPath: pendingSnapshot.record.sourcePath).standardizedFileURL
+            var sourceURL = URL(fileURLWithPath: pendingSnapshot.record.sourcePath).standardizedFileURL
+            if (try? scoreLibrary.relativePath(for: sourceURL)) == nil,
+               let documentsRelativePath = ScoreRecoveryStore.documentsRelativePath(ofRecordedPath: sourceURL.path),
+               let currentURL = try? scoreLibrary.url(forRelativePath: documentsRelativePath) {
+                // The app's container moved since the snapshot was written (e.g. an app update).
+                sourceURL = currentURL
+            }
             let managedRelativePath = try? scoreLibrary.relativePath(for: sourceURL)
             guard
                 sourceURL.pathExtension.lowercased() == ScoreFileFormat.mscz.rawValue,

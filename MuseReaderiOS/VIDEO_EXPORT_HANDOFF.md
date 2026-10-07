@@ -89,6 +89,59 @@ Repeats and jumps cut: the scrolling camera's 1.2 s smoothing window is clamped 
 the current path segment (`ScoreVideoScrollPath.segmentTimes`), so it never
 averages across a jump and slides backward.
 
+**Promotion.** The export panel's Video row has a "New" badge until the video
+sheet has been opened once (`@AppStorage("VideoExport.hasOpened")`, set in the
+sheet's `onAppear`). "What's New in Aria" (`UpdateNoticeSheet`) is paged: a
+looping clip of a scrolling video, one of the Piano layout, then annotations, with
+Next/Continue and Skip. The clips (`Resources/WhatsNew`, 8 s, 720p, silent) are
+real exports from this renderer: Bach's Orchestral Suite No. 2 (the user's
+engraving) scrolling over the Mount Fuji photo, and the Goldberg Aria (repo demo)
+in Piano Photo over Moonlit fjord. To remake them, render frames with the
+painters and encode with `ffmpeg -vf scale=1280:720 -crf 24 -an`.
+
+**Photo backgrounds.** Choosing the Photo appearance shows a row under the cards:
+a "Your photo" tile (opens the Photos library; once chosen it stays available,
+and tapping it again while selected picks another), then 13 built-in nature
+photos (`ScoreVideoBackgroundPhoto.all`). Choosing Photo with no photo yet
+selects the first built-in one rather than opening the library. The draft keeps
+`videoBackgroundPhotoID` (nil = the person's own) and `videoCustomBackgroundData`.
+The photos live in `Resources/VideoBackgrounds` (2048 px, about 5 MB in all). All
+are **CC0** (no attribution, no restrictions; checked in each file's Commons
+metadata), from Wikimedia Commons Featured or Quality pictures:
+
+| File | Source | Licence |
+|---|---|---|
+| `beach-sunset.jpg` | [Juan Griego Sunset.jpg](https://commons.wikimedia.org/wiki/File:Juan_Griego_Sunset.jpg) | CC0 |
+| `beech-ferns.jpg` | [Beech and ferns in Gullmarsskogen.jpg](https://commons.wikimedia.org/wiki/File:Beech_and_ferns_in_Gullmarsskogen.jpg) | CC0 |
+| `blue-sky.jpg` | [Quill-shaped cirrus cloud.jpg](https://commons.wikimedia.org/wiki/File:Quill-shaped_cirrus_cloud.jpg) | CC0 |
+| `forest-river.jpg` | [Parc national de la Jacques-Cartier, Quebec, Canada 22.jpg](https://commons.wikimedia.org/wiki/File:Parc_national_de_la_Jacques-Cartier,_Quebec,_Canada_22.jpg) | CC0 |
+| `grand-canyon.jpg` | [Grand Canyon South Rim at Sunset.jpg](https://commons.wikimedia.org/wiki/File:Grand_Canyon_South_Rim_at_Sunset.jpg) | CC0 |
+| `misty-mountains.jpg` | [Alone in the unspoilt wilderness (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Alone_in_the_unspoilt_wilderness_(Unsplash).jpg) | CC0 |
+| `moonlit-fjord.jpg` | [Waxing half moon over Brofjorden 1.jpg](https://commons.wikimedia.org/wiki/File:Waxing_half_moon_over_Brofjorden_1.jpg) | CC0 |
+| `mount-fuji.jpg` | [Mount Fuji at sunset, March 2025.jpg](https://commons.wikimedia.org/wiki/File:Mount_Fuji_at_sunset,_March_2025.jpg) | CC0 |
+| `mountain-sunset.jpg` | [Matterhorn sunset 2016 (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Matterhorn_sunset_2016_(Unsplash).jpg) | CC0 |
+| `northern-lights.jpg` | [Lofoten, Norway (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Lofoten,_Norway_(Unsplash).jpg) | CC0 |
+| `pink-bay.jpg` | [Sunset over Trommekilen from Norrkila 6.jpg](https://commons.wikimedia.org/wiki/File:Sunset_over_Trommekilen_from_Norrkila_6.jpg) | CC0 |
+| `snowy-peaks.jpg` | [Marmolada, Italy.jpg](https://commons.wikimedia.org/wiki/File:Marmolada,_Italy.jpg) | CC0 |
+| `spruce-forest.jpg` | [Spruce forest at Holma.jpg](https://commons.wikimedia.org/wiki/File:Spruce_forest_at_Holma.jpg) | CC0 |
+
+**Reels & TikTok (vertical 9:16, 1080×1920).** The sheet opens with **Format**,
+right under the preview: two cards with an outline of the frame, "Landscape · 16:9 /
+YouTube" and "Vertical · 9:16 / Reels & TikTok" (`formatCard`), then Layout and
+Appearance. The preview area is always 16:9; vertical video shows as a tall frame
+over a blurred copy of itself. There is no caption under the preview. The choice
+applies to every layout: `ScoreReaderExportDraft.videoVertical`
+and `ScoreVideoExportOptions.vertical` (`options.frameSize` is the size written).
+Pages maps it to its existing portrait style. Both platforms lay their app bar
+over the top ~10% and captions and buttons over the lower ~20%, so vertical
+video keeps clear: Scrolling centres the music at 44% of the height and keeps the
+title below 10%; Piano lifts the keyboard to end at 80% (the background continues
+below) with key height following the key width, and its title card below 10%.
+Scrolling notation is a little larger (staff space ≤ 2.8% of the width, not 2.4%),
+the opening header is capped at 42% of the width (so names and clefs show at the
+start), and a vertical header may pin up to 45% of the width. Painter sizes
+follow the frame's short side.
+
 Scrolling layout details: notation fits 59% of the height, but a staff space is
 capped at 2.4% of it (measured from staff lines in a measure), so one-staff scores
 are large rather than tiny. Vertical placement uses the measured ink of the line (`inkRows`:

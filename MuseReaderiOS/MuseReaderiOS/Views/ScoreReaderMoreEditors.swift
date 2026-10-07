@@ -1237,7 +1237,15 @@ struct ScoreReaderPageSettingsSheet: View {
     @State private var staffSpacing: Double
     @State private var systemSpacing: Double
 
-    private let pageSizes = ["A4", "Letter", "Legal"]
+    private static let presetPageSizes = ["A4", "Letter", "Legal"]
+    /// The score's own page size when it isn't a preset (A3, B4, a desktop custom size, ...),
+    /// offered as "Current" so applying other settings doesn't turn the page into A4.
+    private let currentPageSize: (width: Double, height: Double)?
+    private let currentPageSizeName: String?
+
+    private var pageSizes: [String] {
+        Self.presetPageSizes + (currentPageSizeName.map { [$0] } ?? [])
+    }
 
     let isBusy: Bool
     let commitAction: (ScorePageSettingsValue) -> Void
@@ -1247,7 +1255,18 @@ struct ScoreReaderPageSettingsSheet: View {
         isBusy: Bool,
         commitAction: @escaping (ScorePageSettingsValue) -> Void
     ) {
-        _pageSize = State(initialValue: Self.pageSizeName(for: initialValue))
+        if let presetName = Self.presetPageSizeName(for: initialValue) {
+            currentPageSize = nil
+            currentPageSizeName = nil
+            _pageSize = State(initialValue: presetName)
+        } else {
+            let width = initialValue.pageWidthMillimeters
+            let height = initialValue.pageHeightMillimeters
+            let name = "Current (\(width.formatted(.number.precision(.fractionLength(0)))) × \(height.formatted(.number.precision(.fractionLength(0)))) mm)"
+            currentPageSize = (width, height)
+            currentPageSizeName = name
+            _pageSize = State(initialValue: name)
+        }
         _margins = State(initialValue: initialValue.marginMillimeters)
         _staffSize = State(initialValue: initialValue.staffSizeMillimeters)
         _staffSpacing = State(initialValue: initialValue.staffSpacingSpatium)
@@ -1295,7 +1314,7 @@ struct ScoreReaderPageSettingsSheet: View {
         }
     }
 
-    private static func pageSizeName(for value: ScorePageSettingsValue) -> String {
+    private static func presetPageSizeName(for value: ScorePageSettingsValue) -> String? {
         let width = value.pageWidthMillimeters
         let height = value.pageHeightMillimeters
         if abs(width - 215.9) < 0.75 && abs(height - 279.4) < 0.75 {
@@ -1304,11 +1323,14 @@ struct ScoreReaderPageSettingsSheet: View {
         if abs(width - 215.9) < 0.75 && abs(height - 355.6) < 0.75 {
             return "Legal"
         }
-        return "A4"
+        if abs(width - 210) < 0.75 && abs(height - 297) < 0.75 {
+            return "A4"
+        }
+        return nil
     }
 
     private func applySettingsValue(_ value: ScorePageSettingsValue) {
-        pageSize = Self.pageSizeName(for: value)
+        pageSize = Self.presetPageSizeName(for: value) ?? "A4"
         margins = value.marginMillimeters
         staffSize = value.staffSizeMillimeters
         staffSpacing = value.staffSpacingSpatium
@@ -1323,7 +1345,11 @@ struct ScoreReaderPageSettingsSheet: View {
         case "Legal":
             dimensions = (215.9, 355.6)
         default:
-            dimensions = (210, 297)
+            if let currentPageSize, pageSize == currentPageSizeName {
+                dimensions = (currentPageSize.width, currentPageSize.height)
+            } else {
+                dimensions = (210, 297)
+            }
         }
 
         return ScorePageSettingsValue(

@@ -85,6 +85,11 @@ struct ScoreMetadata {
     bool composerFontItalic = false;
 };
 
+struct PageSelectionRect {
+    int pageIndex = 0;
+    NormalizedSelectionRect rect;
+};
+
 struct ScoreSelectionState {
     bool hasSelection = false;
     bool isNote = false;
@@ -153,6 +158,8 @@ struct ScoreSelectionState {
     double attachmentNormalizedY = 0.0;
     std::vector<NormalizedPoint> attachmentTargets;
     std::vector<NormalizedSelectionRect> highlightRects;
+    // Range highlights on pages after pageIndex, for ranges that cross a page break.
+    std::vector<PageSelectionRect> otherPageHighlightRects;
     double overlayNormalizedX = 0.0;
     double overlayNormalizedY = 0.0;
     double overlayNormalizedWidth = 0.0;
@@ -323,6 +330,10 @@ public:
     bool clearViewTranspose(int& totalPageCount, std::string& errorMessage);
     bool setConcertPitchEnabled(bool enabled, int& totalPageCount, std::string& errorMessage);
     bool renderPage(int pageIndex, int dpi, RenderedPage& output, std::string& errorMessage) const;
+    //! Test/diagnostic: every laid-out element of the displayed score, one line per element
+    //! ("page type x y w" in tenths of a staff space, sorted). Two sessions showing the same
+    //! score give the same lines, so it compares a live session with its saved file reopened.
+    bool layoutFingerprint(std::vector<std::string>& output, std::string& errorMessage) const;
     bool pdfData(std::vector<std::uint8_t>& output, std::string& errorMessage) const;
     bool playbackMIDIData(std::vector<std::uint8_t>& output, std::string& errorMessage) const;
     bool musicXMLData(std::vector<std::uint8_t>& output, std::string& errorMessage) const;

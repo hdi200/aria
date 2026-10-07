@@ -26,6 +26,12 @@ Parts and loading:
 - `editing/edit.cpp`: linked copies of spanners get a clean parent (`moveToDummy`).
 - `dom/spanner.cpp`: non-positive spanner lengths are repaired and logged instead of asserting.
 - `rw/read410/tread.cpp`, `rw/read460/tread.cpp`: skip invalid or overlapping system locks.
+- `editing/addremoveelement.cpp`: `removeNote` iterates over copies of a note's spanner lists,
+  which removing a spanner modifies (read past the end with two or more attached lines), and skips
+  spanners already removed with a companion (a guitar bend's hold). Found by the random-edit
+  stress test, e.g. creating a tuplet over a note with a guitar bend.
+- `editing/edit.cpp`: `undoRemoveMeasures` removes each crossing spanner once, not again through
+  its linked copy (a staff linked to tablature), which freed it twice when the score closed.
 
 Rendering hook:
 - `rendering/paintoptions.h`, `dom/engravingitem.cpp`: `PaintOptions::overrideItemColor`

@@ -7933,7 +7933,17 @@ void Score::undoRemoveMeasures(Measure* m1, Measure* m2, bool preserveTies, bool
         }
     }
 
+    // Aria: undoRemoveElement also removes a spanner's linked copies (e.g. on a linked tab staff),
+    // which may be in this set too; removing those again left two undo commands owning the same
+    // spanner, freed twice when the score closes. Found by the random-edit stress test.
+    std::set<EngravingObject*> removedWithLinks;
     for (Spanner* s : spannersToRemove) {
+        if (removedWithLinks.count(s)) {
+            continue;
+        }
+        for (EngravingObject* linked : s->linkList()) {
+            removedWithLinks.insert(linked);
+        }
         undoRemoveElement(s);
     }
 

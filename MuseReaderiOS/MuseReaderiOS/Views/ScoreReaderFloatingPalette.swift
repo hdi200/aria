@@ -228,6 +228,14 @@ struct ScoreReaderFloatingToolPalette: View {
             ScoreReaderPaletteButton(textSymbol: line.symbol, title: line.title, isSelected: false, isEnabled: hasSelection, action: { addExpressionAction(line.token) })
         }
         ScoreReaderLinesMenuButton(isEnabled: hasSelection, addExpressionAction: addExpressionAction)
+        ScoreReaderPaletteButton(
+            textSymbol: ScoreReaderArticulationTools.fermata.symbol,
+            title: ScoreReaderArticulationTools.fermata.title,
+            usesMusicFont: true,
+            isSelected: false,
+            isEnabled: hasSelection,
+            action: { addExpressionAction(ScoreReaderArticulationTools.fermata.token) }
+        )
         ScoreReaderArticulationMenuButton(
             isEnabled: hasNoteSelection,
             supportsBowingArticulations: editingState.selection?.supportsBowingArticulations == true,

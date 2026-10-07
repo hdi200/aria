@@ -8,6 +8,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -113,7 +114,7 @@ std::string scoreXml(const int key, const std::vector<NoteSpec>& referenceNotes,
         <voice>
           <KeySig><concertKey>)MSCX" << key << R"MSCX(</concertKey></KeySig>
           <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
-          <Clef><concertClefType>G</concertClefType></Clef>
+          <Clef><concertClefType>G</concertClefType><isHeader>1</isHeader></Clef>
 )MSCX";
 
     if (referenceNotes.size() == 1) {
@@ -867,6 +868,670 @@ void testRangeDragIncludesTheBeatItEndsOn(const std::filesystem::path& root)
     expect(state.selection.isMeasure, "A drag ending in the margin did not select a range");
 }
 
+void testFermataButtonTogglesOnNotesRestsAndRanges(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "fermata-button", scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(60) && notes.count(64), "Could not locate the test notes");
+    msr::render::ScoreEditState state;
+    std::string error;
+
+    expect(session->selectElement(0, notes[62].x, notes[62].y, 1.0, state, error), "Could not select a note: " + error);
+    expect(session->addExpression("Fermata", state, error), "Could not add a fermata to a note: " + error);
+    expect(countOccurrences(saveSnapshot(*session, root, "fermata-note"), "<Fermata>") == 1, "The note did not get a fermata");
+    expect(state.selection.isNote, "The note did not stay selected after adding a fermata");
+    expect(session->addExpression("Fermata", state, error), "Could not toggle the fermata off: " + error);
+    expect(countOccurrences(saveSnapshot(*session, root, "fermata-note-off"), "<Fermata>") == 0, "Pressing Fermata again did not remove it");
+
+    bool addedToRest = false;
+    for (double x = notes[64].x + 0.01; x <= 0.6 && !addedToRest; x += 0.004) {
+        expect(session->selectElement(0, x, notes[64].y, 1.0, state, error), "Rest hit testing failed: " + error);
+        if (!state.selection.isRest) {
+            continue;
+        }
+        expect(session->addExpression("Fermata", state, error), "Could not add a fermata to a rest: " + error);
+        addedToRest = true;
+    }
+    expect(addedToRest, "Could not select the rest after the notes");
+    expect(countOccurrences(saveSnapshot(*session, root, "fermata-rest"), "<Fermata>") == 1, "The rest did not get a fermata");
+    expect(session->undo(state, error), "Could not undo the rest fermata: " + error);
+
+    expect(session->selectMeasureRange(0, notes[60].x, notes[60].y, notes[64].x, notes[64].y, state, error),
+           "Could not drag-select the notes: " + error);
+    expect(session->addExpression("Fermata", state, error), "Could not add fermatas to a range: " + error);
+    expect(countOccurrences(saveSnapshot(*session, root, "fermata-range"), "<Fermata>") == 3,
+           "A range fermata should go on each of the three selected notes");
+}
+
+void testRangeHighlightCoversEveryPage(const std::filesystem::path& root)
+{
+    const std::string xml = R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano">
+        <trackName>Piano</trackName>
+        <instrumentId>keyboard.piano</instrumentId>
+        <Channel><program value="0"/></Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <LayoutBreak><subtype>page</subtype></LayoutBreak>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Clef><concertClefType>G</concertClefType></Clef>
+          <Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Chord><durationType>whole</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+    auto session = openSession(root, "two-page-range", xml);
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectAll(state, error), "Select All failed: " + error);
+    expect(state.selection.isMeasure && state.selection.pageIndex == 0 && !state.selection.highlightRects.empty(),
+           "Select All did not highlight the first page");
+    expect(state.selection.otherPageHighlightRects.size() == 1
+           && state.selection.otherPageHighlightRects.front().pageIndex == 1,
+           "Select All did not highlight the measure on the second page");
+    const auto& firstPage = state.selection.highlightRects.front();
+    const auto& action = state.selection;
+    expect(action.actionNormalizedY >= firstPage.normalizedY - 0.001
+           && action.actionNormalizedY <= firstPage.normalizedY + firstPage.normalizedHeight,
+           "The range's action anchor should stay on the first page's highlight");
+}
+
+// Page 1 holds only a tall title frame and page 2 starts with the first system, like an
+// orchestral score. Pencil input on page 2 must land on page 2's staff, not page 1's.
+void testPencilInputWorksOnLaterPages(const std::filesystem::path& root)
+{
+    const std::string xml = R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano">
+        <trackName>Piano</trackName>
+        <instrumentId>keyboard.piano</instrumentId>
+        <Channel><program value="0"/></Channel>
+      </Instrument>
+    </Part>
+    <Staff id="1">
+      <VBox>
+        <height>120</height>
+        <Text><style>title</style><text>Symphony</text></Text>
+        <LayoutBreak><subtype>page</subtype></LayoutBreak>
+      </VBox>
+      <Measure>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Clef><concertClefType>G</concertClefType></Clef>
+          <Chord><durationType>whole</durationType><Note><pitch>72</pitch><tpc>14</tpc></Note></Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+    auto session = openSession(root, "pencil-page-two", xml);
+    msr::render::ScoreEditState state;
+    std::string error;
+
+    std::optional<LocatedItem> note;
+    for (double y = 0.02; y <= 0.5 && !note; y += 0.004) {
+        for (double x = 0.02; x <= 0.98 && !note; x += 0.004) {
+            expect(session->selectElement(1, x, y, 1.0, state, error), "Page 2 hit testing failed: " + error);
+            if (state.selection.isNote && state.selection.pageIndex == 1) {
+                note = locatedItem(state.selection);
+            }
+        }
+    }
+    expect(note.has_value(), "Could not find the note on page 2");
+    const double staffLineGap = state.selection.normalizedHeight; // about one staff space
+
+    // Dragging the selected note down on page 2 lowers its pitch.
+    expect(session->setSelectionPitchAtPagePosition(1, note->x, note->y + staffLineGap * 2, state, error),
+           "Dragging a note's pitch on page 2 failed: " + error);
+    expect(state.selection.isNote && state.selection.midiPitch < 72,
+           "Dragging a note down on page 2 did not lower its pitch (got " + std::to_string(state.selection.midiPitch) + ")");
+
+    expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input: " + error);
+    msr::render::NoteEntryPreviewState preview;
+    expect(session->noteEntryPreview(1, note->x, note->y, 4, false, -1, preview, error), "Preview failed: " + error);
+    expect(preview.hasPreview && preview.pageIndex == 1, "Hovering the Pencil over page 2's staff showed no preview");
+    expect(std::abs((preview.overlayNormalizedY + preview.overlayNormalizedHeight * 0.5) - note->y) < 0.03,
+           "The Pencil preview on page 2 is not drawn at page 2's staff");
+
+    expect(session->insertNote(1, note->x, note->y - staffLineGap * 2, state, error), "Pencil insertion on page 2 failed: " + error);
+    expect(state.selection.isNote && state.selection.pageIndex == 1,
+           "The Pencil note was not entered on page 2");
+}
+
+// The pitch of the chord a saved fermata is attached to (it is written just before its chord).
+int fermataChordPitch(const std::string& saved)
+{
+    const size_t fermata = saved.find("<Fermata>");
+    const size_t pitch = fermata == std::string::npos ? std::string::npos : saved.find("<pitch>", fermata);
+    return pitch == std::string::npos ? -1 : std::stoi(saved.substr(pitch + 7));
+}
+
+void testFermataDragShowsAnchorAndMovesToAnotherNote(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "fermata-drag-anchor", scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(60) && notes.count(64), "Could not locate the test notes");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectElement(0, notes[60].x, notes[60].y, 1.0, state, error), "Could not select the first note: " + error);
+    expect(session->addExpression("Fermata", state, error), "Could not add a fermata: " + error);
+
+    std::optional<LocatedItem> fermata;
+    for (double y = 0.02; y <= 0.4 && !fermata; y += 0.003) {
+        for (double x = 0.02; x <= 0.98 && !fermata; x += 0.003) {
+            expect(session->selectElement(0, x, y, 1.0, state, error), "Fermata hit testing failed: " + error);
+            if (state.selection.canDragMovableElement && !state.selection.isNote && !state.selection.isEditableText) {
+                fermata = locatedItem(state.selection);
+            }
+        }
+    }
+    expect(fermata.has_value(), "Could not select the fermata");
+    expect(!state.selection.overlayPngData.empty() && !state.selection.overlayPdfData.empty(),
+           "A selected fermata should be highlighted by a blue copy of the symbol");
+    expect(state.selection.hasAttachmentPoint && state.selection.attachmentTargets.size() == 5,
+           "A selected fermata should report its anchor and the 5 notes/rests it can attach to (got "
+           + std::to_string(state.selection.attachmentTargets.size()) + ")");
+    expect(std::abs(state.selection.attachmentNormalizedX - notes[60].x) < 0.02,
+           "The fermata's anchor should be at its note");
+
+    // A small nudge keeps it on the same note.
+    expect(session->dragSelectedMovableElement(0, fermata->x + 0.004, fermata->y - 0.01, state, error), "Nudge failed: " + error);
+    expect(fermataChordPitch(saveSnapshot(*session, root, "fermata-nudged")) == 60, "A small nudge moved the fermata to another note");
+
+    // Dropping it over the third note moves it there.
+    expect(session->dragSelectedMovableElement(0, notes[64].x, fermata->y, state, error), "Drag to another note failed: " + error);
+    const std::string moved = saveSnapshot(*session, root, "fermata-moved");
+    expect(countOccurrences(moved, "<Fermata>") == 1, "Moving the fermata should not duplicate it");
+    expect(fermataChordPitch(moved) == 64, "Dropping the fermata over the third note did not attach it there");
+    expect(state.selection.canDragMovableElement && std::abs(state.selection.attachmentNormalizedX - notes[64].x) < 0.02,
+           "The moved fermata should stay selected, anchored at its new note");
+
+    expect(session->undo(state, error), "Undo failed: " + error);
+    expect(fermataChordPitch(saveSnapshot(*session, root, "fermata-move-undone")) == 60, "Undo did not move the fermata back");
+}
+
+// Length in quarter notes of the first saved spanner of a type (its <next><location>).
+double spannerLengthInQuarters(const std::string& saved, const std::string& type)
+{
+    const size_t start = saved.find("<Spanner type=\"" + type + "\"");
+    const size_t next = start == std::string::npos ? std::string::npos : saved.find("<next>", start);
+    const size_t end = next == std::string::npos ? std::string::npos : saved.find("</next>", next);
+    if (end == std::string::npos) {
+        return -1.0;
+    }
+    const std::string location = saved.substr(next, end - next);
+    double quarters = 0.0;
+    std::smatch match;
+    if (std::regex_search(location, match, std::regex("<measures>(-?[0-9]+)</measures>"))) {
+        quarters += std::stoi(match[1]) * 4.0;
+    }
+    if (std::regex_search(location, match, std::regex("<fractions>(-?[0-9]+)/([0-9]+)</fractions>"))) {
+        quarters += 4.0 * std::stoi(match[1]) / std::stoi(match[2]);
+    }
+    return quarters;
+}
+
+void testExpressionHandlesSitOnTheLineAndClampWhenCrossed(const std::filesystem::path& root)
+{
+    std::ostringstream xml;
+    xml << R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="violin"><trackName>Violin</trackName><instrumentId>strings.violin</instrumentId><Channel><program value="40"/></Channel></Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <LayoutBreak><subtype>line</subtype></LayoutBreak>
+        <voice>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Clef><concertClefType>G</concertClefType></Clef>
+)MSCX";
+    const int pitches[] = { 67, 69, 71, 72, 74, 72, 71, 69 };
+    for (int index = 0; index < 8; ++index) {
+        if (index == 4) {
+            xml << "        </voice>\n      </Measure>\n      <Measure>\n        <voice>\n";
+        }
+        xml << "          <Chord><durationType>quarter</durationType><Note><pitch>" << pitches[index] << "</pitch></Note></Chord>\n";
+    }
+    xml << "        </voice>\n      </Measure>\n    </Staff>\n  </Score>\n</museScore>\n";
+    auto session = openSession(root, "expression-handles", xml.str());
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(67) && notes.count(69) && notes.count(71), "Could not locate the first system's notes");
+    const LocatedItem note1 = notes[67];
+    const LocatedItem note2 = notes[69];
+    const LocatedItem note3 = notes[71];
+    msr::render::ScoreEditState state;
+    std::string error;
+
+    // A crescendo over the first three notes.
+    expect(session->selectMeasureRange(0, note1.x, note1.y, note3.x, note3.y, state, error), "Range select failed: " + error);
+    expect(session->addExpression("crescendo", state, error), "Could not add a crescendo: " + error);
+    expect(state.selection.isExpressionSpanner && state.selection.isHairpin, "The new crescendo should be selected");
+    expect(!state.selection.overlayPngData.empty(), "A selected hairpin should be highlighted by a blue copy of itself");
+    const double handleY = state.selection.startHandleNormalizedY;
+    expect(handleY > note1.y + 0.01 && std::abs(state.selection.endHandleNormalizedY - handleY) < 0.01,
+           "Hairpin handles should sit on the wedge below the staff, not on the notes");
+    expect(state.selection.startHandleNormalizedX < note2.x && state.selection.endHandleNormalizedX > note3.x - 0.01,
+           "Hairpin handles should be at the wedge's ends");
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "hairpin-added"), "HairPin") - 3.0) < 0.01,
+           "The crescendo should span three quarter notes");
+
+    // The app snaps a dragged end to these targets (every note of both systems) and sends the
+    // chosen one; the engine must attach exactly there.
+    expect(state.selection.attachmentTargets.size() == 8,
+           "A selected hairpin should offer all 8 notes as attach points, got "
+           + std::to_string(state.selection.attachmentTargets.size()));
+    msr::render::NormalizedPoint note2Target = state.selection.attachmentTargets.front();
+    for (const auto& target : state.selection.attachmentTargets) {
+        if (std::abs(target.normalizedX - note2.x) < std::abs(note2Target.normalizedX - note2.x)) {
+            note2Target = target;
+        }
+    }
+    const double hairpinEndBefore = state.selection.endHandleNormalizedX;
+    expect(session->retargetSelectedExpressionEndpoint(false, 0, note2Target.normalizedX, note2Target.normalizedY, state, error),
+           "Dropping the hairpin end on a snapped target failed: " + error);
+    expect(state.selection.endHandleNormalizedX < hairpinEndBefore - 0.01,
+           "The drawn hairpin did not shorten (its end handle stayed put) after moving its end");
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "hairpin-snapped"), "HairPin") - 2.0) < 0.01,
+           "The crescendo should end on the snapped second note");
+
+    // Dragging the end handle at the wedge's height (no snapping) onto the second note.
+    expect(session->retargetSelectedExpressionEndpoint(false, 0, note2.x, handleY, state, error),
+           "Dragging the hairpin end along the wedge failed: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "hairpin-shortened"), "HairPin") - 2.0) < 0.01,
+           "The crescendo should now end on the second note");
+
+    // As in the app: tap the hairpin to select it, then drag its end handle with the app's
+    // snapping rule (nearest system by target height, then nearest note across) and release.
+    expect(session->selectElement(0, note1.x, note1.y, 1.0, state, error), "Could not select a note: " + error);
+    bool tappedHairpin = false;
+    for (double x = note1.x; x <= note2.x && !tappedHairpin; x += 0.002) {
+        for (double dy = -0.01; dy <= 0.01 && !tappedHairpin; dy += 0.002) {
+            expect(session->selectElement(0, x, handleY + dy, 1.0, state, error), "Hairpin hit testing failed: " + error);
+            tappedHairpin = state.selection.isHairpin;
+        }
+    }
+    expect(tappedHairpin, "Could not tap-select the hairpin");
+    {
+        const double fingerX = note3.x;
+        const double fingerY = state.selection.endHandleNormalizedY;
+        double systemY = state.selection.attachmentTargets.front().normalizedY;
+        for (const auto& target : state.selection.attachmentTargets) {
+            if (std::abs(target.normalizedY - fingerY) < std::abs(systemY - fingerY)) {
+                systemY = target.normalizedY;
+            }
+        }
+        std::optional<msr::render::NormalizedPoint> snapped;
+        for (const auto& target : state.selection.attachmentTargets) {
+            if (std::abs(target.normalizedY - systemY) < 0.0005
+                && (!snapped || std::abs(target.normalizedX - fingerX) < std::abs(snapped->normalizedX - fingerX))) {
+                snapped = target;
+            }
+        }
+        expect(snapped.has_value(), "The app's snapping rule found no target");
+        expect(session->retargetSelectedExpressionEndpoint(false, 0, snapped->normalizedX, snapped->normalizedY, state, error),
+               "Releasing a tapped hairpin's end handle failed: " + error);
+        expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "hairpin-tapped-moved"), "HairPin") - 3.0) < 0.01,
+               "A tapped hairpin's end did not move to the third note");
+        expect(state.selection.isHairpin, "The hairpin should stay selected after moving its end");
+    }
+
+    // Dragging the start handle past the end keeps the line over a single note instead of failing.
+    expect(session->retargetSelectedExpressionEndpoint(true, 0, note3.x, handleY, state, error),
+           "Dragging the hairpin start past its end should not fail: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "hairpin-crossed"), "HairPin") - 1.0) < 0.01,
+           "A crossed hairpin should shrink to the last note it covered");
+    expect(session->deleteSelection(state, error), "Could not delete the hairpin: " + error);
+
+    // A slur over notes 1-3; dragging its end before its start keeps two notes.
+    expect(session->selectMeasureRange(0, note1.x, note1.y, note3.x, note3.y, state, error), "Range select failed: " + error);
+    expect(session->addExpression("slur", state, error), "Could not add a slur: " + error);
+    expect(state.selection.isSlur && !state.selection.overlayPngData.empty(), "A selected slur should be drawn in blue");
+    const double slurStartBefore = state.selection.startHandleNormalizedX;
+    const double slurEndBefore = state.selection.endHandleNormalizedX;
+    // Plain moves: end onto the second note, then back onto the third; start onto the second.
+    expect(session->retargetSelectedExpressionEndpoint(false, 0, note2.x, note2.y, state, error), "Moving the slur end failed: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "slur-end-moved"), "Slur") - 1.0) < 0.01,
+           "The slur end did not move to the second note in the file");
+    expect(state.selection.endHandleNormalizedX < slurEndBefore - 0.01, "The slur's end handle did not move left after moving its end");
+    expect(session->undo(state, error), "Undoing the slur end move failed: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "slur-end-undone"), "Slur") - 2.0) < 0.01,
+           "Undo did not restore the slur's end in the file");
+    expect(session->redo(state, error), "Redoing the slur end move failed: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "slur-end-redone"), "Slur") - 1.0) < 0.01,
+           "Redo did not re-apply the slur's end move in the file");
+    // Undo/redo clears the selection; tap the slur again, as the user would.
+    bool tappedSlur = false;
+    for (double y = note1.y - 0.04; y <= note1.y + 0.02 && !tappedSlur; y += 0.002) {
+        for (double x = note1.x; x <= note2.x && !tappedSlur; x += 0.002) {
+            expect(session->selectElement(0, x, y, 1.0, state, error), "Slur hit testing failed: " + error);
+            tappedSlur = state.selection.isSlur;
+        }
+    }
+    expect(tappedSlur, "Could not tap-select the slur after redo");
+    expect(session->retargetSelectedExpressionEndpoint(false, 0, note3.x, note3.y, state, error), "Moving the slur end back failed: " + error);
+    expect(std::abs(state.selection.endHandleNormalizedX - slurEndBefore) < 0.01, "The slur's end handle did not return to the third note");
+    expect(session->retargetSelectedExpressionEndpoint(true, 0, note2.x, note2.y, state, error), "Moving the slur start failed: " + error);
+    expect(state.selection.startHandleNormalizedX > slurStartBefore + 0.01, "The slur's start handle did not move right");
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "slur-start-moved"), "Slur") - 1.0) < 0.01,
+           "The slur start did not move to the second note in the file");
+    expect(session->retargetSelectedExpressionEndpoint(true, 0, note1.x, note1.y, state, error), "Moving the slur start back failed: " + error);
+    expect(session->retargetSelectedExpressionEndpoint(false, 0, note1.x - 0.02, state.selection.endHandleNormalizedY, state, error),
+           "Dragging the slur end before its start should not fail: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "slur-crossed"), "Slur") - 1.0) < 0.01,
+           "A crossed slur should keep its first two notes");
+}
+
+// The clefs of staff 1 in a saved file, as "<measure>:<type>" in order.
+std::vector<std::string> savedClefs(const std::string& saved)
+{
+    std::vector<std::string> clefs;
+    const size_t staffStart = saved.find("<Staff id=\"1\">", saved.find("</Part>"));
+    const size_t staffEnd = saved.find("</Staff>", staffStart);
+    const std::string staff = saved.substr(staffStart, staffEnd - staffStart);
+    int measure = 0;
+    for (size_t offset = 0; (offset = staff.find('<', offset)) != std::string::npos; ++offset) {
+        if (staff.compare(offset, 8, "<Measure") == 0) {
+            ++measure;
+        } else if (staff.compare(offset, 6, "<Clef>") == 0) {
+            const size_t type = staff.find("<concertClefType>", offset);
+            clefs.push_back(std::to_string(measure) + ":" + staff.substr(type + 17, staff.find('<', type + 17) - type - 17));
+        }
+    }
+    return clefs;
+}
+
+void testChangeClefOnFirstNoteReplacesTheBarsClef(const std::filesystem::path& root, const bool savedWithOldBug)
+{
+    // A normal file marks its starting clef as the header clef. A file saved with the old Change
+    // Clef bug has an unmarked clef at the start of bar 1, read as a clef change after the
+    // time signature.
+    const std::string name = savedWithOldBug ? "change-clef-old-bug" : "change-clef";
+    std::string xml = R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano"><trackName>Piano</trackName><instrumentId>keyboard.piano</instrumentId><Channel><program value="0"/></Channel></Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <Clef><concertClefType>G</concertClefType>HEADER</Clef>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Chord><durationType>quarter</durationType><Note><pitch>60</pitch></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>62</pitch></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>64</pitch></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>65</pitch></Note></Chord>
+        </voice>
+      </Measure>
+      <Measure>
+        <voice>
+          <Chord><durationType>quarter</durationType><Note><pitch>67</pitch></Note></Chord>
+          <Chord><durationType>quarter</durationType><Note><pitch>69</pitch></Note></Chord>
+          <Chord><durationType>half</durationType><Note><pitch>71</pitch></Note></Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+    xml.replace(xml.find("HEADER"), 6, savedWithOldBug ? "" : "<isHeader>1</isHeader>");
+    auto session = openSession(root, name, xml);
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(60) && notes.count(64) && notes.count(67), "Could not locate the test notes");
+    msr::render::ScoreEditState state;
+    std::string error;
+
+    const std::vector<std::string> originalClefs = savedClefs(saveSnapshot(*session, root, name + "-original"));
+
+    // First note of the score: the starting clef becomes a bass clef, with no extra clef.
+    expect(session->selectElement(0, notes[60].x, notes[60].y, 1.0, state, error), "Could not select the first note: " + error);
+    expect(session->changeClef("bass", state, error), "Changing the clef failed: " + error);
+    std::vector<std::string> clefs = savedClefs(saveSnapshot(*session, root, name + "-first-note"));
+    expect(clefs == std::vector<std::string> { "1:F" },
+           "Changing the clef on the first note should replace the starting clef, got " + [&] { std::string all; for (const auto& c : clefs) { all += c + " "; } return all; }());
+
+    // Undo brings the treble clef back.
+    expect(session->undo(state, error), "Undoing the clef change failed: " + error);
+    const std::vector<std::string> undoneClefs = savedClefs(saveSnapshot(*session, root, name + "-undone"));
+    if (!savedWithOldBug) {
+        expect(undoneClefs == originalClefs, "Undo did not restore the original starting clef");
+    }
+    expect(std::find(undoneClefs.begin(), undoneClefs.end(), "1:F") == undoneClefs.end() && !undoneClefs.empty(),
+           "Undo left a bass clef behind");
+    expect(session->redo(state, error), "Redoing the clef change failed: " + error);
+
+    // First note of bar 2: a clef change at the end of bar 1 (where desktop puts it).
+    notes = locateNotesByPitch(*session);
+    expect(session->selectElement(0, notes[67].x, notes[67].y, 1.0, state, error), "Could not select bar 2's first note: " + error);
+    expect(session->changeClef("treble", state, error), "Changing the clef at bar 2 failed: " + error);
+    clefs = savedClefs(saveSnapshot(*session, root, name + "-bar-two"));
+    expect(clefs == std::vector<std::string> { "1:F", "1:G" },
+           "A clef change at bar 2's first note should sit at the end of bar 1");
+
+    // A note in the middle of a bar still gets a clef change right before it.
+    expect(session->undo(state, error), "Undo failed: " + error);
+    notes = locateNotesByPitch(*session);
+    expect(session->selectElement(0, notes[64].x, notes[64].y, 1.0, state, error), "Could not select a mid-bar note: " + error);
+    expect(session->changeClef("treble", state, error), "Changing the clef mid-bar failed: " + error);
+    clefs = savedClefs(saveSnapshot(*session, root, name + "-mid-bar"));
+    expect(clefs == std::vector<std::string> { "1:F", "1:G" }, "A mid-bar clef change should come before the selected note");
+}
+
+// A score saved by the old Change Clef bug: a starting treble clef plus a bass clef change right
+// after the time signature (so the notes already read in bass clef).
+void testStrayStartClefIsOfferedAsARepair(const std::filesystem::path& root)
+{
+    const auto scoreWith = [](const std::string& strayClef) {
+        return std::string(R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano"><trackName>Piano</trackName><instrumentId>keyboard.piano</instrumentId><Channel><program value="0"/></Channel></Instrument>
+    </Part>
+    <Staff id="1">
+      <Measure>
+        <voice>
+          <Clef><concertClefType>G</concertClefType><transposingClefType>G</transposingClefType><isHeader>1</isHeader></Clef>
+          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>
+)MSCX") + strayClef + R"MSCX(
+          <Chord><durationType>half</durationType><Note><pitch>48</pitch></Note></Chord>
+          <Chord><durationType>half</durationType><Note><pitch>52</pitch></Note></Chord>
+        </voice>
+      </Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+    };
+    std::string error;
+
+    // A normal score offers nothing.
+    auto clean = openSession(root, "clef-repair-clean", scoreWith(""));
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    expect(clean->legacyRepairIssues(issues, error), "Scanning a clean score failed: " + error);
+    expect(std::none_of(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "strayClef"; }),
+           "A normal score should not be offered a clef repair");
+
+    auto damaged = openSession(root, "clef-repair-damaged", scoreWith("<Clef><concertClefType>F</concertClefType><transposingClefType>F</transposingClefType></Clef>"));
+    expect(damaged->legacyRepairIssues(issues, error), "Scanning the damaged score failed: " + error);
+    const auto stray = std::find_if(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "strayClef"; });
+    expect(stray != issues.end() && stray->measureNumber == 1 && stray->staffIndex == 0,
+           "The stray clef after the time signature should be offered as a repair in measure 1");
+    expect(savedClefs(saveSnapshot(*damaged, root, "clef-repair-before")) == std::vector<std::string>({ "1:G", "1:F" }),
+           "The damaged test score should start with a treble clef and a stray bass clef");
+    const std::map<int, LocatedItem> notesBefore = locateNotesByPitch(*damaged);
+
+    msr::render::ScoreEditState state;
+    expect(damaged->applyLegacyRepairs({ stray->index }, state, error), "Applying the clef repair failed: " + error);
+    const std::vector<std::string> repairedClefs = savedClefs(saveSnapshot(*damaged, root, "clef-repair-after"));
+    expect(repairedClefs == std::vector<std::string>({ "1:F" }),
+           "After the repair the bar should have a single bass starting clef, got "
+               + std::accumulate(repairedClefs.begin(), repairedClefs.end(), std::string(), [](std::string all, const std::string& clef) {
+                     return all + clef + " ";
+                 }));
+    const std::map<int, LocatedItem> notesAfter = locateNotesByPitch(*damaged);
+    for (const int pitch : { 48, 52 }) {
+        expect(notesBefore.count(pitch) && notesAfter.count(pitch) && std::abs(notesBefore.at(pitch).y - notesAfter.at(pitch).y) < 0.002,
+               "The repair moved a note (pitch " + std::to_string(pitch) + ")");
+    }
+    expect(damaged->legacyRepairIssues(issues, error)
+               && std::none_of(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "strayClef"; }),
+           "The clef repair should not be offered again once applied");
+}
+
+// Typed text is plain text; "&" and "<" in it must be escaped in the file, or the score no
+// longer opens (found by the random-edit stress test).
+void testTypedTextWithAmpersandsSavesAndReopens(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "ampersand-text", scoreXml(0, { { 60, 14 }, { 62, 16 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectElement(0, notes[60].x, notes[60].y, 1.0, state, error), "Could not select a note: " + error);
+    expect(session->addText("Staff Text", state, error), "Could not add staff text: " + error);
+    expect(session->setSelectedText("Rit. & dim. <a tempo>", state, error), "Could not type into the staff text: " + error);
+    expect(state.selection.textContent == "Rit. & dim. <a tempo>", "The typed text did not read back unchanged");
+    expect(session->selectElement(0, notes[62].x, notes[62].y, 1.0, state, error), "Could not select the second note: " + error);
+    expect(session->addLyricsText("rock & roll", false, state, error), "Could not add lyrics: " + error);
+    expect(session->selectAttachedLyrics(state, error) && session->setSelectedText("Tom & Jerry", state, error),
+           "Could not edit the lyrics: " + error);
+
+    const std::filesystem::path saved = root / "ampersand-saved" / "ampersand-saved.mscx";
+    std::filesystem::create_directories(saved.parent_path());
+    expect(session->saveToPath(saved.string(), error), "Saving failed: " + error);
+    auto reopened = msr::render::ScoreRenderSession::open(saved.string(), error);
+    expect(reopened != nullptr, "A score with \"&\" in its text no longer opens: " + error);
+    const std::string xml = readFile(saved);
+    expect(xml.find("Rit. &amp; dim. &lt;a tempo&gt;") != std::string::npos, "The staff text was not escaped in the file");
+    expect(xml.find("Tom &amp; Jerry") != std::string::npos, "The lyrics were not escaped in the file");
+}
+
+// An octave shift keeps the note's spelling (desktop's Ctrl+Up), even for E# or Cb.
+void testOctaveShiftKeepsSpelling(const std::filesystem::path& root)
+{
+    // E#4 = MIDI 65 spelled with tpc 25 (E#).
+    auto session = openSession(root, "octave-spelling", scoreXml(0, { { 65, 25 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(65), "Could not locate the E#");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectElement(0, notes[65].x, notes[65].y, 1.0, state, error), "Could not select the note: " + error);
+    expect(session->shiftSelectionPitchByOctaves(1, state, error), "Octave shift failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "octave-spelling-up");
+    expect(saved.find("<pitch>77</pitch>") != std::string::npos, "The note did not move up an octave");
+    expect(saved.find("<tpc>25</tpc>") != std::string::npos, "An octave shift re-spelled E# (expected tpc 25)");
+}
+
+std::string savedExcerptXml(const std::filesystem::path& root);
+
+// A tempo in half notes or dotted quarters plays at the right speed in the full score and its
+// linked part ("half = 60" is 120 quarter notes a minute, stored as 2 beats a second).
+void testTempoBeatUnitsReachLinkedParts(const std::filesystem::path& testRoot)
+{
+    const std::filesystem::path root = testRoot / "tempo-units";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "tempo-units", scoreXml(0, { { 60, 14 } }, 0));
+    int pageCount = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pageCount, error) && session->setActivePartIndex(std::nullopt, pageCount, error),
+           "Could not create the linked part: " + error);
+    for (const auto& [unit, bpm, expected] : std::vector<std::tuple<std::string, int, std::string>> {
+             { "half", 60, "<tempo>2</tempo>" }, { "dottedquarter", 60, "<tempo>1.5</tempo>" }, { "eighth", 120, "<tempo>1</tempo>" } }) {
+        selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+        msr::render::ScoreEditState state;
+        expect(session->addTempo(unit, bpm, state, error), "Could not add a " + unit + " tempo: " + error);
+        const std::string score = saveSnapshot(*session, root, "tempo-units-" + unit);
+        const std::string part = savedExcerptXml(root);
+        expect(score.find(expected) != std::string::npos, unit + " = " + std::to_string(bpm) + ": full score tempo is wrong (expected " + expected + ")");
+        expect(part.find(expected) != std::string::npos, unit + " = " + std::to_string(bpm) + ": linked part tempo is wrong (expected " + expected + ")");
+    }
+}
+
+// Transposing bars on one staff "to key" changes the key for those bars on that staff only:
+// the other staff keeps its key, and the original key returns after the passage.
+void testTransposeToKeyStaysInsideTheSelection(const std::filesystem::path& root)
+{
+    std::ostringstream xml;
+    xml << R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="flute"><trackName>Flute</trackName><instrumentId>wind.flutes.flute</instrumentId><Channel><program value="73"/></Channel></Instrument>
+    </Part>
+    <Part>
+      <Staff id="2"/>
+      <Instrument id="violin"><trackName>Violin</trackName><instrumentId>strings.violin</instrumentId><Channel><program value="40"/></Channel></Instrument>
+    </Part>
+)MSCX";
+    const int pitches[2][4] = { { 72, 74, 76, 77 }, { 60, 62, 64, 65 } };
+    for (int staff = 0; staff < 2; ++staff) {
+        xml << "    <Staff id=\"" << staff + 1 << "\">\n";
+        for (int bar = 0; bar < 4; ++bar) {
+            xml << "      <Measure><voice>" << (bar == 0 ? "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>" : "")
+                << "<Chord><durationType>whole</durationType><Note><pitch>" << pitches[staff][bar] << "</pitch></Note></Chord></voice></Measure>\n";
+        }
+        xml << "    </Staff>\n";
+    }
+    xml << "  </Score>\n</museScore>\n";
+    auto session = openSession(root, "transpose-to-key", xml.str());
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(74), "Could not locate bar 2 of the top staff");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectMeasureRange(0, notes[74].x, notes[74].y, notes[74].x, notes[74].y, state, error), "Range select failed: " + error);
+    // mode 2 = to key, direction 0 = up, target key 2 = D major
+    expect(session->transposeSelectedMeasureRange(2, 0, 0, 2, state, error), "Transpose failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "transpose-to-key");
+    auto staffXml = [&saved](const int staff) {
+        size_t start = saved.find("</Part>");
+        for (int i = 0; i <= staff; ++i) {
+            start = saved.find("<Staff id=", saved.find("<Measure", start) - 30 > start ? start : start);
+            start = saved.find("<Staff id=\"" + std::to_string(i + 1) + "\">", start);
+        }
+        return saved.substr(start, saved.find("</Staff>", start) - start);
+    };
+    const std::string top = staffXml(0);
+    const std::string bottom = staffXml(1);
+    expect(top.find("<concertKey>2</concertKey>") != std::string::npos, "The transposed bars should be in D major");
+    expect(bottom.find("<concertKey>2</concertKey>") == std::string::npos, "The unselected staff got the new key signature");
+    expect(countOccurrences(top, "<KeySig>") >= 2, "The original key should return after the transposed bars");
+}
+
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
 {
     auto session = openSession(root, "measure-instrument-context", scoreXml(0, { { 60, 14 } }, 1));
@@ -1466,6 +2131,23 @@ int main()
                           [&] { testElementCanBeTappedAndDeleted(testDirectory.path, name, tag); });
     }
     passed &= runTest("range drags include the beat they end on", [&] { testRangeDragIncludesTheBeatItEndsOn(testDirectory.path); });
+    passed &= runTest("fermata button toggles on notes, rests and ranges",
+                      [&] { testFermataButtonTogglesOnNotesRestsAndRanges(testDirectory.path); });
+    passed &= runTest("range highlights cover every page", [&] { testRangeHighlightCoversEveryPage(testDirectory.path); });
+    passed &= runTest("pencil input works on later pages", [&] { testPencilInputWorksOnLaterPages(testDirectory.path); });
+    passed &= runTest("fermata drag shows its anchor and can move to another note",
+                      [&] { testFermataDragShowsAnchorAndMovesToAnotherNote(testDirectory.path); });
+    passed &= runTest("expression handles sit on the line and clamp when crossed",
+                      [&] { testExpressionHandlesSitOnTheLineAndClampWhenCrossed(testDirectory.path); });
+    passed &= runTest("change clef on a bar's first note replaces the bar's clef",
+                      [&] { testChangeClefOnFirstNoteReplacesTheBarsClef(testDirectory.path, false); });
+    passed &= runTest("change clef repairs scores saved with the stray-clef bug",
+                      [&] { testChangeClefOnFirstNoteReplacesTheBarsClef(testDirectory.path, true); });
+    passed &= runTest("a stray start-of-bar clef is offered as a repair", [&] { testStrayStartClefIsOfferedAsARepair(testDirectory.path); });
+    passed &= runTest("typed text with ampersands saves and reopens", [&] { testTypedTextWithAmpersandsSavesAndReopens(testDirectory.path); });
+    passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
+    passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
+    passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
     passed &= runTest("part names survive save and follow instrument replacement", [&] { testPartNamesSurviveSave(testDirectory.path); });
     passed &= runTest("new dynamics and text reach linked parts", [&] { testNewDynamicsAndTextReachLinkedParts(testDirectory.path); });

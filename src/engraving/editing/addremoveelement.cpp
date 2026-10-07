@@ -215,11 +215,20 @@ static void removeNote(const Note* note)
             score->doUndoRemoveElement(tieBack);
         }
     }
-    for (Spanner* s : note->spannerBack()) {
-        score->doUndoRemoveElement(s);
+    // Aria: iterate over copies; removing a spanner erases it from these lists (reading past
+    // their end with two or more attached lines), and can remove a companion spanner too (a
+    // guitar bend's hold), so skip any that is no longer attached rather than removing it twice.
+    const std::vector<Spanner*> spannersBack = note->spannerBack();
+    for (Spanner* s : spannersBack) {
+        if (muse::contains(note->spannerBack(), s)) {
+            score->doUndoRemoveElement(s);
+        }
     }
-    for (Spanner* s : note->spannerFor()) {
-        score->doUndoRemoveElement(s);
+    const std::vector<Spanner*> spannersFor = note->spannerFor();
+    for (Spanner* s : spannersFor) {
+        if (muse::contains(note->spannerFor(), s)) {
+            score->doUndoRemoveElement(s);
+        }
     }
 }
 

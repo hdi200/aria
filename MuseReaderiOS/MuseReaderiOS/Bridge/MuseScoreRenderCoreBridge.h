@@ -367,6 +367,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isSingleMeasure;
 @property (nonatomic) BOOL isFirstMeasure;
 @property (nonatomic) BOOL isPickupMeasure;
+/// Range highlights on later pages, for ranges that cross a page break; parallel to
+/// otherPageHighlightPageIndexes.
+@property (nonatomic, copy) NSArray<MSRNormalizedRectInfo *> *otherPageHighlightRects;
+@property (nonatomic, copy) NSArray<NSNumber *> *otherPageHighlightPageIndexes;
 @property (nonatomic) NSInteger pickupActualNumerator;
 @property (nonatomic) NSInteger pickupActualDenominator;
 @property (nonatomic) NSInteger pickupNominalNumerator;

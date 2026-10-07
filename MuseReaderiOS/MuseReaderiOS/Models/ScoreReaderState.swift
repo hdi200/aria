@@ -520,10 +520,10 @@ final class ScoreReaderState: ObservableObject {
             return measureRangePreviewSelection
         }
 
-        guard editingState.selection?.pageIndex == pageIndex else {
+        guard let selection = editingState.selection else {
             return nil
         }
 
-        return editingState.selection
+        return selection.pageIndex == pageIndex ? selection : selection.highlightOnly(onPage: pageIndex)
     }
 }

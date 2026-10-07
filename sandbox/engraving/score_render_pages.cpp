@@ -1,3 +1,31 @@
+    bool layoutFingerprint(std::vector<std::string>& output, std::string& errorMessage) const
+    {
+        output.clear();
+        const mu::engraving::Score* score = presentationScore();
+        if (!score) {
+            errorMessage = "The MuseScore render session is no longer available.";
+            return false;
+        }
+        const double unit = score->style().spatium() * 0.1;
+        auto rounded = [unit](const double value) {
+            return static_cast<long long>(std::llround(value / unit));
+        };
+        int pageNumber = 0;
+        for (const mu::engraving::Page* page : score->pages()) {
+            for (const mu::engraving::EngravingItem* item : page->elements()) {
+                if (!item || !item->visible() || item->isPage()) {
+                    continue;
+                }
+                const mu::engraving::RectF rect = item->pageBoundingRect();
+                output.push_back(std::to_string(pageNumber) + " " + item->typeName() + " " + std::to_string(rounded(rect.left()))
+                                 + " " + std::to_string(rounded(rect.top())) + " " + std::to_string(rounded(rect.width())));
+            }
+            ++pageNumber;
+        }
+        std::sort(output.begin(), output.end());
+        return true;
+    }
+
     void appendLayoutBreakMarkersForPage(mu::engraving::Page* scorePage,
                                          msr::render::RenderedPage& page) const
     {

@@ -22,6 +22,13 @@ enum LiveScoreRenderSessionError: LocalizedError {
 }
 
 actor LiveScoreRenderSession {
+    /// Every call into the MuseScore engine runs on the app-wide render-core lane, so this
+    /// score never touches the engine's shared state while another score is being opened
+    /// or saved (see RenderCoreWorkGate).
+    nonisolated var unownedExecutor: UnownedSerialExecutor {
+        RenderCoreWorkGate.queue.asUnownedSerialExecutor()
+    }
+
     private let bridgeSession: MSRRenderSession
     private var cachedPlaybackMIDIData: Data?
     private var cachedPlaybackMeasureRegions: [ScorePlaybackMeasureRegion]?
@@ -1414,6 +1421,15 @@ actor LiveScoreRenderSession {
                     height: $0.normalizedHeight
                 )
             }
+            var otherPageHighlightRects: [Int: [ScoreNormalizedRect]] = [:]
+            for (rect, otherPageIndex) in zip(bridgeSelection.otherPageHighlightRects, bridgeSelection.otherPageHighlightPageIndexes) {
+                otherPageHighlightRects[otherPageIndex.intValue, default: []].append(ScoreNormalizedRect(
+                    x: rect.normalizedX,
+                    y: rect.normalizedY,
+                    width: rect.normalizedWidth,
+                    height: rect.normalizedHeight
+                ))
+            }
             let overlayImageData = bridgeSelection.overlayImageData.isEmpty ? nil : bridgeSelection.overlayImageData
             let overlayPDFData = bridgeSelection.overlayPdfData.isEmpty ? nil : bridgeSelection.overlayPdfData
             let overlayNormalizedRect = overlayImageData == nil && overlayPDFData == nil ? nil : ScoreNormalizedRect(
@@ -1485,7 +1501,8 @@ actor LiveScoreRenderSession {
                 highlightRects: highlightRects,
                 overlayNormalizedRect: overlayNormalizedRect,
                 overlayImageData: overlayImageData,
-                overlayPDFData: overlayPDFData
+                overlayPDFData: overlayPDFData,
+                otherPageHighlightRects: otherPageHighlightRects
             )
         } else {
             selection = nil

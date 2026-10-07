@@ -77,6 +77,17 @@ struct ScoreRecoveryStore: @unchecked Sendable {
         }
     }
 
+    /// The library-relative part of a recorded source path. Records hold absolute paths, but
+    /// iOS can move the app's container (for example when the app is updated), so a record
+    /// from before the move must be re-rooted at the current Documents folder.
+    static func documentsRelativePath(ofRecordedPath recordedPath: String) -> String? {
+        guard let documentsRange = recordedPath.range(of: "/Documents/") else {
+            return nil
+        }
+        let relativePath = String(recordedPath[documentsRange.upperBound...])
+        return relativePath.isEmpty ? nil : relativePath
+    }
+
     func removeSnapshot(for sourceURL: URL) throws {
         let directoryURL = try recoveryDirectoryURL()
         let key = recoveryKey(for: sourceURL)

@@ -80,3 +80,43 @@ this check does not (build with `-DSCORE_RENDER_BUILD_TESTS=ON`):
 `new dynamics and text reach linked parts`,
 `blank part dynamics require approval`, and
 `jumps and markers reach linked parts`.
+
+## Live drawing matches the saved score
+
+An edit can change the score without the engine redrawing it, so the page shows something
+other than what was saved until the score is reopened (this happened with dragging a slur's
+end). The edit sweep can write page 1 as drawn live and as drawn after reopening the saved
+copy, for every edit and its undo:
+
+```bash
+ARIA_STALE_RENDER_DIR=/tmp/aria-stale build-aria-475-host/score_render_edit_sweep_tests
+python3 sandbox/engraving/compat/compare_stale_renders.py /tmp/aria-stale
+```
+
+October 2026 baseline: 376 of 380 identical. The four that differ (`time-signature-*` and
+`create-pickup-*`, full and part) come from the sweep's hand-written fixture, which writes
+its clef after the time signature; the same edits on normally ordered scores draw identically.
+
+
+## Random-edit stress test
+
+`compat/fuzz_edits.py` runs `score_render_fuzz` (tests/score_render_fuzz.cpp): seeded random
+edits on many scores, checking for crashes, corruption, failed saves or reopens, stale layout
+(live vs reopened `layoutFingerprint`), round-trip and undo differences, then desktop 4.7.5 on
+the final files. Every failure prints a REPRO command. For crashes, build the AddressSanitizer
+variant and replay with `ARIA_FUZZ_PARANOID=1` (full relayout after every edit, so a crash shows
+up right after the edit that caused it); `ARIA_FUZZ_TRACE_CORRUPTION=1` names the first edit
+that damages a bar.
+
+```bash
+cmake -S sandbox/engraving -B build-aria-475-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSCORE_RENDER_BUILD_TESTS=ON \
+  -DQt6_DIR=$HOME/Qt/6.11.0/macos/lib/cmake/Qt6 -DSCORE_RENDER_QT_HOST_ROOT=$HOME/Qt/6.11.0/macos \
+  "-DCMAKE_CXX_FLAGS=-fsanitize=address -fno-omit-frame-pointer" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address" \
+  "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address"
+python3 sandbox/engraving/compat/fuzz_edits.py --scores 40 --steps 150 --seed 1
+```
+
+Open finding (October 2026): pasting over tuplet notes in the Goldberg demo (2.06 file) can leave
+a chord pointing at a removed tuplet; the next edit removes it again and closing the score frees
+it twice (engine `cmdPaste`). Replay: `score_render_fuzz --score "demos/Demos Pre IOS Export/goldberg.mscz"
+--seed 1039 --steps 150 --check-every 25` in the ASan build (steps 38 paste, 39 rest).

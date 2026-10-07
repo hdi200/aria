@@ -434,6 +434,30 @@ void expectNoScoreContains(const SavedState& state, const std::string& needle, c
     }
 }
 
+// Opt-in stale-drawing check. With ARIA_STALE_RENDER_DIR set, writes page 1 as the live
+// session draws it and as a fresh session draws the saved copy. If an edit changes the score
+// without relaying it out, the two differ (compare with compat/compare_stale_renders.py).
+void dumpLiveAndReopenedRender(msr::render::ScoreRenderSession& session, const SavedState& saved, const std::string& name)
+{
+    const char* outputDir = std::getenv("ARIA_STALE_RENDER_DIR");
+    if (!outputDir || !*outputDir) {
+        return;
+    }
+    std::string error;
+    msr::render::RenderedPage live;
+    msr::render::RenderedPage reopened;
+    session.renderPage(0, 150, live, error);
+    if (auto reopenedSession = msr::render::ScoreRenderSession::open(saved.artifactPath.string(), error)) {
+        reopenedSession->renderPage(0, 150, reopened, error);
+    }
+    const std::filesystem::path dir(outputDir);
+    std::filesystem::create_directories(dir);
+    std::ofstream(dir / (name + "-live.pdf"), std::ios::binary)
+        .write(reinterpret_cast<const char*>(live.pdfData.data()), static_cast<std::streamsize>(live.pdfData.size()));
+    std::ofstream(dir / (name + "-reopened.pdf"), std::ios::binary)
+        .write(reinterpret_cast<const char*>(reopened.pdfData.data()), static_cast<std::streamsize>(reopened.pdfData.size()));
+}
+
 using Mutation = std::function<bool(msr::render::ScoreRenderSession&,
                                     msr::render::ScoreEditState&,
                                     std::string&)>;
@@ -468,6 +492,8 @@ void runLinkedMutationCase(const std::filesystem::path& root,
     }
 
     const SavedState changed = saveState(*session, testRoot, root / "roundtrip-artifacts", caseName + "-changed");
+
+    dumpLiveAndReopenedRender(*session, changed, caseName + "-changed");
     expect(normalizedUndoXml(changed.master) != normalizedUndoXml(baseline.master)
                || changed.masterStyle != baseline.masterStyle
                || changed.excerpts != baseline.excerpts
@@ -480,6 +506,7 @@ void runLinkedMutationCase(const std::filesystem::path& root,
     error.clear();
     expect(session->undo(state, error), caseName + ": undo failed: " + error);
     const SavedState undone = saveState(*session, testRoot, root / "roundtrip-artifacts", caseName + "-undone");
+    dumpLiveAndReopenedRender(*session, undone, caseName + "-undone");
     expectUndoMatches(baseline, undone, caseName);
     expectPartcheckClean(baseline, undone, caseName + " undo");
 }
@@ -515,6 +542,8 @@ void runPreparedMutationCase(const std::filesystem::path& root,
     }
 
     const SavedState changed = saveState(*session, testRoot, root / "roundtrip-artifacts", caseName + "-changed");
+
+    dumpLiveAndReopenedRender(*session, changed, caseName + "-changed");
     expect(normalizedUndoXml(changed.master) != normalizedUndoXml(baseline.master)
                || changed.masterStyle != baseline.masterStyle
                || changed.excerpts != baseline.excerpts
@@ -527,6 +556,7 @@ void runPreparedMutationCase(const std::filesystem::path& root,
     error.clear();
     expect(session->undo(state, error), caseName + ": undo failed: " + error);
     const SavedState undone = saveState(*session, testRoot, root / "roundtrip-artifacts", caseName + "-undone");
+    dumpLiveAndReopenedRender(*session, undone, caseName + "-undone");
     expectUndoMatches(baseline, undone, caseName);
     expectPartcheckClean(baseline, undone, caseName + " undo");
 }
@@ -628,6 +658,9 @@ void testCoreNotationMutationSweep(const std::filesystem::path& root)
              return session.flipSelectionStemDirection(state, error);
          } },
         { "clef", [](auto& session, auto& state, auto& error) {
+             // Mid-bar, so this exercises a linked clef change and exact undo. A clef on a bar's
+             // first note replaces the bar's clef; that is covered by the accidental tests.
+             selectAt(session, noteWithPitch(scanScore(session, { 62 }, 0), 62));
              return session.changeClef("bass", state, error);
          } },
         { "add-measure", [](auto& session, auto& state, auto& error) {
@@ -919,8 +952,10 @@ void testPickupClearAndKeySignatureRedo(const std::filesystem::path& root)
             expect(session->setActivePartIndex(std::nullopt, pageCount, error), caseName + ": could not return to score: " + error);
         }
         const SavedState changed = saveState(*session, testRoot, root / "roundtrip-artifacts", caseName + "-changed");
+        dumpLiveAndReopenedRender(*session, changed, caseName + "-changed");
         expect(session->undo(state, error), caseName + ": undo failed: " + error);
         const SavedState undone = saveState(*session, testRoot, root / "roundtrip-artifacts", caseName + "-undone");
+        dumpLiveAndReopenedRender(*session, undone, caseName + "-undone");
         expectUndoMatches(baseline, undone, caseName + " undo");
         expect(session->redo(state, error), caseName + ": redo failed: " + error);
         const SavedState redone = saveState(*session, testRoot, root / "roundtrip-artifacts", caseName + "-redone");

@@ -1023,7 +1023,8 @@ struct ScoreReaderView: View {
                         style: style, background: background, liveRenderSession: liveRenderSession,
                         pageCount: readerState.pageCount, title: readerState.scoreTitle,
                         composer: readerState.scoreMetadata.composer,
-                        pinsStaffHeader: selectedPartID == "full-score" && pinsVideoStaffHeader)
+                        pinsStaffHeader: selectedPartID == "full-score" && pinsVideoStaffHeader,
+                        vertical: exportDraft.videoVertical)
                 }
             )
         }
@@ -2623,6 +2624,7 @@ struct ScoreReaderView: View {
 
     private func writeVideoExports(mixerSettings: ScoreMixerSettings) async throws -> [URL] {
         let style = exportDraft.videoStyle
+        let vertical = exportDraft.videoVertical
         let backgroundImageData = exportDraft.videoBackgroundImageData
         let composer = readerState.scoreMetadata.composer
         let scoreTitle = readerState.scoreTitle
@@ -2652,7 +2654,8 @@ struct ScoreReaderView: View {
                                                  titleFont: textFonts.title, composerFont: textFonts.composer,
                                                  mixerSettings: mixerSettings,
                                                  backgroundImageData: backgroundImageData,
-                                                 pinsStaffHeader: !isPart && pinsVideoStaffHeader),
+                                                 pinsStaffHeader: !isPart && pinsVideoStaffHeader,
+                                                 vertical: vertical),
                 progress: reportProgress
             )
             return exportURL
@@ -3347,7 +3350,8 @@ private final class ScoreVideoPreviewCache {
     }
 
     func image(style: ScoreVideoStyle, background: Data?, liveRenderSession: LiveScoreRenderSession,
-               pageCount: Int, title: String, composer: String, pinsStaffHeader: Bool) async -> UIImage? {
+               pageCount: Int, title: String, composer: String, pinsStaffHeader: Bool,
+               vertical: Bool) async -> UIImage? {
         let layout = style.layout
         let loading = materials[layout] ?? Task {
             try? await ScoreVideoExporter.previewMaterial(liveRenderSession: liveRenderSession,
@@ -3365,7 +3369,8 @@ private final class ScoreVideoPreviewCache {
         guard let fonts else { return nil }
         let options = ScoreVideoExportOptions(style: style, title: title, composer: composer,
                                               titleFont: fonts.title, composerFont: fonts.composer,
-                                              backgroundImageData: background, pinsStaffHeader: pinsStaffHeader)
+                                              backgroundImageData: background, pinsStaffHeader: pinsStaffHeader,
+                                              vertical: vertical)
         return await Task.detached(priority: .userInitiated) {
             ScoreVideoExporter.previewFrame(material, options: options).map { UIImage(cgImage: $0) }
         }.value

@@ -253,6 +253,7 @@
             return false;
         }
 
+        score->updateSwing();
         mu::engraving::PlaybackModel playbackModel(m_sessionContext->context());
         const SteadyClock::time_point started = SteadyClock::now();
         playbackModel.load(score);
