@@ -1659,6 +1659,20 @@ void testAddedInstrumentsMatchDesktop(const std::filesystem::path& root)
     expect(saved.find("<StaffType group=\"percussion\">") != std::string::npos, "The drum set should get a percussion staff");
     expect(saved.find("<StaffType group=\"tablature\">") != std::string::npos, "The tab guitar should get a tablature staff");
     expect(saved.find("<trackName>Violin 2</trackName>") != std::string::npos, "A second violin should be named Violin 2");
+
+    // Replacing: the template's staff type and a desktop part name.
+    const std::vector<msr::render::ScorePartInfo> parts = session->partInfoList();
+    expect(parts.size() == 4, "Expected four parts");
+    expect(session->replacePartInstrument(parts[1].partId, "bb-clarinet", state, error), "Replacing with a clarinet failed: " + error);
+    expect(session->replacePartInstrument(parts[0].partId, "drumset", state, error), "Replacing with a drum set failed: " + error);
+    const std::string replaced = saveSnapshot(*session, root, "replace-instruments");
+    expect(replaced.find("<trackName>Clarinet in B♭</trackName>") != std::string::npos, "A clarinet should be named Clarinet in B♭");
+    expect(countOccurrences(replaced, "<StaffType group=\"percussion\">") == 2, "The replaced drum set should get a percussion staff");
+
+    // Replacing every instrument keeps the score's key.
+    expect(session->replaceInstruments({ "flute", "violoncello" }, state, error), "Replacing all instruments failed: " + error);
+    const std::string all = saveSnapshot(*session, root, "replace-all-instruments");
+    expect(countOccurrences(all, "<concertKey>2</concertKey>") >= 2, "New instruments should keep the score's D major");
 }
 
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)

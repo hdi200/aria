@@ -4235,13 +4235,15 @@
         mu::engraving::Score* score = m_masterScore.get();
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader replace score instruments"));
 
+        // The new instruments keep the score's key signatures, which go with the old staves.
+        const mu::engraving::KeyList keyList = score->keyList();
         std::vector<mu::engraving::Part*> existingParts = score->parts();
         for (mu::engraving::Part* part : existingParts) {
             score->cmdRemovePart(part);
         }
 
         for (const mu::engraving::InstrumentTemplate* instrumentTemplate : templates) {
-            score->appendPart(instrumentTemplate);
+            appendPartLikeDesktop(score, *instrumentTemplate, keyList);
         }
 
         score->setBracketsAndBarlines();
@@ -4284,9 +4286,9 @@
 
     // Desktop's NotationParts::insertNewParts + appendStaves: a numbered name when the instrument
     // is already in the score, the template's staff type and line count, and the score's keys.
-    static void appendPartLikeDesktop(mu::engraving::Score* score, const mu::engraving::InstrumentTemplate& instrumentTemplate)
+    static void appendPartLikeDesktop(mu::engraving::Score* score, const mu::engraving::InstrumentTemplate& instrumentTemplate,
+                                      const mu::engraving::KeyList& keyList)
     {
-        const mu::engraving::KeyList keyList = score->keyList();
         const mu::engraving::Instrument instrument = mu::engraving::Instrument::fromTemplate(&instrumentTemplate);
 
         int number = 0;
@@ -4362,7 +4364,7 @@
 
         mu::engraving::Score* score = m_masterScore.get();
         score->startCmd(muse::TranslatableString::untranslatable("Aria add instrument"));
-        appendPartLikeDesktop(score, *instrumentTemplate);
+        appendPartLikeDesktop(score, *instrumentTemplate, score->keyList());
         score->setBracketsAndBarlines();
         score->endCmd();
 
