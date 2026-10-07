@@ -13,7 +13,8 @@
         int pageNumber = 0;
         for (const mu::engraving::Page* page : score->pages()) {
             for (const mu::engraving::EngravingItem* item : page->elements()) {
-                if (!item || !item->visible() || item->isPage()) {
+                // Time-tick anchors are drag guides left in the layout; Aria never draws them.
+                if (!item || !item->visible() || item->isPage() || item->isTimeTickAnchor()) {
                     continue;
                 }
                 const mu::engraving::RectF rect = item->pageBoundingRect();

@@ -81,15 +81,88 @@ std::string savedScoreText(const fs::path& folder, const std::string& name)
              << "\n";
         std::istringstream lines(readFile(file));
         std::string line;
+        // Multi-measure rests are written as extra <Measure> blocks copied from the current layout
+        // and rebuilt on open, so a part not laid out since the last edit writes old copies.
+        // An empty <Beam> is a beam read from the file with no settings of its own; once layout
+        // rebuilds it (after undo, for example) it is automatic and not written. Same beaming.
+        std::string measure;
+        bool inMeasure = false;
+        bool pendingBeam = false;
         while (std::getline(lines, line)) {
             if (line.find("<eid>") != std::string::npos || line.find("<linkedTo>") != std::string::npos
                 || line.find("<linkedMain>") != std::string::npos || line.find("<linked>") != std::string::npos) {
                 continue;
             }
-            text << line << "\n";
+            const bool beamOpen = line.find_first_not_of(' ') != std::string::npos && line.substr(line.find_first_not_of(' ')) == "<Beam>";
+            if (pendingBeam) {
+                pendingBeam = false;
+                if (line.find("</Beam>") != std::string::npos && line.find_first_not_of(' ') == line.find("</Beam>")) {
+                    continue;
+                }
+                const std::string open = "<Beam>\n";
+                if (inMeasure) {
+                    measure += open;
+                } else {
+                    text << open;
+                }
+            }
+            if (beamOpen) {
+                pendingBeam = true;
+                continue;
+            }
+            if (!inMeasure && line.find("<Measure") != std::string::npos && line.find("/>") == std::string::npos) {
+                inMeasure = true;
+                measure.clear();
+            }
+            if (!inMeasure) {
+                text << line << "\n";
+                continue;
+            }
+            measure += line + "\n";
+            if (line.find("</Measure>") != std::string::npos) {
+                inMeasure = false;
+                if (measure.find("<multiMeasureRest>") == std::string::npos) {
+                    text << measure;
+                }
+            }
         }
+        text << measure.substr(0, inMeasure ? measure.size() : 0);
     }
     return text.str();
+}
+
+// Fingerprint entries are "page type x y width" in tenths of a staff space. A pair that differs
+// by at most one unit in each number is rounding, not stale layout; drop both.
+void dropNearMatches(std::vector<std::string>& onlyLive, std::vector<std::string>& onlyFresh)
+{
+    auto parse = [](const std::string& entry, std::string& key, long long values[3]) {
+        std::istringstream in(entry);
+        std::string page;
+        std::string type;
+        in >> page >> type >> values[0] >> values[1] >> values[2];
+        key = page + " " + type;
+        return static_cast<bool>(in);
+    };
+    for (auto live = onlyLive.begin(); live != onlyLive.end();) {
+        std::string liveKey;
+        long long liveValues[3] = {};
+        auto match = onlyFresh.end();
+        if (parse(*live, liveKey, liveValues)) {
+            match = std::find_if(onlyFresh.begin(), onlyFresh.end(), [&](const std::string& fresh) {
+                std::string freshKey;
+                long long freshValues[3] = {};
+                return parse(fresh, freshKey, freshValues) && freshKey == liveKey
+                       && std::abs(freshValues[0] - liveValues[0]) <= 1 && std::abs(freshValues[1] - liveValues[1]) <= 1
+                       && std::abs(freshValues[2] - liveValues[2]) <= 1;
+            });
+        }
+        if (match != onlyFresh.end()) {
+            onlyFresh.erase(match);
+            live = onlyLive.erase(live);
+        } else {
+            ++live;
+        }
+    }
 }
 
 std::string firstDifference(const std::string& a, const std::string& b)
@@ -470,11 +543,14 @@ private:
 
         std::vector<std::string> live;
         std::vector<std::string> fresh;
+        std::vector<std::string> onlyLive;
+        std::vector<std::string> onlyFresh;
         if (m_session->layoutFingerprint(live, error) && reopened->layoutFingerprint(fresh, error) && live != fresh) {
-            std::vector<std::string> onlyLive;
-            std::vector<std::string> onlyFresh;
             std::set_difference(live.begin(), live.end(), fresh.begin(), fresh.end(), std::back_inserter(onlyLive));
             std::set_difference(fresh.begin(), fresh.end(), live.begin(), live.end(), std::back_inserter(onlyFresh));
+            dropNearMatches(onlyLive, onlyFresh);
+        }
+        if (!onlyLive.empty() || !onlyFresh.empty()) {
             std::string detail = std::to_string(onlyLive.size()) + " element(s) only live, " + std::to_string(onlyFresh.size()) + " only reopened;";
             for (size_t i = 0; i < std::min<size_t>(3, onlyLive.size()); ++i) {
                 detail += " live[" + onlyLive[i] + "]";
@@ -580,6 +656,21 @@ int main(int argc, char* argv[])
 
     std::string error;
     std::unique_ptr<msr::render::ScoreRenderSession> session = msr::render::ScoreRenderSession::open(options.score.string(), error);
+    // Start from the score as Aria saves it. Opening a pre-4.70 file upgrades some style values
+    // that its parts only take on after one save and reopen (desktop 4.7.5 does the same), which
+    // the roundtrip check would otherwise report at every checkpoint.
+    if (session && session->supportsEditing()) {
+        const fs::path startFolder = options.out / "start" / options.score.stem();
+        fs::remove_all(startFolder);
+        fs::create_directories(startFolder);
+        const fs::path startPath = startFolder / (options.score.stem().string() + ".mscx");
+        if (session->saveToPath(startPath.string(), error)) {
+            if (auto saved = msr::render::ScoreRenderSession::open(startPath.string(), error)) {
+                session = std::move(saved);
+            }
+        }
+        error.clear();
+    }
     if (!session || !session->supportsEditing()) {
         std::cout << "SKIP " << options.score.string() << ": " << (session ? "not editable" : error) << std::endl;
         return 0;

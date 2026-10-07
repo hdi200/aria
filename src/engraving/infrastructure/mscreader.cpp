@@ -21,6 +21,8 @@
  */
 #include "mscreader.h"
 
+#include <algorithm>
+
 #include "io/file.h"
 #include "io/fileinfo.h"
 #include "io/dir.h"
@@ -182,6 +184,18 @@ std::vector<String> MscReader::excerptFileNames() const
         if (filePath.startsWith(u"Excerpts/") && filePath.endsWith(u".mscx", muse::CaseInsensitive)) {
             names.push_back(FileInfo(filePath).completeBaseName());
         }
+    }
+
+    //! NOTE Aria: a folder is listed in no particular order, so parts would come back reordered.
+    //! Excerpts are saved as "<index>_<name>"; when every name has that prefix, follow it.
+    auto indexOf = [](const String& name) {
+        const size_t underscore = name.indexOf(u'_');
+        bool ok = underscore != muse::nidx && underscore > 0;
+        const int index = ok ? name.left(underscore).toInt(&ok) : -1;
+        return ok ? index : -1;
+    };
+    if (std::all_of(names.begin(), names.end(), [&](const String& name) { return indexOf(name) >= 0; })) {
+        std::stable_sort(names.begin(), names.end(), [&](const String& a, const String& b) { return indexOf(a) < indexOf(b); });
     }
     return names;
 }

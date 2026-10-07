@@ -276,10 +276,18 @@ else()
             ${CMAKE_CURRENT_LIST_DIR}/tests/data/swing.mscx)
         set_tests_properties(score_render_swing_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-        # Random-edit stress test; run through compat/fuzz_edits.py (not part of ctest).
+        # Random-edit stress test; compat/fuzz_edits.py runs it over many scores. ctest runs a short
+        # fixed-seed pass on two demos so a regression shows up with the other tests.
         add_executable(score_render_fuzz tests/score_render_fuzz.cpp)
         target_include_directories(score_render_fuzz PRIVATE ${CMAKE_CURRENT_LIST_DIR})
         target_link_libraries(score_render_fuzz PRIVATE score_render_core)
+        foreach(fuzz_score Amazing_grace.mscz Dynamic_Strings.mscx)
+            add_test(NAME score_render_fuzz_${fuzz_score} COMMAND score_render_fuzz
+                --score ${CMAKE_CURRENT_LIST_DIR}/../../demos/${fuzz_score}
+                --out ${CMAKE_CURRENT_BINARY_DIR}/fuzz-ctest/${fuzz_score}
+                --seed 11 --steps 80 --check-every 20)
+            set_tests_properties(score_render_fuzz_${fuzz_score} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+        endforeach()
 
         add_executable(score_render_audio_mix_tests tests/score_render_audio_mix_tests.cpp)
         target_include_directories(score_render_audio_mix_tests PRIVATE ${CMAKE_CURRENT_LIST_DIR})

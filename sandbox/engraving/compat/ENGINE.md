@@ -32,6 +32,9 @@ Parts and loading:
   stress test, e.g. creating a tuplet over a note with a guitar bend.
 - `editing/edit.cpp`: `undoRemoveMeasures` removes each crossing spanner once, not again through
   its linked copy (a staff linked to tablature), which freed it twice when the score closed.
+- `infrastructure/mscreader.cpp`: `excerptFileNames` sorts parts by their `<index>_` file-name
+  prefix, so a score saved as a folder (not a zip) reopens with its parts in order rather than
+  in directory order. Zipped files are already in that order.
 
 Rendering hook:
 - `rendering/paintoptions.h`, `dom/engravingitem.cpp`: `PaintOptions::overrideItemColor`
