@@ -3327,21 +3327,6 @@
             errorMessage = "Unsupported transpose target key.";
             return false;
         }
-        if (transposeMode == mu::engraving::TransposeMode::TO_KEY) {
-            mu::engraving::Key currentKey = mu::engraving::Key::C;
-            const mu::engraving::Fraction keyTick = startMeasure ? startMeasure->tick() : score->selection().tickStart();
-            for (mu::engraving::staff_idx_t staffIdx = 0; staffIdx < score->nstaves(); ++staffIdx) {
-                mu::engraving::Staff* staff = score->staff(staffIdx);
-                if (staff && staff->isPitchedStaff(keyTick)) {
-                    currentKey = staff->concertKey(keyTick);
-                    break;
-                }
-            }
-            if (currentKey == key) {
-                output = makeEditState(score);
-                return true;
-            }
-        }
         if (transposeMode != mu::engraving::TransposeMode::TO_KEY
             && (interval <= 0 || interval >= static_cast<int>(mu::engraving::Interval::allIntervals.size()))) {
             errorMessage = "Unsupported transpose interval.";
@@ -3358,6 +3343,54 @@
             );
         }
 
+        // To key: the selected staves change key at the start of the range and go back to their
+        // own key after it, so bars outside the selection keep reading as before.
+        struct StaffKeys {
+            mu::engraving::Staff* staff = nullptr;
+            mu::engraving::Key startKey = mu::engraving::Key::C;
+            mu::engraving::KeySigEvent keyAfter;
+            bool keyChangeAfter = false;
+        };
+        std::vector<StaffKeys> rangeKeys;
+        mu::engraving::Key referenceKey = mu::engraving::Key::C;
+        mu::engraving::Fraction keyEndTick = mu::engraving::Fraction(-1, 1);
+        if (transposeMode == mu::engraving::TransposeMode::TO_KEY) {
+            const mu::engraving::Fraction keyTick = startMeasure ? startMeasure->tick() : score->selection().tickStart();
+            bool foundReference = false;
+            for (mu::engraving::staff_idx_t staffIdx = staffStart; staffIdx < staffEnd; ++staffIdx) {
+                mu::engraving::Staff* staff = score->staff(staffIdx);
+                if (staff && staff->isPitchedStaff(keyTick)) {
+                    referenceKey = staff->concertKey(keyTick);
+                    foundReference = true;
+                    break;
+                }
+            }
+            if (!foundReference || referenceKey == key) {
+                output = makeEditState(score);
+                return true;
+            }
+            if (!transposesCurrentListSelection) {
+                if (endMeasure->endTick() < score->endTick()) {
+                    keyEndTick = endMeasure->endTick();
+                }
+                for (mu::engraving::staff_idx_t staffIdx = staffStart; staffIdx < staffEnd; ++staffIdx) {
+                    mu::engraving::Staff* staff = score->staff(staffIdx);
+                    if (!staff || !staff->isPitchedStaff(keyTick) || staff->keySigEvent(keyTick).isAtonal()
+                        || staff->keySigEvent(keyTick).custom()) {
+                        continue;
+                    }
+                    StaffKeys keys;
+                    keys.staff = staff;
+                    keys.startKey = staff->concertKey(keyTick);
+                    if (keyEndTick.isValid() && keyEndTick > mu::engraving::Fraction(0, 1)) {
+                        keys.keyAfter = staff->keySigEvent(keyEndTick);
+                        keys.keyChangeAfter = staff->keyList()->count(keyEndTick.ticks()) > 0;
+                    }
+                    rangeKeys.push_back(keys);
+                }
+            }
+        }
+
         score->startCmd(commandName);
         if (!transposesCurrentListSelection) {
             ::selectMeasureRange(score, startMeasure, endMeasure, staffStart, staffEnd);
@@ -3368,18 +3401,35 @@
             errorMessage = "MuseScore could not transpose the current selection.";
             return false;
         }
-        if (!transposesCurrentListSelection && transposeMode == mu::engraving::TransposeMode::TO_KEY) {
-            mu::engraving::KeySigEvent keyEvent;
-            keyEvent.setConcertKey(key);
-            keyEvent.setKey(key);
+        if (!rangeKeys.empty()) {
             const mu::engraving::Fraction tick = startMeasure->tick();
-            for (size_t staffIndex = 0; staffIndex < score->nstaves(); ++staffIndex) {
-                mu::engraving::Staff* staff = score->staff(staffIndex);
-                if (!staff || staff->isDrumStaff(tick)) {
-                    continue;
+            const int fifths = static_cast<int>(key) - static_cast<int>(referenceKey);
+            for (const StaffKeys& keys : rangeKeys) {
+                // Staves in another key move by the same number of fifths as the first one.
+                int newKey = static_cast<int>(keys.startKey) + fifths;
+                while (newKey > static_cast<int>(mu::engraving::Key::MAX)) {
+                    newKey -= 12;
                 }
-
-                score->undoChangeKeySig(staff, tick, keyEvent);
+                while (newKey < static_cast<int>(mu::engraving::Key::MIN)) {
+                    newKey += 12;
+                }
+                mu::engraving::KeySigEvent keyEvent;
+                keyEvent.setConcertKey(static_cast<mu::engraving::Key>(newKey));
+                keyEvent.setKey(static_cast<mu::engraving::Key>(newKey));
+                score->undoChangeKeySig(keys.staff, tick, keyEvent);
+            }
+            if (keyEndTick.isValid() && keyEndTick > tick) {
+                for (const StaffKeys& keys : rangeKeys) {
+                    if (keys.keyChangeAfter || keys.keyAfter.isAtonal() || keys.keyAfter.custom()
+                        || keys.staff->concertKey(keyEndTick) == keys.keyAfter.concertKey()) {
+                        continue;
+                    }
+                    mu::engraving::KeySigEvent keyEvent;
+                    keyEvent.setConcertKey(keys.keyAfter.concertKey());
+                    keyEvent.setKey(keys.keyAfter.concertKey());
+                    keyEvent.setMode(keys.keyAfter.mode());
+                    score->undoChangeKeySig(keys.staff, keyEndTick, keyEvent);
+                }
             }
         }
         score->endCmd();

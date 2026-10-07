@@ -1532,6 +1532,54 @@ void testTransposeToKeyStaysInsideTheSelection(const std::filesystem::path& root
     expect(countOccurrences(top, "<KeySig>") >= 2, "The original key should return after the transposed bars");
 }
 
+void testTransposeToKeyMovesEachSelectedStaffByTheSameAmount(const std::filesystem::path& root)
+{
+    // Top staff in C, bottom staff in F; both selected from bar 3 to the last bar.
+    std::ostringstream xml;
+    xml << R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="flute"><trackName>Flute</trackName><instrumentId>wind.flutes.flute</instrumentId><Channel><program value="73"/></Channel></Instrument>
+    </Part>
+    <Part>
+      <Staff id="2"/>
+      <Instrument id="violin"><trackName>Violin</trackName><instrumentId>strings.violin</instrumentId><Channel><program value="40"/></Channel></Instrument>
+    </Part>
+)MSCX";
+    const int pitches[2][4] = { { 72, 74, 76, 77 }, { 60, 62, 64, 65 } };
+    for (int staff = 0; staff < 2; ++staff) {
+        xml << "    <Staff id=\"" << staff + 1 << "\">\n";
+        for (int bar = 0; bar < 4; ++bar) {
+            xml << "      <Measure><voice>";
+            if (bar == 0) {
+                xml << (staff == 1 ? "<KeySig><concertKey>-1</concertKey></KeySig>" : "") << "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>";
+            }
+            xml << "<Chord><durationType>whole</durationType><Note><pitch>" << pitches[staff][bar] << "</pitch></Note></Chord></voice></Measure>\n";
+        }
+        xml << "    </Staff>\n";
+    }
+    xml << "  </Score>\n</museScore>\n";
+    auto session = openSession(root, "transpose-to-key-two-keys", xml.str());
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(76) && notes.count(65), "Could not locate bars 3 and 4");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectMeasureRange(0, notes[76].x, notes[76].y, notes[65].x, notes[65].y, state, error), "Range select failed: " + error);
+    // mode 2 = to key, direction 0 = up, target key 2 = D major
+    expect(session->transposeSelectedMeasureRange(2, 0, 0, 2, state, error), "Transpose failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "transpose-to-key-two-keys");
+    const size_t bottomStart = saved.find("<Staff id=\"2\">", saved.find("</Part>", saved.find("</Part>") + 1));
+    const std::string top = saved.substr(0, bottomStart);
+    const std::string bottom = saved.substr(bottomStart);
+    expect(top.find("<concertKey>2</concertKey>") != std::string::npos, "The top staff should move to D major");
+    expect(bottom.find("<concertKey>1</concertKey>") != std::string::npos, "The F major staff should move up the same amount, to G major");
+    expect(countOccurrences(top, "<KeySig>") == 1, "Nothing follows the last bar, so no key should be restored");
+    expect(countOccurrences(bottom, "<KeySig>") == 2, "The bottom staff should keep its F major start and gain one key change");
+}
+
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
 {
     auto session = openSession(root, "measure-instrument-context", scoreXml(0, { { 60, 14 } }, 1));
@@ -2148,6 +2196,8 @@ int main()
     passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
     passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
     passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
+    passed &= runTest("transpose to key moves each selected staff by the same amount",
+                      [&] { testTransposeToKeyMovesEachSelectedStaffByTheSameAmount(testDirectory.path); });
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
     passed &= runTest("part names survive save and follow instrument replacement", [&] { testPartNamesSurviveSave(testDirectory.path); });
     passed &= runTest("new dynamics and text reach linked parts", [&] { testNewDynamicsAndTextReachLinkedParts(testDirectory.path); });
