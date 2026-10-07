@@ -823,14 +823,14 @@ void testElementCanBeTappedAndDeleted(const std::filesystem::path& root, const s
            "Could not select and delete " + tag + " through page hit testing");
 }
 
-std::map<int, LocatedItem> locateNotesByPitch(msr::render::ScoreRenderSession& session)
+std::map<int, LocatedItem> locateNotesByPitch(msr::render::ScoreRenderSession& session, const int pageIndex = 0)
 {
     std::map<int, LocatedItem> notes;
     std::string error;
     for (double y = 0.02; y <= 0.4; y += 0.004) {
         for (double x = 0.02; x <= 0.98; x += 0.004) {
             msr::render::ScoreEditState state;
-            expect(session.selectElement(0, x, y, 1.0, state, error), "Note hit testing failed: " + error);
+            expect(session.selectElement(pageIndex, x, y, 1.0, state, error), "Note hit testing failed: " + error);
             if (state.selection.isNote && !notes.count(state.selection.midiPitch)) {
                 notes[state.selection.midiPitch] = locatedItem(state.selection);
             }
@@ -1718,6 +1718,106 @@ void testDraggingFretDiagramChordMovesTheDiagram(const std::filesystem::path& ro
     expect(diagram > secondChord, "The diagram should have moved to the third note");
 }
 
+// The pitch of the first note written after `tag`: what an annotation is attached to.
+int pitchAfter(const std::string& saved, const std::string& tag)
+{
+    const size_t at = saved.find(tag);
+    const size_t pitch = at == std::string::npos ? std::string::npos : saved.find("<pitch>", at);
+    return pitch == std::string::npos ? -1 : std::stoi(saved.substr(pitch + 7));
+}
+
+// The tap, range, expression and drag paths on page 2, in the score's first and last bars there.
+void testEditingWorksOnLaterPagesAndEdgeBars(const std::filesystem::path& root)
+{
+    std::ostringstream xml;
+    xml << R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="piano"><trackName>Piano</trackName><instrumentId>keyboard.piano</instrumentId><Channel><program value="0"/></Channel></Instrument>
+    </Part>
+    <Staff id="1">
+      <VBox>
+        <height>120</height>
+        <Text><style>title</style><text>Later pages</text></Text>
+        <LayoutBreak><subtype>page</subtype></LayoutBreak>
+      </VBox>
+)MSCX";
+    const int pitches[2][4] = { { 60, 62, 64, 65 }, { 67, 69, 71, 72 } };
+    for (int bar = 0; bar < 2; ++bar) {
+        xml << "      <Measure><voice>";
+        if (bar == 0) {
+            xml << "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig><Clef><concertClefType>G</concertClefType><isHeader>1</isHeader></Clef>";
+        }
+        for (const int pitch : pitches[bar]) {
+            xml << "<Chord><durationType>quarter</durationType><Note><pitch>" << pitch << "</pitch></Note></Chord>";
+        }
+        xml << "</voice></Measure>\n";
+    }
+    xml << "    </Staff>\n  </Score>\n</museScore>\n";
+    auto session = openSession(root, "later-pages", xml.str());
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session, 1);
+    for (const int pitch : { 60, 62, 64, 65, 67, 69, 71, 72 }) {
+        expect(notes.count(pitch) && notes[pitch].pageIndex == 1, "Could not tap note " + std::to_string(pitch) + " on page 2");
+    }
+    msr::render::ScoreEditState state;
+    std::string error;
+
+    // Range from the first bar to the last bar on page 2.
+    expect(session->selectMeasureRange(1, notes[60].x, notes[60].y, notes[72].x, notes[72].y, state, error), "Range select failed: " + error);
+    expect(state.selection.hasSelection && state.selection.pageIndex == 1, "The range should be on page 2");
+    expect(state.selection.normalizedX < notes[60].x && state.selection.normalizedX + state.selection.normalizedWidth > notes[72].x,
+           "The range highlight should cover both bars");
+
+    // A crescendo over it, then its end moved back to the second bar's second note.
+    expect(session->addExpression("crescendo", state, error), "Could not add a crescendo: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "later-hairpin"), "HairPin") - 8.0) < 0.01,
+           "The crescendo should cover both bars");
+    msr::render::NormalizedPoint target = state.selection.attachmentTargets.front();
+    for (const auto& candidate : state.selection.attachmentTargets) {
+        if (std::abs(candidate.normalizedX - notes[69].x) < std::abs(target.normalizedX - notes[69].x)) {
+            target = candidate;
+        }
+    }
+    expect(session->retargetSelectedExpressionEndpoint(false, 1, target.normalizedX, target.normalizedY, state, error),
+           "Moving the hairpin end on page 2 failed: " + error);
+    expect(std::abs(spannerLengthInQuarters(saveSnapshot(*session, root, "later-hairpin-moved"), "HairPin") - 6.0) < 0.01,
+           "The crescendo should end on the second bar's second note");
+    expect(session->deleteSelection(state, error), "Could not delete the hairpin: " + error);
+
+    // A dynamic dragged from the first bar into the last bar.
+    expect(session->selectElement(1, notes[64].x, notes[64].y, 1.0, state, error), "Could not select a note: " + error);
+    expect(session->addExpression("mf", state, error), "Could not add a dynamic: " + error);
+    expect(session->dragSelectedMovableElement(1, notes[71].x, state.selection.normalizedY + state.selection.normalizedHeight * 0.5, state, error),
+           "Dragging the dynamic on page 2 failed: " + error);
+    expect(pitchAfter(saveSnapshot(*session, root, "later-dynamic"), "<Dynamic>") == 71, "The dynamic should now be on the last bar's third note");
+
+    // A fermata dragged onto the score's very last note.
+    expect(session->selectElement(1, notes[65].x, notes[65].y, 1.0, state, error), "Could not select a note: " + error);
+    expect(session->addExpression("Fermata", state, error), "Could not add a fermata: " + error);
+    bool tappedFermata = false;
+    for (double y = notes[65].y - 0.08; y < notes[65].y && !tappedFermata; y += 0.002) {
+        for (double x = notes[65].x - 0.02; x < notes[65].x + 0.02 && !tappedFermata; x += 0.002) {
+            expect(session->selectElement(1, x, y, 1.0, state, error), "Fermata hit testing failed: " + error);
+            tappedFermata = state.selection.canDragMovableElement && !state.selection.isNote && !state.selection.isEditableText;
+        }
+    }
+    expect(tappedFermata, "Could not tap the fermata on page 2");
+    expect(session->dragSelectedMovableElement(1, notes[72].x, state.selection.normalizedY + state.selection.normalizedHeight * 0.5, state, error),
+           "Dragging the fermata on page 2 failed: " + error);
+    expect(pitchAfter(saveSnapshot(*session, root, "later-fermata"), "<Fermata>") == 72, "The fermata should now be on the last note");
+
+    // A chord symbol dragged from the first note across the barline.
+    expect(session->selectElement(1, notes[60].x, notes[60].y, 1.0, state, error), "Could not select the first note: " + error);
+    expect(session->addText("Chord Text", state, error), "Adding a chord symbol failed: " + error);
+    expect(session->setSelectedText("C", state, error), "Setting the chord failed: " + error);
+    expect(session->dragSelectedChordText(1, notes[67].x, state.selection.normalizedY + state.selection.normalizedHeight * 0.5, state, error),
+           "Dragging the chord symbol on page 2 failed: " + error);
+    expect(pitchAfter(saveSnapshot(*session, root, "later-chord"), "<Harmony>") == 67, "The chord symbol should now be on the second bar's first note");
+}
+
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
 {
     auto session = openSession(root, "measure-instrument-context", scoreXml(0, { { 60, 14 } }, 1));
@@ -2321,6 +2421,7 @@ int main()
                       [&] { testFermataButtonTogglesOnNotesRestsAndRanges(testDirectory.path); });
     passed &= runTest("range highlights cover every page", [&] { testRangeHighlightCoversEveryPage(testDirectory.path); });
     passed &= runTest("pencil input works on later pages", [&] { testPencilInputWorksOnLaterPages(testDirectory.path); });
+    passed &= runTest("editing works on later pages and edge bars", [&] { testEditingWorksOnLaterPagesAndEdgeBars(testDirectory.path); });
     passed &= runTest("fermata drag shows its anchor and can move to another note",
                       [&] { testFermataDragShowsAnchorAndMovesToAnotherNote(testDirectory.path); });
     passed &= runTest("expression handles sit on the line and clamp when crossed",
