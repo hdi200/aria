@@ -774,6 +774,12 @@ struct ScoreLegacyRepairIssue: Identifiable, Sendable, Equatable {
             return "Tempo · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
         case "strayClef":
             return "Extra Clef · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
+        case "emptyLyrics":
+            return "Empty Lyrics · \(location) · From Measure \(measureNumber)"
+        case "lyricHyphen":
+            return "Lyric Hyphens · \(location) · From Measure \(measureNumber)"
+        case "drumStaff":
+            return "Drum Staff · \(location) · Staff \(staffIndex + 1)"
         default:
             return "Dynamic · \(location) · Measure \(measureNumber) · Staff \(staffIndex + 1)"
         }

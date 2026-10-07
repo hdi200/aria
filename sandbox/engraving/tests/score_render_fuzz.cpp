@@ -45,6 +45,7 @@ struct Options {
     unsigned seed = 1;
     int steps = 200;
     int checkEvery = 10;
+    bool listRepairs = false;
 };
 
 struct Target {
@@ -633,6 +634,11 @@ private:
 int main(int argc, char* argv[])
 {
     Options options;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--list-repairs") {
+            options.listRepairs = true;
+        }
+    }
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string flag = argv[i];
         const std::string value = argv[i + 1];
@@ -648,14 +654,28 @@ int main(int argc, char* argv[])
             options.checkEvery = std::max(1, std::stoi(value));
         }
     }
-    if (options.score.empty() || options.out.empty()) {
+    if (options.score.empty() || (options.out.empty() && !options.listRepairs)) {
         std::cerr << "usage: score_render_fuzz --score <file> --out <dir> [--seed N] [--steps N] [--check-every N]\n";
         return 2;
     }
-    fs::create_directories(options.out);
+    if (!options.out.empty()) {
+        fs::create_directories(options.out);
+    }
 
     std::string error;
     std::unique_ptr<msr::render::ScoreRenderSession> session = msr::render::ScoreRenderSession::open(options.score.string(), error);
+    // --list-repairs: print what the repair sheet would offer for this file, then stop. Run over
+    // desktop-made scores, anything listed is a repair that would misfire.
+    if (options.listRepairs) {
+        std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+        if (session && session->legacyRepairIssues(issues, error)) {
+            for (const auto& issue : issues) {
+                std::cout << "REPAIR " << issue.kind << " m" << issue.measureNumber << " " << options.score.string() << ": " << issue.message
+                          << std::endl;
+            }
+        }
+        return 0;
+    }
     // Start from the score as Aria saves it. Opening a pre-4.70 file upgrades some style values
     // that its parts only take on after one save and reopen (desktop 4.7.5 does the same), which
     // the roundtrip check would otherwise report at every checkpoint.

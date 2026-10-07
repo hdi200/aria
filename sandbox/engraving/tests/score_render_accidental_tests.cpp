@@ -1412,6 +1412,100 @@ void testStrayStartClefIsOfferedAsARepair(const std::filesystem::path& root)
            "The clef repair should not be offered again once applied");
 }
 
+// Lyrics as earlier versions of Aria saved them: "_" left an empty lyric on every note (each with
+// its own one-note line) instead of extending the word's line; space left empty lyrics on
+// skipped notes; "-" was typed into the text. The repair sheet offers to fix both.
+void testOldAriaLyricsAreOfferedAsRepairs(const std::filesystem::path& root)
+{
+    const auto lyric = [](const std::string& text, const std::string& extra = "") {
+        return "<Lyrics>" + extra + "<text>" + text + "</text></Lyrics>";
+    };
+    const std::string shortLine = "<ticks_f>1/1920</ticks_f>";
+    const std::string notes[] = {
+        lyric("ah", shortLine), lyric("", shortLine), lyric("", shortLine), lyric(""), // ah _ _ then stopped
+        lyric("glo-"), lyric("ry"), lyric(""), lyric("end"),                          // glo-ry, a skipped note, end
+    };
+    std::ostringstream xml;
+    xml << R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="voice"><trackName>Voice</trackName><instrumentId>voice.vocals</instrumentId><Channel><program value="52"/></Channel></Instrument>
+    </Part>
+    <Staff id="1">
+)MSCX";
+    for (int bar = 0; bar < 2; ++bar) {
+        xml << "      <Measure><voice>" << (bar == 0 ? "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>" : "");
+        for (int beat = 0; beat < 4; ++beat) {
+            xml << "<Chord><durationType>quarter</durationType>" << notes[bar * 4 + beat] << "<Note><pitch>67</pitch></Note></Chord>";
+        }
+        xml << "</voice></Measure>\n";
+    }
+    xml << "    </Staff>\n  </Score>\n</museScore>\n";
+
+    auto session = openSession(root, "old-lyrics", xml.str());
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    std::string error;
+    expect(session->legacyRepairIssues(issues, error), "Scanning failed: " + error);
+    std::vector<int> indexes;
+    for (const auto& issue : issues) {
+        if (issue.kind == "emptyLyrics" || issue.kind == "lyricHyphen") {
+            indexes.push_back(issue.index);
+        }
+    }
+    expect(indexes.size() == 2, "Both lyric repairs should be offered");
+    msr::render::ScoreEditState state;
+    expect(session->applyLegacyRepairs(indexes, state, error), "Applying the lyric repairs failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "old-lyrics-repaired");
+    expect(countOccurrences(saved, "<Lyrics>") == 4, "Only ah, glo, ry and end should remain");
+    expect(saved.find("<ticks_f>1/2</ticks_f>") != std::string::npos, "ah's line should run over the notes _ was typed on");
+    expect(saved.find("glo-") == std::string::npos && saved.find("<syllabic>begin</syllabic>") != std::string::npos
+               && saved.find("<syllabic>end</syllabic>") != std::string::npos,
+           "glo- ry should become glo-ry with a real hyphen");
+    expect(session->legacyRepairIssues(issues, error)
+               && std::none_of(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "emptyLyrics" || issue.kind == "lyricHyphen"; }),
+           "The lyric repairs should not be offered again");
+
+    // A clean score with lyrics, including a real hyphen and extension line, is left alone.
+    auto clean = openSession(root, "clean-lyrics", saved);
+    expect(clean->legacyRepairIssues(issues, error)
+               && std::none_of(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "emptyLyrics" || issue.kind == "lyricHyphen"; }),
+           "Correct lyrics should not be offered a repair");
+}
+
+// A drum kit on a pitched staff, as earlier versions of Aria added it.
+void testDrumKitOnPitchedStaffIsOfferedAsARepair(const std::filesystem::path& root)
+{
+    std::string xml;
+    {
+        auto session = openSession(root, "drum-source", scoreXml(0, { { 60, 14 } }, 1));
+        msr::render::ScoreEditState state;
+        std::string error;
+        expect(session->addInstrument("drumset", state, error), "Adding a drum set failed: " + error);
+        xml = saveSnapshot(*session, root, "drum-source");
+    }
+    const size_t percussion = xml.find("<StaffType group=\"percussion\">");
+    expect(percussion != std::string::npos, "The drum set should be on a percussion staff");
+    xml.replace(percussion, xml.find("</StaffType>", percussion) - percussion,
+                "<StaffType group=\"pitched\"><name>stdNormal</name>");
+
+    auto session = openSession(root, "drum-damaged", xml);
+    std::vector<msr::render::ScoreLegacyRepairIssue> issues;
+    std::string error;
+    expect(session->legacyRepairIssues(issues, error), "Scanning failed: " + error);
+    const auto drum = std::find_if(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "drumStaff"; });
+    expect(drum != issues.end() && drum->staffIndex == 1, "The drum kit on a pitched staff should be offered a repair");
+    msr::render::ScoreEditState state;
+    expect(session->applyLegacyRepairs({ drum->index }, state, error), "Applying the drum repair failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "drum-repaired");
+    expect(saved.find("<StaffType group=\"percussion\">") != std::string::npos, "The drum kit should now be on a percussion staff");
+    expect(session->legacyRepairIssues(issues, error)
+               && std::none_of(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "drumStaff"; }),
+           "The drum repair should not be offered again");
+}
+
 // Typed text is plain text; "&" and "<" in it must be escaped in the file, or the score no
 // longer opens (found by the random-edit stress test).
 void testTypedTextWithAmpersandsSavesAndReopens(const std::filesystem::path& root)
@@ -2438,6 +2532,9 @@ int main()
     passed &= runTest("dragging a fret diagram's chord moves the diagram",
                       [&] { testDraggingFretDiagramChordMovesTheDiagram(testDirectory.path); });
     passed &= runTest("added instruments match desktop", [&] { testAddedInstrumentsMatchDesktop(testDirectory.path); });
+    passed &= runTest("old Aria lyrics are offered as repairs", [&] { testOldAriaLyricsAreOfferedAsRepairs(testDirectory.path); });
+    passed &= runTest("drum kit on a pitched staff is offered as a repair",
+                      [&] { testDrumKitOnPitchedStaffIsOfferedAsARepair(testDirectory.path); });
     passed &= runTest("lyrics entry matches desktop", [&] { testLyricsEntryMatchesDesktop(testDirectory.path); });
     passed &= runTest("transpose to key moves each selected staff by the same amount",
                       [&] { testTransposeToKeyMovesEachSelectedStaffByTheSameAmount(testDirectory.path); });

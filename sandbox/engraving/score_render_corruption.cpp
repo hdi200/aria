@@ -48,8 +48,10 @@
         bool startedCommand = false;
         for (int index : issueIndexes) {
             const LegacyRepairCandidate& candidate = candidates.at(static_cast<size_t>(index));
-            if (candidate.issue.kind != "missingRepeat" && candidate.issue.kind != "missingTempo"
-                && candidate.issue.kind != "partName" && candidate.issue.kind != "strayClef") {
+            static const std::unordered_set<std::string> structural = {
+                "missingRepeat", "missingTempo", "partName", "strayClef", "emptyLyrics", "lyricHyphen", "drumStaff"
+            };
+            if (!structural.count(candidate.issue.kind)) {
                 continue;
             }
             if (!startedCommand) {
@@ -65,6 +67,14 @@
             }
             if (candidate.issue.kind == "strayClef") {
                 repairStrayStartClef(m_masterScore.get(), candidate.target);
+                continue;
+            }
+            if (candidate.issue.kind == "emptyLyrics" || candidate.issue.kind == "lyricHyphen") {
+                repairAriaLyrics(m_masterScore.get(), candidate);
+                continue;
+            }
+            if (candidate.issue.kind == "drumStaff") {
+                repairDrumStaff(candidate.staff);
                 continue;
             }
             repairMissingSystemMarking(m_masterScore.get(), candidate.source);

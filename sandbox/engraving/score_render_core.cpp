@@ -108,6 +108,7 @@
 #include "engraving/editing/editchord.h"
 #include "engraving/editing/editnote.h"
 #include "engraving/editing/editpart.h"
+#include "engraving/editing/editstaff.h"
 #include "engraving/editing/editscoreproperties.h"
 #include "engraving/editing/editspanner.h"
 #include "engraving/editing/transpose.h"

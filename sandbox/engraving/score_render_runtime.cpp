@@ -74,6 +74,10 @@ struct LegacyRepairCandidate {
     // partName repairs
     std::vector<mu::engraving::Part*> parts;
     muse::String newPartName;
+    // lyrics, lyricHyphen and drumStaff repairs
+    std::vector<mu::engraving::Lyrics*> lyrics;
+    std::vector<std::pair<mu::engraving::Lyrics*, mu::engraving::Fraction>> lyricExtensions;
+    mu::engraving::Staff* staff = nullptr;
 };
 
 bool isLinkedSystemMarking(const mu::engraving::EngravingItem* item)
@@ -310,6 +314,165 @@ void scanStrayStartClefs(mu::engraving::MasterScore* masterScore, std::vector<Le
     }
 }
 
+// The lyric of the same verse on the next chord of `lyrics`'s voice, or nullptr.
+mu::engraving::Lyrics* nextLyricsInVoice(const mu::engraving::Lyrics* lyrics)
+{
+    const mu::engraving::ChordRest* chordRest = lyrics->chordRest();
+    if (!chordRest) {
+        return nullptr;
+    }
+    for (mu::engraving::Segment* segment = chordRest->segment()->next1(mu::engraving::SegmentType::ChordRest); segment;
+         segment = segment->next1(mu::engraving::SegmentType::ChordRest)) {
+        mu::engraving::EngravingItem* item = segment->element(chordRest->track());
+        if (item && item->isChord()) {
+            return mu::engraving::toChordRest(item)->lyrics(lyrics->verse(), lyrics->placement());
+        }
+    }
+    return nullptr;
+}
+
+// Lyrics left by earlier versions of Aria's lyric entry, which desktop never saves: empty lyrics
+// (space on a note to skip it, or "_" repeated, left one on every note), whose extension lines
+// stopped at the first note; and "-" typed into the text ("glo-") instead of a syllable hyphen.
+void scanAriaLyrics(mu::engraving::MasterScore* masterScore, std::vector<LegacyRepairCandidate>& candidates)
+{
+    LegacyRepairCandidate empty;
+    LegacyRepairCandidate hyphens;
+    int emptyMeasure = 0;
+    int hyphenMeasure = 0;
+    for (mu::engraving::Segment* segment = masterScore->firstSegment(mu::engraving::SegmentType::ChordRest); segment;
+         segment = segment->next1(mu::engraving::SegmentType::ChordRest)) {
+        for (mu::engraving::EngravingItem* item : segment->elist()) {
+            if (!item || !item->isChordRest()) {
+                continue;
+            }
+            for (mu::engraving::Lyrics* lyrics : mu::engraving::toChordRest(item)->lyrics()) {
+                const muse::String text = lyrics->plainText().trimmed();
+                if (text.empty()) {
+                    if (empty.lyrics.empty()) {
+                        emptyMeasure = segment->measure()->no() + 1;
+                    }
+                    empty.lyrics.push_back(lyrics);
+                    continue;
+                }
+                // An extension line followed by empty lyrics that also had one: the line was
+                // meant to run to the last of them.
+                if (lyrics->ticks().isNotZero()) {
+                    mu::engraving::Fraction lastTick;
+                    for (mu::engraving::Lyrics* next = nextLyricsInVoice(lyrics);
+                         next && next->plainText().trimmed().empty() && next->ticks().isNotZero(); next = nextLyricsInVoice(next)) {
+                        lastTick = next->segment()->tick();
+                    }
+                    const mu::engraving::Fraction ticks = lastTick - lyrics->segment()->tick();
+                    if (lastTick.isNotZero() && ticks > lyrics->ticks()) {
+                        empty.lyricExtensions.emplace_back(lyrics, ticks);
+                    }
+                }
+                const bool joinsNext = lyrics->syllabic() == mu::engraving::LyricsSyllabic::SINGLE
+                                       || lyrics->syllabic() == mu::engraving::LyricsSyllabic::END;
+                if (text.size() > 1 && text.endsWith(u'-') && !text.endsWith(u"--") && joinsNext && nextLyricsInVoice(lyrics)) {
+                    if (hyphens.lyrics.empty()) {
+                        hyphenMeasure = segment->measure()->no() + 1;
+                    }
+                    hyphens.lyrics.push_back(lyrics);
+                }
+            }
+        }
+    }
+    if (!empty.lyrics.empty()) {
+        const size_t count = empty.lyrics.size();
+        std::string message = "Remove " + std::to_string(count) + " empty lyric" + (count == 1 ? "" : "s")
+                              + " left by lyric entry in earlier versions of Aria. They print nothing but take space under the staff";
+        if (!empty.lyricExtensions.empty()) {
+            const size_t lines = empty.lyricExtensions.size();
+            message += ", and extend " + std::to_string(lines) + " extension line" + (lines == 1 ? "" : "s")
+                       + " over the notes " + (lines == 1 ? "it was" : "they were") + " typed across";
+        }
+        empty.issue.index = static_cast<int>(candidates.size());
+        empty.issue.measureNumber = emptyMeasure;
+        empty.issue.kind = "emptyLyrics";
+        empty.issue.location = "Full score and parts";
+        empty.issue.message = message + ".";
+        candidates.push_back(std::move(empty));
+    }
+    if (!hyphens.lyrics.empty()) {
+        const size_t count = hyphens.lyrics.size();
+        hyphens.issue.index = static_cast<int>(candidates.size());
+        hyphens.issue.measureNumber = hyphenMeasure;
+        hyphens.issue.kind = "lyricHyphen";
+        hyphens.issue.location = "Full score and parts";
+        hyphens.issue.message = "Turn " + std::to_string(count) + " hyphen" + (count == 1 ? "" : "s")
+                                + " typed into lyrics (like \u201Cglo-\u201D) into syllable hyphens between the notes, as earlier versions "
+                                  "of Aria should have made.";
+        candidates.push_back(std::move(hyphens));
+    }
+}
+
+// A drum kit or other drum-set instrument on an ordinary five-line pitched staff, as earlier
+// versions of Aria made when adding one. Its notes then show at their sound's MIDI pitch.
+void scanDrumsOnPitchedStaves(mu::engraving::MasterScore* masterScore, std::vector<LegacyRepairCandidate>& candidates)
+{
+    for (mu::engraving::Staff* staff : masterScore->staves()) {
+        const mu::engraving::Instrument* instrument = staff->part()->instrument(mu::engraving::Fraction(0, 1));
+        if (!instrument || !instrument->useDrumset() || !staff->staffType(mu::engraving::Fraction(0, 1))
+            || staff->staffType(mu::engraving::Fraction(0, 1))->group() != mu::engraving::StaffGroup::STANDARD) {
+            continue;
+        }
+        LegacyRepairCandidate candidate;
+        candidate.issue.index = static_cast<int>(candidates.size());
+        candidate.issue.measureNumber = 1;
+        candidate.issue.staffIndex = static_cast<int>(staff->idx());
+        candidate.issue.kind = "drumStaff";
+        candidate.issue.location = "Full score and parts";
+        candidate.issue.message = "\u201C" + staff->part()->partName().toStdString()
+                                  + "\u201D is on a pitched staff, as earlier versions of Aria added drum kits. Switch it to a "
+                                    "percussion staff so each drum shows on its own line.";
+        candidate.staff = staff;
+        candidates.push_back(std::move(candidate));
+    }
+}
+
+// Must run inside an undo command.
+void repairAriaLyrics(mu::engraving::MasterScore* masterScore, const LegacyRepairCandidate& candidate)
+{
+    if (candidate.issue.kind == "emptyLyrics") {
+        for (const auto& [lyrics, ticks] : candidate.lyricExtensions) {
+            lyrics->undoChangeProperty(mu::engraving::Pid::LYRIC_TICKS, ticks);
+        }
+        for (mu::engraving::Lyrics* lyrics : candidate.lyrics) {
+            masterScore->undoRemoveElement(lyrics);
+        }
+        return;
+    }
+    for (mu::engraving::Lyrics* lyrics : candidate.lyrics) {
+        muse::String text = lyrics->plainText().trimmed();
+        text.chop(1);
+        lyrics->undoChangeProperty(mu::engraving::Pid::TEXT, mu::engraving::TextBase::plainToXmlText(text));
+        lyrics->undoChangeProperty(mu::engraving::Pid::SYLLABIC,
+                                   int(lyrics->syllabic() == mu::engraving::LyricsSyllabic::END ? mu::engraving::LyricsSyllabic::MIDDLE
+                                                                                                  : mu::engraving::LyricsSyllabic::BEGIN));
+        if (mu::engraving::Lyrics* next = nextLyricsInVoice(lyrics)) {
+            if (next->syllabic() == mu::engraving::LyricsSyllabic::SINGLE) {
+                next->undoChangeProperty(mu::engraving::Pid::SYLLABIC, int(mu::engraving::LyricsSyllabic::END));
+            } else if (next->syllabic() == mu::engraving::LyricsSyllabic::BEGIN) {
+                next->undoChangeProperty(mu::engraving::Pid::SYLLABIC, int(mu::engraving::LyricsSyllabic::MIDDLE));
+            }
+        }
+    }
+}
+
+// Must run inside an undo command.
+void repairDrumStaff(mu::engraving::Staff* staff)
+{
+    const mu::engraving::StaffType* preset = mu::engraving::StaffType::getDefaultPreset(mu::engraving::StaffGroup::PERCUSSION);
+    for (mu::engraving::Staff* linked : staff->staffList()) {
+        const mu::engraving::StaffType* current = linked->staffType(mu::engraving::Fraction(0, 1));
+        if (current && current->group() == mu::engraving::StaffGroup::STANDARD) {
+            linked->score()->undo(new mu::engraving::ChangeStaffType(linked, *preset));
+        }
+    }
+}
+
 // Make a stray start-of-bar clef change the bar's starting clef. Must run inside an undo command.
 void repairStrayStartClef(mu::engraving::MasterScore* masterScore, mu::engraving::EngravingItem* strayClef)
 {
@@ -431,6 +594,9 @@ std::vector<LegacyRepairCandidate> scanLegacyRepairCandidates(mu::engraving::Mas
     }
     // Change Clef made stray starting clefs with every engine version; the repair is musically neutral.
     scanStrayStartClefs(masterScore, candidates);
+    // Shapes desktop never saves, so these are safe whichever version saved the file.
+    scanAriaLyrics(masterScore, candidates);
+    scanDrumsOnPitchedStaves(masterScore, candidates);
     return candidates;
 }
 
