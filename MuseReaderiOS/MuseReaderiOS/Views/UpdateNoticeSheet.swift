@@ -95,7 +95,7 @@ struct UpdateNoticeSheet: View {
         Page(
             clip: "whats-new-scrolling",
             systemImage: "film",
-            title: "Share a play-along video",
+            title: "Turn your score into a video",
             message: "Open Share and choose Video. Your score scrolls smoothly as it plays, with playback "
                 + "using your saved mix. Keep it on paper or set it over a photo, in landscape for YouTube "
                 + "or vertical for Reels and TikTok."

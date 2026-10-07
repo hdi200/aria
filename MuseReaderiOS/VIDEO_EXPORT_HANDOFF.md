@@ -1,6 +1,6 @@
 # Video export: handoff brief (updated 2026-09-29)
 
-Export → **Video** renders a play-along MP4 of the displayed score, either the full
+Export → **Video** renders a scrolling-score MP4 of the displayed score, either the full
 score or each selected part, with its playback audio. The approved scrolling
 appearance, score fonts, photo background, and tapered cursor are committed.
 The new video sheet and performance changes are implemented locally and **not

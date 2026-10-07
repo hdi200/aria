@@ -26,10 +26,6 @@ enum ScoreReaderPageHorizontalAlignment: Equatable {
 
 enum ScoreReaderReadingGesturePolicy {
     static let allowsDoubleTapZoom = false
-
-    static func isCenterEditLongPress(_ normalizedPoint: CGPoint) -> Bool {
-        normalizedPoint.x > 0.20 && normalizedPoint.x < 0.80
-    }
 }
 
 struct ScoreReaderZoomLayout {
@@ -147,7 +143,7 @@ struct ZoomableImageView: UIViewRepresentable {
     var onPencilDoubleTap: (() -> Void)? = nil
     var onSwipePreviousPage: (() -> Void)? = nil
     var onSwipeNextPage: (() -> Void)? = nil
-    var onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)? = nil
+    var onReadingLongPress: ((CGPoint, CGPoint) -> Void)? = nil
     var onManualScroll: (() -> Void)? = nil
     var annotationStrokes: [ScoreRenderedAnnotationStroke] = []
     var selectedAnnotationStrokeIDs: Set<UUID> = []
@@ -180,7 +176,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilDoubleTap: onPencilDoubleTap,
             onSwipePreviousPage: onSwipePreviousPage,
             onSwipeNextPage: onSwipeNextPage,
-            onReadingCenterLongPress: onReadingCenterLongPress,
+            onReadingLongPress: onReadingLongPress,
             onManualScroll: onManualScroll
         )
     }
@@ -283,7 +279,7 @@ struct ZoomableImageView: UIViewRepresentable {
 
         let readingLongPressGestureRecognizer = UILongPressGestureRecognizer(
             target: context.coordinator,
-            action: #selector(Coordinator.handleReadingCenterLongPress(_:))
+            action: #selector(Coordinator.handleReadingLongPress(_:))
         )
         readingLongPressGestureRecognizer.minimumPressDuration = 0.45
         readingLongPressGestureRecognizer.allowableMovement = 2_000
@@ -343,7 +339,7 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.onPencilDoubleTap = onPencilDoubleTap
         context.coordinator.onSwipePreviousPage = onSwipePreviousPage
         context.coordinator.onSwipeNextPage = onSwipeNextPage
-        context.coordinator.onReadingCenterLongPress = onReadingCenterLongPress
+        context.coordinator.onReadingLongPress = onReadingLongPress
         context.coordinator.onManualScroll = onManualScroll
         context.coordinator.onAnnotationInteractionStart = onAnnotationInteractionStart
         context.coordinator.onAnnotationStrokeCommit = onAnnotationStrokeCommit
@@ -436,7 +432,7 @@ struct ZoomableImageView: UIViewRepresentable {
         var onPencilDoubleTap: (() -> Void)?
         var onSwipePreviousPage: (() -> Void)?
         var onSwipeNextPage: (() -> Void)?
-        var onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)?
+        var onReadingLongPress: ((CGPoint, CGPoint) -> Void)?
         var onManualScroll: (() -> Void)?
         var onAnnotationInteractionStart: (() -> Void)?
         var onAnnotationStrokeCommit: (([CGPoint]) -> Void)?
@@ -512,7 +508,7 @@ struct ZoomableImageView: UIViewRepresentable {
             onPencilDoubleTap: (() -> Void)? = nil,
             onSwipePreviousPage: (() -> Void)? = nil,
             onSwipeNextPage: (() -> Void)? = nil,
-            onReadingCenterLongPress: ((CGPoint, CGPoint) -> Void)? = nil,
+            onReadingLongPress: ((CGPoint, CGPoint) -> Void)? = nil,
             onManualScroll: (() -> Void)? = nil
         ) {
             self.zoomScale = zoomScale
@@ -530,7 +526,7 @@ struct ZoomableImageView: UIViewRepresentable {
             self.onPencilDoubleTap = onPencilDoubleTap
             self.onSwipePreviousPage = onSwipePreviousPage
             self.onSwipeNextPage = onSwipeNextPage
-            self.onReadingCenterLongPress = onReadingCenterLongPress
+            self.onReadingLongPress = onReadingLongPress
             self.onManualScroll = onManualScroll
         }
 
@@ -878,7 +874,7 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         @objc
-        func handleReadingCenterLongPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
+        func handleReadingLongPress(_ gestureRecognizer: UILongPressGestureRecognizer) {
             guard let overlayView else {
                 return
             }
@@ -888,17 +884,18 @@ struct ZoomableImageView: UIViewRepresentable {
                 guard
                     let scrollView = zoomScrollView,
                     scrollView.zoomScale <= 1.01,
+                    // Anywhere on the page, including the page-turn edges: a hold
+                    // never turns the page, so it can't take a tap's place there.
                     let normalizedPoint = overlayView.normalizedPoint(
                         at: gestureRecognizer.location(in: overlayView)
-                    ),
-                    ScoreReaderReadingGesturePolicy.isCenterEditLongPress(normalizedPoint)
+                    )
                 else {
                     readingLongPressStartPoint = nil
                     return
                 }
 
                 readingLongPressStartPoint = normalizedPoint
-                onReadingCenterLongPress?(normalizedPoint, normalizedPoint)
+                onReadingLongPress?(normalizedPoint, normalizedPoint)
 
             case .changed, .ended:
                 guard
@@ -913,7 +910,7 @@ struct ZoomableImageView: UIViewRepresentable {
                     return
                 }
 
-                onReadingCenterLongPress?(startPoint, normalizedPoint)
+                onReadingLongPress?(startPoint, normalizedPoint)
                 if gestureRecognizer.state == .ended {
                     readingLongPressStartPoint = nil
                 }

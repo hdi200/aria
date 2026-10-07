@@ -1402,11 +1402,8 @@ struct MuseReaderiOSTests {
     }
 
     @Test
-    func viewModeLongPressOnlyUsesTheCenterPageZone() {
+    func viewModeReadingDisablesDoubleTapZoom() {
         #expect(!ScoreReaderReadingGesturePolicy.allowsDoubleTapZoom)
-        #expect(ScoreReaderReadingGesturePolicy.isCenterEditLongPress(CGPoint(x: 0.5, y: 0.1)))
-        #expect(!ScoreReaderReadingGesturePolicy.isCenterEditLongPress(CGPoint(x: 0.2, y: 0.5)))
-        #expect(!ScoreReaderReadingGesturePolicy.isCenterEditLongPress(CGPoint(x: 0.8, y: 0.5)))
     }
 
     private func fixtureURL(_ relativePath: String) -> URL {

@@ -517,7 +517,7 @@ struct ScoreReaderPageSurface: View {
                         onPencilDoubleTap: pencilDoubleTapAction,
                         onSwipePreviousPage: swipePreviousPageAction,
                         onSwipeNextPage: swipeNextPageAction,
-                        onReadingCenterLongPress: viewModeLongPressAction,
+                        onReadingLongPress: viewModeLongPressAction,
                         onManualScroll: manualScrollAction,
                         annotationStrokes: annotationConfiguration?.strokes ?? [],
                         selectedAnnotationStrokeIDs: annotationConfiguration?.selectedStrokeIDs ?? [],

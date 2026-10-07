@@ -360,7 +360,7 @@ enum ScoreVideoExportError: LocalizedError {
     }
 }
 
-/// Renders a play-along video of the displayed score with its audio: either
+/// Renders a scrolling or piano video of the displayed score with its audio: either
 /// the whole piece on one line scrolling past a fixed playhead, or the pages
 /// with a camera that follows the music. Frames and audio are produced in
 /// playback order and written as MP4.

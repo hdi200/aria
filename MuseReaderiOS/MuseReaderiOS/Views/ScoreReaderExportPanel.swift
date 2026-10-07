@@ -58,7 +58,7 @@ enum ScoreReaderExportFormat: String, CaseIterable, Identifiable {
         case .images:
             return "PNG pages"
         case .video:
-            return "Scrolling score, play-along"
+            return "Scrolling score or piano"
         }
     }
 
