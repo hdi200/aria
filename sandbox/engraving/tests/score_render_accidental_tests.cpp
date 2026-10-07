@@ -1640,6 +1640,27 @@ void testLyricsEntryMatchesDesktop(const std::filesystem::path& root)
     }
 }
 
+// Adding instruments follows desktop's NotationParts::insertNewParts: the new staves take the
+// score's key, its staff type (percussion, tablature) and a numbered name.
+void testAddedInstrumentsMatchDesktop(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "add-instruments", scoreXml(2, { { 62, 16 } }, 2));
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->addInstrument("violin", state, error), "Adding a violin failed: " + error);
+    expect(session->addInstrument("drumset", state, error), "Adding a drum set failed: " + error);
+    expect(session->addInstrument("guitar-steel-tablature", state, error), "Adding a tab guitar failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "add-instruments");
+    auto staffXml = [&saved](const int id) {
+        const size_t start = saved.find("<Staff id=\"" + std::to_string(id) + "\">", saved.rfind("</Part>"));
+        return start == std::string::npos ? std::string() : saved.substr(start, saved.find("</Staff>", start) - start);
+    };
+    expect(staffXml(2).find("<concertKey>2</concertKey>") != std::string::npos, "The new violin should be in the score's D major");
+    expect(saved.find("<StaffType group=\"percussion\">") != std::string::npos, "The drum set should get a percussion staff");
+    expect(saved.find("<StaffType group=\"tablature\">") != std::string::npos, "The tab guitar should get a tablature staff");
+    expect(saved.find("<trackName>Violin 2</trackName>") != std::string::npos, "A second violin should be named Violin 2");
+}
+
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
 {
     auto session = openSession(root, "measure-instrument-context", scoreXml(0, { { 60, 14 } }, 1));
@@ -2256,6 +2277,7 @@ int main()
     passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
     passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
     passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
+    passed &= runTest("added instruments match desktop", [&] { testAddedInstrumentsMatchDesktop(testDirectory.path); });
     passed &= runTest("lyrics entry matches desktop", [&] { testLyricsEntryMatchesDesktop(testDirectory.path); });
     passed &= runTest("transpose to key moves each selected staff by the same amount",
                       [&] { testTransposeToKeyMovesEachSelectedStaffByTheSameAmount(testDirectory.path); });

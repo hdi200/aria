@@ -4089,10 +4089,16 @@
             return false;
         }
 
+        // As desktop's instruments panel (PartTreeItem::replaceInstrument): the template's staff
+        // type (tablature, percussion) and a part name with its transposition, e.g. "Clarinet in B♭".
         const mu::engraving::Instrument replacement
             = mu::engraving::Instrument::fromTemplate(instrumentTemplate);
+        const mu::engraving::StaffType* staffType = instrumentTemplate->staffTypePreset
+            ? instrumentTemplate->staffTypePreset
+            : mu::engraving::StaffType::getDefaultPreset(instrumentTemplate->staffGroup);
         m_masterScore->startCmd(muse::TranslatableString::untranslatable("Aria change instrument"));
-        mu::engraving::EditPart::replacePartInstrument(m_masterScore.get(), part, replacement);
+        mu::engraving::EditPart::replacePartInstrument(m_masterScore.get(), part, replacement, staffType,
+                                                       instrumentTitle(replacement.trackName(), replacement.trait()));
         m_masterScore->endCmd();
 
         refreshAfterEdit();
@@ -4247,6 +4253,90 @@
         return true;
     }
 
+    // Instrument names as desktop writes them (notationtypes.h formatInstrumentTitle, used for the
+    // part name, and NotationParts' formatInstrumentTitleOnScore, used for staff names).
+    static muse::String instrumentTitle(const muse::String& name, const mu::engraving::Trait& trait)
+    {
+        switch (trait.type) {
+        case mu::engraving::TraitType::Tuning:
+            return trait.name + u" " + name;
+        case mu::engraving::TraitType::Transposition:
+            return name + u" in " + trait.name;
+        case mu::engraving::TraitType::Course:
+            return name + u" (" + trait.name + u")";
+        case mu::engraving::TraitType::Unknown:
+            break;
+        }
+        return name;
+    }
+
+    static muse::String instrumentTitleOnScore(const muse::String& name, const mu::engraving::Trait& trait, const int number)
+    {
+        muse::String title = name;
+        if (trait.type == mu::engraving::TraitType::Transposition && !trait.isHiddenOnScore) {
+            title += u" in " + trait.name;
+        }
+        if (number > 0) {
+            title += u" " + muse::String::number(number);
+        }
+        return title;
+    }
+
+    // Desktop's NotationParts::insertNewParts + appendStaves: a numbered name when the instrument
+    // is already in the score, the template's staff type and line count, and the score's keys.
+    static void appendPartLikeDesktop(mu::engraving::Score* score, const mu::engraving::InstrumentTemplate& instrumentTemplate)
+    {
+        const mu::engraving::KeyList keyList = score->keyList();
+        const mu::engraving::Instrument instrument = mu::engraving::Instrument::fromTemplate(&instrumentTemplate);
+
+        int number = 0;
+        for (const mu::engraving::Part* existing : score->parts()) {
+            if (existing->instrument()->id() == instrumentTemplate.id) {
+                ++number;
+            }
+        }
+        number = number > 0 ? number + 1 : 0;
+
+        mu::engraving::Part* part = new mu::engraving::Part(score);
+        part->setInstrument(instrument);
+        const mu::engraving::StaffNameList& longNames = instrument.longNames();
+        const mu::engraving::StaffNameList& shortNames = instrument.shortNames();
+        const muse::String longName = instrumentTitleOnScore(longNames.empty() ? muse::String() : longNames.front().name(),
+                                                             instrument.trait(), number);
+        const muse::String shortName = instrumentTitleOnScore(shortNames.empty() ? muse::String() : shortNames.front().name(),
+                                                              instrument.trait(), number);
+        part->setPartName(longName);
+        part->setLongName(longName);
+        part->setShortName(shortName);
+        score->undoInsertPart(part, score->parts().size());
+
+        for (mu::engraving::staff_idx_t index = 0; index < instrumentTemplate.staffCount; ++index) {
+            mu::engraving::Staff* staff = mu::engraving::Factory::createStaff(part);
+            const mu::engraving::StaffType* staffType = instrumentTemplate.staffTypePreset
+                ? instrumentTemplate.staffTypePreset
+                : mu::engraving::StaffType::preset(mu::engraving::StaffTypes::STANDARD);
+            mu::engraving::StaffType* staffTypeCopy = staff->setStaffType(mu::engraving::Fraction(0, 1), *staffType);
+            if (index >= mu::engraving::MAX_STAVES) {
+                staffTypeCopy->setSmall(false);
+            } else {
+                staffTypeCopy->setSmall(instrumentTemplate.smallStaff[index]);
+                staffTypeCopy->setLines(instrumentTemplate.staffLines[index]);
+                staff->setBracketType(0, instrumentTemplate.bracket[index]);
+                staff->setBracketSpan(0, instrumentTemplate.bracketSpan[index]);
+                staff->setBarLineSpan(instrumentTemplate.barlineSpan[index]);
+            }
+            staff->setDefaultClefType(instrumentTemplate.clefType(index));
+            score->undoInsertStaff(staff, index);
+        }
+
+        if (part->nstaves() > 0) {
+            const mu::engraving::staff_idx_t firstStaff = part->staff(0)->idx();
+            score->adjustKeySigs(firstStaff, firstStaff + part->nstaves(), keyList);
+        }
+        score->setUpTempoMapLater();
+        score->masterScore()->rebuildMidiMapping();
+    }
+
     bool addInstrument(const std::string& instrumentId,
                        msr::render::ScoreEditState& output,
                        std::string& errorMessage)
@@ -4272,7 +4362,7 @@
 
         mu::engraving::Score* score = m_masterScore.get();
         score->startCmd(muse::TranslatableString::untranslatable("Aria add instrument"));
-        score->appendPart(instrumentTemplate);
+        appendPartLikeDesktop(score, *instrumentTemplate);
         score->setBracketsAndBarlines();
         score->endCmd();
 
