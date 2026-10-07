@@ -8,6 +8,7 @@ import UIKit
 
 enum ScoreReaderLyricsInputCommand: Equatable {
     case advance
+    case hyphen
     case melisma
 }
 
@@ -173,6 +174,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
     let isFirstResponder: Bool
     let commitAction: () -> Void
     let spaceAction: () -> Void
+    let hyphenAction: (() -> Void)?
     let melismaAction: (() -> Void)?
     let dismissAction: (() -> Void)?
 
@@ -182,6 +184,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         isFirstResponder: Bool,
         commitAction: @escaping () -> Void,
         spaceAction: @escaping () -> Void,
+        hyphenAction: (() -> Void)? = nil,
         melismaAction: (() -> Void)? = nil,
         dismissAction: (() -> Void)? = nil
     ) {
@@ -190,6 +193,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         self.isFirstResponder = isFirstResponder
         self.commitAction = commitAction
         self.spaceAction = spaceAction
+        self.hyphenAction = hyphenAction
         self.melismaAction = melismaAction
         self.dismissAction = dismissAction
     }
@@ -216,6 +220,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         context.coordinator.text = $text
         context.coordinator.commitAction = commitAction
         context.coordinator.spaceAction = spaceAction
+        context.coordinator.hyphenAction = hyphenAction
         context.coordinator.melismaAction = melismaAction
         context.coordinator.dismissAction = dismissAction
 
@@ -231,6 +236,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
             text: $text,
             commitAction: commitAction,
             spaceAction: spaceAction,
+            hyphenAction: hyphenAction,
             melismaAction: melismaAction,
             dismissAction: dismissAction
         )
@@ -240,6 +246,8 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         switch replacementString {
         case " ":
             return .advance
+        case "-":
+            return .hyphen
         case "_":
             return .melisma
         default:
@@ -251,6 +259,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         var text: Binding<String>
         var commitAction: () -> Void
         var spaceAction: () -> Void
+        var hyphenAction: (() -> Void)?
         var melismaAction: (() -> Void)?
         var dismissAction: (() -> Void)?
 
@@ -258,12 +267,14 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
             text: Binding<String>,
             commitAction: @escaping () -> Void,
             spaceAction: @escaping () -> Void,
+            hyphenAction: (() -> Void)? = nil,
             melismaAction: (() -> Void)? = nil,
             dismissAction: (() -> Void)? = nil
         ) {
             self.text = text
             self.commitAction = commitAction
             self.spaceAction = spaceAction
+            self.hyphenAction = hyphenAction
             self.melismaAction = melismaAction
             self.dismissAction = dismissAction
         }
@@ -287,6 +298,12 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
             switch command {
             case .advance:
                 spaceAction()
+            case .hyphen:
+                // Without a hyphen action (the plain text editor) "-" is typed as text.
+                guard let hyphenAction else {
+                    return true
+                }
+                hyphenAction()
             case .melisma:
                 guard let melismaAction else {
                     return true

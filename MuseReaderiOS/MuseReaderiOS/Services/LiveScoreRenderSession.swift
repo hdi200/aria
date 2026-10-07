@@ -561,6 +561,26 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func addLyricsHyphen(_ text: String) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.addLyricsHyphen(text))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
+    func finishLyricsEntry() throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.finishLyricsEntry())
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func addRepeatJump(_ repeatJumpKind: String) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()

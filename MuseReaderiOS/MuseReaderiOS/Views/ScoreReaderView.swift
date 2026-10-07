@@ -434,6 +434,7 @@ struct ScoreReaderView: View {
                                 addChordTextAndSelectNextAction: readerState.addChordTextAndSelectNext,
                                 openLyricsEntryAction: openLyricsEntry,
                                 addLyricsTextAction: readerState.addLyricsText,
+                                addLyricsHyphenAction: readerState.addLyricsHyphen,
                                 addLyricsMelismaAction: readerState.addLyricsMelisma,
                                 addRepeatJumpAction: readerState.addRepeatJump,
                                 addExpressionAction: readerState.addExpression,
@@ -3175,6 +3176,9 @@ struct ScoreReaderView: View {
     private func handleToolCategoryChange(from oldValue: ScoreReaderToolCategory, to newValue: ScoreReaderToolCategory) {
         let wasTextEntry = oldValue == .chord || oldValue == .lyrics
         let isTextEntry = newValue == .chord || newValue == .lyrics
+        if oldValue == .lyrics && newValue != .lyrics {
+            readerState.finishLyricsEntry()
+        }
 
         if newValue == .chord {
             readerState.prepareChordTextEntry()

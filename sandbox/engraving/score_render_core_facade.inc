@@ -326,6 +326,18 @@ bool msr::render::ScoreRenderSession::addLyricsMelisma(const std::string& text,
     return m_impl->addLyricsMelisma(text, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::addLyricsHyphen(const std::string& text,
+                                                      ScoreEditState& output,
+                                                      std::string& errorMessage)
+{
+    return m_impl->addLyricsHyphen(text, output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::finishLyricsEntry(ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->finishLyricsEntry(output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::addRepeatJump(const std::string& repeatJumpKind,
                                                      ScoreEditState& output,
                                                      std::string& errorMessage)

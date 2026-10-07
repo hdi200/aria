@@ -1580,6 +1580,66 @@ void testTransposeToKeyMovesEachSelectedStaffByTheSameAmount(const std::filesyst
     expect(countOccurrences(bottom, "<KeySig>") == 2, "The bottom staff should keep its F major start and gain one key change");
 }
 
+// Lyrics entry follows desktop: "-" hyphenates, space skips without leaving empty lyrics, "_"
+// extends the word's line over several notes, and closing the panel removes an empty lyric.
+void testLyricsEntryMatchesDesktop(const std::filesystem::path& root)
+{
+    const std::vector<NoteSpec> fourNotes = { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } };
+    msr::render::ScoreEditState state;
+    std::string error;
+    auto selectFirst = [&](msr::render::ScoreRenderSession& session) {
+        std::map<int, LocatedItem> notes = locateNotesByPitch(session);
+        expect(notes.count(60), "Could not locate the first note");
+        expect(session.selectElement(0, notes[60].x, notes[60].y, 1.0, state, error), "Could not select the first note: " + error);
+    };
+
+    {
+        auto session = openSession(root, "lyrics-hyphen", scoreXml(0, fourNotes, 1));
+        selectFirst(*session);
+        expect(session->addLyricsHyphen("glo", state, error), "Hyphen failed: " + error);
+        expect(session->addLyricsHyphen("ri", state, error), "Second hyphen failed: " + error);
+        expect(session->addLyricsText("a", false, state, error), "Last syllable failed: " + error);
+        const std::string saved = saveSnapshot(*session, root, "lyrics-hyphen");
+        expect(countOccurrences(saved, "<Lyrics>") == 3, "glo-ri-a should be three lyrics");
+        expect(saved.find("<syllabic>begin</syllabic>") != std::string::npos, "glo should begin the word");
+        expect(saved.find("<syllabic>middle</syllabic>") != std::string::npos, "ri should be in the middle");
+        expect(saved.find("<syllabic>end</syllabic>") != std::string::npos, "a should end the word");
+        expect(saved.find("glo-") == std::string::npos, "The hyphen should not be typed into the text");
+    }
+    {
+        auto session = openSession(root, "lyrics-skip", scoreXml(0, fourNotes, 1));
+        selectFirst(*session);
+        expect(session->addLyricsText("la", true, state, error), "Space failed: " + error);
+        expect(session->addLyricsText("", true, state, error), "Skipping a note failed: " + error);
+        expect(session->addLyricsText("", true, state, error), "Skipping another note failed: " + error);
+        expect(session->addLyricsText("da", false, state, error), "Last lyric failed: " + error);
+        const std::string saved = saveSnapshot(*session, root, "lyrics-skip");
+        expect(countOccurrences(saved, "<Lyrics>") == 2, "Skipped notes should not keep empty lyrics");
+    }
+    {
+        auto session = openSession(root, "lyrics-extension", scoreXml(0, fourNotes, 1));
+        selectFirst(*session);
+        expect(session->addLyricsMelisma("ah", state, error), "Extension failed: " + error);
+        expect(session->addLyricsMelisma("", state, error), "Second extension failed: " + error);
+        expect(session->addLyricsMelisma("", state, error), "Third extension failed: " + error);
+        expect(session->addLyricsText("la", false, state, error), "Lyric after the extension failed: " + error);
+        const std::string saved = saveSnapshot(*session, root, "lyrics-extension");
+        expect(countOccurrences(saved, "<Lyrics>") == 2, "The extension should not leave empty lyrics on the notes it covers");
+        expect(saved.find("<ticks_f>1/2</ticks_f>") != std::string::npos, "ah's line should run to the third note");
+    }
+    {
+        auto session = openSession(root, "lyrics-close", scoreXml(0, fourNotes, 1));
+        selectFirst(*session);
+        expect(session->addLyricsText("la", true, state, error), "Space failed: " + error);
+        expect(session->finishLyricsEntry(state, error), "Closing lyrics failed: " + error);
+        const std::string saved = saveSnapshot(*session, root, "lyrics-close");
+        expect(countOccurrences(saved, "<Lyrics>") == 1, "Closing the panel should remove the empty next lyric");
+        expect(session->undo(state, error), "Undo failed: " + error);
+        expect(session->undo(state, error), "Second undo failed: " + error);
+        expect(countOccurrences(saveSnapshot(*session, root, "lyrics-close-undone"), "<Lyrics>") == 0, "Undo should remove the lyrics");
+    }
+}
+
 void testMeasureSelectionCarriesInstrumentContext(const std::filesystem::path& root)
 {
     auto session = openSession(root, "measure-instrument-context", scoreXml(0, { { 60, 14 } }, 1));
@@ -2196,6 +2256,7 @@ int main()
     passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
     passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
     passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
+    passed &= runTest("lyrics entry matches desktop", [&] { testLyricsEntryMatchesDesktop(testDirectory.path); });
     passed &= runTest("transpose to key moves each selected staff by the same amount",
                       [&] { testTransposeToKeyMovesEachSelectedStaffByTheSameAmount(testDirectory.path); });
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });

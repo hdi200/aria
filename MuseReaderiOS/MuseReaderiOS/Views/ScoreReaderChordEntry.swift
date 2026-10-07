@@ -168,6 +168,7 @@ struct ScoreReaderLyricsEntryPanel: View {
     let initialText: String
     let isInsertEnabled: Bool
     let insertAction: (String, Bool) -> Void
+    let hyphenAction: (String) -> Void
     let melismaAction: (String) -> Void
     let cancelAction: () -> Void
 
@@ -176,6 +177,7 @@ struct ScoreReaderLyricsEntryPanel: View {
         initialText: String,
         isInsertEnabled: Bool,
         insertAction: @escaping (String, Bool) -> Void,
+        hyphenAction: @escaping (String) -> Void,
         melismaAction: @escaping (String) -> Void,
         cancelAction: @escaping () -> Void
     ) {
@@ -183,6 +185,7 @@ struct ScoreReaderLyricsEntryPanel: View {
         self.initialText = initialText
         self.isInsertEnabled = isInsertEnabled
         self.insertAction = insertAction
+        self.hyphenAction = hyphenAction
         self.melismaAction = melismaAction
         self.cancelAction = cancelAction
         _lyricsText = State(initialValue: initialText)
@@ -237,7 +240,7 @@ struct ScoreReaderLyricsEntryPanel: View {
                 extensionButton
             }
 
-            Text("Space moves to next note • _ extends the syllable")
+            Text("Space: next note • - joins syllables • _ extends")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.black.opacity(0.48))
                 .fixedSize(horizontal: false, vertical: true)
@@ -252,6 +255,7 @@ struct ScoreReaderLyricsEntryPanel: View {
             isFirstResponder: true,
             commitAction: commit,
             spaceAction: commitAndAdvance,
+            hyphenAction: commitHyphen,
             melismaAction: commitMelisma,
             dismissAction: cancelAction
         )
@@ -321,6 +325,15 @@ struct ScoreReaderLyricsEntryPanel: View {
         }
 
         insertAction(lyricsText.trimmedToNil ?? "", true)
+        lyricsText = ""
+    }
+
+    private func commitHyphen() {
+        guard isInsertEnabled else {
+            return
+        }
+
+        hyphenAction(lyricsText.trimmedToNil ?? "")
         lyricsText = ""
     }
 

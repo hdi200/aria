@@ -736,6 +736,20 @@ extension ScoreReaderState {
         }
     }
 
+    func addLyricsHyphen(_ text: String) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
+            try await liveRenderSession.addLyricsHyphen(trimmedText)
+        }
+    }
+
+    /// Leaving lyrics entry removes a lyric left empty, as desktop does when editing ends.
+    func finishLyricsEntry() {
+        performEditingAction(mutatesScore: true) { liveRenderSession in
+            try await liveRenderSession.finishLyricsEntry()
+        }
+    }
+
     func addRepeatJump(_ repeatJumpKind: String) {
         performEditingAction(mutatesScore: true) { liveRenderSession in
             try await liveRenderSession.addRepeatJump(repeatJumpKind)
