@@ -1280,10 +1280,55 @@ final class ScorePageContentView: UIView {
     }
 }
 
+/// The PDF page a CATiledLayer view draws. The layer draws tiles on background threads while
+/// the main thread swaps in a newly rendered page, and a CGPDFPage does not keep its document
+/// alive: drawing a page whose document was just released crashed (seen when edits came
+/// quickly). A draw takes the document and page together under the lock and holds both until
+/// it ends.
+nonisolated private final class TiledPDFPageSource: @unchecked Sendable {
+    struct Snapshot {
+        let document: CGPDFDocument
+        let page: CGPDFPage
+        let contentSize: CGSize
+    }
+
+    private let lock = NSLock()
+    private var document: CGPDFDocument?
+    private var page: CGPDFPage?
+    private var contentSize = CGSize(width: 1, height: 1)
+
+    func set(document: CGPDFDocument?, page: CGPDFPage?) {
+        lock.lock()
+        self.document = document
+        self.page = page
+        lock.unlock()
+    }
+
+    func setContentSize(_ size: CGSize) {
+        lock.lock()
+        contentSize = size
+        lock.unlock()
+    }
+
+    var hasPage: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return page != nil
+    }
+
+    func snapshot() -> Snapshot? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let document, let page else {
+            return nil
+        }
+        return Snapshot(document: document, page: page, contentSize: contentSize)
+    }
+}
+
 private final class ScorePagePDFTileView: UIView {
     private var currentPDFData: Data?
-    private var pdfDocument: CGPDFDocument?
-    private var pdfPage: CGPDFPage?
+    private let pdfSource = TiledPDFPageSource()
     private var contentSize = CGSize(width: 1, height: 1)
     private var lastViewportSize = CGSize.zero
 
@@ -1327,6 +1372,7 @@ private final class ScorePagePDFTileView: UIView {
         )
         var needsRedraw = self.contentSize != validContentSize
         self.contentSize = validContentSize
+        pdfSource.setContentSize(validContentSize)
 
         if currentPDFData != pdfData {
             guard
@@ -1339,8 +1385,7 @@ private final class ScorePagePDFTileView: UIView {
             }
 
             currentPDFData = pdfData
-            pdfDocument = document
-            pdfPage = page
+            pdfSource.set(document: document, page: page)
             needsRedraw = true
         }
 
@@ -1348,31 +1393,31 @@ private final class ScorePagePDFTileView: UIView {
             setNeedsDisplay()
         }
 
-        return pdfPage != nil
+        return pdfSource.hasPage
     }
 
     func clear() {
         currentPDFData = nil
-        pdfDocument = nil
-        pdfPage = nil
+        pdfSource.set(document: nil, page: nil)
         setNeedsDisplay()
     }
 
     override func draw(_ rect: CGRect) {
         guard
             let context = UIGraphicsGetCurrentContext(),
-            let pdfPage,
+            let snapshot = pdfSource.snapshot(),
             bounds.width > 0,
             bounds.height > 0
         else {
             return
         }
+        let pdfPage = snapshot.page
 
         context.saveGState()
         context.setFillColor(UIColor.white.cgColor)
         context.fill(rect)
 
-        let contentRect = AVMakeRect(aspectRatio: contentSize, insideRect: bounds)
+        let contentRect = AVMakeRect(aspectRatio: snapshot.contentSize, insideRect: bounds)
         let pageBox = pdfPage.getBoxRect(.mediaBox)
         guard contentRect.width > 0, contentRect.height > 0, pageBox.width > 0, pageBox.height > 0 else {
             context.restoreGState()
@@ -1384,16 +1429,16 @@ private final class ScorePagePDFTileView: UIView {
         context.translateBy(x: -pageBox.minX, y: -pageBox.minY)
         context.drawPDFPage(pdfPage)
         context.restoreGState()
+        withExtendedLifetime(snapshot.document) {}
     }
 }
 
 private final class ScoreOverlayPDFView: UIView {
     private var currentPDFData: Data?
-    private var pdfDocument: CGPDFDocument?
-    private var pdfPage: CGPDFPage?
+    private let pdfSource = TiledPDFPageSource()
 
     var hasDocument: Bool {
-        pdfPage != nil
+        pdfSource.hasPage
     }
 
     override class var layerClass: AnyClass {
@@ -1435,30 +1480,29 @@ private final class ScoreOverlayPDFView: UIView {
             }
 
             currentPDFData = pdfData
-            pdfDocument = document
-            pdfPage = page
+            pdfSource.set(document: document, page: page)
             setNeedsDisplay()
         }
 
-        return pdfPage != nil
+        return pdfSource.hasPage
     }
 
     func clear() {
         currentPDFData = nil
-        pdfDocument = nil
-        pdfPage = nil
+        pdfSource.set(document: nil, page: nil)
         setNeedsDisplay()
     }
 
     override func draw(_ rect: CGRect) {
         guard
             let context = UIGraphicsGetCurrentContext(),
-            let pdfPage,
+            let snapshot = pdfSource.snapshot(),
             bounds.width > 0,
             bounds.height > 0
         else {
             return
         }
+        let pdfPage = snapshot.page
 
         let pageBox = pdfPage.getBoxRect(.mediaBox)
         guard pageBox.width > 0, pageBox.height > 0 else {
@@ -1472,6 +1516,7 @@ private final class ScoreOverlayPDFView: UIView {
         context.translateBy(x: -pageBox.minX, y: -pageBox.minY)
         context.drawPDFPage(pdfPage)
         context.restoreGState()
+        withExtendedLifetime(snapshot.document) {}
     }
 }
 
