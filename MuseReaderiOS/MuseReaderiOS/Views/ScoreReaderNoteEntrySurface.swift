@@ -589,7 +589,8 @@ struct ScoreReaderNoteEntrySurface: View {
             ScoreReaderLyricsEntryPanel(
                 selectionID: editingState.selection?.textEditorID,
                 initialText: editingState.selection?.textKind == "Lyrics" ? (editingState.selection?.textContent ?? "") : "",
-                isInsertEnabled: lyricEntryEnabled && !isBusy,
+                // Lyric commands queue behind the edit in flight, so typing stays enabled.
+                isInsertEnabled: lyricEntryEnabled,
                 insertAction: addLyricsTextAction,
                 hyphenAction: addLyricsHyphenAction,
                 melismaAction: addLyricsMelismaAction,
@@ -743,7 +744,8 @@ struct ScoreReaderNoteEntrySurface: View {
             ScoreReaderLyricsEntryPanel(
                 selectionID: editingState.selection?.textEditorID,
                 initialText: editingState.selection?.textKind == "Lyrics" ? (editingState.selection?.textContent ?? "") : "",
-                isInsertEnabled: lyricEntryEnabled && !isBusy,
+                // Lyric commands queue behind the edit in flight, so typing stays enabled.
+                isInsertEnabled: lyricEntryEnabled,
                 insertAction: addLyricsTextAction,
                 hyphenAction: addLyricsHyphenAction,
                 melismaAction: addLyricsMelismaAction,

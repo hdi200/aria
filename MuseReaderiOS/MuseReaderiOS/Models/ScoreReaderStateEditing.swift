@@ -724,29 +724,68 @@ extension ScoreReaderState {
             return
         }
 
-        performEditingAction(mutatesScore: !trimmedText.isEmpty || advanceToNextChord, revealActiveNotation: true) { liveRenderSession in
+        enqueueLyricsAction(revealActiveNotation: true) { liveRenderSession in
             try await liveRenderSession.addLyricsText(trimmedText, advanceToNextChord: advanceToNextChord)
         }
     }
 
     func addLyricsMelisma(_ text: String) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
+        enqueueLyricsAction(revealActiveNotation: true) { liveRenderSession in
             try await liveRenderSession.addLyricsMelisma(trimmedText)
         }
     }
 
     func addLyricsHyphen(_ text: String) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
+        enqueueLyricsAction(revealActiveNotation: true) { liveRenderSession in
             try await liveRenderSession.addLyricsHyphen(trimmedText)
         }
     }
 
     /// Leaving lyrics entry removes a lyric left empty, as desktop does when editing ends.
     func finishLyricsEntry() {
-        performEditingAction(mutatesScore: true) { liveRenderSession in
+        enqueueLyricsAction(revealActiveNotation: false) { liveRenderSession in
             try await liveRenderSession.finishLyricsEntry()
+        }
+    }
+
+    /// Runs a lyric command after the previous one and after any other edit in flight (such as
+    /// leaving note input when the lyrics panel closes), instead of dropping it.
+    private func enqueueLyricsAction(
+        revealActiveNotation: Bool,
+        action: @escaping (LiveScoreRenderSession) async throws -> ScoreEditingState
+    ) {
+        let previous = lyricsActionTail
+        lyricsActionTail = Task { @MainActor [weak self] in
+            await previous?.value
+            // Bounded wait (about 10 s) for an unrelated edit to finish.
+            for _ in 0..<1000 {
+                guard let self, self.isEditingActionInFlight else {
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 10_000_000)
+            }
+            guard
+                let self,
+                self.supportsEditing,
+                self.isEditingMode,
+                let liveRenderSession = self.session.liveRenderSession,
+                !self.isEditingActionInFlight
+            else {
+                return
+            }
+            self.isEditingActionInFlight = true
+            self.editingErrorMessage = nil
+            defer {
+                self.isEditingActionInFlight = false
+            }
+            do {
+                let newState = try await action(liveRenderSession)
+                self.refreshAfterScoreMutation(with: newState, auditionNote: false, revealActiveNotation: revealActiveNotation)
+            } catch {
+                self.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
         }
     }
 

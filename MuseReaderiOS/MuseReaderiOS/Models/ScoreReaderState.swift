@@ -125,6 +125,9 @@ final class ScoreReaderState: ObservableObject {
     @Published var saveNeedsChordSymbolRemovalApproval = false
     @Published var hasUnsavedAutosaveChanges = false
     @Published var isEditingActionInFlight = false
+    /// Lyric commands run one after another: typing "glo-ri-a " quickly sends several before the
+    /// first one finishes, and an edit that arrives while another is running would be dropped.
+    var lyricsActionTail: Task<Void, Never>?
     //! NOTE Live score info. session.document is a snapshot from when the score was opened,
     //! so it goes stale after metadata edits, on-page title edits, and undo/redo.
     @Published var scoreMetadata: ScoreEditableMetadata

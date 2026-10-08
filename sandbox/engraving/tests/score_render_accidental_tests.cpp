@@ -1722,6 +1722,31 @@ void testLyricsEntryMatchesDesktop(const std::filesystem::path& root)
         expect(saved.find("<ticks_f>1/2</ticks_f>") != std::string::npos, "ah's line should run to the third note");
     }
     {
+        // The app's burst: select a note, open lyrics (attaches an empty lyric), then type
+        // "glo-ri-a in  ex__" with every command arriving back to back.
+        std::string eightNotes = scoreXml(0, fourNotes, 1);
+        const size_t firstBarEnd = eightNotes.find("</Measure>") + 10;
+        eightNotes.insert(firstBarEnd, "\n      <Measure><voice>"
+                                       "<Chord><durationType>quarter</durationType><Note><pitch>67</pitch><tpc>15</tpc></Note></Chord>"
+                                       "<Chord><durationType>quarter</durationType><Note><pitch>69</pitch><tpc>17</tpc></Note></Chord>"
+                                       "<Chord><durationType>quarter</durationType><Note><pitch>71</pitch><tpc>19</tpc></Note></Chord>"
+                                       "<Chord><durationType>quarter</durationType><Note><pitch>72</pitch><tpc>14</tpc></Note></Chord>"
+                                       "</voice></Measure>");
+        auto session = openSession(root, "lyrics-burst", eightNotes);
+        selectFirst(*session);
+        expect(session->selectAttachedLyrics(state, error), "Opening lyrics failed: " + error);
+        expect(session->addLyricsHyphen("glo", state, error), "glo- failed: " + error);
+        expect(session->addLyricsHyphen("ri", state, error), "ri- failed: " + error);
+        expect(session->addLyricsText("a", true, state, error), "a failed: " + error);
+        expect(session->addLyricsText("in", true, state, error), "in failed: " + error);
+        expect(session->addLyricsText("", true, state, error), "Skipping failed: " + error);
+        expect(session->addLyricsMelisma("ex", state, error), "ex_ failed: " + error);
+        expect(session->addLyricsMelisma("", state, error), "_ failed: " + error);
+        expect(session->finishLyricsEntry(state, error), "Closing lyrics failed: " + error);
+        const std::string saved = saveSnapshot(*session, root, "lyrics-burst");
+        expect(countOccurrences(saved, "<Lyrics>") == 5, "glo ri a in ex should be the only lyrics");
+    }
+    {
         auto session = openSession(root, "lyrics-close", scoreXml(0, fourNotes, 1));
         selectFirst(*session);
         expect(session->addLyricsText("la", true, state, error), "Space failed: " + error);

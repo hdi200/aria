@@ -286,6 +286,7 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             text.wrappedValue = textField.text ?? ""
             spaceAction()
+            textField.text = ""
             return false
         }
 
@@ -310,6 +311,9 @@ struct ScoreReaderLyricsTextInputField: UIViewRepresentable {
                 }
                 melismaAction()
             }
+            // The syllable has been handed over; keys typed next belong to the next note, even
+            // before SwiftUI clears the bound text.
+            textField.text = ""
             return false
         }
     }

@@ -163,6 +163,9 @@ struct ScoreReaderLyricsEntryPanel: View {
 
     @State private var lyricsText: String
     @State private var activeSelectionID: String?
+    /// Space, "-" or "_" sent and not yet answered. Text typed meanwhile belongs to the next
+    /// note, so the selection moving there must not clear it.
+    @State private var pendingAdvances = 0
 
     let selectionID: String?
     let initialText: String
@@ -206,6 +209,13 @@ struct ScoreReaderLyricsEntryPanel: View {
             }
 
             activeSelectionID = newSelectionID
+            if pendingAdvances > 0 {
+                pendingAdvances -= 1
+                if lyricsText.isEmpty {
+                    lyricsText = initialText
+                }
+                return
+            }
             lyricsText = initialText
         }
         .onChangeCompatible(of: initialText) { newText in
@@ -324,6 +334,7 @@ struct ScoreReaderLyricsEntryPanel: View {
             return
         }
 
+        pendingAdvances += 1
         insertAction(lyricsText.trimmedToNil ?? "", true)
         lyricsText = ""
     }
@@ -333,6 +344,7 @@ struct ScoreReaderLyricsEntryPanel: View {
             return
         }
 
+        pendingAdvances += 1
         hyphenAction(lyricsText.trimmedToNil ?? "")
         lyricsText = ""
     }
@@ -342,6 +354,7 @@ struct ScoreReaderLyricsEntryPanel: View {
             return
         }
 
+        pendingAdvances += 1
         melismaAction(lyricsText.trimmedToNil ?? "")
         lyricsText = ""
     }
