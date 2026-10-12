@@ -87,6 +87,15 @@ struct UpdateNoticeSheet: View {
         let message: String
         /// Annotations are iPad-only, so iPhone skips their page.
         var isPadOnly = false
+        /// A list page of smaller changes, shown instead of the picture and message.
+        var items: [Item] = []
+    }
+
+    private struct Item: Identifiable {
+        var id: String { title }
+        let systemImage: String
+        let title: String
+        let detail: String
     }
 
     // The clips are real exports: Bach's Orchestral Suite No. 2 scrolling over
@@ -115,6 +124,34 @@ struct UpdateNoticeSheet: View {
                 + "or finger. Each mark stays with its spot in the music, even when the layout changes. "
                 + "Your annotations are saved with this score, ready for your next practice or rehearsal.",
             isPadOnly: true
+        ),
+        Page(
+            clip: nil,
+            systemImage: "sparkles",
+            title: "Also in this update",
+            message: "",
+            items: [
+                Item(
+                    systemImage: "metronome",
+                    title: "Count-in",
+                    detail: "Touch and hold the metronome button to play one bar of clicks before playback starts."
+                ),
+                Item(
+                    systemImage: "music.mic",
+                    title: "Lyrics like MuseScore",
+                    detail: "Type - between syllables for a hyphen and _ to hold a syllable across notes."
+                ),
+                Item(
+                    systemImage: "book.pages",
+                    title: "Page scrubber",
+                    detail: "Drag the slider at the bottom of the score to jump to any page."
+                ),
+                Item(
+                    systemImage: "music.note.list",
+                    title: "Swing and instruments",
+                    detail: "Swing markings now swing in playback, and added instruments get the right key and drum staff."
+                ),
+            ]
         )
     ]
     .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
@@ -173,7 +210,45 @@ struct UpdateNoticeSheet: View {
         .presentationDetents([.large])
     }
 
+    @ViewBuilder
     private func pageView(_ page: Page) -> some View {
+        if page.items.isEmpty {
+            mediaPageView(page)
+        } else {
+            listPageView(page)
+        }
+    }
+
+    private func listPageView(_ page: Page) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text(page.title)
+                    .font(.title3.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(page.items) { item in
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: item.systemImage)
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 44, height: 44)
+                            .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.title).font(.body.weight(.semibold))
+                            Text(item.detail)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding()
+        }
+    }
+
+    private func mediaPageView(_ page: Page) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Group {
