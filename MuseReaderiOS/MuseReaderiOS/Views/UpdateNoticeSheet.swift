@@ -138,11 +138,6 @@ struct UpdateNoticeSheet: View {
                     detail: "Touch and hold the metronome button to play one bar of clicks before playback starts."
                 ),
                 Item(
-                    systemImage: "music.mic",
-                    title: "Lyrics like MuseScore",
-                    detail: "Type - between syllables for a hyphen and _ to hold a syllable across notes."
-                ),
-                Item(
                     systemImage: "book.pages",
                     title: "Page scrubber",
                     detail: "Drag the slider at the bottom of the score to jump to any page."
