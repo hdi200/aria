@@ -11,10 +11,11 @@ import SwiftUI
 struct UpdateNoticeStore {
     static let currentVersion = 2
 
-    // Annotations and video export release on October 1, 2026 at
-    // 12:00 PM Eastern. AppTransaction supplies Apple's signed date for when this
-    // customer first acquired the app, which survives the update itself.
-    static let releaseDate = Date(timeIntervalSince1970: 1_790_870_400)
+    // Annotations and video export release on October 14, 2026 at
+    // 12:00 AM Eastern: anyone who got the app before then sees the notice once.
+    // AppTransaction supplies Apple's signed date for when this customer first
+    // acquired the app, which survives the update itself.
+    static let releaseDate = Date(timeIntervalSince1970: 1_791_950_400)
 
     private let defaultsKey = "UpdateNotice.seenVersion"
     private var audienceKey: String {

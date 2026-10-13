@@ -16,7 +16,9 @@ struct ScoreReaderFeatureTourStep: Identifiable {
 ///
 /// Versioned so a later release can introduce a new tour by bumping `currentVersion`.
 struct ScoreReaderFeatureTourStore {
-    static let currentVersion = 2
+    // Still version 1: count-in is announced in the update notice instead, so people
+    // who already saw this tour are not shown it again.
+    static let currentVersion = 1
 
     // Version 6.0, which introduced the mixer and play-from-here tour, began its
     // release on September 15, 2026 at 2:00 PM Eastern. AppTransaction supplies
@@ -105,13 +107,6 @@ struct ScoreReaderFeatureTour: View {
             title: "Play or loop any passage",
             message: "In View mode, touch and hold a measure, then choose Play from here. "
                 + "Drag across measures to loop a section instead."
-        ),
-        ScoreReaderFeatureTourStep(
-            id: 2,
-            systemImage: "metronome",
-            title: "Start with a count-in",
-            message: "Touch and hold the metronome button to turn on a one-bar count-in. "
-                + "A tap still turns the metronome on or off."
         )
     ]
 
