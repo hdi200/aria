@@ -104,6 +104,10 @@ compile_commands.json
 # Standalone privacy policy website; tracked in its own repository.
 /privacy-site/
 
+# Local promo videos, marketing screenshots and the scripts that build them.
+/promo/
+MuseReaderiOS/MuseReaderiOSUITests/PromoTrailerUITests.swift
+
 # Aria media kept out of git (video backgrounds, What's New / marketing videos)
 MuseReaderiOS/MuseReaderiOS/Resources/VideoBackgrounds/
 MuseReaderiOS/MuseReaderiOS/Resources/WhatsNew/
