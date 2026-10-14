@@ -713,8 +713,10 @@ struct ScoreReaderVideoExportSheet: View {
             if completedVideos.isEmpty {
                 GeometryReader { geometry in
                     ScrollView {
+                        // iPad fits everything by shrinking the preview. iPhone keeps
+                        // the full-width preview and scrolls; the footer stays put.
                         column { settingsContent(compact: geometry.size.height < settingsControlsHeight + 150) }
-                            .frame(idealHeight: geometry.size.height)
+                            .frame(idealHeight: isTablet ? geometry.size.height : nil)
                     }
                     .scrollBounceBehavior(.basedOnSize)
                 }
@@ -1114,11 +1116,12 @@ struct ScoreReaderVideoExportSheet: View {
         }
         .animation(.easeOut(duration: 0.2), value: previewImage)
         .aspectRatio(16.0 / 9.0, contentMode: .fit)
-        .frame(maxWidth: .infinity, minHeight: 100)
+        // The card keeps the frame's shape when it shrinks, so no blank bars.
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(0.08)))
         .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        .frame(maxWidth: .infinity, minHeight: 100)
         .opacity(isPreparingExport ? 0.6 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Video preview, \(styleSummary)")
