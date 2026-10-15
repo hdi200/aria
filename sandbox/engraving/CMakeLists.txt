@@ -49,7 +49,7 @@ set(MUSE_QT_SUPPORT ON CACHE BOOL "" FORCE)
 set(MUSE_ENABLE_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 set(MUSE_COMPILE_USE_PCH OFF CACHE BOOL "" FORCE)
 set(MUSE_COMPILE_USE_UNITY OFF CACHE BOOL "" FORCE)
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR ANDROID)
     set(ENGRAVING_NO_API ON CACHE BOOL "" FORCE)
     set(MUE_COMPILE_USE_SYSTEM_FREETYPE OFF CACHE BOOL "" FORCE)
     set(MUE_COMPILE_USE_SYSTEM_HARFBUZZ OFF CACHE BOOL "" FORCE)
@@ -65,6 +65,14 @@ set(MUE_BUILD_ENGRAVING_DEVTOOLS OFF CACHE BOOL "" FORCE)
 set(MUE_BUILD_ENGRAVING_PLAYBACK ON CACHE BOOL "" FORCE)
 set(MUSICXML_NO_INTERNAL ON CACHE BOOL "" FORCE)
 
+if(ANDROID)
+    # Android takes the engine's Linux path for the app data folder, which needs
+    # install-location macros that only the full MuseScore build defines. The
+    # render core embeds its resources, so the folder is never used.
+    set(MUSE_APP_INSTALL_PREFIX "/")
+    set(MUSE_APP_INSTALL_NAME "aria")
+endif()
+
 include(SetupBuildEnvironment)
 include(GetPlatformInfo)
 include(${MU_ROOT}/src/framework/cmake/MuseSetupConfiguration.cmake)
@@ -73,6 +81,14 @@ include(${MU_ROOT}/src/framework/audio/thirdparty/fluidsynth/fluidsynth.cmake)
 find_package(Qt6 6.3 REQUIRED COMPONENTS Core Gui Svg Qml Quick Widgets Network)
 
 qt_standard_project_setup()
+
+if(ANDROID)
+    # Qt for Android is a shared build, so Qt's add_library would make every
+    # engine module a shared library. Build them static, as on iOS, so the app
+    # links one render core library.
+    qt_policy(SET QTP0003 NEW)
+    set(BUILD_SHARED_LIBS OFF)
+endif()
 
 add_subdirectory(${MU_ROOT}/src/framework/global global)
 add_subdirectory(${MU_ROOT}/src/framework/draw draw)
@@ -171,6 +187,36 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
         XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO
         XCODE_ATTRIBUTE_DEFINES_MODULE YES
+    )
+elseif(ANDROID)
+    # Static library for the Android app's JNI library to link, plus the page
+    # probe so rendering can be checked on a device or emulator with adb.
+    add_library(MuseScoreRenderCore STATIC
+        ${score_render_core_common_sources}
+    )
+
+    target_include_directories(MuseScoreRenderCore PUBLIC
+        ${score_render_core_common_includes}
+    )
+
+    target_link_libraries(MuseScoreRenderCore PUBLIC
+        ${score_render_core_common_links}
+    )
+
+    target_compile_definitions(MuseScoreRenderCore PRIVATE
+        ${FLUIDSYNTH_DEF}
+    )
+
+    add_executable(score_render_probe
+        main.cpp
+    )
+
+    target_include_directories(score_render_probe PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+    )
+
+    target_link_libraries(score_render_probe PRIVATE
+        MuseScoreRenderCore
     )
 else()
     add_library(score_render_core

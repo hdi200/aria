@@ -46,7 +46,7 @@ Performance:
   re-encoding it as PNG (about 2 s for a large title-frame picture). Every reader decodes
   a `Pixmap` with `loadFromData`, so the drawn pixels are the same. Files are unaffected.
 
-iOS build plumbing (no effect on the Mac build):
+iOS and Android build plumbing (no effect on the Mac build):
 - `src/framework/draw/CMakeLists.txt`, `drawmodule.cpp`: iOS uses Qt's font provider only
   (`DRAW_QT_FONT_PROVIDER_ONLY`), no FreeType/HarfBuzz font engine.
 - `src/framework/draw/cmake/SetupHarfBuzz.cmake`: use Qt's bundled HarfBuzz on iOS.
@@ -55,6 +55,9 @@ iOS build plumbing (no effect on the Mac build):
 - `src/framework/global/internal/interactive.cpp`: iOS uses the QML file-dialog path
   (as Linux does) because the render core has no QtWidgets.
 - `src/engraving/CMakeLists.txt`: `ENGRAVING_NO_API` option; dtl include path.
+- Android builds take the same branches as iOS in `draw/CMakeLists.txt`,
+  `global/CMakeLists.txt` and `SetupBuildEnvironment.cmake` (Qt font provider only, no
+  macOS helper). Android code otherwise takes the engine's Linux paths (`Q_OS_LINUX`).
 
 Compiler fixes: `global/api/interactiveapi.cpp` (Qt 6.11 needs `<QMetaEnum>`),
 `global/api/apiutils.h`, `global/io/internal/filesystem.h`, `audio/devtools/inputlag.h`,

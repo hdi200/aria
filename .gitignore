@@ -111,3 +111,6 @@ MuseReaderiOS/MuseReaderiOSUITests/PromoTrailerUITests.swift
 # Aria media kept out of git (video backgrounds, What's New / marketing videos)
 MuseReaderiOS/MuseReaderiOS/Resources/VideoBackgrounds/
 MuseReaderiOS/MuseReaderiOS/Resources/WhatsNew/
+
+# Android app, private until release (has its own private repo inside)
+/MuseReaderAndroid/

@@ -249,8 +249,9 @@ else()
         )
     endif()
 
-    # Aria: the macOS helper needs AppKit, which iOS builds (also OS_IS_MAC) do not have.
-    if (OS_IS_MAC AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # Aria: the macOS helper needs AppKit, which iOS and Android builds made on a Mac
+    # (also OS_IS_MAC) do not have.
+    if (OS_IS_MAC AND NOT (CMAKE_SYSTEM_NAME STREQUAL "iOS" OR ANDROID))
         target_sources(muse_global PRIVATE
             internal/platform/macos/macosinteractivehelper.mm
             internal/platform/macos/macosinteractivehelper.h

@@ -84,7 +84,7 @@ else()
         internal/fontsdatabase.h
     )
 
-    if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    if (CMAKE_SYSTEM_NAME STREQUAL "iOS" OR ANDROID)
         target_compile_definitions(muse_draw PRIVATE DRAW_QT_FONT_PROVIDER_ONLY)
     else()
         # fonts
