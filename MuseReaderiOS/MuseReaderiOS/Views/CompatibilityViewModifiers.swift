@@ -37,11 +37,16 @@ extension View {
 
     @ViewBuilder
     func presentationCompactPopoverWhenAvailable() -> some View {
+        #if os(Android)
+        // Android presents these as bottom sheets; there is no compact popover.
+        self
+        #else
         if #available(iOS 16.4, *) {
             presentationCompactAdaptation(.popover)
         } else {
             self
         }
+        #endif
     }
 
     @ViewBuilder
@@ -55,19 +60,24 @@ extension View {
 
     @ViewBuilder
     func clearPresentationBackgroundWhenAvailable() -> some View {
+        #if os(Android)
+        // Not available on Android (Skip); keeps the default sheet background.
+        self
+        #else
         if #available(iOS 16.4, *) {
             presentationBackground(.clear)
         } else {
             self
         }
+        #endif
     }
 }
 
-private struct OldNewOnChangeCompatibilityModifier<Value: Equatable>: ViewModifier {
+struct OldNewOnChangeCompatibilityModifier<Value: Equatable>: ViewModifier {
     let value: Value
     let action: (Value, Value) -> Void
 
-    @State private var previousValue: Value?
+    @State var previousValue: Value?
 
     func body(content: Content) -> some View {
         content

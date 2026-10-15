@@ -6,10 +6,10 @@
 import SwiftUI
 
 struct ScoreReaderWidePitchKeyboard: View {
-    @State private var lockedStartMIDIPitch: Int?
-    @State private var naturalKeyOffset = 0
-    @State private var dragTranslation: CGFloat = 0
-    @State private var dragStartNaturalKeyOffset: Int?
+    @State var lockedStartMIDIPitch: Int?
+    @State var naturalKeyOffset = 0
+    @State var dragTranslation: CGFloat = 0
+    @State var dragStartNaturalKeyOffset: Int?
 
     let useFlats: Bool
     let activePitchClass: Int?
