@@ -1911,31 +1911,29 @@ struct ScoreReaderTransposeGridSelection<Item: ScoreReaderTransposeOption>: View
     ]
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(items, id: \.self) { item in
-                Button {
-                    selection = item
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(item.title)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.68)
-                        if selection == item {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                    }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(selection == item ? Color.blue : Color.black.opacity(0.82))
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .background(Color.white.opacity(selection == item ? 0.96 : 0.74), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .stroke(selection == item ? Color.blue : Color.black.opacity(0.08), lineWidth: selection == item ? 1.2 : 0.5)
+        AriaGrid(columns: columns, spacing: 8, items: items, id: \.self) { item in
+            Button {
+                selection = item
+            } label: {
+                HStack(spacing: 6) {
+                    Text(item.title)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.68)
+                    if selection == item {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .semibold))
                     }
                 }
-                .buttonStyle(.plain)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(selection == item ? Color.blue : Color.black.opacity(0.82))
+                .frame(maxWidth: .infinity, minHeight: 46)
+                .background(Color.white.opacity(selection == item ? 0.96 : 0.74), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .stroke(selection == item ? Color.blue : Color.black.opacity(0.08), lineWidth: selection == item ? 1.2 : 0.5)
+                }
             }
+            .buttonStyle(.plain)
         }
     }
 }

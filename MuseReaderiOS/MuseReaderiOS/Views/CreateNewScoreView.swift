@@ -305,18 +305,16 @@ struct CreateScoreTemplateSection: View {
 
     var body: some View {
         CreateScoreSection(number: 2, title: "Template", isPhone: isPhone) {
-            LazyVGrid(columns: columns, spacing: isPhone ? 8 : 10) {
-                ForEach(NewScoreTemplate.allCases) { template in
-                    CreateScoreTemplateCard(
-                        template: template,
-                        isSelected: draft.template == template && template != .custom,
-                        isPhone: isPhone
-                    ) {
-                        if template == .custom {
-                            isTemplateBrowserPresented = true
-                        } else {
-                            applyTemplate(template)
-                        }
+            AriaGrid(columns: columns, spacing: isPhone ? 8 : 10, items: NewScoreTemplate.allCases) { template in
+                CreateScoreTemplateCard(
+                    template: template,
+                    isSelected: draft.template == template && template != .custom,
+                    isPhone: isPhone
+                ) {
+                    if template == .custom {
+                        isTemplateBrowserPresented = true
+                    } else {
+                        applyTemplate(template)
                     }
                 }
             }
@@ -1626,50 +1624,53 @@ struct CreateScoreMusicSettingsSection: View {
 
     var body: some View {
         CreateScoreSection(number: 4, title: "Music Settings", isPhone: isPhone, collapsible: isPhone, startsCollapsed: isPhone) {
-            LazyVGrid(columns: columns, spacing: isPhone ? 10 : 14) {
-                CreateScorePickerField(title: "Key Signature") {
-                    Button(action: { isKeySignaturePresented = true }) {
-                        HStack {
-                            Text(draft.keySignature.rawValue)
-                                .foregroundStyle(CreateScorePalette.ink)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(CreateScorePalette.mutedInk)
+            AriaGrid(columns: columns, spacing: isPhone ? 10 : 14, items: CreateScoreMusicSetting.allCases) { setting in
+                switch setting {
+                case .keySignature:
+                    CreateScorePickerField(title: "Key Signature") {
+                        Button(action: { isKeySignaturePresented = true }) {
+                            HStack {
+                                Text(draft.keySignature.rawValue)
+                                    .foregroundStyle(CreateScorePalette.ink)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(CreateScorePalette.mutedInk)
+                            }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                }
-
-                CreateScorePickerField(title: "Time Signature") {
-                    Button(action: { isTimeSignaturePresented = true }) {
-                        HStack {
-                            Text(draft.timeSignature.rawValue)
-                                .foregroundStyle(CreateScorePalette.ink)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(CreateScorePalette.mutedInk)
+                case .timeSignature:
+                    CreateScorePickerField(title: "Time Signature") {
+                        Button(action: { isTimeSignaturePresented = true }) {
+                            HStack {
+                                Text(draft.timeSignature.rawValue)
+                                    .foregroundStyle(CreateScorePalette.ink)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(CreateScorePalette.mutedInk)
+                            }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                }
-
-                CreateScorePickerField(title: "Tempo") {
-                    Stepper(value: $draft.tempo, in: 30...240, step: 4) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "music.note")
-                            Text("\(draft.tempo)")
+                case .tempo:
+                    CreateScorePickerField(title: "Tempo") {
+                        Stepper(value: $draft.tempo, in: 30...240, step: 4) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "music.note")
+                                Text("\(draft.tempo)")
+                            }
                         }
                     }
-                }
-
-                CreateScorePickerField(title: "Measures") {
-                    Stepper(value: $draft.measureCount, in: 1...256, step: 1) {
-                        Text("\(draft.measureCount)")
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                case .measures:
+                    CreateScorePickerField(title: "Measures") {
+                        Stepper(value: $draft.measureCount, in: 1...256, step: 1) {
+                            Text("\(draft.measureCount)")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }
@@ -1692,6 +1693,15 @@ struct CreateScoreMusicSettingsSection: View {
             )
         }
     }
+}
+
+enum CreateScoreMusicSetting: CaseIterable, Identifiable {
+    case keySignature
+    case timeSignature
+    case tempo
+    case measures
+
+    var id: Self { self }
 }
 
 struct CreateScorePickerField<Content: View>: View {

@@ -577,13 +577,11 @@ struct ScoreReaderTimeSignatureSheet: View {
             Text("Common")
                 .font(.system(size: 16, weight: .bold))
 
-            LazyVGrid(columns: commonGridColumns, spacing: isPhoneLandscape ? 10 : 12) {
-                ForEach(presets) { preset in
-                    pickerButton(preset.title, isSelected: selected == preset) {
-                        selected = preset
-                        customNumerator = preset.numerator
-                        customDenominator = preset.denominator
-                    }
+            AriaGrid(columns: commonGridColumns, spacing: isPhoneLandscape ? 10 : 12, items: presets) { preset in
+                pickerButton(preset.title, isSelected: selected == preset) {
+                    selected = preset
+                    customNumerator = preset.numerator
+                    customDenominator = preset.denominator
                 }
             }
         }
@@ -975,11 +973,9 @@ struct ScoreReaderKeySignatureSheet: View {
     }
 
     private func keyGrid(_ keys: [ScoreKeySignatureValue]) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: isPhoneLandscape ? 38 : 48, maximum: isPhoneLandscape ? 42 : 56), spacing: isPhoneLandscape ? 9 : 16)], spacing: isPhoneLandscape ? 8 : 12) {
-            ForEach(keys.map { keyValueSelection(for: $0.keyValue, minor: showingMinor) }) { key in
-                pickerButton(key.title, isSelected: selected == key) {
-                    selected = key
-                }
+        AriaGrid(columns: [GridItem(.adaptive(minimum: isPhoneLandscape ? 38 : 48, maximum: isPhoneLandscape ? 42 : 56), spacing: isPhoneLandscape ? 9 : 16)], spacing: isPhoneLandscape ? 8 : 12, items: keys.map { keyValueSelection(for: $0.keyValue, minor: showingMinor) }) { key in
+            pickerButton(key.title, isSelected: selected == key) {
+                selected = key
             }
         }
     }

@@ -198,12 +198,10 @@ struct ScoreReaderPickupEditorSheet: View {
             Text("Common")
                 .font(.system(size: 16, weight: .bold))
 
-            LazyVGrid(columns: commonGridColumns, spacing: isPhoneLandscape ? 10 : 12) {
-                ForEach(presets) { preset in
-                    pickerButton(preset.title, isSelected: count == preset.numerator && denominator == preset.denominator) {
-                        count = preset.numerator
-                        denominator = preset.denominator
-                    }
+            AriaGrid(columns: commonGridColumns, spacing: isPhoneLandscape ? 10 : 12, items: presets) { preset in
+                pickerButton(preset.title, isSelected: count == preset.numerator && denominator == preset.denominator) {
+                    count = preset.numerator
+                    denominator = preset.denominator
                 }
             }
         }
