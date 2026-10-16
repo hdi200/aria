@@ -211,8 +211,14 @@ struct ScoreReaderView: View {
     let session: ScoreSession
     private let initialRememberedState: ScoreReaderRememberedState
 
+    #if os(Android)
+    // Skip keeps only @State (the first object); see OwnedState.
+    @State var readerState: ScoreReaderState
+    @State var annotationController: ScoreAnnotationController
+    #else
     @OwnedState private var readerState: ScoreReaderState
     @OwnedState private var annotationController: ScoreAnnotationController
+    #endif
     @State var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
     @State var lastPhoneLandscapeZoomMode: Bool?
     @State var selectedToolCategory: ScoreReaderToolCategory
@@ -351,6 +357,17 @@ struct ScoreReaderView: View {
         _selectedToolCategory = State(initialValue: initialToolCategory)
         _selectedPartID = State(initialValue: rememberedState.selectedPartID)
         _readingStyle = State(initialValue: rememberedState.readingStyle)
+        #if os(Android)
+        _readerState = State(
+            initialValue: ScoreReaderState(
+                session: session,
+                initialPageIndex: initialInteractionMode == .view ? rememberedState.pageIndex : initialPageIndex,
+                initialInteractionMode: initialInteractionMode,
+                initialViewTransposeKey: initialInteractionMode == .view ? rememberedState.viewTransposeKey : nil
+            )
+        )
+        _annotationController = State(initialValue: ScoreAnnotationController(documentURL: session.document.url))
+        #else
         _readerState = OwnedState(
             wrappedValue: ScoreReaderState(
                 session: session,
@@ -360,6 +377,7 @@ struct ScoreReaderView: View {
             )
         )
         _annotationController = OwnedState(wrappedValue: ScoreAnnotationController(documentURL: session.document.url))
+        #endif
     }
 
     var body: some View {

@@ -356,7 +356,10 @@ struct ManagedScoreLibrary {
         try prepareStorageIfNeeded()
 
         let rootURL = try ManagedScoreLibraryPaths.visibleRootURL(fileManager: fileManager)
-        let resolvedURL = URL(fileURLWithPath: storedRelativePath, relativeTo: rootURL).standardizedFileURL
+        // The base must be a directory URL (iOS's Documents URL is; Android's has no
+        // trailing slash), or resolving replaces its last component.
+        let baseURL = URL(fileURLWithPath: rootURL.path, isDirectory: true)
+        let resolvedURL = URL(fileURLWithPath: storedRelativePath, relativeTo: baseURL).standardizedFileURL
 
         guard try relativePath(for: resolvedURL) != nil else {
             throw ManagedScoreLibraryError.invalidLocation

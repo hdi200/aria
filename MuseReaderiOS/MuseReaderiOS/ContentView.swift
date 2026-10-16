@@ -11,7 +11,12 @@ import StoreKit
 struct ContentView: View {
     @Environment(\.requestReview) var requestReview
     @Environment(\.scenePhase) var scenePhase
+    #if os(Android)
+    // Skip keeps only @State (the first object); see OwnedState.
+    @State var appModel = MuseReaderAppModel()
+    #else
     @OwnedState private var appModel = MuseReaderAppModel()
+    #endif
     @State var reviewRequestTracker = ReviewRequestTracker()
 
     var body: some View {

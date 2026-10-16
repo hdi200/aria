@@ -5,6 +5,10 @@
 //
 
 import Observation
+#if os(Android)
+// Skip's Observation bridge, so Android's UI redraws when these properties change.
+import SkipFuse
+#endif
 import Foundation
 import UniformTypeIdentifiers
 
