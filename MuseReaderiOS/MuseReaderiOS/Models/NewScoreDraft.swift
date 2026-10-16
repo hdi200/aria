@@ -124,8 +124,8 @@ enum NewScoreTemplate: String, CaseIterable, Identifiable, Sendable, Equatable {
 
     var bundleDirectoryURL: URL? {
         let bundleCandidates = [
-            Bundle.main.url(forResource: "ScoreTemplates", withExtension: "bundle"),
-            Bundle.main.url(forResource: "ScoreTemplates", withExtension: "bundle", subdirectory: "Resources")
+            AppResources.url(forResource: "ScoreTemplates", withExtension: "bundle"),
+            AppResources.url(forResource: "ScoreTemplates", withExtension: "bundle", subdirectory: "Resources")
         ]
 
         for bundleURL in bundleCandidates.compactMap({ $0 }) {
@@ -204,8 +204,8 @@ struct NewScoreTemplateChoice: Identifiable, Sendable, Equatable {
 
     var bundleDirectoryURL: URL? {
         let bundleCandidates = [
-            Bundle.main.url(forResource: "ScoreTemplates", withExtension: "bundle"),
-            Bundle.main.url(forResource: "ScoreTemplates", withExtension: "bundle", subdirectory: "Resources")
+            AppResources.url(forResource: "ScoreTemplates", withExtension: "bundle"),
+            AppResources.url(forResource: "ScoreTemplates", withExtension: "bundle", subdirectory: "Resources")
         ]
 
         for bundleURL in bundleCandidates.compactMap({ $0 }) {

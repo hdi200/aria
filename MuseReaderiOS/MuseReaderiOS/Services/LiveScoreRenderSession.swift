@@ -249,7 +249,7 @@ actor LiveScoreRenderSession {
             return cachedPlaybackSoundFontURL
         }
 
-        let soundFontURL = Bundle.main.url(forResource: "MuseScore_General", withExtension: "sf2")
+        let soundFontURL = AppResources.url(forResource: "MuseScore_General", withExtension: "sf2")
         cachedPlaybackSoundFontURL = soundFontURL
         return soundFontURL
     }
