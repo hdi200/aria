@@ -5,8 +5,12 @@
 //
 
 import Foundation
+#if os(Android)
+import UIKit
+#else
 import PDFKit
 import UIKit
+#endif
 
 /// Turns a setlist into files the system share sheet can hand to another app.
 ///
@@ -129,6 +133,10 @@ enum SetlistShareExporter {
     }
 
     private static func pdfData(fromPreviewPages pages: [ScorePage], scoreTitle: String) throws -> Data {
+        #if os(Android)
+        // Scores always open with a live session on Android, which writes the PDF.
+        throw SetlistShareError.unavailableScore(scoreTitle)
+        #else
         let pageImages = pages.compactMap { $0.rasterizedImage() }
         guard let firstPageImage = pageImages.first else {
             throw SetlistShareError.unavailableScore(scoreTitle)
@@ -142,6 +150,7 @@ enum SetlistShareExporter {
                 pageImage.draw(in: pageBounds)
             }
         }
+        #endif
     }
 
     private static func musicXMLData(
@@ -185,6 +194,15 @@ enum SetlistShareExporter {
         to directory: URL,
         setlistName: String
     ) throws -> URL {
+        #if os(Android)
+        // Android has no PDFKit; AndroidPDFMerger joins the engine's PDFs the same way.
+        let combinedData: Data
+        do {
+            combinedData = try AndroidPDFMerger.merge(documents.map { AndroidPDFMerger.Source(title: $0.title, data: $0.data) })
+        } catch {
+            throw SetlistShareError.pdfMergeFailed
+        }
+        #else
         // The source documents stay alive until the merged data is generated:
         // a PDFPage keeps a reference back to the document it came from.
         let sourceDocuments = try documents.map { source -> (title: String, document: PDFDocument) in
@@ -224,6 +242,7 @@ enum SetlistShareExporter {
         guard insertionIndex > 0, let combinedData = combinedDocument.dataRepresentation() else {
             throw SetlistShareError.pdfMergeFailed
         }
+        #endif
 
         return try write(
             combinedData,
