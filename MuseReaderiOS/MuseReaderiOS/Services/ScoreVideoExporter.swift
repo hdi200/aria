@@ -5,7 +5,6 @@
 
 import AVFoundation
 import Accelerate
-import CoreGraphics
 import CoreImage
 import CoreMedia
 import Metal

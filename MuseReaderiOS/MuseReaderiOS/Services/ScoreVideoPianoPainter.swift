@@ -4,7 +4,6 @@
 //
 
 import AudioToolbox
-import CoreGraphics
 import CoreImage
 import Metal
 import UIKit
@@ -17,6 +16,10 @@ enum ScoreVideoPianoNotes {
     /// the next section's tempo to every pass of a repeat, so it drifts from
     /// the audio (goldberg ends 161 s late).
     static func notes(fromMIDI data: Data) -> [ScoreVideoPianoNote] {
+        #if os(Android)
+        // Only the checks read MIDI; Android has no MusicSequence.
+        return []
+        #else
         var sequenceRef: MusicSequence?
         guard NewMusicSequence(&sequenceRef) == noErr, let sequence = sequenceRef else { return [] }
         defer { DisposeMusicSequence(sequence) }
@@ -61,6 +64,7 @@ enum ScoreVideoPianoNotes {
             if foundNotes { noteTrack += 1 }
         }
         return notes.sorted { ($0.startSeconds, $0.pitch) < ($1.startSeconds, $1.pitch) }
+        #endif
     }
 }
 
