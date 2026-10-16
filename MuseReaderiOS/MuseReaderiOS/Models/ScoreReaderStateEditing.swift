@@ -1,6 +1,70 @@
 import CoreGraphics
 import Foundation
 
+enum ScorePageTapInputKind {
+    case direct
+    case pencil
+}
+
+enum ScoreReaderToolCategory: String, CaseIterable {
+    case select
+    case notes
+    case chord
+    case lyrics
+    case repeats
+    case text
+    case expression
+    case layout
+    case more
+}
+
+struct ScoreReaderToolModePolicy {
+    enum PencilAction {
+        case enterEditMode
+        case chooseSelect
+        case chooseNoteInput
+    }
+
+    static func category(
+        afterSettingNoteInputEnabled noteInputEnabled: Bool,
+        currentCategory: ScoreReaderToolCategory
+    ) -> ScoreReaderToolCategory {
+        if noteInputEnabled {
+            return .notes
+        }
+        return currentCategory == .notes ? .select : currentCategory
+    }
+
+    static func allowsAutomaticPencilNoteEntry(after action: PencilAction) -> Bool {
+        action != .chooseSelect
+    }
+
+    static func selectionLeavesNoteInput(_ selectionKind: ScoreSelectedElementKind?) -> Bool {
+        selectionKind != nil
+    }
+}
+
+enum ScoreAutoSystemBreaksMode: String, CaseIterable, Identifiable {
+    case measuresPerSystem
+    case lockCurrentLayout
+    case removeExisting
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .measuresPerSystem: return "Measures per system"
+        case .lockCurrentLayout: return "Lock current layout"
+        case .removeExisting: return "Remove existing breaks"
+        }
+    }
+}
+
+struct ScoreAutoSystemBreaksRequest {
+    let mode: ScoreAutoSystemBreaksMode
+    let measuresPerSystem: Int
+}
+
 struct ScoreTransposeRequest {
     let mode: ScoreTransposeMode
     let direction: ScoreTransposeDirection

@@ -12,44 +12,6 @@ enum ScoreReaderLyricsInputCommand: Equatable {
     case melisma
 }
 
-enum ScoreReaderToolCategory: String, CaseIterable {
-    case select
-    case notes
-    case chord
-    case lyrics
-    case repeats
-    case text
-    case expression
-    case layout
-    case more
-}
-
-struct ScoreReaderToolModePolicy {
-    enum PencilAction {
-        case enterEditMode
-        case chooseSelect
-        case chooseNoteInput
-    }
-
-    static func category(
-        afterSettingNoteInputEnabled noteInputEnabled: Bool,
-        currentCategory: ScoreReaderToolCategory
-    ) -> ScoreReaderToolCategory {
-        if noteInputEnabled {
-            return .notes
-        }
-        return currentCategory == .notes ? .select : currentCategory
-    }
-
-    static func allowsAutomaticPencilNoteEntry(after action: PencilAction) -> Bool {
-        action != .chooseSelect
-    }
-
-    static func selectionLeavesNoteInput(_ selectionKind: ScoreSelectedElementKind?) -> Bool {
-        selectionKind != nil
-    }
-}
-
 struct ScoreReaderTextEditorDraft: Identifiable {
     let selectionID: String
     let title: String

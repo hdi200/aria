@@ -9,16 +9,6 @@ import CoreImage
 import Metal
 import UIKit
 
-/// One sounding note of the performance, in playback time.
-struct ScoreVideoPianoNote: Equatable, Sendable {
-    let pitch: Int
-    let startSeconds: TimeInterval
-    let endSeconds: TimeInterval
-    /// The staff that plays it, from 0 in score order, so a piano's two
-    /// hands, or each part, get their own colour.
-    let track: Int
-}
-
 enum ScoreVideoPianoNotes {
     /// The notes of a MIDI file, with beats converted to seconds through its
     /// tempo map; percussion is left out. Used by the checks to render samples
@@ -71,84 +61,6 @@ enum ScoreVideoPianoNotes {
             if foundNotes { noteTrack += 1 }
         }
         return notes.sorted { ($0.startSeconds, $0.pitch) < ($1.startSeconds, $1.pitch) }
-    }
-}
-
-/// The keys shown, fitted to the music's range across the frame's width.
-struct ScoreVideoPianoKeyboard: Equatable {
-    static let lowestPianoPitch = 21
-    static let highestPianoPitch = 108
-
-    let lowestPitch: Int
-    let highestPitch: Int
-    let whiteKeyWidth: CGFloat
-    private let leftEdge: Double
-
-    var blackKeyWidth: CGFloat {
-        whiteKeyWidth * 0.62
-    }
-
-    /// The music's range plus a little room, at least `minimumSpan`
-    /// semitones, ending on white keys and within a real piano.
-    init(pitches: [Int], width: CGFloat, minimumSpan: Int = 36) {
-        var low = (pitches.min() ?? 48) - 2
-        var high = (pitches.max() ?? 84) + 2
-        if high - low < minimumSpan {
-            let extra = minimumSpan - (high - low)
-            low -= extra / 2
-            high += extra - extra / 2
-        }
-        if low < Self.lowestPianoPitch {
-            high += Self.lowestPianoPitch - low
-            low = Self.lowestPianoPitch
-        }
-        if high > Self.highestPianoPitch {
-            low -= high - Self.highestPianoPitch
-            high = Self.highestPianoPitch
-        }
-        low = max(low, Self.lowestPianoPitch)
-        // Both ends of a real piano are white keys, so this stays in range.
-        while Self.isBlack(low) { low -= 1 }
-        while Self.isBlack(high) { high += 1 }
-        lowestPitch = low
-        highestPitch = high
-        leftEdge = Self.whitePosition(low) - 0.5
-        whiteKeyWidth = width / CGFloat(Self.whitePosition(high) + 0.5 - leftEdge)
-    }
-
-    static func isBlack(_ pitch: Int) -> Bool {
-        [1, 3, 6, 8, 10].contains(pitch % 12)
-    }
-
-    /// White keys sit at whole numbers; black keys on the boundary between two.
-    static func whitePosition(_ pitch: Int) -> Double {
-        let positions: [Double] = [0, 0.5, 1, 1.5, 2, 3, 3.5, 4, 4.5, 5, 5.5, 6]
-        return Double(pitch / 12) * 7 + positions[pitch % 12]
-    }
-
-    var pitches: ClosedRange<Int> {
-        lowestPitch...highestPitch
-    }
-
-    func centerX(of pitch: Int) -> CGFloat {
-        CGFloat(Self.whitePosition(pitch) - leftEdge) * whiteKeyWidth
-    }
-
-    func keyWidth(of pitch: Int) -> CGFloat {
-        Self.isBlack(pitch) ? blackKeyWidth : whiteKeyWidth
-    }
-}
-
-/// How the piano video looks: neon notes on black, the light piano roll,
-/// or glassy notes over the user's blurred photo.
-enum ScoreVideoPianoTheme: Sendable {
-    case dark
-    case light
-    case photo
-
-    /// Soft bloom around the notes and flares, composed on the GPU.
-    var glows: Bool {
-        self != .light
     }
 }
 

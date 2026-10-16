@@ -101,6 +101,12 @@ struct ScorePage: Identifiable, Sendable, Equatable {
             return image
         }
 
+        #if os(Android)
+        guard let pdfData, !pdfData.isEmpty else {
+            return nil
+        }
+        return AndroidPDFPageRenderer.image(pdfData: pdfData, size: displaySize)
+        #else
         guard
             let pdfData,
             !pdfData.isEmpty,
@@ -141,6 +147,7 @@ struct ScorePage: Identifiable, Sendable, Equatable {
             context.translateBy(x: -pageBox.minX, y: -pageBox.minY)
             context.drawPDFPage(page)
         }
+        #endif
     }
 
     func rasterizedPNGData() -> Data? {

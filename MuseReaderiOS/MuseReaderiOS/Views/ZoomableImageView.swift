@@ -9,11 +9,6 @@ import QuartzCore
 import SwiftUI
 import UIKit
 
-enum ScorePageTapInputKind {
-    case direct
-    case pencil
-}
-
 enum ScoreReaderZoomLimits {
     static let minimumScale: CGFloat = 1
 }

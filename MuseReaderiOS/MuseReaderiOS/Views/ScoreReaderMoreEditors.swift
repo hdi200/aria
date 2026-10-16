@@ -1,27 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum ScoreAutoSystemBreaksMode: String, CaseIterable, Identifiable {
-    case measuresPerSystem
-    case lockCurrentLayout
-    case removeExisting
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .measuresPerSystem: return "Measures per system"
-        case .lockCurrentLayout: return "Lock current layout"
-        case .removeExisting: return "Remove existing breaks"
-        }
-    }
-}
-
-struct ScoreAutoSystemBreaksRequest {
-    let mode: ScoreAutoSystemBreaksMode
-    let measuresPerSystem: Int
-}
-
 struct ScoreReaderAutoSystemBreaksSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var mode: ScoreAutoSystemBreaksMode = .measuresPerSystem
