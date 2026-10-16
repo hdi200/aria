@@ -67,7 +67,7 @@ struct OpenSourceLegalView: View {
     }
 }
 
-private struct LegalSection<Content: View>: View {
+struct LegalSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
 
@@ -85,7 +85,7 @@ private struct LegalSection<Content: View>: View {
     }
 }
 
-private struct LegalNoticeRow: View {
+struct LegalNoticeRow: View {
     let name: String
     let detail: String
 

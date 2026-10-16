@@ -11,14 +11,14 @@ struct ScoreDetailView: View {
     var model: MuseReaderAppModel
     let session: ScoreSession
 
-    @State private var readerPresentation: ReaderPresentation?
-    @State private var exportedMIDIFile: SharedExportFile?
-    @State private var exportErrorMessage: String?
-    @State private var isPreparingMIDIExport = false
-    @State private var editableMetadata = ScoreEditableMetadata()
-    @State private var isEditingMetadataPresented = false
-    @State private var isSavingMetadata = false
-    @State private var metadataSaveErrorMessage: String?
+    @State var readerPresentation: ReaderPresentation?
+    @State var exportedMIDIFile: SharedExportFile?
+    @State var exportErrorMessage: String?
+    @State var isPreparingMIDIExport = false
+    @State var editableMetadata = ScoreEditableMetadata()
+    @State var isEditingMetadataPresented = false
+    @State var isSavingMetadata = false
+    @State var metadataSaveErrorMessage: String?
 
     private var canOpenReader: Bool {
         session.pageCount > 0
@@ -268,14 +268,14 @@ struct ScoreDetailView: View {
     }
 }
 
-private enum ScoreDetailPalette {
+enum ScoreDetailPalette {
     static let accent = Color(red: 0.75, green: 0.28, blue: 0.19)
     static let accentSoft = Color(red: 0.96, green: 0.91, blue: 0.86)
     static let ink = Color(red: 0.18, green: 0.13, blue: 0.09)
     static let mutedInk = Color(red: 0.40, green: 0.31, blue: 0.22)
 }
 
-private struct ScoreHeroSection: View {
+struct ScoreHeroSection: View {
     let session: ScoreSession
     let openReaderAction: (() -> Void)?
     let editInfoAction: (() -> Void)?
@@ -373,7 +373,7 @@ private struct ScoreHeroSection: View {
     }
 }
 
-private struct ScoreHeroChip: View {
+struct ScoreHeroChip: View {
     let text: String
     let symbol: String
 
@@ -387,7 +387,7 @@ private struct ScoreHeroChip: View {
     }
 }
 
-private struct ScoreHeroMetric: View {
+struct ScoreHeroMetric: View {
     let value: String
     let label: String
 
@@ -408,7 +408,7 @@ private struct ScoreHeroMetric: View {
     }
 }
 
-private struct ScoreHeroCover: View {
+struct ScoreHeroCover: View {
     let image: UIImage?
     let format: ScoreFileFormat
 
@@ -475,7 +475,7 @@ private struct ScoreHeroCover: View {
     }
 }
 
-private struct ScorePreviewStripSection: View {
+struct ScorePreviewStripSection: View {
     let session: ScoreSession
     let openPageAction: (Int) -> Void
 
@@ -509,7 +509,7 @@ private struct ScorePreviewStripSection: View {
     }
 }
 
-private struct ScorePreviewCard: View {
+struct ScorePreviewCard: View {
     let page: ScorePage
     let openAction: () -> Void
 
@@ -567,7 +567,7 @@ private struct ScorePreviewCard: View {
     }
 }
 
-private struct LiveRenderingCallout: View {
+struct LiveRenderingCallout: View {
     let title: String
     let detail: String
     let buttonTitle: String?
@@ -601,7 +601,7 @@ private struct LiveRenderingCallout: View {
     }
 }
 
-private struct ScoreCapabilitiesSection: View {
+struct ScoreCapabilitiesSection: View {
     let session: ScoreSession
 
     private let columns = [
@@ -647,7 +647,7 @@ private struct ScoreCapabilitiesSection: View {
     }
 }
 
-private struct ScoreMetadataSection: View {
+struct ScoreMetadataSection: View {
     let document: ScoreDocument
     let editInfoAction: (() -> Void)?
 
@@ -699,7 +699,7 @@ private struct ScoreMetadataSection: View {
     }
 }
 
-private struct ScorePackageContentsSection: View {
+struct ScorePackageContentsSection: View {
     let entries: [String]
 
     var body: some View {
@@ -726,7 +726,7 @@ private struct ScorePackageContentsSection: View {
     }
 }
 
-private struct ScoreSourceSection: View {
+struct ScoreSourceSection: View {
     let excerpt: String
 
     var body: some View {
@@ -743,7 +743,7 @@ private struct ScoreSourceSection: View {
     }
 }
 
-private struct SectionHeadingView: View {
+struct SectionHeadingView: View {
     let title: String
 
     var body: some View {
@@ -753,7 +753,7 @@ private struct SectionHeadingView: View {
     }
 }
 
-private struct MetadataCard: View {
+struct MetadataCard: View {
     let title: String
     let value: String?
 
@@ -774,7 +774,7 @@ private struct MetadataCard: View {
     }
 }
 
-private struct CapabilityCard: View {
+struct CapabilityCard: View {
     let title: String
     let isAvailable: Bool
     let detail: String
@@ -803,7 +803,7 @@ private struct CapabilityCard: View {
     }
 }
 
-private struct ReaderPresentation: Identifiable {
+struct ReaderPresentation: Identifiable {
     let startPageIndex: Int
 
     var id: Int {
@@ -811,7 +811,7 @@ private struct ReaderPresentation: Identifiable {
     }
 }
 
-private struct SharedExportFile: Identifiable {
+struct SharedExportFile: Identifiable {
     let url: URL
 
     var id: String {
@@ -819,7 +819,7 @@ private struct SharedExportFile: Identifiable {
     }
 }
 
-private struct ShareSheetView: UIViewControllerRepresentable {
+struct ShareSheetView: UIViewControllerRepresentable {
     let activityItems: [Any]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {

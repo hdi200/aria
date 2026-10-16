@@ -11,8 +11,8 @@ import UniformTypeIdentifiers
 struct CreateNewScoreView: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State private var draft = NewScoreDraft()
-    @State private var isCreating = false
+    @State var draft = NewScoreDraft()
+    @State var isCreating = false
 
     let createAction: (NewScoreDraft) async -> Bool
 
@@ -108,7 +108,7 @@ struct CreateNewScoreView: View {
     }
 }
 
-private enum CreateScorePalette {
+enum CreateScorePalette {
     static let accent = Color.blue
     static let accentSoft = Color.blue.opacity(0.10)
     static let ink = Color(red: 0.12, green: 0.12, blue: 0.14)
@@ -118,7 +118,7 @@ private enum CreateScorePalette {
     static let divider = Color(red: 0.90, green: 0.91, blue: 0.94)
 }
 
-private struct CreateScoreTopBar: View {
+struct CreateScoreTopBar: View {
     var isPhone = false
     let cancelAction: () -> Void
 
@@ -156,12 +156,12 @@ private struct CreateScoreTopBar: View {
     }
 }
 
-private struct CreateScoreSection<Content: View>: View {
+struct CreateScoreSection<Content: View>: View {
     let number: Int
     let title: String
     var isPhone = false
     var collapsible = false
-    @State private var isExpanded: Bool
+    @State var isExpanded: Bool
     @ViewBuilder let content: Content
 
     init(number: Int,
@@ -240,7 +240,7 @@ private struct CreateScoreSection<Content: View>: View {
     }
 }
 
-private struct CreateScoreDetailsSection: View {
+struct CreateScoreDetailsSection: View {
     @Binding var draft: NewScoreDraft
     var isPhone = false
 
@@ -255,7 +255,7 @@ private struct CreateScoreDetailsSection: View {
     }
 }
 
-private struct CreateScoreTextField: View {
+struct CreateScoreTextField: View {
     let label: String
     let placeholder: String
     @Binding var text: String
@@ -287,10 +287,10 @@ private struct CreateScoreTextField: View {
     }
 }
 
-private struct CreateScoreTemplateSection: View {
+struct CreateScoreTemplateSection: View {
     @Binding var draft: NewScoreDraft
     var isPhone = false
-    @State private var isTemplateBrowserPresented = false
+    @State var isTemplateBrowserPresented = false
 
     private var columns: [GridItem] {
         if isPhone {
@@ -341,7 +341,7 @@ private struct CreateScoreTemplateSection: View {
     }
 }
 
-private struct CreateScoreTemplateCard: View {
+struct CreateScoreTemplateCard: View {
     let template: NewScoreTemplate
     let isSelected: Bool
     var isPhone = false
@@ -383,7 +383,7 @@ private struct CreateScoreTemplateCard: View {
     }
 }
 
-private struct CreateScoreTemplateIcon: View {
+struct CreateScoreTemplateIcon: View {
     let template: NewScoreTemplate
     var isPhone = false
 
@@ -438,10 +438,10 @@ private struct CreateScoreTemplateIcon: View {
     }
 }
 
-private struct TemplateBrowserSheet: View {
+struct TemplateBrowserSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedCategory: NewScoreTemplateCategory
-    @State private var focusedTemplate: NewScoreTemplateChoice
+    @State var selectedCategory: NewScoreTemplateCategory
+    @State var focusedTemplate: NewScoreTemplateChoice
 
     let selectAction: (NewScoreTemplateChoice) -> Void
 
@@ -685,7 +685,7 @@ private struct TemplateBrowserSheet: View {
     }
 }
 
-private struct CreateScoreStaffLines: View {
+struct CreateScoreStaffLines: View {
     var body: some View {
         VStack(spacing: 3) {
             ForEach(0..<5, id: \.self) { _ in
@@ -698,10 +698,10 @@ private struct CreateScoreStaffLines: View {
     }
 }
 
-private struct CreateScoreInstrumentationSection: View {
+struct CreateScoreInstrumentationSection: View {
     @Binding var instruments: [NewScoreInstrument]
     var isPhone = false
-    @State private var isInstrumentPickerPresented = false
+    @State var isInstrumentPickerPresented = false
 
     var body: some View {
         CreateScoreSection(number: 3, title: "Instrumentation", isPhone: isPhone) {
@@ -754,7 +754,7 @@ private struct CreateScoreInstrumentationSection: View {
     }
 }
 
-private struct CreateScoreInstrumentRow: View {
+struct CreateScoreInstrumentRow: View {
     let instrument: NewScoreInstrument
 
     var body: some View {
@@ -790,13 +790,13 @@ struct AddInstrumentSheet: View {
     var addCurrentInstrumentAction: (NewScoreInstrument) -> Void
     var removeCurrentInstrumentAction: (Int, NewScoreInstrument) -> Void
     var moveCurrentInstrumentAction: (Int, Int) -> Void
-    @State private var selectedGenre: NewScoreInstrumentGenre = .common
-    @State private var selectedCategory: NewScoreInstrumentCategory = .all
-    @State private var searchText = ""
-    @State private var focusedInstrument: NewScoreInstrument = NewScoreInstrumentCatalog.importantInstruments.first!
-    @State private var removalCandidate: NewScoreInstrument?
-    @State private var draggedInstrumentID: String?
-    @State private var draggedInstrumentOriginalIndex: Int?
+    @State var selectedGenre: NewScoreInstrumentGenre = .common
+    @State var selectedCategory: NewScoreInstrumentCategory = .all
+    @State var searchText = ""
+    @State var focusedInstrument: NewScoreInstrument = NewScoreInstrumentCatalog.importantInstruments.first!
+    @State var removalCandidate: NewScoreInstrument?
+    @State var draggedInstrumentID: String?
+    @State var draggedInstrumentOriginalIndex: Int?
 
     init(selectedInstruments: Binding<[NewScoreInstrument]>,
          currentInstruments: Binding<[NewScoreInstrument]> = .constant([]),
@@ -1537,7 +1537,7 @@ struct AddInstrumentSheet: View {
     }
 }
 
-private struct InstrumentReorderDropDelegate: DropDelegate {
+struct InstrumentReorderDropDelegate: DropDelegate {
     let instrument: NewScoreInstrument
     @Binding var instruments: [NewScoreInstrument]
     @Binding var draggedInstrumentID: String?
@@ -1579,7 +1579,7 @@ private struct InstrumentReorderDropDelegate: DropDelegate {
     }
 }
 
-private struct AddInstrumentSheetLayout {
+struct AddInstrumentSheetLayout {
     let outerPadding: CGFloat
     let genreWidth: CGFloat
     let categoryWidth: CGFloat
@@ -1611,11 +1611,11 @@ struct CreateScoreClef: View {
     }
 }
 
-private struct CreateScoreMusicSettingsSection: View {
+struct CreateScoreMusicSettingsSection: View {
     @Binding var draft: NewScoreDraft
     var isPhone = false
-    @State private var isKeySignaturePresented = false
-    @State private var isTimeSignaturePresented = false
+    @State var isKeySignaturePresented = false
+    @State var isTimeSignaturePresented = false
 
     private var columns: [GridItem] {
         if isPhone {
@@ -1694,7 +1694,7 @@ private struct CreateScoreMusicSettingsSection: View {
     }
 }
 
-private struct CreateScorePickerField<Content: View>: View {
+struct CreateScorePickerField<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
 
@@ -1718,12 +1718,12 @@ private struct CreateScorePickerField<Content: View>: View {
     }
 }
 
-private struct CreateScoreOptionsSection: View {
+struct CreateScoreOptionsSection: View {
     @Binding var draft: NewScoreDraft
     var isPhone = false
-    @State private var isPickupMeasurePresented = false
-    @State private var pickupSheetOpenedFromDisabled = false
-    @State private var pickupSelectionCommitted = false
+    @State var isPickupMeasurePresented = false
+    @State var pickupSheetOpenedFromDisabled = false
+    @State var pickupSelectionCommitted = false
 
     private var pickupEnabled: Binding<Bool> {
         Binding(
@@ -1801,7 +1801,7 @@ private struct CreateScoreOptionsSection: View {
     }
 }
 
-private struct CreateScorePickupMeasureSummary: View {
+struct CreateScorePickupMeasureSummary: View {
     let numerator: Int
     let denominator: Int
     let editAction: () -> Void
@@ -1828,7 +1828,7 @@ private struct CreateScorePickupMeasureSummary: View {
     }
 }
 
-private struct CreateScoreOptionLabel: View {
+struct CreateScoreOptionLabel: View {
     let title: String
     let detail: String
     var isPhone = false
@@ -1863,7 +1863,7 @@ private struct CreateScoreOptionLabel: View {
     }
 }
 
-private struct CreateScoreBottomBar: View {
+struct CreateScoreBottomBar: View {
     let isCreating: Bool
     let canCreate: Bool
     var isPhone = false

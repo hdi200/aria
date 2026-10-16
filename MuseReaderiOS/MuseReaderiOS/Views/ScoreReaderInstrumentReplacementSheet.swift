@@ -7,8 +7,8 @@ struct ScoreReaderInstrumentReplacementSheet: View {
     let isBusy: Bool
     let replaceAction: (NewScoreInstrument, InstrumentReplacementScope) -> Void
 
-    @State private var scope: InstrumentReplacementScope
-    @State private var searchText = ""
+    @State var scope: InstrumentReplacementScope
+    @State var searchText = ""
 
     init(
         context: InstrumentReplacementContext,

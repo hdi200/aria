@@ -91,7 +91,7 @@ struct ScoreReaderFeatureTour: View {
     let steps: [ScoreReaderFeatureTourStep]
     let dismiss: () -> Void
 
-    @State private var stepIndex = 0
+    @State var stepIndex = 0
 
     static let defaultSteps: [ScoreReaderFeatureTourStep] = [
         ScoreReaderFeatureTourStep(

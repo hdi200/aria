@@ -18,8 +18,8 @@ struct ScoreReaderPickupEditorSheet: View {
     let removeAction: () -> Void
     let cancelAction: (() -> Void)?
 
-    @State private var count: Int
-    @State private var denominator: Int
+    @State var count: Int
+    @State var denominator: Int
 
     init(
         context: ScorePickupEditorContext,
@@ -458,7 +458,7 @@ struct ScoreReaderPickupEditorSheet: View {
     }
 }
 
-private struct PickupLengthPreset: Identifiable, Equatable {
+struct PickupLengthPreset: Identifiable, Equatable {
     let numerator: Int
     let denominator: Int
 

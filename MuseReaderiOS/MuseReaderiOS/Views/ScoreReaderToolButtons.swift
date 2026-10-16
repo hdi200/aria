@@ -119,7 +119,7 @@ struct ScoreReaderModeToolbar: View {
     }
 }
 
-private struct ScoreReaderModeToolbarChromeModifier: ViewModifier {
+struct ScoreReaderModeToolbarChromeModifier: ViewModifier {
     let isCompact: Bool
 
     func body(content: Content) -> some View {
@@ -133,7 +133,7 @@ private struct ScoreReaderModeToolbarChromeModifier: ViewModifier {
     }
 }
 
-private enum ScoreReaderCompactModeMetrics {
+enum ScoreReaderCompactModeMetrics {
     static let cellHeight: CGFloat = 62
     static let iconSlotHeight: CGFloat = 24
     static let highlightCornerRadius: CGFloat = 10
@@ -214,7 +214,7 @@ struct ScoreReaderCompactModeToolbarButton: View {
     }
 }
 
-private struct ScoreReaderCompactModeToolbarLabel: View {
+struct ScoreReaderCompactModeToolbarLabel: View {
     let title: String
     var systemImage: String? = nil
     var textSymbol: String? = nil
@@ -374,7 +374,7 @@ struct ScoreReaderPreviousNextControls: View {
 }
 
 struct ScoreReaderVoiceSelector: View {
-    @State private var isExpanded = false
+    @State var isExpanded = false
 
     let currentVoice: Int
     let isEnabled: Bool

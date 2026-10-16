@@ -8,7 +8,7 @@ import UIKit
 
 struct ScoreReaderNoteEntrySurface: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var preferFlats = false
+    @State var preferFlats = false
 
     let editingState: ScoreEditingState
     let pendingPitchClass: Int?
@@ -1127,7 +1127,7 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 }
 
-private struct ScoreReaderCompactPanelEmbeddedKey: EnvironmentKey {
+struct ScoreReaderCompactPanelEmbeddedKey: EnvironmentKey {
     static let defaultValue = false
 }
 

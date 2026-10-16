@@ -7,9 +7,9 @@ struct ScoreLegacyRepairPrompt: Identifiable {
 
 struct ScoreLegacyRepairSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedIndexes: Set<Int>
-    @State private var isFixing = false
-    @State private var errorMessage: String?
+    @State var selectedIndexes: Set<Int>
+    @State var isFixing = false
+    @State var errorMessage: String?
 
     let issues: [ScoreLegacyRepairIssue]
     let fixSelected: @MainActor ([Int]) async throws -> Void

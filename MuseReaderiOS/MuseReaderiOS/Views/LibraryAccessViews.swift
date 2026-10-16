@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-private struct AriaProLogoBadge: View {
+struct AriaProLogoBadge: View {
     var body: some View {
         ZStack {
             Circle()
@@ -36,8 +36,8 @@ struct LibraryPaywallView: View {
 
     let context: LibraryPaywallContext
 
-    @State private var resultMessage: String?
-    @State private var didUnlock = false
+    @State var resultMessage: String?
+    @State var didUnlock = false
 
     var body: some View {
         ScrollView {
@@ -209,7 +209,7 @@ struct LibraryPaywallView: View {
     }
 }
 
-private struct PaywallBenefitRow: View {
+struct PaywallBenefitRow: View {
     let systemImage: String
     let title: String
 
@@ -233,8 +233,8 @@ struct ScoreImportReviewSheet: View {
 
     let review: ScoreImportReview
 
-    @State private var selectedIDs: Set<UUID>
-    @State private var capacityMessage: String?
+    @State var selectedIDs: Set<UUID>
+    @State var capacityMessage: String?
 
     init(model: MuseReaderAppModel, review: ScoreImportReview) {
         self.model = model

@@ -12,13 +12,13 @@ struct SetlistShareSheet: View {
 
     let setlist: LibrarySetlistFolder
 
-    @State private var format: ScoreReaderExportFormat = .pdf
-    @State private var combinesPDFPages = false
-    @State private var preparedShareItems: ScoreReaderSharedExportItems?
-    @State private var preparedScoreCount = 0
-    @State private var prepareTask: Task<Void, Never>?
-    @State private var errorMessage: String?
-    @State private var skippedScores: [SetlistShareFailure] = []
+    @State var format: ScoreReaderExportFormat = .pdf
+    @State var combinesPDFPages = false
+    @State var preparedShareItems: ScoreReaderSharedExportItems?
+    @State var preparedScoreCount = 0
+    @State var prepareTask: Task<Void, Never>?
+    @State var errorMessage: String?
+    @State var skippedScores: [SetlistShareFailure] = []
 
     private var scores: [ReaderRecentDocument] {
         model.orderedScores(in: setlist)

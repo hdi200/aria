@@ -8,9 +8,9 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
     var hintHeight: CGFloat = 46
     var hintTint: Color = .blue
 
-    @State private var viewportWidth: CGFloat = 0
-    @State private var contentWidth: CGFloat = 0
-    @State private var hasInteracted = false
+    @State var viewportWidth: CGFloat = 0
+    @State var contentWidth: CGFloat = 0
+    @State var hasInteracted = false
 
     private let content: Content
 
@@ -88,7 +88,7 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
     }
 }
 
-private struct MobileHorizontalScrollContentWidthPreferenceKey: PreferenceKey {
+struct MobileHorizontalScrollContentWidthPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -96,7 +96,7 @@ private struct MobileHorizontalScrollContentWidthPreferenceKey: PreferenceKey {
     }
 }
 
-private struct MobileHorizontalScrollViewportWidthPreferenceKey: PreferenceKey {
+struct MobileHorizontalScrollViewportWidthPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {

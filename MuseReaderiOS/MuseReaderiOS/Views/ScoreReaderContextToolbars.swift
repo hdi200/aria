@@ -710,7 +710,7 @@ struct ScoreReaderCompactPaletteButton: View {
     }
 }
 
-private struct ScoreReaderCompactControlGroup<Content: View>: View {
+struct ScoreReaderCompactControlGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -727,7 +727,7 @@ private struct ScoreReaderCompactControlGroup<Content: View>: View {
     }
 }
 
-private struct ScoreReaderCompactGroupedDivider: View {
+struct ScoreReaderCompactGroupedDivider: View {
     var body: some View {
         Rectangle()
             .fill(Color.black.opacity(0.07))
@@ -735,7 +735,7 @@ private struct ScoreReaderCompactGroupedDivider: View {
     }
 }
 
-private struct ScoreReaderCompactGroupedPaletteButton: View {
+struct ScoreReaderCompactGroupedPaletteButton: View {
     var duration: ScoreNoteDuration? = nil
     var textSymbol: String? = nil
     var systemImage: String? = nil
@@ -784,7 +784,7 @@ private struct ScoreReaderCompactGroupedPaletteButton: View {
     }
 }
 
-private struct ScoreReaderCompactGridPaletteButton: View {
+struct ScoreReaderCompactGridPaletteButton: View {
     var duration: ScoreNoteDuration? = nil
     var textSymbol: String? = nil
     var systemImage: String? = nil
@@ -842,7 +842,7 @@ private struct ScoreReaderCompactGridPaletteButton: View {
     }
 }
 
-private struct ScoreReaderCompactGridTupletMenuButton: View {
+struct ScoreReaderCompactGridTupletMenuButton: View {
     let isEnabled: Bool
     let action: (Int) -> Void
 
@@ -923,7 +923,7 @@ struct ScoreReaderCompactTupletMenuButton: View {
     }
 }
 
-private enum ScoreReaderTupletPreset: Int, CaseIterable, Identifiable {
+enum ScoreReaderTupletPreset: Int, CaseIterable, Identifiable {
     case duplet = 2
     case triplet = 3
     case quadruplet = 4
@@ -1186,7 +1186,7 @@ struct ScoreReaderHorizontalContextToolbar<Content: View>: View {
     }
 }
 
-private struct ScoreReaderHorizontalToolbarChromeModifier: ViewModifier {
+struct ScoreReaderHorizontalToolbarChromeModifier: ViewModifier {
     let isEmbedded: Bool
 
     func body(content: Content) -> some View {

@@ -100,7 +100,7 @@ struct ScoreReaderEditorRail: View {
 }
 
 struct ScoreReaderEditingDeck: View {
-    @State private var preferFlats = false
+    @State var preferFlats = false
 
     let editingState: ScoreEditingState
     let pendingPitchClass: Int?

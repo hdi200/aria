@@ -34,8 +34,8 @@ struct ScoreReaderPageScrubber: View {
     let usesTwoPageSpread: Bool
     let commitAction: (Int) -> Void
 
-    @State private var scrubPageIndex: Int?
-    @State private var selectionFeedback = UISelectionFeedbackGenerator()
+    @State var scrubPageIndex: Int?
+    @State var selectionFeedback = UISelectionFeedbackGenerator()
 
     private let knobSize: CGFloat = 14
     private let trackHeight: CGFloat = 4

@@ -12,7 +12,7 @@ struct ContentView: View {
     @Environment(\.requestReview) private var requestReview
     @Environment(\.scenePhase) private var scenePhase
     @OwnedState private var appModel = MuseReaderAppModel()
-    @State private var reviewRequestTracker = ReviewRequestTracker()
+    @State var reviewRequestTracker = ReviewRequestTracker()
 
     var body: some View {
         LibraryView(model: appModel)

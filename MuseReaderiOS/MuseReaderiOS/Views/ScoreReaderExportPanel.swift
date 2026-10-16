@@ -623,29 +623,29 @@ struct ScoreReaderVideoExportSheet: View {
     static let openedKey = "VideoExport.hasOpened"
     @AppStorage(openedKey) private var hasOpenedVideoExport = false
     @Environment(\.dismiss) private var dismiss
-    @State private var isChoosingPhoto = false
-    @State private var backgroundPhotoItem: PhotosPickerItem?
-    @State private var isLoadingBackground = false
-    @State private var backgroundError: String?
-    @State private var previewImage: UIImage?
-    @State private var paperThumbnail: UIImage?
-    @State private var photoThumbnail: UIImage?
-    @State private var builtInThumbnails: [String: UIImage] = [:]
-    @State private var customThumbnail: UIImage?
-    @State private var pianoDarkThumbnail: UIImage?
-    @State private var pianoLightThumbnail: UIImage?
-    @State private var previewRevision = 0
-    @State private var isLoadingPreview = true
-    @State private var preferredScrollingStyle: ScoreVideoStyle = .scrolling
-    @State private var preferredPianoStyle: ScoreVideoStyle = .piano
-    @State private var player = AVPlayer()
-    @State private var playingVideo: URL?
-    @State private var isFullScreen = false
-    @State private var videoDetails: [URL: String] = [:]
-    @State private var availableWindowSize = CGSize.zero
-    @State private var headerHeight: CGFloat = 76
-    @State private var footerHeight: CGFloat = 115
-    @State private var settingsControlsHeight: CGFloat = 300
+    @State var isChoosingPhoto = false
+    @State var backgroundPhotoItem: PhotosPickerItem?
+    @State var isLoadingBackground = false
+    @State var backgroundError: String?
+    @State var previewImage: UIImage?
+    @State var paperThumbnail: UIImage?
+    @State var photoThumbnail: UIImage?
+    @State var builtInThumbnails: [String: UIImage] = [:]
+    @State var customThumbnail: UIImage?
+    @State var pianoDarkThumbnail: UIImage?
+    @State var pianoLightThumbnail: UIImage?
+    @State var previewRevision = 0
+    @State var isLoadingPreview = true
+    @State var preferredScrollingStyle: ScoreVideoStyle = .scrolling
+    @State var preferredPianoStyle: ScoreVideoStyle = .piano
+    @State var player = AVPlayer()
+    @State var playingVideo: URL?
+    @State var isFullScreen = false
+    @State var videoDetails: [URL: String] = [:]
+    @State var availableWindowSize = CGSize.zero
+    @State var headerHeight: CGFloat = 76
+    @State var footerHeight: CGFloat = 115
+    @State var settingsControlsHeight: CGFloat = 300
 
     @Binding var draft: ScoreReaderExportDraft
     let isPreparingExport: Bool
@@ -1409,7 +1409,7 @@ struct ScoreReaderVideoExportSheet: View {
 }
 
 /// A centered iPad panel with enough height for the preview and all settings.
-private struct ScoreReaderVideoSheetSizing: ViewModifier {
+struct ScoreReaderVideoSheetSizing: ViewModifier {
     let preferredSize: CGSize?
 
     func body(content: Content) -> some View {
@@ -1422,7 +1422,7 @@ private struct ScoreReaderVideoSheetSizing: ViewModifier {
 }
 
 @available(iOS 18.0, *)
-private struct ScoreReaderVideoPanelSizing: PresentationSizing {
+struct ScoreReaderVideoPanelSizing: PresentationSizing {
     let preferredSize: CGSize?
 
     func proposedSize(for root: PresentationSizingRoot, context: PresentationSizingContext) -> ProposedViewSize {
@@ -1432,7 +1432,7 @@ private struct ScoreReaderVideoPanelSizing: PresentationSizing {
 }
 
 /// Read the presenting window, including Split View and Stage Manager resizing.
-private struct ScoreReaderVideoWindowSizeReader: UIViewRepresentable {
+struct ScoreReaderVideoWindowSizeReader: UIViewRepresentable {
     let onChange: (CGSize) -> Void
 
     func makeUIView(context: Context) -> WindowSizeView {
@@ -1480,7 +1480,7 @@ private struct ScoreReaderVideoWindowSizeReader: UIViewRepresentable {
 }
 
 /// Measure the controls first and give the preview the remaining height.
-private struct ScoreReaderVideoSettingsLayout: Layout {
+struct ScoreReaderVideoSettingsLayout: Layout {
     let spacing: CGFloat
 
     private func heights(proposal: ProposedViewSize, subviews: Subviews) -> (preview: CGFloat, controls: CGFloat) {
@@ -1507,7 +1507,7 @@ private struct ScoreReaderVideoSettingsLayout: Layout {
 }
 
 /// Two or more choices; the selected one is outlined in the accent colour.
-private struct ScoreReaderVideoSegmentedControl<Value: Hashable>: View {
+struct ScoreReaderVideoSegmentedControl<Value: Hashable>: View {
     let options: [(title: String, value: Value)]
     @Binding var selection: Value
 
@@ -1542,7 +1542,7 @@ private struct ScoreReaderVideoSegmentedControl<Value: Hashable>: View {
     }
 }
 
-private struct ScoreReaderVideoButtonStyle: ButtonStyle {
+struct ScoreReaderVideoButtonStyle: ButtonStyle {
     let isPrimary: Bool
 
     func makeBody(configuration: Configuration) -> some View {
@@ -1560,7 +1560,7 @@ private struct ScoreReaderVideoButtonStyle: ButtonStyle {
 }
 
 /// The system player inline, with its standard controls.
-private struct ScoreReaderVideoPlayerView: UIViewControllerRepresentable {
+struct ScoreReaderVideoPlayerView: UIViewControllerRepresentable {
     let player: AVPlayer
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
@@ -1579,7 +1579,7 @@ private struct ScoreReaderVideoPlayerView: UIViewControllerRepresentable {
 }
 
 /// The same player filling the screen; playback carries on where it was.
-private struct ScoreReaderFullScreenVideo: View {
+struct ScoreReaderFullScreenVideo: View {
     let player: AVPlayer
     let closeAction: () -> Void
 
@@ -1616,7 +1616,7 @@ private nonisolated enum ScoreReaderVideoThumbnail {
     }
 }
 
-private struct ScoreReaderExportFooterButtonStyle: ButtonStyle {
+struct ScoreReaderExportFooterButtonStyle: ButtonStyle {
     let isPrimary: Bool
     var isCompact = false
 

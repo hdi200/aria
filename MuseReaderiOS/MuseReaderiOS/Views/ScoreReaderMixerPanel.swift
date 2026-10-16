@@ -450,7 +450,7 @@ struct ScoreReaderMixerPanel: View {
 
 }
 
-private struct VerticalMixerFader: View {
+struct VerticalMixerFader: View {
     @Binding var value: Float
     let color: Color
     let accessibilityName: String
@@ -510,7 +510,7 @@ private struct VerticalMixerFader: View {
     }
 }
 
-private struct StereoLevelMeter: View {
+struct StereoLevelMeter: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let level: Float
 

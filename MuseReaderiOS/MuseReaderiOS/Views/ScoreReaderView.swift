@@ -31,19 +31,19 @@ struct ScoreReaderPageSwipePolicy {
     }
 }
 
-private enum ScoreReaderTransposeScope {
+enum ScoreReaderTransposeScope {
     case selection
     case score
 }
 
-private struct ScoreReaderTransposeSheetContext: Identifiable {
+struct ScoreReaderTransposeSheetContext: Identifiable {
     let id = UUID()
     let currentKey: Int
     let scope: ScoreReaderTransposeScope
 }
 
-private struct ScoreReaderViewKeyControl: View {
-    @State private var isKeyPickerPresented = false
+struct ScoreReaderViewKeyControl: View {
+    @State var isKeyPickerPresented = false
 
     let currentKey: ScoreTransposeTargetKey
     let originalKey: ScoreTransposeTargetKey
@@ -87,7 +87,7 @@ private struct ScoreReaderViewKeyControl: View {
     }
 }
 
-private struct ScoreReaderViewKeyPicker: View {
+struct ScoreReaderViewKeyPicker: View {
     @Environment(\.dismiss) private var dismiss
 
     let currentKey: ScoreTransposeTargetKey
@@ -178,12 +178,12 @@ private struct ScoreReaderViewKeyPicker: View {
     }
 }
 
-private struct ScoreReaderPlaybackScrollTarget: Equatable {
+struct ScoreReaderPlaybackScrollTarget: Equatable {
     let pageIndex: Int
     let normalizedRect: ScoreNormalizedRect
 }
 
-private struct ScoreReaderTwoPageViewIcon: View {
+struct ScoreReaderTwoPageViewIcon: View {
     let isActive: Bool
 
     var body: some View {
@@ -213,16 +213,16 @@ struct ScoreReaderView: View {
 
     @OwnedState private var readerState: ScoreReaderState
     @OwnedState private var annotationController: ScoreAnnotationController
-    @State private var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
-    @State private var lastPhoneLandscapeZoomMode: Bool?
-    @State private var selectedToolCategory: ScoreReaderToolCategory
-    @State private var textEditorDraft: ScoreReaderTextEditorDraft?
-    @State private var legacyRepairPrompt: ScoreLegacyRepairPrompt?
-    @State private var isPartsPanelPresented = false
-    @State private var isMixerPresented = false
-    @State private var isFeatureTourPresented = false
+    @State var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
+    @State var lastPhoneLandscapeZoomMode: Bool?
+    @State var selectedToolCategory: ScoreReaderToolCategory
+    @State var textEditorDraft: ScoreReaderTextEditorDraft?
+    @State var legacyRepairPrompt: ScoreLegacyRepairPrompt?
+    @State var isPartsPanelPresented = false
+    @State var isMixerPresented = false
+    @State var isFeatureTourPresented = false
     private let featureTourStore = ScoreReaderFeatureTourStore()
-    @State private var isUpdateNoticePresented = false
+    @State var isUpdateNoticePresented = false
     private let updateNoticeStore = UpdateNoticeStore()
 
     @MainActor
@@ -266,54 +266,54 @@ struct ScoreReaderView: View {
             .transition(.opacity)
         }
     }
-    @State private var isExportPanelPresented = false
-    @State private var exportDraft = ScoreReaderExportDraft()
-    @State private var sharedExportItems: ScoreReaderSharedExportItems?
+    @State var isExportPanelPresented = false
+    @State var exportDraft = ScoreReaderExportDraft()
+    @State var sharedExportItems: ScoreReaderSharedExportItems?
     /// Finished videos, shown in the video sheet to watch and share.
-    @State private var completedVideoURLs: [URL] = []
-    @State private var exportTask: Task<Void, Never>?
-    @State private var videoPreviewCache = ScoreVideoPreviewCache()
-    @State private var isVideoSheetPresented = false
-    @State private var exportErrorMessage: String?
-    @State private var isPreparingExport = false
-    @State private var exportProgress: Double?
-    @State private var selectedPartID = "full-score"
-    @State private var isTempoEditorPresented = false
-    @State private var isTimeSignaturePresented = false
-    @State private var isKeySignaturePresented = false
-    @State private var isScoreSetupPresented = false
-    @State private var isPageSettingsPresented = false
-    @State private var isInstrumentLayoutPresented = false
-    @State private var instrumentReplacementContext: InstrumentReplacementContext?
-    @State private var transposeSheetContext: ScoreReaderTransposeSheetContext?
-    @State private var isAddMeasuresPresented = false
-    @State private var isAutoBreaksPresented = false
-    @State private var isAddInstrumentPresented = false
-    @State private var isClefPickerPresented = false
-    @State private var instrumentsToAdd: [NewScoreInstrument] = []
-    @State private var currentScoreInstruments: [NewScoreInstrument] = []
-    @State private var instrumentLayoutParts: [ScorePart] = []
-    @State private var selectionCommandAnchor: ScoreReaderSelectionCommandAnchor?
-    @State private var dismissedSelectionCommandIdentity: String?
-    @State private var pencilAutoNoteEntryAllowed = true
-    @State private var zoomScaleBeforeTextEntry: CGFloat?
-    @State private var isClosingScore = false
-    @State private var isTransitioningScore = false
-    @State private var measuredNoteEntryPanelHeight: CGFloat = 0
-    @State private var measuredTopChromeHeight: CGFloat = 0
-    @State private var didApplyInitialToolCategory = false
-    @State private var isChromeVisible = true
-    @State private var savedViewModeConfirmationIsVisible = false
-    @State private var readingStyle: ScoreReaderReadingStyle = .pageTurn
-    @State private var viewModeSaveErrorMessage: String?
-    @State private var isAnnotationModeActive = false
-    @State private var annotationsVisible = true
-    @State private var annotationTool = ScoreAnnotationTool.pen
+    @State var completedVideoURLs: [URL] = []
+    @State var exportTask: Task<Void, Never>?
+    @State var videoPreviewCache = ScoreVideoPreviewCache()
+    @State var isVideoSheetPresented = false
+    @State var exportErrorMessage: String?
+    @State var isPreparingExport = false
+    @State var exportProgress: Double?
+    @State var selectedPartID = "full-score"
+    @State var isTempoEditorPresented = false
+    @State var isTimeSignaturePresented = false
+    @State var isKeySignaturePresented = false
+    @State var isScoreSetupPresented = false
+    @State var isPageSettingsPresented = false
+    @State var isInstrumentLayoutPresented = false
+    @State var instrumentReplacementContext: InstrumentReplacementContext?
+    @State var transposeSheetContext: ScoreReaderTransposeSheetContext?
+    @State var isAddMeasuresPresented = false
+    @State var isAutoBreaksPresented = false
+    @State var isAddInstrumentPresented = false
+    @State var isClefPickerPresented = false
+    @State var instrumentsToAdd: [NewScoreInstrument] = []
+    @State var currentScoreInstruments: [NewScoreInstrument] = []
+    @State var instrumentLayoutParts: [ScorePart] = []
+    @State var selectionCommandAnchor: ScoreReaderSelectionCommandAnchor?
+    @State var dismissedSelectionCommandIdentity: String?
+    @State var pencilAutoNoteEntryAllowed = true
+    @State var zoomScaleBeforeTextEntry: CGFloat?
+    @State var isClosingScore = false
+    @State var isTransitioningScore = false
+    @State var measuredNoteEntryPanelHeight: CGFloat = 0
+    @State var measuredTopChromeHeight: CGFloat = 0
+    @State var didApplyInitialToolCategory = false
+    @State var isChromeVisible = true
+    @State var savedViewModeConfirmationIsVisible = false
+    @State var readingStyle: ScoreReaderReadingStyle = .pageTurn
+    @State var viewModeSaveErrorMessage: String?
+    @State var isAnnotationModeActive = false
+    @State var annotationsVisible = true
+    @State var annotationTool = ScoreAnnotationTool.pen
     @AppStorage("ScoreReaderAnnotationMarkerColor") private var annotationMarkerColor = ScoreAnnotationColor.black
     @AppStorage("ScoreReaderAnnotationMarkerWidth") private var annotationMarkerWidth: Double = 4
     @AppStorage("ScoreReaderAnnotationHighlighterColor") private var annotationHighlighterColor = ScoreAnnotationColor.yellow
     @AppStorage("ScoreReaderAnnotationHighlighterWidth") private var annotationHighlighterWidth: Double = 4
-    @State private var readingStyleBeforeAnnotation: ScoreReaderReadingStyle?
+    @State var readingStyleBeforeAnnotation: ScoreReaderReadingStyle?
 
     private let setlistNavigation: ScoreReaderSetlistNavigation?
     private let readerReadyAction: (@MainActor () -> Void)?
@@ -2501,7 +2501,7 @@ struct ScoreReaderView: View {
         return title.map { "Opening \($0)…" } ?? "Opening score…"
     }
 
-    @State private var isTransitioningTowardPreviousScore = false
+    @State var isTransitioningTowardPreviousScore = false
 
     private func transitionToAdjacentScore(_ direction: ScoreReaderSequenceDirection) {
         guard let setlistNavigation,
@@ -3239,7 +3239,7 @@ struct ScoreReaderView: View {
     }
 }
 
-private struct ScoreReaderCorruptionMenu: View {
+struct ScoreReaderCorruptionMenu: View {
     let report: ScoreCorruptionReport
     let isBusy: Bool
     let selectIssueAction: (ScoreCorruptionIssue) -> Void
@@ -3316,7 +3316,7 @@ private struct ScoreReaderCorruptionMenu: View {
     }
 }
 
-private struct ScoreReaderSavingHUD: View {
+struct ScoreReaderSavingHUD: View {
     var label = "Saving…"
 
     var body: some View {
@@ -3344,7 +3344,7 @@ private extension String {
 /// switches the score to one line and back), so it happens once per sheet and
 /// never twice at the same time; each style change only redraws.
 @MainActor
-private final class ScoreVideoPreviewCache {
+final class ScoreVideoPreviewCache {
     private var materials: [ScoreVideoStyle.Layout: Task<ScoreVideoExporter.PreviewMaterial?, Never>] = [:]
     private var fonts: (title: ScoreVideoTextFont, composer: ScoreVideoTextFont)?
 

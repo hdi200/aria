@@ -44,8 +44,8 @@ struct ScoreReaderTextEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isTextFieldFocused: Bool
 
-    @State private var text: String
-    @State private var chordFieldIsFirstResponder = true
+    @State var text: String
+    @State var chordFieldIsFirstResponder = true
 
     let draft: ScoreReaderTextEditorDraft
     let isBusy: Bool
@@ -559,7 +559,7 @@ final class ScoreReaderChordKeyboardView: UIView {
         return row
     }
 
-    private enum ButtonStyle {
+    enum ButtonStyle {
         case plain
         case secondary
         case root

@@ -1321,7 +1321,7 @@ nonisolated private final class TiledPDFPageSource: @unchecked Sendable {
     }
 }
 
-private final class ScorePagePDFTileView: UIView {
+final class ScorePagePDFTileView: UIView {
     private var currentPDFData: Data?
     private let pdfSource = TiledPDFPageSource()
     private var contentSize = CGSize(width: 1, height: 1)
@@ -1428,7 +1428,7 @@ private final class ScorePagePDFTileView: UIView {
     }
 }
 
-private final class ScoreOverlayPDFView: UIView {
+final class ScoreOverlayPDFView: UIView {
     private var currentPDFData: Data?
     private let pdfSource = TiledPDFPageSource()
 
@@ -1515,7 +1515,7 @@ private final class ScoreOverlayPDFView: UIView {
     }
 }
 
-private final class ScorePageZoomContainerView: UIView {
+final class ScorePageZoomContainerView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .white
@@ -1546,7 +1546,7 @@ private final class ScorePageZoomContainerView: UIView {
     }
 }
 
-private final class ScorePageZoomScrollView: UIScrollView {
+final class ScorePageZoomScrollView: UIScrollView {
     var shouldBeginPagePan: ((UIPanGestureRecognizer, UIScrollView) -> Bool)?
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -2830,7 +2830,7 @@ final class ScorePageOverlayView: UIView {
     }
 }
 
-private final class ScoreLayoutMarkerBadgeView: UIView {
+final class ScoreLayoutMarkerBadgeView: UIView {
     private let label = UILabel()
     private let lockImageView = UIImageView()
 

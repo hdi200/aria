@@ -41,7 +41,7 @@ struct ScoreReaderPhoneHeaderLayoutPolicy: Equatable {
 }
 
 struct ScoreReaderChromeBar: View {
-    @State private var isMetronomeSettingsPresented = false
+    @State var isMetronomeSettingsPresented = false
 
     let scoreTitle: String
     let parts: [ScorePart]

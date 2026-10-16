@@ -76,9 +76,9 @@ struct UpdateNoticeStore {
 
 struct UpdateNoticeSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var page = 0
+    @State var page = 0
 
-    private struct Page: Identifiable {
+    struct Page: Identifiable {
         /// Position among the pages shown on this device.
         var id = 0
         /// A looping clip in Resources/WhatsNew, or a symbol when there is none.
@@ -92,7 +92,7 @@ struct UpdateNoticeSheet: View {
         var items: [Item] = []
     }
 
-    private struct Item: Identifiable {
+    struct Item: Identifiable {
         var id: String { title }
         let systemImage: String
         let title: String
@@ -279,7 +279,7 @@ struct UpdateNoticeSheet: View {
 }
 
 /// A silent clip that loops without controls.
-private struct UpdateNoticeLoopingVideo: UIViewRepresentable {
+struct UpdateNoticeLoopingVideo: UIViewRepresentable {
     let url: URL
 
     final class PlayerView: UIView {

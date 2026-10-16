@@ -3,8 +3,8 @@ import UniformTypeIdentifiers
 
 struct ScoreReaderAutoSystemBreaksSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var mode: ScoreAutoSystemBreaksMode = .measuresPerSystem
-    @State private var measuresText = "4"
+    @State var mode: ScoreAutoSystemBreaksMode = .measuresPerSystem
+    @State var measuresText = "4"
 
     let isBusy: Bool
     let commitAction: (ScoreAutoSystemBreaksRequest) -> Void
@@ -112,7 +112,7 @@ struct ScoreReaderAutoSystemBreaksSheet: View {
 
 struct ScoreReaderAddMeasuresSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var countText = "4"
+    @State var countText = "4"
 
     let isBusy: Bool
     let commitAction: (Int) -> Void
@@ -214,8 +214,8 @@ struct ScoreReaderAddMeasuresSheet: View {
 
 struct ScoreReaderTempoEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var tokens: [TempoToken]
-    @State private var hasStartedNumberEntry = false
+    @State var tokens: [TempoToken]
+    @State var hasStartedNumberEntry = false
 
     let isBusy: Bool
     let commitAction: (TempoValue) -> Void
@@ -301,7 +301,7 @@ struct ScoreReaderTempoEditorSheet: View {
     }
 }
 
-private struct TempoKeyboard: View {
+struct TempoKeyboard: View {
     @Binding var tokens: [TempoToken]
     @Binding var hasStartedNumberEntry: Bool
     let doneEnabled: Bool
@@ -405,9 +405,9 @@ struct ScoreReaderTimeSignatureSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var selected: ScoreTimeSignatureValue
-    @State private var customNumerator: Int
-    @State private var customDenominator: Int
+    @State var selected: ScoreTimeSignatureValue
+    @State var customNumerator: Int
+    @State var customDenominator: Int
 
     let currentValue: ScoreTimeSignatureValue
     let isBusy: Bool
@@ -760,8 +760,8 @@ struct ScoreReaderKeySignatureSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var selected: ScoreKeySignatureValue
-    @State private var showingMinor = false
+    @State var selected: ScoreKeySignatureValue
+    @State var showingMinor = false
 
     let currentKeyValue: Int
     let isBusy: Bool
@@ -1066,7 +1066,7 @@ struct ScoreReaderKeySignatureSheet: View {
     }
 }
 
-private struct ScoreReaderKeySignaturePreviewCard: View {
+struct ScoreReaderKeySignaturePreviewCard: View {
     let keyValue: Int
     let keyTitle: String
     let isCompactLandscape: Bool
@@ -1121,13 +1121,13 @@ private struct ScoreReaderKeySignaturePreviewCard: View {
         return (0..<abs(keyValue)).map { KeySignatureAccidental(symbol: symbol, yOffset: yOffsets[$0]) }
     }
 
-    private struct KeySignatureAccidental: Identifiable {
+    struct KeySignatureAccidental: Identifiable {
         let id = UUID()
         let symbol: String
         let yOffset: CGFloat
     }
 
-    private struct StaffLines: Shape {
+    struct StaffLines: Shape {
         func path(in rect: CGRect) -> Path {
             var path = Path()
             let spacing = rect.height / 6
@@ -1145,8 +1145,8 @@ private struct ScoreReaderKeySignaturePreviewCard: View {
 struct ScoreReaderSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State var metadata: ScoreEditableMetadata
-    @State private var isSaving = false
-    @State private var saveErrorMessage: String?
+    @State var isSaving = false
+    @State var saveErrorMessage: String?
 
     let isBusy: Bool
     let commitAction: (ScoreEditableMetadata) async throws -> Void
@@ -1210,11 +1210,11 @@ struct ScoreReaderSetupSheet: View {
 
 struct ScoreReaderPageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var pageSize: String
-    @State private var margins: Double
-    @State private var staffSize: Double
-    @State private var staffSpacing: Double
-    @State private var systemSpacing: Double
+    @State var pageSize: String
+    @State var margins: Double
+    @State var staffSize: Double
+    @State var staffSpacing: Double
+    @State var systemSpacing: Double
 
     private static let presetPageSizes = ["A4", "Letter", "Legal"]
     /// The score's own page size when it isn't a preset (A3, B4, a desktop custom size, ...),
@@ -1348,8 +1348,8 @@ struct ScoreReaderInstrumentLayoutSheet: View {
     let isBusy: Bool
     let setVisibilityAction: (Int, Bool) -> Void
     let moveAction: (Int, Int) -> Void
-    @State private var draggedPartID: String?
-    @State private var draggedOriginalIndex: Int?
+    @State var draggedPartID: String?
+    @State var draggedOriginalIndex: Int?
 
     var body: some View {
         NavigationStack {
@@ -1495,7 +1495,7 @@ struct ScoreReaderInstrumentLayoutSheet: View {
     }
 }
 
-private struct InstrumentLayoutMetrics {
+struct InstrumentLayoutMetrics {
     let cardWidth: CGFloat
     let topPadding: CGFloat
     let rowHorizontalPadding: CGFloat
@@ -1511,7 +1511,7 @@ private struct InstrumentLayoutMetrics {
     let nameLineLimit: Int
 }
 
-private struct ScorePartLayoutDropDelegate: DropDelegate {
+struct ScorePartLayoutDropDelegate: DropDelegate {
     let part: ScorePart
     @Binding var parts: [ScorePart]
     @Binding var draggedPartID: String?

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ScoreReaderFloatingToolPalette: View {
-    @State private var preferFlats = false
+    @State var preferFlats = false
 
     let selectedToolCategory: ScoreReaderToolCategory
     let isDockedLeft: Bool

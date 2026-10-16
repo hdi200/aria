@@ -13,27 +13,27 @@ struct LibraryView: View {
     @Bindable var model: MuseReaderAppModel
     private let accessController: LibraryAccessController
 
-    @State private var searchText = ""
-    @State private var selectedCategory: LibraryCategory = .allScores
-    @State private var readerPresentation: LibraryReaderPresentation?
-    @State private var pendingCreatedReaderPresentation: LibraryReaderPresentation?
-    @State private var scorePendingDeletion: ReaderRecentDocument?
-    @State private var scoreInfoEditorSession: ScoreSession?
-    @State private var editableScoreInfo = ScoreEditableMetadata()
-    @State private var isSavingScoreInfo = false
-    @State private var scoreInfoSaveErrorMessage: String?
-    @State private var isNewSetlistPresented = false
-    @State private var newSetlistName = ""
-    @State private var folderPendingRename: LibrarySetlistFolder?
-    @State private var folderPendingDeletion: LibrarySetlistFolder?
-    @State private var folderPendingShare: LibrarySetlistFolder?
-    @State private var folderPendingScoreAdd: FolderScoreAddRequest?
-    @State private var isSetlistReorderPresented = false
-    @State private var isEditingActiveSetlist = false
-    @State private var isScoreDropTargeted = false
-    @State private var renameSetlistName = ""
-    @State private var scorePendingFolderSelection: ReaderRecentDocument?
-    @State private var isOpenSourceLegalPresented = false
+    @State var searchText = ""
+    @State var selectedCategory: LibraryCategory = .allScores
+    @State var readerPresentation: LibraryReaderPresentation?
+    @State var pendingCreatedReaderPresentation: LibraryReaderPresentation?
+    @State var scorePendingDeletion: ReaderRecentDocument?
+    @State var scoreInfoEditorSession: ScoreSession?
+    @State var editableScoreInfo = ScoreEditableMetadata()
+    @State var isSavingScoreInfo = false
+    @State var scoreInfoSaveErrorMessage: String?
+    @State var isNewSetlistPresented = false
+    @State var newSetlistName = ""
+    @State var folderPendingRename: LibrarySetlistFolder?
+    @State var folderPendingDeletion: LibrarySetlistFolder?
+    @State var folderPendingShare: LibrarySetlistFolder?
+    @State var folderPendingScoreAdd: FolderScoreAddRequest?
+    @State var isSetlistReorderPresented = false
+    @State var isEditingActiveSetlist = false
+    @State var isScoreDropTargeted = false
+    @State var renameSetlistName = ""
+    @State var scorePendingFolderSelection: ReaderRecentDocument?
+    @State var isOpenSourceLegalPresented = false
     @AppStorage("LibraryScoreSortOrder") private var scoreSortOrder = LibraryScoreSortOrder.recentlyOpened
     @AppStorage("LibraryDashboardScoreLayout") private var dashboardScoreLayout = LibraryScoreLayout.medium
     @AppStorage("LibraryPhoneScoreLayout") private var phoneScoreLayout = LibraryScoreLayout.list
@@ -813,7 +813,7 @@ struct LibraryView: View {
     }
 }
 
-private enum LibraryCategory: Equatable {
+enum LibraryCategory: Equatable {
     case allScores
     case setlists
     case setlist(UUID)
@@ -938,7 +938,7 @@ struct LibrarySetlistDisplayPolicy {
     }
 }
 
-private enum LibraryScoreLayout: String, CaseIterable, Identifiable {
+enum LibraryScoreLayout: String, CaseIterable, Identifiable {
     case list
     case small
     case medium
@@ -1035,7 +1035,7 @@ private enum LibraryScoreLayout: String, CaseIterable, Identifiable {
 }
 
 /// Shows the early-supporter message once nothing else is in the way.
-private struct LibraryLaunchMessages: ViewModifier {
+struct LibraryLaunchMessages: ViewModifier {
     var model: MuseReaderAppModel
     let accessStatus: LibraryAccessStatus
 
@@ -1053,13 +1053,13 @@ private struct LibraryLaunchMessages: ViewModifier {
     }
 }
 
-private struct FolderScoreAddRequest: Identifiable {
+struct FolderScoreAddRequest: Identifiable {
     let id: UUID
 }
 
-private struct ReorderSetlistsSheet: View {
+struct ReorderSetlistsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var setlists: [LibrarySetlistFolder]
+    @State var setlists: [LibrarySetlistFolder]
 
     let saveAction: ([UUID]) -> Void
 
@@ -1124,7 +1124,7 @@ enum LibraryPalette {
     ]
 }
 
-private struct LibrarySidebar: View {
+struct LibrarySidebar: View {
     @Binding var selectedCategory: LibraryCategory
     let folders: [LibrarySetlistFolder]
     let importAction: () -> Void
@@ -1247,7 +1247,7 @@ private struct LibrarySidebar: View {
     }
 }
 
-private struct LibraryBrandHeader: View {
+struct LibraryBrandHeader: View {
     var body: some View {
         HStack(spacing: 14) {
             AriaLogoMark(size: 36, cornerRadius: 11)
@@ -1272,7 +1272,7 @@ struct AriaLogoMark: View {
     }
 }
 
-private struct SidebarSectionTitle: View {
+struct SidebarSectionTitle: View {
     let title: String
 
     init(_ title: String) {
@@ -1287,7 +1287,7 @@ private struct SidebarSectionTitle: View {
     }
 }
 
-private struct SidebarNavButton: View {
+struct SidebarNavButton: View {
     let title: String
     let systemImage: String
     let isSelected: Bool
@@ -1314,7 +1314,7 @@ private struct SidebarNavButton: View {
     }
 }
 
-private struct SidebarSetlistButton: View {
+struct SidebarSetlistButton: View {
     let folder: LibrarySetlistFolder
     let isSelected: Bool
     let selectAction: () -> Void
@@ -1323,7 +1323,7 @@ private struct SidebarSetlistButton: View {
     let shareAction: () -> Void
     let dropScoreAction: (String) -> Void
 
-    @State private var isDropTargeted = false
+    @State var isDropTargeted = false
 
     var body: some View {
         Button(action: selectAction) {
@@ -1399,7 +1399,7 @@ enum PhoneTab: Int, CaseIterable {
     }
 }
 
-private struct PhoneLibraryView: View {
+struct PhoneLibraryView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     let scores: [ReaderRecentDocument]
@@ -1722,7 +1722,7 @@ private struct PhoneLibraryView: View {
 
 // PhoneLibraryActionButtons removed — buttons now inline in PhoneLibraryView header
 
-private struct PhoneSearchField: View {
+struct PhoneSearchField: View {
     @Binding var text: String
 
     var body: some View {
@@ -1756,7 +1756,7 @@ private struct PhoneSearchField: View {
     }
 }
 
-private struct PhoneBottomTabBar: View {
+struct PhoneBottomTabBar: View {
     let activeTab: PhoneTab
     let onSelect: (PhoneTab) -> Void
 
@@ -1795,7 +1795,7 @@ private struct PhoneBottomTabBar: View {
 }
 
 // PhoneSetlistContent — shown when Setlists tab is active
-private struct PhoneSetlistContent: View {
+struct PhoneSetlistContent: View {
     let folders: [LibrarySetlistFolder]
     @Binding var selectedCategory: LibraryCategory
     let createFolderAction: () -> Void
@@ -1910,7 +1910,7 @@ private struct PhoneSetlistContent: View {
     }
 }
 
-private struct PhoneScoreList: View {
+struct PhoneScoreList: View {
     let scores: [ReaderRecentDocument]
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
@@ -1951,7 +1951,7 @@ private struct PhoneScoreList: View {
     }
 }
 
-private struct PhoneScoreGrid: View {
+struct PhoneScoreGrid: View {
     let scores: [ReaderRecentDocument]
     let scoreLayout: LibraryScoreLayout
     let openAction: (ReaderRecentDocument) -> Void
@@ -1984,7 +1984,7 @@ private struct PhoneScoreGrid: View {
     }
 }
 
-private struct PhoneScoreListRow: View {
+struct PhoneScoreListRow: View {
     let score: ReaderRecentDocument
     let openAction: () -> Void
     let editInfoAction: () -> Void
@@ -2048,9 +2048,9 @@ private struct PhoneScoreListRow: View {
     }
 }
 
-private struct FolderScorePickerSheet: View {
+struct FolderScorePickerSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
+    @State var searchText = ""
 
     let folderName: String
     let scores: [ReaderRecentDocument]
@@ -2133,9 +2133,9 @@ private struct FolderScorePickerSheet: View {
     }
 }
 
-private struct ScoreSetlistPickerSheet: View {
+struct ScoreSetlistPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
+    @State var searchText = ""
 
     let scoreTitle: String
     let setlists: [LibrarySetlistFolder]
@@ -2220,7 +2220,7 @@ private struct ScoreSetlistPickerSheet: View {
     }
 }
 
-private struct PhoneSettingsContent: View {
+struct PhoneSettingsContent: View {
     let accessStatus: LibraryAccessStatus
     let accessDisplayPrice: String?
     let unlockAction: () -> Void
@@ -2269,7 +2269,7 @@ private struct PhoneSettingsContent: View {
     }
 }
 
-private struct LibraryDashboardView: View {
+struct LibraryDashboardView: View {
     let scores: [ReaderRecentDocument]
     let activeSetlistOrderedScores: [ReaderRecentDocument]
     let selectedCategory: LibraryCategory
@@ -2398,7 +2398,7 @@ private struct LibraryDashboardView: View {
     }
 }
 
-private struct LibraryScoreDisplayBar: View {
+struct LibraryScoreDisplayBar: View {
     let scoreCount: Int
     @Binding var sortOrder: LibraryScoreSortOrder
     @Binding var scoreLayout: LibraryScoreLayout
@@ -2485,7 +2485,7 @@ private struct LibraryScoreDisplayBar: View {
     }
 }
 
-private struct LibraryDisplayMenuLabel: View {
+struct LibraryDisplayMenuLabel: View {
     let systemImage: String
     let title: String
     let accessibilityLabel: String
@@ -2517,7 +2517,7 @@ private struct LibraryDisplayMenuLabel: View {
     }
 }
 
-private struct SetlistScoreEditingList: View {
+struct SetlistScoreEditingList: View {
     let scores: [ReaderRecentDocument]
     let removeAction: (ReaderRecentDocument) -> Void
     let reorderAction: ([ReaderRecentDocument.ID]) -> Void
@@ -2560,7 +2560,7 @@ private struct SetlistScoreEditingList: View {
     }
 }
 
-private struct LibraryScoreList: View {
+struct LibraryScoreList: View {
     let scores: [ReaderRecentDocument]
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
@@ -2597,7 +2597,7 @@ private struct LibraryScoreList: View {
     }
 }
 
-private struct LibraryScoreListRow: View {
+struct LibraryScoreListRow: View {
     let score: ReaderRecentDocument
     let openAction: () -> Void
     let editInfoAction: () -> Void
@@ -2654,7 +2654,7 @@ private struct LibraryScoreListRow: View {
     }
 }
 
-private struct LibrarySettingsContent: View {
+struct LibrarySettingsContent: View {
     let accessStatus: LibraryAccessStatus
     let accessDisplayPrice: String?
     let unlockAction: () -> Void
@@ -2707,7 +2707,7 @@ private struct LibrarySettingsContent: View {
     }
 }
 
-private struct LibraryDashboardHeader: View {
+struct LibraryDashboardHeader: View {
     let title: String
     @Binding var searchText: String
     let createAction: () -> Void
@@ -2854,7 +2854,7 @@ private struct LibraryDashboardHeader: View {
     }
 }
 
-private struct SearchField: View {
+struct SearchField: View {
     @Binding var text: String
 
     var body: some View {
@@ -2893,7 +2893,7 @@ private struct SearchField: View {
     }
 }
 
-private struct LibraryScoreCard: View {
+struct LibraryScoreCard: View {
     let score: ReaderRecentDocument
     let paletteIndex: Int
     let openAction: () -> Void
@@ -2902,7 +2902,7 @@ private struct LibraryScoreCard: View {
     let addToFolderAction: (() -> Void)?
     let removeFromFolderAction: (() -> Void)?
 
-    @State private var isInfoPresented = false
+    @State var isInfoPresented = false
 
     init(
         score: ReaderRecentDocument,
@@ -3001,7 +3001,7 @@ private struct LibraryScoreCard: View {
     }
 }
 
-private struct ScoreCardThumbnail: View {
+struct ScoreCardThumbnail: View {
     let palette: (fill: Color, icon: Color)
     let formatLabel: String
     let previewImage: UIImage?
@@ -3077,7 +3077,7 @@ private struct ScoreCardThumbnail: View {
     }
 }
 
-private struct ScoreCardPlaceholder: View {
+struct ScoreCardPlaceholder: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             RoundedRectangle(cornerRadius: 999, style: .continuous)
@@ -3097,7 +3097,7 @@ private struct ScoreCardPlaceholder: View {
     }
 }
 
-private struct ScoreCardInfoPopover: View {
+struct ScoreCardInfoPopover: View {
     let score: ReaderRecentDocument
 
     var body: some View {
@@ -3141,7 +3141,7 @@ private struct ScoreCardInfoPopover: View {
     }
 }
 
-private struct ScoreInfoRow: View {
+struct ScoreInfoRow: View {
     let label: String
     let value: String
 
@@ -3160,7 +3160,7 @@ private struct ScoreInfoRow: View {
     }
 }
 
-private struct LibraryScoreInfoEditorSheet: View {
+struct LibraryScoreInfoEditorSheet: View {
     @Binding var metadata: ScoreEditableMetadata
     let isSaving: Bool
     let cancelAction: () -> Void
@@ -3203,7 +3203,7 @@ private struct LibraryScoreInfoEditorSheet: View {
     }
 }
 
-private struct LibraryEmptyState: View {
+struct LibraryEmptyState: View {
     let createAction: () -> Void
     let importAction: () -> Void
     let selectedCategory: LibraryCategory
@@ -3279,7 +3279,7 @@ private struct LibraryEmptyState: View {
     }
 }
 
-private struct SetlistReaderSequence {
+struct SetlistReaderSequence {
     let setlistID: UUID
     let scores: [ReaderRecentDocument]
     let selectedIndex: Int
@@ -3322,13 +3322,13 @@ struct SetlistReaderNavigationPlan {
     }
 }
 
-private struct SetlistScoreReaderHost: View {
-    private struct FailedTransition {
+struct SetlistScoreReaderHost: View {
+    struct FailedTransition {
         let direction: ScoreReaderSequenceDirection
         let readingStyle: ScoreReaderReadingStyle
     }
 
-    private struct PreloadedScore {
+    struct PreloadedScore {
         let index: Int
         let scoreID: ReaderRecentDocument.ID
         let session: ScoreSession
@@ -3338,18 +3338,18 @@ private struct SetlistScoreReaderHost: View {
 
     let sequence: SetlistReaderSequence
 
-    @State private var currentSession: ScoreSession
-    @State private var currentIndex: Int
-    @State private var initialPageIndex = 0
-    @State private var readingStyleOverride: ScoreReaderReadingStyle?
-    @State private var transitionErrorMessage: String?
-    @State private var failedTransition: FailedTransition?
-    @State private var retryLoadingTitle: String?
-    @State private var preloadedNextScore: PreloadedScore?
-    @State private var preloadTask: Task<Void, Never>?
-    @State private var preloadingTargetIndex: Int?
-    @State private var preloadGeneration = 0
-    @State private var sessionsAwaitingPreviewRefresh: [ScoreSession] = []
+    @State var currentSession: ScoreSession
+    @State var currentIndex: Int
+    @State var initialPageIndex = 0
+    @State var readingStyleOverride: ScoreReaderReadingStyle?
+    @State var transitionErrorMessage: String?
+    @State var failedTransition: FailedTransition?
+    @State var retryLoadingTitle: String?
+    @State var preloadedNextScore: PreloadedScore?
+    @State var preloadTask: Task<Void, Never>?
+    @State var preloadingTargetIndex: Int?
+    @State var preloadGeneration = 0
+    @State var sessionsAwaitingPreviewRefresh: [ScoreSession] = []
 
     init(model: MuseReaderAppModel, initialSession: ScoreSession, sequence: SetlistReaderSequence) {
         self.model = model
@@ -3604,7 +3604,7 @@ private struct SetlistScoreReaderHost: View {
     }
 }
 
-private struct LibraryReaderPresentation: Identifiable {
+struct LibraryReaderPresentation: Identifiable {
     let id = UUID()
     let session: ScoreSession
     let startPageIndex: Int

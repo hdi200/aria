@@ -402,7 +402,7 @@ struct ScoreReaderPageCanvas: View {
 }
 
 struct ScoreReaderPageSurface: View {
-    @State private var zoomViewport = ScoreReaderZoomViewport()
+    @State var zoomViewport = ScoreReaderZoomViewport()
 
     let pageIndex: Int
     let page: ScorePage?
@@ -997,7 +997,7 @@ struct ScoreReaderPlaybackLoopOverlay: View {
     }
 }
 
-private struct ScoreReaderOverlayCoordinateSpace {
+struct ScoreReaderOverlayCoordinateSpace {
     let imageSize: CGSize?
     let viewport: ScoreReaderZoomViewport
 
@@ -1044,7 +1044,7 @@ struct ScoreReaderSelectionCommandAnchorPreferenceKey: PreferenceKey {
     }
 }
 
-private struct ScoreReaderSelectedNoteRestActions: View {
+struct ScoreReaderSelectedNoteRestActions: View {
     let selectedElement: ScoreSelectedElement
     let imageSize: CGSize?
     let zoomViewport: ScoreReaderZoomViewport
@@ -1104,8 +1104,8 @@ private struct ScoreReaderSelectedNoteRestActions: View {
 }
 
 struct ScoreReaderSelectionCommandOverlay: View {
-    @State private var isMenuPresented = false
-    @State private var isTransposePresented = false
+    @State var isMenuPresented = false
+    @State var isTransposePresented = false
 
     let anchor: ScoreReaderSelectionCommandAnchor
     let copyAction: () -> Void
@@ -1373,7 +1373,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
     }
 }
 
-private struct ScoreReaderNoteRestCommandMenu: View {
+struct ScoreReaderNoteRestCommandMenu: View {
     let isNoteSelection: Bool
     let supportsBowingArticulations: Bool
     let copyAction: () -> Void
@@ -1524,7 +1524,7 @@ struct ScoreReaderSelectedMeasureActions: View {
     }
 }
 
-private struct ScoreReaderMeasureCommandMenu: View {
+struct ScoreReaderMeasureCommandMenu: View {
     let copyAction: () -> Void
     let cutAction: () -> Void
     let pasteAction: () -> Void
@@ -1648,7 +1648,7 @@ private struct ScoreReaderMeasureCommandMenu: View {
     }
 }
 
-private struct ScoreReaderMeasureCommandRow: View {
+struct ScoreReaderMeasureCommandRow: View {
     let title: String
     var systemImage: String? = nil
     var symbolText: String? = nil
@@ -1703,7 +1703,7 @@ private struct ScoreReaderMeasureCommandRow: View {
     }
 }
 
-private struct ScoreReaderMeasureCommandDivider: View {
+struct ScoreReaderMeasureCommandDivider: View {
     var body: some View {
         Rectangle()
             .fill(Color.black.opacity(0.08))
@@ -1713,11 +1713,11 @@ private struct ScoreReaderMeasureCommandDivider: View {
 }
 
 struct ScoreReaderTransposePanel: View {
-    @State private var mode: ScoreTransposeMode = .interval
-    @State private var direction: ScoreTransposeDirection = .up
-    @State private var diatonicStep = ScoreTransposeDiatonicStep.third
-    @State private var interval = ScoreTransposeInterval.majorSecond
-    @State private var targetKey: ScoreTransposeTargetKey
+    @State var mode: ScoreTransposeMode = .interval
+    @State var direction: ScoreTransposeDirection = .up
+    @State var diatonicStep = ScoreTransposeDiatonicStep.third
+    @State var interval = ScoreTransposeInterval.majorSecond
+    @State var targetKey: ScoreTransposeTargetKey
 
     let title: String
     let isSheetStyle: Bool
@@ -1829,7 +1829,7 @@ struct ScoreReaderTransposePanel: View {
     }
 }
 
-private struct ScoreReaderTransposeSegmentedControl: View {
+struct ScoreReaderTransposeSegmentedControl: View {
     @Binding var selection: ScoreTransposeMode
 
     var body: some View {
@@ -1858,7 +1858,7 @@ private struct ScoreReaderTransposeSegmentedControl: View {
     }
 }
 
-private struct ScoreReaderTransposeListSelection<Item: ScoreReaderTransposeOption>: View {
+struct ScoreReaderTransposeListSelection<Item: ScoreReaderTransposeOption>: View {
     let items: [Item]
     @Binding var selection: Item
 
@@ -1901,7 +1901,7 @@ private struct ScoreReaderTransposeListSelection<Item: ScoreReaderTransposeOptio
     }
 }
 
-private struct ScoreReaderTransposeGridSelection<Item: ScoreReaderTransposeOption>: View {
+struct ScoreReaderTransposeGridSelection<Item: ScoreReaderTransposeOption>: View {
     let items: [Item]
     @Binding var selection: Item
 
@@ -1940,7 +1940,7 @@ private struct ScoreReaderTransposeGridSelection<Item: ScoreReaderTransposeOptio
     }
 }
 
-private struct ScoreReaderDirectionToggle: View {
+struct ScoreReaderDirectionToggle: View {
     @Binding var selection: ScoreTransposeDirection
 
     var body: some View {
@@ -1969,7 +1969,7 @@ private struct ScoreReaderDirectionToggle: View {
     }
 }
 
-private struct ScoreReaderTransposePanelButtonStyle: ButtonStyle {
+struct ScoreReaderTransposePanelButtonStyle: ButtonStyle {
     enum Kind {
         case primary
         case secondary

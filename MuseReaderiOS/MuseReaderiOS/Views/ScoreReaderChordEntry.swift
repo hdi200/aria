@@ -4,8 +4,8 @@ import UIKit
 struct ScoreReaderChordEntryPanel: View {
     @Environment(\.scoreReaderCompactPanelEmbedded) private var embedsInCompactPanel
 
-    @State private var chordText: String
-    @State private var activeSelectionID: String?
+    @State var chordText: String
+    @State var activeSelectionID: String?
 
     let selectionID: String?
     let initialText: String
@@ -161,11 +161,11 @@ struct ScoreReaderChordEntryPanel: View {
 struct ScoreReaderLyricsEntryPanel: View {
     @Environment(\.scoreReaderCompactPanelEmbedded) private var embedsInCompactPanel
 
-    @State private var lyricsText: String
-    @State private var activeSelectionID: String?
+    @State var lyricsText: String
+    @State var activeSelectionID: String?
     /// Space, "-" or "_" sent and not yet answered. Text typed meanwhile belongs to the next
     /// note, so the selection moving there must not clear it.
-    @State private var pendingAdvances = 0
+    @State var pendingAdvances = 0
 
     let selectionID: String?
     let initialText: String
