@@ -3,7 +3,7 @@
 //  MuseReaderiOS
 //
 
-import Combine
+import Observation
 import CoreGraphics
 import CryptoKit
 import Foundation
@@ -375,22 +375,23 @@ private enum ScoreAnnotationGeometry {
 }
 
 @MainActor
-final class ScoreAnnotationController: ObservableObject {
-    @Published private(set) var document: ScoreAnnotationDocument {
+@Observable
+final class ScoreAnnotationController {
+    private(set) var document: ScoreAnnotationDocument {
         didSet { renderCache = nil }
     }
-    @Published private(set) var selectedStrokeIDs: Set<UUID> = []
-    @Published private(set) var saveErrorMessage: String?
+    private(set) var selectedStrokeIDs: Set<UUID> = []
+    private(set) var saveErrorMessage: String?
     /// False when the stored file can't be safely overwritten.
     let isEditable: Bool
 
     private let store: ScoreAnnotationStore
     private var undoStack: [[ScoreAnnotationStroke]] = []
     private var redoStack: [[ScoreAnnotationStroke]] = []
-    private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
     /// Strokes drawn before measure geometry arrived; anchored once it does.
     private var unanchoredStrokeIDs: Set<UUID> = []
-    private var renderCache: RenderCache?
+    @ObservationIgnored private var renderCache: RenderCache?
 
     private struct RenderCache {
         let partID: String

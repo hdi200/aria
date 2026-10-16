@@ -211,8 +211,8 @@ struct ScoreReaderView: View {
     let session: ScoreSession
     private let initialRememberedState: ScoreReaderRememberedState
 
-    @StateObject private var readerState: ScoreReaderState
-    @StateObject private var annotationController: ScoreAnnotationController
+    @OwnedState private var readerState: ScoreReaderState
+    @OwnedState private var annotationController: ScoreAnnotationController
     @State private var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
     @State private var lastPhoneLandscapeZoomMode: Bool?
     @State private var selectedToolCategory: ScoreReaderToolCategory
@@ -351,7 +351,7 @@ struct ScoreReaderView: View {
         _selectedToolCategory = State(initialValue: initialToolCategory)
         _selectedPartID = State(initialValue: rememberedState.selectedPartID)
         _readingStyle = State(initialValue: rememberedState.readingStyle)
-        _readerState = StateObject(
+        _readerState = OwnedState(
             wrappedValue: ScoreReaderState(
                 session: session,
                 initialPageIndex: initialInteractionMode == .view ? rememberedState.pageIndex : initialPageIndex,
@@ -359,7 +359,7 @@ struct ScoreReaderView: View {
                 initialViewTransposeKey: initialInteractionMode == .view ? rememberedState.viewTransposeKey : nil
             )
         )
-        _annotationController = StateObject(wrappedValue: ScoreAnnotationController(documentURL: session.document.url))
+        _annotationController = OwnedState(wrappedValue: ScoreAnnotationController(documentURL: session.document.url))
     }
 
     var body: some View {

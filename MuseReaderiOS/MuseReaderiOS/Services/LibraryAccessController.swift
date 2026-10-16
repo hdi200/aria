@@ -3,7 +3,7 @@
 //  MuseReaderiOS
 //
 
-import Combine
+import Observation
 import Foundation
 import StoreKit
 
@@ -195,7 +195,8 @@ struct LibraryAccessPolicy {
 }
 
 @MainActor
-final class LibraryAccessController: ObservableObject {
+@Observable
+final class LibraryAccessController {
     static let unlimitedScoresProductID = "com.hdi200.ariascore.unlimitedscores"
 
     private enum CacheKeys {
@@ -203,15 +204,15 @@ final class LibraryAccessController: ObservableObject {
         static let verifiedFree = "Aria.LibraryAccess.VerifiedFree"
     }
 
-    @Published private(set) var status: LibraryAccessStatus
-    @Published private(set) var product: Product?
-    @Published private(set) var isLoadingProduct = false
-    @Published private(set) var isPerformingPurchase = false
+    private(set) var status: LibraryAccessStatus
+    private(set) var product: Product?
+    private(set) var isLoadingProduct = false
+    private(set) var isPerformingPurchase = false
 
     private let userDefaults: UserDefaults
     private let simulationOverride: LibraryAccessSimulationOverride?
     private let originalAppVersionSimulation: LibraryOriginalAppVersionSimulation?
-    private var updatesTask: Task<Void, Never>?
+    @ObservationIgnored private var updatesTask: Task<Void, Never>?
     private var hasStarted = false
 
     init(

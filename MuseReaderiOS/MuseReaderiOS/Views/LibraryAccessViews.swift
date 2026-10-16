@@ -31,8 +31,8 @@ private struct AriaProLogoBadge: View {
 struct LibraryPaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @ObservedObject var model: MuseReaderAppModel
-    @ObservedObject var accessController: LibraryAccessController
+    var model: MuseReaderAppModel
+    var accessController: LibraryAccessController
 
     let context: LibraryPaywallContext
 
@@ -229,7 +229,7 @@ private struct PaywallBenefitRow: View {
 struct ScoreImportReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @ObservedObject var model: MuseReaderAppModel
+    var model: MuseReaderAppModel
 
     let review: ScoreImportReview
 

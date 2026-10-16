@@ -4,7 +4,7 @@
 //
 //
 
-import Combine
+import Observation
 import Foundation
 import UniformTypeIdentifiers
 
@@ -113,7 +113,8 @@ enum ScoreImportBatchRunner {
 }
 
 @MainActor
-final class MuseReaderAppModel: ObservableObject {
+@Observable
+final class MuseReaderAppModel {
     private enum PreviewConstants {
         static let libraryThumbnailPageIndex = 0
         static let libraryThumbnailDPI = 120
@@ -121,17 +122,17 @@ final class MuseReaderAppModel: ObservableObject {
         static let metadataRefreshDelay: Duration = .seconds(1)
     }
 
-    @Published var recents: [ReaderRecentDocument]
-    @Published var setlistFolders: [LibrarySetlistFolder]
-    @Published var currentSession: ScoreSession?
-    @Published var pendingImportedSession: ScoreSession?
-    @Published var isImportingPresented = false
-    @Published var isCreateScorePresented = false
-    @Published var isLoading = false
-    @Published var importProgress: ScoreImportProgress?
-    @Published var errorAlert: ReaderAlert?
-    @Published private(set) var managedScoreCount = 0
-    @Published var libraryAccessSheet: LibraryAccessSheet?
+    var recents: [ReaderRecentDocument]
+    var setlistFolders: [LibrarySetlistFolder]
+    var currentSession: ScoreSession?
+    var pendingImportedSession: ScoreSession?
+    var isImportingPresented = false
+    var isCreateScorePresented = false
+    var isLoading = false
+    var importProgress: ScoreImportProgress?
+    var errorAlert: ReaderAlert?
+    private(set) var managedScoreCount = 0
+    var libraryAccessSheet: LibraryAccessSheet?
 
     let libraryAccessController: LibraryAccessController
 
@@ -141,7 +142,7 @@ final class MuseReaderAppModel: ObservableObject {
     private let setlistStore: LibrarySetlistStore
     private let scoreLibrary: ManagedScoreLibrary
     private let recoveryStore: ScoreRecoveryStore
-    private var libraryPreviewRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var libraryPreviewRefreshTask: Task<Void, Never>?
     private var libraryPreviewRefreshGeneration = 0
     private var didAttemptLaunchRecovery = false
     private var reservedScoreSlots = 0

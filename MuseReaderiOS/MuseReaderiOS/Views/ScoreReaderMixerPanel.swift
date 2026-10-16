@@ -2,14 +2,14 @@ import SwiftUI
 import UIKit
 
 struct ScoreReaderMixerPanel: View {
-    @ObservedObject var readerState: ScoreReaderState
-    @ObservedObject private var mixerLevelMonitor: ScoreMixerLevelMonitor
+    var readerState: ScoreReaderState
+    private let mixerLevelMonitor: ScoreMixerLevelMonitor
     let selectedPartID: String
     let close: () -> Void
 
     init(readerState: ScoreReaderState, selectedPartID: String, close: @escaping () -> Void) {
         self.readerState = readerState
-        self._mixerLevelMonitor = ObservedObject(wrappedValue: readerState.mixerLevelMonitor)
+        self.mixerLevelMonitor = readerState.mixerLevelMonitor
         self.selectedPartID = selectedPartID
         self.close = close
     }

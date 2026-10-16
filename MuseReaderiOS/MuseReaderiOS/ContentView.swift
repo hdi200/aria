@@ -11,7 +11,7 @@ import StoreKit
 struct ContentView: View {
     @Environment(\.requestReview) private var requestReview
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var appModel = MuseReaderAppModel()
+    @OwnedState private var appModel = MuseReaderAppModel()
     @State private var reviewRequestTracker = ReviewRequestTracker()
 
     var body: some View {

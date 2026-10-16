@@ -4,7 +4,7 @@
 //
 //
 
-import Combine
+import Observation
 import Foundation
 import CoreGraphics
 import UIKit
@@ -82,8 +82,9 @@ struct ScoreReaderRememberedStateStore {
 }
 
 @MainActor
-final class ScoreMixerLevelMonitor: ObservableObject {
-    @Published private(set) var levels: [String: Float] = [:]
+@Observable
+final class ScoreMixerLevelMonitor {
+    private(set) var levels: [String: Float] = [:]
 
     func update(_ levels: [String: Float]) {
         self.levels = levels
@@ -91,30 +92,31 @@ final class ScoreMixerLevelMonitor: ObservableObject {
 }
 
 @MainActor
-final class ScoreReaderState: ObservableObject {
+@Observable
+final class ScoreReaderState {
     let session: ScoreSession
 
-    @Published var selectedPageIndex: Int
-    @Published var cachedPagesByIndex: [Int: ScorePage]
-    @Published var loadingPageIndices: Set<Int> = []
-    @Published var pageErrorMessages: [Int: String] = [:]
-    @Published var playbackState: ScorePlaybackState
-    @Published var playbackErrorMessage: String?
-    @Published var isPlaybackActionInFlight = false
-    @Published var playbackPreparationMessage: String?
-    @Published var playbackMeasureHighlight: ScorePlaybackMeasureHighlight?
-    @Published var playFromHereTarget: ScorePlayFromHereTarget?
-    @Published var playbackLoopRange: ScorePlaybackLoopRange?
-    @Published var playbackLoopIsActive = false
-    @Published var mixerSettings = ScoreMixerSettings()
-    @Published var metronomeEnabled = false
-    @Published var countInEnabled = UserDefaults.standard.bool(forKey: "ScoreReader.countInEnabled")
-    @Published var isCountingIn = false
-    @Published var countInBeatNumber: Int?
-    @Published var editingState: ScoreEditingState = .inactive
-    @Published var measureRangePreviewSelection: ScoreSelectedElement?
-    @Published var editingErrorMessage: String?
-    @Published var autosaveFailureMessage: String? {
+    var selectedPageIndex: Int
+    var cachedPagesByIndex: [Int: ScorePage]
+    var loadingPageIndices: Set<Int> = []
+    var pageErrorMessages: [Int: String] = [:]
+    var playbackState: ScorePlaybackState
+    var playbackErrorMessage: String?
+    var isPlaybackActionInFlight = false
+    var playbackPreparationMessage: String?
+    var playbackMeasureHighlight: ScorePlaybackMeasureHighlight?
+    var playFromHereTarget: ScorePlayFromHereTarget?
+    var playbackLoopRange: ScorePlaybackLoopRange?
+    var playbackLoopIsActive = false
+    var mixerSettings = ScoreMixerSettings()
+    var metronomeEnabled = false
+    var countInEnabled = UserDefaults.standard.bool(forKey: "ScoreReader.countInEnabled")
+    var isCountingIn = false
+    var countInBeatNumber: Int?
+    var editingState: ScoreEditingState = .inactive
+    var measureRangePreviewSelection: ScoreSelectedElement?
+    var editingErrorMessage: String?
+    var autosaveFailureMessage: String? {
         didSet {
             if autosaveFailureMessage == nil {
                 saveNeedsChordSymbolRemovalApproval = false
@@ -122,38 +124,38 @@ final class ScoreReaderState: ObservableObject {
         }
     }
     /// The last save paused because every chord symbol was removed from the full score.
-    @Published var saveNeedsChordSymbolRemovalApproval = false
-    @Published var hasUnsavedAutosaveChanges = false
-    @Published var isEditingActionInFlight = false
+    var saveNeedsChordSymbolRemovalApproval = false
+    var hasUnsavedAutosaveChanges = false
+    var isEditingActionInFlight = false
     /// Lyric commands run one after another: typing "glo-ri-a " quickly sends several before the
     /// first one finishes, and an edit that arrives while another is running would be dropped.
-    var lyricsActionTail: Task<Void, Never>?
+    @ObservationIgnored var lyricsActionTail: Task<Void, Never>?
     //! NOTE Live score info. session.document is a snapshot from when the score was opened,
     //! so it goes stale after metadata edits, on-page title edits, and undo/redo.
-    @Published var scoreMetadata: ScoreEditableMetadata
+    var scoreMetadata: ScoreEditableMetadata
     var scoreMetadataRefreshRevision = 0
-    @Published private(set) var scoreParts: [ScorePart]
-    @Published var pendingPitchClass: Int?
-    @Published var pendingMIDIPitch: Int?
-    @Published var pendingPreferFlats = false
-    @Published var pendingAccidentalKind: ScoreAccidentalKind?
-    @Published var stackedChordInputEnabled = false
-    @Published var noteEntryPreview: ScoreNoteEntryPreview?
-    @Published var activeNotationAutoScrollRevision = 0
-    @Published var activePageCount: Int
-    @Published var concertPitchEnabled = false
-    @Published var hasConcertPitchRelevantTransposition = false
-    @Published var viewTransposeSourceKey: ScoreTransposeTargetKey?
-    @Published var viewTransposeKey: ScoreTransposeTargetKey?
-    @Published var isViewTransposeActionInFlight = false
-    @Published var viewTransposeErrorMessage: String?
-    @Published var corruptionReport: ScoreCorruptionReport
-    @Published var pickupEditorContext: ScorePickupEditorContext?
-    @Published private(set) var lastSelectedMeasureIndex: Int?
-    @Published private(set) var lastSelectedMeasureTick: Int64?
-    @Published private(set) var interactionMode: ScoreReaderInteractionMode
-    @Published var playbackFollowIsSuspended = false
-    @Published var playbackFollowEnabled = true
+    private(set) var scoreParts: [ScorePart]
+    var pendingPitchClass: Int?
+    var pendingMIDIPitch: Int?
+    var pendingPreferFlats = false
+    var pendingAccidentalKind: ScoreAccidentalKind?
+    var stackedChordInputEnabled = false
+    var noteEntryPreview: ScoreNoteEntryPreview?
+    var activeNotationAutoScrollRevision = 0
+    var activePageCount: Int
+    var concertPitchEnabled = false
+    var hasConcertPitchRelevantTransposition = false
+    var viewTransposeSourceKey: ScoreTransposeTargetKey?
+    var viewTransposeKey: ScoreTransposeTargetKey?
+    var isViewTransposeActionInFlight = false
+    var viewTransposeErrorMessage: String?
+    var corruptionReport: ScoreCorruptionReport
+    var pickupEditorContext: ScorePickupEditorContext?
+    private(set) var lastSelectedMeasureIndex: Int?
+    private(set) var lastSelectedMeasureTick: Int64?
+    private(set) var interactionMode: ScoreReaderInteractionMode
+    var playbackFollowIsSuspended = false
+    var playbackFollowEnabled = true
 
     let preferredDPI: Int
     let playbackController: NativePlaybackController?
@@ -164,25 +166,25 @@ final class ScoreReaderState: ObservableObject {
     let playbackMonitorInterval = Duration.milliseconds(25)
     let midiChordReleaseSettleDelay = Duration.milliseconds(35)
     let midiChordMaxHoldDelay = Duration.milliseconds(700)
-    var loadTasks: [Int: Task<Void, Never>] = [:]
+    @ObservationIgnored var loadTasks: [Int: Task<Void, Never>] = [:]
     var staleLivePageIndices: Set<Int> = []
-    var playbackMonitorTask: Task<Void, Never>?
-    var playbackContextTask: Task<Void, Never>?
-    var playbackWarmupTask: Task<Void, Error>?
-    var autosaveTask: Task<Void, Never>?
-    var backgroundRecoveryTask: Task<Void, Never>?
-    var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
+    @ObservationIgnored var playbackMonitorTask: Task<Void, Never>?
+    @ObservationIgnored var playbackContextTask: Task<Void, Never>?
+    @ObservationIgnored var playbackWarmupTask: Task<Void, Error>?
+    @ObservationIgnored var autosaveTask: Task<Void, Never>?
+    @ObservationIgnored var backgroundRecoveryTask: Task<Void, Never>?
+    @ObservationIgnored var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
     let recoveryStore = ScoreRecoveryStore()
-    var deferredPagePrefetchTask: Task<Void, Never>?
-    var editingStateTask: Task<Void, Never>?
-    var noteEntryPreviewTask: Task<Void, Never>?
-    var measureRangePreviewTask: Task<Void, Never>?
+    @ObservationIgnored var deferredPagePrefetchTask: Task<Void, Never>?
+    @ObservationIgnored var editingStateTask: Task<Void, Never>?
+    @ObservationIgnored var noteEntryPreviewTask: Task<Void, Never>?
+    @ObservationIgnored var measureRangePreviewTask: Task<Void, Never>?
     var editingStateRevision = 0
     var noteEntryPreviewRevision = 0
     var measureRangePreviewRevision = 0
     var autosaveRevision = 0
     var playbackWarmupRevision = 0
-    @Published var playbackMeasureRegions: [ScorePlaybackMeasureRegion] = []
+    var playbackMeasureRegions: [ScorePlaybackMeasureRegion] = []
     var playbackWasExplicitlyStopped = false
     var pendingPlaybackSelectionStartPoint: CGPoint?
     var pendingPlaybackSelectionEndPoint: CGPoint?
@@ -190,7 +192,7 @@ final class ScoreReaderState: ObservableObject {
     var activeScorePartIndex: Int?
     var pendingScorePartIndex: Int?
     var partSelectionRevision = 0
-    var partSelectionTask: Task<Void, Never>?
+    @ObservationIgnored var partSelectionTask: Task<Void, Never>?
     var partSelectionErrorMessage: String?
     var hasContinuousNoteInputCursor = false
     var noteInputWasActivatedByPencil = false
@@ -198,7 +200,7 @@ final class ScoreReaderState: ObservableObject {
     var lastKeyboardInputCanReceiveAccidental = false
     var activeMIDIPitches: Set<Int> = []
     var pendingMIDIChordPitches: Set<Int> = []
-    var midiChordCaptureTask: Task<Void, Never>?
+    @ObservationIgnored var midiChordCaptureTask: Task<Void, Never>?
 
     // Tracks the most recent Pencil aim (hover/fine-tune) so a note-entry tap can
     // commit exactly where the live preview ghost was shown, rather than the tap's

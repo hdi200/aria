@@ -8,7 +8,7 @@ import SwiftUI
 import UIKit
 
 struct ScoreDetailView: View {
-    @ObservedObject var model: MuseReaderAppModel
+    var model: MuseReaderAppModel
     let session: ScoreSession
 
     @State private var readerPresentation: ReaderPresentation?

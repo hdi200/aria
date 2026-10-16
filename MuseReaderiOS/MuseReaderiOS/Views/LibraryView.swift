@@ -10,8 +10,8 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @ObservedObject var model: MuseReaderAppModel
-    @ObservedObject private var accessController: LibraryAccessController
+    @Bindable var model: MuseReaderAppModel
+    private let accessController: LibraryAccessController
 
     @State private var searchText = ""
     @State private var selectedCategory: LibraryCategory = .allScores
@@ -45,7 +45,7 @@ struct LibraryView: View {
 
     init(model: MuseReaderAppModel) {
         self.model = model
-        _accessController = ObservedObject(wrappedValue: model.libraryAccessController)
+        accessController = model.libraryAccessController
     }
 
     private var activeSetlistFolder: LibrarySetlistFolder? {
@@ -1036,7 +1036,7 @@ private enum LibraryScoreLayout: String, CaseIterable, Identifiable {
 
 /// Shows the early-supporter message once nothing else is in the way.
 private struct LibraryLaunchMessages: ViewModifier {
-    @ObservedObject var model: MuseReaderAppModel
+    var model: MuseReaderAppModel
     let accessStatus: LibraryAccessStatus
 
     func body(content: Content) -> some View {
@@ -3334,7 +3334,7 @@ private struct SetlistScoreReaderHost: View {
         let session: ScoreSession
     }
 
-    @ObservedObject var model: MuseReaderAppModel
+    var model: MuseReaderAppModel
 
     let sequence: SetlistReaderSequence
 

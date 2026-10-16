@@ -105,11 +105,25 @@ final class ReviewRequestTracker {
         if !versions.contains(appVersion) {
             versions.append(appVersion)
         }
+        #if os(Android)
+        // Android's UserDefaults stores no arrays, so the list is kept as JSON there.
+        if let json = try? JSONEncoder().encode(versions) {
+            userDefaults.set(String(decoding: json, as: UTF8.self), forKey: Constants.requestedVersionsKey)
+        }
+        #else
         userDefaults.set(versions, forKey: Constants.requestedVersionsKey)
+        #endif
     }
 
     private func requestedVersions() -> [String] {
+        #if os(Android)
+        guard let json = userDefaults.string(forKey: Constants.requestedVersionsKey) else {
+            return []
+        }
+        return (try? JSONDecoder().decode([String].self, from: Data(json.utf8))) ?? []
+        #else
         userDefaults.stringArray(forKey: Constants.requestedVersionsKey) ?? []
+        #endif
     }
 
     private func isLongLivedCurrentVersion(now: Date) -> Bool {
