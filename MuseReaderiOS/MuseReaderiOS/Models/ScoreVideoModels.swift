@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CoreGraphics
 
 enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
     /// The whole piece on one continuous line that scrolls past a fixed playhead.

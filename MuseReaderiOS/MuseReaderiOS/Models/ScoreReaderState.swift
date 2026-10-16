@@ -6,7 +6,6 @@
 
 import Observation
 import Foundation
-import CoreGraphics
 import UIKit
 
 enum ScoreReaderInteractionMode: Equatable {

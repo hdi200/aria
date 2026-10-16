@@ -54,7 +54,7 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
             if showsOverflowHint {
                 HStack(spacing: 0) {
                     LinearGradient(
-                        colors: [Color(uiColor: .systemBackground).opacity(0), Color(uiColor: .systemBackground).opacity(0.96)],
+                        colors: [Color(.systemBackground).opacity(0), Color(.systemBackground).opacity(0.96)],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -64,7 +64,7 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(hintTint.opacity(0.72))
                         .frame(width: 24, height: hintHeight)
-                        .background(Color(uiColor: .systemBackground).opacity(0.96))
+                        .background(Color(.systemBackground).opacity(0.96))
                 }
                 .allowsHitTesting(false)
                 .transition(.opacity)

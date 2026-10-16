@@ -2811,6 +2811,10 @@ struct ScoreReaderView: View {
             guard !pages.isEmpty else {
                 throw ScoreReaderExportError.noPages
             }
+            #if os(Android)
+            // Scores always open with a live session on Android, which writes the PDF above.
+            throw ScoreReaderExportError.unsupportedFormat("PDF")
+            #else
             let exportURL = try Self.exportURL(baseName: exportFileName(for: target), extension: "pdf")
             let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: pages[0].size))
             try renderer.writePDF(to: exportURL) { context in
@@ -2820,6 +2824,7 @@ struct ScoreReaderView: View {
                 }
             }
             return exportURL
+            #endif
         }
     }
 

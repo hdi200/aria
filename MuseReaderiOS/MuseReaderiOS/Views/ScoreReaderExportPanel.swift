@@ -414,3 +414,26 @@ struct ScoreReaderExportPanel: View {
 
 /// Nature photos bundled for photo backgrounds. All are CC0 (free for any use,
 /// no attribution); sources are listed in VIDEO_EXPORT_HANDOFF.md.
+
+struct ScoreReaderExportFooterButtonStyle: ButtonStyle {
+    let isPrimary: Bool
+    var isCompact = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: isCompact ? 14 : 15, weight: .semibold))
+            .foregroundStyle(isPrimary ? Color.white : Color.black.opacity(0.86))
+            .frame(height: isCompact ? 42 : 52)
+            .background(
+                isPrimary
+                    ? Color.blue.opacity(configuration.isPressed ? 0.82 : 1)
+                    : Color.white.opacity(configuration.isPressed ? 0.64 : 0.86),
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(Color.black.opacity(isPrimary ? 0 : 0.08), lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+    }
+}

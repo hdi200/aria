@@ -5,7 +5,6 @@
 //  Page zoom and layout math for the score page viewer (ZoomableImageView).
 //
 
-import CoreGraphics
 import UIKit
 
 enum ScoreReaderZoomLimits {
