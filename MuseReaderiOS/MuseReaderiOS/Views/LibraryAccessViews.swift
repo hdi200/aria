@@ -29,8 +29,8 @@ struct AriaProLogoBadge: View {
 }
 
 struct LibraryPaywallView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     var model: MuseReaderAppModel
     var accessController: LibraryAccessController
 
@@ -227,8 +227,8 @@ struct PaywallBenefitRow: View {
 }
 
 struct ScoreImportReviewSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     var model: MuseReaderAppModel
 
     let review: ScoreImportReview
@@ -619,7 +619,7 @@ struct ScoreImportReviewSheet: View {
 }
 
 struct EarlySupporterAccessView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
 
     var body: some View {
         VStack(spacing: 22) {

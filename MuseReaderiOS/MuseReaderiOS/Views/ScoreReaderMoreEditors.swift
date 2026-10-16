@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ScoreReaderAutoSystemBreaksSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var mode: ScoreAutoSystemBreaksMode = .measuresPerSystem
     @State var measuresText = "4"
 
@@ -111,7 +111,7 @@ struct ScoreReaderAutoSystemBreaksSheet: View {
 }
 
 struct ScoreReaderAddMeasuresSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var countText = "4"
 
     let isBusy: Bool
@@ -213,7 +213,7 @@ struct ScoreReaderAddMeasuresSheet: View {
 }
 
 struct ScoreReaderTempoEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var tokens: [TempoToken]
     @State var hasStartedNumberEntry = false
 
@@ -402,9 +402,9 @@ struct TempoKeyboard: View {
 }
 
 struct ScoreReaderTimeSignatureSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
     @State var selected: ScoreTimeSignatureValue
     @State var customNumerator: Int
     @State var customDenominator: Int
@@ -757,9 +757,9 @@ struct ScoreReaderTimeSignatureSheet: View {
 }
 
 struct ScoreReaderKeySignatureSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
     @State var selected: ScoreKeySignatureValue
     @State var showingMinor = false
 
@@ -1143,7 +1143,7 @@ struct ScoreReaderKeySignaturePreviewCard: View {
 }
 
 struct ScoreReaderSetupSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var metadata: ScoreEditableMetadata
     @State var isSaving = false
     @State var saveErrorMessage: String?
@@ -1209,7 +1209,7 @@ struct ScoreReaderSetupSheet: View {
 }
 
 struct ScoreReaderPageSettingsSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var pageSize: String
     @State var margins: Double
     @State var staffSize: Double
@@ -1343,7 +1343,7 @@ struct ScoreReaderPageSettingsSheet: View {
 }
 
 struct ScoreReaderInstrumentLayoutSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @Binding var parts: [ScorePart]
     let isBusy: Bool
     let setVisibilityAction: (Int, Bool) -> Void

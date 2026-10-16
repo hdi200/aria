@@ -8,9 +8,9 @@ import SwiftUI
 /// Reusable pickup-measure sheet. Visual layout matches `ScoreReaderTimeSignatureSheet`
 /// and `ScoreReaderKeySignatureSheet` in ScoreReaderMoreEditors.swift.
 struct ScoreReaderPickupEditorSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
 
     let context: ScorePickupEditorContext
     let isBusy: Bool

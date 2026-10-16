@@ -819,16 +819,6 @@ struct SharedExportFile: Identifiable {
     }
 }
 
-struct ShareSheetView: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-
 private extension String {
     func nonEmptyOrFallback(_ fallback: String) -> String {
         trimmedToNil ?? fallback

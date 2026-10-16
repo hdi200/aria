@@ -6,31 +6,6 @@
 import SwiftUI
 import UIKit
 
-enum ScoreReaderKeyboardShortcut {
-    case undo
-    case redo
-    case copy
-    case cut
-    case paste
-    case selectAll
-    case delete
-    case togglePlayback
-    case clearSelection
-    case selectPrevious
-    case selectNext
-    case toggleNoteInput
-    case enterPitch(Int)
-    case applyDuration(ScoreNoteDuration)
-    case enterRest
-    case toggleDot
-    case toggleTie
-    case addSlur
-    case selectVoice(Int)
-    case movePitch(up: Bool)
-    case shiftOctave(Int)
-    case shiftSemitone(Int)
-}
-
 struct ScoreReaderKeyboardShortcutView: UIViewRepresentable {
     var isEnabled: Bool
     var action: (ScoreReaderKeyboardShortcut) -> Void

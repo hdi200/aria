@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ScoreReaderInstrumentReplacementSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
 
     let context: InstrumentReplacementContext
     let isBusy: Bool

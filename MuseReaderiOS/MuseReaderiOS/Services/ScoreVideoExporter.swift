@@ -1728,3 +1728,44 @@ struct ScoreVideoAudioChunk: Sendable {
         return sampleBuffer
     }
 }
+
+/// Preview frames for the video sheet. Loading is the slow part (scrolling
+/// switches the score to one line and back), so it happens once per sheet and
+/// never twice at the same time; each style change only redraws.
+@MainActor
+final class ScoreVideoPreviewCache {
+    private var materials: [ScoreVideoStyle.Layout: Task<ScoreVideoExporter.PreviewMaterial?, Never>] = [:]
+    private var fonts: (title: ScoreVideoTextFont, composer: ScoreVideoTextFont)?
+
+    func reset() {
+        materials = [:]
+        fonts = nil
+    }
+
+    func image(style: ScoreVideoStyle, background: Data?, liveRenderSession: LiveScoreRenderSession,
+               pageCount: Int, title: String, composer: String, pinsStaffHeader: Bool,
+               vertical: Bool) async -> UIImage? {
+        let layout = style.layout
+        let loading = materials[layout] ?? Task {
+            try? await ScoreVideoExporter.previewMaterial(liveRenderSession: liveRenderSession,
+                                                          pageCount: pageCount, layout: layout)
+        }
+        materials[layout] = loading
+        guard let material = await loading.value else {
+            materials[layout] = nil
+            return nil
+        }
+        if fonts == nil {
+            let loaded = await liveRenderSession.videoTextFonts()
+            fonts = (loaded.title, loaded.composer)
+        }
+        guard let fonts else { return nil }
+        let options = ScoreVideoExportOptions(style: style, title: title, composer: composer,
+                                              titleFont: fonts.title, composerFont: fonts.composer,
+                                              backgroundImageData: background, pinsStaffHeader: pinsStaffHeader,
+                                              vertical: vertical)
+        return await Task.detached(priority: .userInitiated) {
+            ScoreVideoExporter.previewFrame(material, options: options).map { UIImage(cgImage: $0) }
+        }.value
+    }
+}

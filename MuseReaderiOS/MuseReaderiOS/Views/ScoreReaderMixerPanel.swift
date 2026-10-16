@@ -511,7 +511,7 @@ struct VerticalMixerFader: View {
 }
 
 struct StereoLevelMeter: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     let level: Float
 
     var body: some View {

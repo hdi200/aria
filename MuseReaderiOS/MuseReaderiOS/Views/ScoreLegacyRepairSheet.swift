@@ -6,7 +6,7 @@ struct ScoreLegacyRepairPrompt: Identifiable {
 }
 
 struct ScoreLegacyRepairSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var selectedIndexes: Set<Int>
     @State var isFixing = false
     @State var errorMessage: String?

@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ScoreReaderChordEntryPanel: View {
-    @Environment(\.scoreReaderCompactPanelEmbedded) private var embedsInCompactPanel
+    @Environment(\.scoreReaderCompactPanelEmbedded) var embedsInCompactPanel
 
     @State var chordText: String
     @State var activeSelectionID: String?
@@ -159,7 +159,7 @@ struct ScoreReaderChordEntryPanel: View {
 }
 
 struct ScoreReaderLyricsEntryPanel: View {
-    @Environment(\.scoreReaderCompactPanelEmbedded) private var embedsInCompactPanel
+    @Environment(\.scoreReaderCompactPanelEmbedded) var embedsInCompactPanel
 
     @State var lyricsText: String
     @State var activeSelectionID: String?

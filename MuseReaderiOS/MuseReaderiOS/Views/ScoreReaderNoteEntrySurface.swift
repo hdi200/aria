@@ -7,7 +7,7 @@ import SwiftUI
 import UIKit
 
 struct ScoreReaderNoteEntrySurface: View {
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
     @State var preferFlats = false
 
     let editingState: ScoreEditingState

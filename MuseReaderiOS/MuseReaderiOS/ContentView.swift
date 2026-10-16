@@ -9,8 +9,8 @@ import SwiftUI
 import StoreKit
 
 struct ContentView: View {
-    @Environment(\.requestReview) private var requestReview
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.requestReview) var requestReview
+    @Environment(\.scenePhase) var scenePhase
     @OwnedState private var appModel = MuseReaderAppModel()
     @State var reviewRequestTracker = ReviewRequestTracker()
 

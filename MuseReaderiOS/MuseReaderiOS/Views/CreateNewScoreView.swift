@@ -9,7 +9,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct CreateNewScoreView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
 
     @State var draft = NewScoreDraft()
     @State var isCreating = false
@@ -439,7 +439,7 @@ struct CreateScoreTemplateIcon: View {
 }
 
 struct TemplateBrowserSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var selectedCategory: NewScoreTemplateCategory
     @State var focusedTemplate: NewScoreTemplateChoice
 
@@ -782,7 +782,7 @@ struct CreateScoreInstrumentRow: View {
 }
 
 struct AddInstrumentSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @Binding var selectedInstruments: [NewScoreInstrument]
     @Binding var currentInstruments: [NewScoreInstrument]
     let showsCurrentInstruments: Bool

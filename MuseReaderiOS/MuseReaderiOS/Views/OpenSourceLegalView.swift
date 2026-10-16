@@ -7,7 +7,7 @@
 import SwiftUI
 
 struct OpenSourceLegalView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
 
     var body: some View {
         NavigationStack {

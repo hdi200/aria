@@ -9,7 +9,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct LibraryView: View {
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scenePhase) var scenePhase
     @Bindable var model: MuseReaderAppModel
     private let accessController: LibraryAccessController
 
@@ -34,12 +34,12 @@ struct LibraryView: View {
     @State var renameSetlistName = ""
     @State var scorePendingFolderSelection: ReaderRecentDocument?
     @State var isOpenSourceLegalPresented = false
-    @AppStorage("LibraryScoreSortOrder") private var scoreSortOrder = LibraryScoreSortOrder.recentlyOpened
-    @AppStorage("LibraryDashboardScoreLayout") private var dashboardScoreLayout = LibraryScoreLayout.medium
-    @AppStorage("LibraryPhoneScoreLayout") private var phoneScoreLayout = LibraryScoreLayout.list
-    @AppStorage("SetlistScoreSortOrder") private var setlistScoreSortOrder = LibraryScoreSortOrder.setlistOrder
-    @AppStorage("SetlistDashboardScoreLayout") private var setlistDashboardScoreLayout = LibraryScoreLayout.medium
-    @AppStorage("SetlistPhoneScoreLayout") private var setlistPhoneScoreLayout = LibraryScoreLayout.list
+    @AppStorage("LibraryScoreSortOrder") var scoreSortOrder = LibraryScoreSortOrder.recentlyOpened
+    @AppStorage("LibraryDashboardScoreLayout") var dashboardScoreLayout = LibraryScoreLayout.medium
+    @AppStorage("LibraryPhoneScoreLayout") var phoneScoreLayout = LibraryScoreLayout.list
+    @AppStorage("SetlistScoreSortOrder") var setlistScoreSortOrder = LibraryScoreSortOrder.setlistOrder
+    @AppStorage("SetlistDashboardScoreLayout") var setlistDashboardScoreLayout = LibraryScoreLayout.medium
+    @AppStorage("SetlistPhoneScoreLayout") var setlistPhoneScoreLayout = LibraryScoreLayout.list
 
     private let sidebarWidth: CGFloat = 286
 
@@ -1058,7 +1058,7 @@ struct FolderScoreAddRequest: Identifiable {
 }
 
 struct ReorderSetlistsSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var setlists: [LibrarySetlistFolder]
 
     let saveAction: ([UUID]) -> Void
@@ -1400,7 +1400,7 @@ enum PhoneTab: Int, CaseIterable {
 }
 
 struct PhoneLibraryView: View {
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
 
     let scores: [ReaderRecentDocument]
     let activeSetlistOrderedScores: [ReaderRecentDocument]
@@ -2049,7 +2049,7 @@ struct PhoneScoreListRow: View {
 }
 
 struct FolderScorePickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var searchText = ""
 
     let folderName: String
@@ -2134,7 +2134,7 @@ struct FolderScorePickerSheet: View {
 }
 
 struct ScoreSetlistPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @State var searchText = ""
 
     let scoreTitle: String

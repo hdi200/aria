@@ -1169,7 +1169,7 @@ struct ScoreReaderMoreContextToolbar: View {
 }
 
 struct ScoreReaderHorizontalContextToolbar<Content: View>: View {
-    @Environment(\.scoreReaderCompactPanelEmbedded) private var isEmbeddedInCompactPanel
+    @Environment(\.scoreReaderCompactPanelEmbedded) var isEmbeddedInCompactPanel
     @ViewBuilder let content: () -> Content
 
     var body: some View {

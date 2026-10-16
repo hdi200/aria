@@ -88,7 +88,7 @@ struct ScoreReaderViewKeyControl: View {
 }
 
 struct ScoreReaderViewKeyPicker: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
 
     let currentKey: ScoreTransposeTargetKey
     let originalKey: ScoreTransposeTargetKey
@@ -203,10 +203,10 @@ struct ScoreReaderTwoPageViewIcon: View {
 }
 
 struct ScoreReaderView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("ScoreReaderFloatingPaletteDockedLeft") private var floatingPaletteDockedLeft = true
-    @AppStorage("ScoreReaderTwoPageViewEnabled") private var twoPageViewEnabled = false
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.scenePhase) var scenePhase
+    @AppStorage("ScoreReaderFloatingPaletteDockedLeft") var floatingPaletteDockedLeft = true
+    @AppStorage("ScoreReaderTwoPageViewEnabled") var twoPageViewEnabled = false
 
     let session: ScoreSession
     private let initialRememberedState: ScoreReaderRememberedState
@@ -309,10 +309,10 @@ struct ScoreReaderView: View {
     @State var isAnnotationModeActive = false
     @State var annotationsVisible = true
     @State var annotationTool = ScoreAnnotationTool.pen
-    @AppStorage("ScoreReaderAnnotationMarkerColor") private var annotationMarkerColor = ScoreAnnotationColor.black
-    @AppStorage("ScoreReaderAnnotationMarkerWidth") private var annotationMarkerWidth: Double = 4
-    @AppStorage("ScoreReaderAnnotationHighlighterColor") private var annotationHighlighterColor = ScoreAnnotationColor.yellow
-    @AppStorage("ScoreReaderAnnotationHighlighterWidth") private var annotationHighlighterWidth: Double = 4
+    @AppStorage("ScoreReaderAnnotationMarkerColor") var annotationMarkerColor = ScoreAnnotationColor.black
+    @AppStorage("ScoreReaderAnnotationMarkerWidth") var annotationMarkerWidth: Double = 4
+    @AppStorage("ScoreReaderAnnotationHighlighterColor") var annotationHighlighterColor = ScoreAnnotationColor.yellow
+    @AppStorage("ScoreReaderAnnotationHighlighterWidth") var annotationHighlighterWidth: Double = 4
     @State var readingStyleBeforeAnnotation: ScoreReaderReadingStyle?
 
     private let setlistNavigation: ScoreReaderSetlistNavigation?
@@ -3337,46 +3337,5 @@ struct ScoreReaderSavingHUD: View {
 private extension String {
     func nonEmptyOrFallback(_ fallback: String) -> String {
         isEmpty ? fallback : self
-    }
-}
-
-/// Preview frames for the video sheet. Loading is the slow part (scrolling
-/// switches the score to one line and back), so it happens once per sheet and
-/// never twice at the same time; each style change only redraws.
-@MainActor
-final class ScoreVideoPreviewCache {
-    private var materials: [ScoreVideoStyle.Layout: Task<ScoreVideoExporter.PreviewMaterial?, Never>] = [:]
-    private var fonts: (title: ScoreVideoTextFont, composer: ScoreVideoTextFont)?
-
-    func reset() {
-        materials = [:]
-        fonts = nil
-    }
-
-    func image(style: ScoreVideoStyle, background: Data?, liveRenderSession: LiveScoreRenderSession,
-               pageCount: Int, title: String, composer: String, pinsStaffHeader: Bool,
-               vertical: Bool) async -> UIImage? {
-        let layout = style.layout
-        let loading = materials[layout] ?? Task {
-            try? await ScoreVideoExporter.previewMaterial(liveRenderSession: liveRenderSession,
-                                                          pageCount: pageCount, layout: layout)
-        }
-        materials[layout] = loading
-        guard let material = await loading.value else {
-            materials[layout] = nil
-            return nil
-        }
-        if fonts == nil {
-            let loaded = await liveRenderSession.videoTextFonts()
-            fonts = (loaded.title, loaded.composer)
-        }
-        guard let fonts else { return nil }
-        let options = ScoreVideoExportOptions(style: style, title: title, composer: composer,
-                                              titleFont: fonts.title, composerFont: fonts.composer,
-                                              backgroundImageData: background, pinsStaffHeader: pinsStaffHeader,
-                                              vertical: vertical)
-        return await Task.detached(priority: .userInitiated) {
-            ScoreVideoExporter.previewFrame(material, options: options).map { UIImage(cgImage: $0) }
-        }.value
     }
 }

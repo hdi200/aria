@@ -7,7 +7,7 @@
 import SwiftUI
 
 struct SetlistShareSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     var model: MuseReaderAppModel
 
     let setlist: LibrarySetlistFolder
