@@ -251,13 +251,13 @@ final class ScoreReaderChordKeyboardView: UIView {
     private let spaceAction: (() -> Void)?
     private let dismissAction: (() -> Void)?
     private let isCompactPhoneKeyboard = UIDevice.current.userInterfaceIdiom == .phone
-    private let naturalNotes = ["C", "D", "E", "F", "G", "A", "B"]
-    private let rootRowKeys = ["C", "D", "E", "F", "G", "A", "B", "♭", "#"]
-    private let qualities = ["maj", "min", "°", "ø", "+", "sus"]
-    private let extensions = ["2", "3", "4", "5", "6", "7", "8", "9", "11", "13"]
-    private let modifiers = ["add", "no", "♭5", "#5", "/", "⌫"]
+    private let naturalNotes = ScoreReaderChordDraft.naturalNotes
+    private let rootRowKeys = ScoreReaderChordDraft.rootRowKeys
+    private let qualities = ScoreReaderChordDraft.qualities
+    private let extensions = ScoreReaderChordDraft.extensions
+    private let modifiers = ScoreReaderChordDraft.modifiers
 
-    private var draftText = ""
+    private var draft = ScoreReaderChordDraft()
     private var rootButtons: [UIButton] = []
     private weak var insertButton: UIButton?
 
@@ -283,7 +283,7 @@ final class ScoreReaderChordKeyboardView: UIView {
     }
 
     func reset(to text: String) {
-        draftText = text
+        draft = ScoreReaderChordDraft(text: text)
         updateKeyboardState()
     }
 
@@ -308,7 +308,7 @@ final class ScoreReaderChordKeyboardView: UIView {
             stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -bottomInset)
         ])
 
-        draftText = targetTextField?.text ?? ""
+        draft = ScoreReaderChordDraft(text: targetTextField?.text ?? "")
         updateKeyboardState()
     }
 
@@ -410,8 +410,8 @@ final class ScoreReaderChordKeyboardView: UIView {
         row.distribution = .fill
         row.heightAnchor.constraint(equalToConstant: actionRowHeight).isActive = true
 
-        let insertButton = makeButton(title: "insert/next", style: .plain)
-        let doneButton = makeButton(title: "done", style: .primary)
+        let insertButton = makeButton(title: ScoreReaderChordDraft.insertKey, style: .plain)
+        let doneButton = makeButton(title: ScoreReaderChordDraft.doneKey, style: .primary)
         self.insertButton = insertButton
 
         row.addArrangedSubview(insertButton)
@@ -529,21 +529,19 @@ final class ScoreReaderChordKeyboardView: UIView {
     }
 
     private func handleKey(_ key: String) {
-        switch key {
-        case "insert/next":
-            handleSpace()
-        case "done":
-            commitPendingChord()
+        switch draft.press(key, advancesOnInsert: spaceAction != nil) {
+        case .none:
+            break
+        case .advance:
+            spaceAction?()
+            draft.clear()
+        case .done:
+            if draft.hasChord {
+                commitAction()
+                draft.clear()
+            }
             targetTextField?.resignFirstResponder()
             dismissAction?()
-        case "⌫":
-            backspace()
-        case "♭", "#":
-            appendKey(key == "♭" ? "b" : key)
-        case "♭5":
-            appendKey("b5")
-        default:
-            appendKey(key)
         }
 
         updateKeyboardState()
@@ -558,65 +556,16 @@ final class ScoreReaderChordKeyboardView: UIView {
             return
         }
 
-        let natural = button.accessibilityIdentifier ?? ""
-        guard naturalNotes.contains(natural) else {
-            return
-        }
-
-        appendKey("\(natural)#")
+        draft.pressAndHold(root: button.accessibilityIdentifier ?? "")
         updateKeyboardState()
     }
 
-    private func appendKey(_ key: String) {
-        draftText += key
-    }
-
-    private func commitCurrentChord() {
-        let chord = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !chord.isEmpty else {
-            return
-        }
-
-        draftText = chord + " "
-    }
-
-    private func commitPendingChord() {
-        guard draftText.trimmedToNil != nil else {
-            return
-        }
-
-        commitAction()
-        clearDraft()
-    }
-
-    private func handleSpace() {
-        guard spaceAction == nil else {
-            spaceAction?()
-            clearDraft()
-            return
-        }
-
-        commitCurrentChord()
-    }
-
-    private func backspace() {
-        guard !draftText.isEmpty else {
-            return
-        }
-
-        draftText.removeLast()
-    }
-
-    private func clearDraft() {
-        draftText = ""
-    }
-
     private func updateKeyboardState() {
-        targetTextField?.text = draftText
+        targetTextField?.text = draft.text
         syncText()
 
         var insertConfiguration = insertButton?.configuration
-        insertConfiguration?.attributedTitle = attributedTitle(for: draftText.trimmedToNil == nil ? "next" : "insert/next", style: .plain)
+        insertConfiguration?.attributedTitle = attributedTitle(for: draft.insertTitle, style: .plain)
         insertButton?.configuration = insertConfiguration
 
         updateRootButtons()
@@ -627,7 +576,7 @@ final class ScoreReaderChordKeyboardView: UIView {
             let note = button.accessibilityIdentifier ?? ""
             var configuration = button.configuration
             configuration?.subtitle = nil
-            configuration?.baseBackgroundColor = draftText.hasSuffix(note) ? .systemBlue.withAlphaComponent(0.15) : .systemBackground
+            configuration?.baseBackgroundColor = draft.highlights(root: note) ? .systemBlue.withAlphaComponent(0.15) : .systemBackground
             button.configuration = configuration
         }
     }

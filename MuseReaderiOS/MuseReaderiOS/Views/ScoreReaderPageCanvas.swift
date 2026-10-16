@@ -1967,7 +1967,7 @@ struct ScoreReaderDirectionToggle: View {
     }
 }
 
-struct ScoreReaderTransposePanelButtonStyle: ButtonStyle {
+struct ScoreReaderTransposePanelButtonStyle: AriaLabelButtonStyle {
     enum Kind {
         case primary
         case secondary
@@ -1975,12 +1975,12 @@ struct ScoreReaderTransposePanelButtonStyle: ButtonStyle {
 
     let kind: Kind
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+    func styled(_ label: AnyView, isPressed: Bool) -> some View {
+        label
             .font(.system(size: 15, weight: .bold))
             .foregroundStyle(kind == .primary ? Color.white : Color.black.opacity(0.82))
             .frame(height: 48)
-            .background(background.opacity(configuration.isPressed ? 0.76 : 1), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(background.opacity(isPressed ? 0.76 : 1), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay {
                 if kind == .secondary {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)

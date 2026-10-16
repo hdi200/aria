@@ -1155,7 +1155,7 @@ struct AddInstrumentSheet: View {
                                     .frame(height: 52)
                                     .background(Color(.secondarySystemBackground))
                                     .contentShape(Rectangle())
-                                    .onDrag {
+                                    .onReorderDrag {
                                         draggedInstrumentID = instrument.id
                                         draggedInstrumentOriginalIndex = index
                                         return NSItemProvider(object: instrument.id as NSString)
@@ -1334,7 +1334,7 @@ struct AddInstrumentSheet: View {
                     VStack(spacing: 0) {
                         ForEach(Array(selectedInstruments.enumerated()), id: \.element.id) { index, instrument in
                             selectedInstrumentRow(instrument)
-                                .onDrag {
+                                .onReorderDrag {
                                     draggedInstrumentID = instrument.id
                                     draggedInstrumentOriginalIndex = index
                                     return NSItemProvider(object: instrument.id as NSString)
@@ -1393,7 +1393,7 @@ struct AddInstrumentSheet: View {
                 .frame(height: 42)
                 .padding(.horizontal, 10)
                 .background(Color.white)
-                .onDrag {
+                .onReorderDrag {
                     draggedInstrumentID = instrument.id
                     draggedInstrumentOriginalIndex = index
                     return NSItemProvider(object: instrument.id as NSString)

@@ -68,6 +68,113 @@ enum ScoreReaderKeyboardShortcut {
     case shiftSemitone(Int)
 }
 
+/// A hardware key, as both platforms report it to the shortcut map.
+enum ScoreReaderShortcutKey: Equatable {
+    /// A printable key, lowercase ("a", "3", " ", ".", "+", "=").
+    case character(String)
+    case delete
+    case escape
+    case leftArrow
+    case rightArrow
+    case upArrow
+    case downArrow
+}
+
+struct ScoreReaderShortcutModifiers: OptionSet {
+    let rawValue: Int
+    /// Command on iOS; Ctrl or Meta on Android.
+    static let command = ScoreReaderShortcutModifiers(rawValue: 1 << 0)
+    static let shift = ScoreReaderShortcutModifiers(rawValue: 1 << 1)
+    static let alternate = ScoreReaderShortcutModifiers(rawValue: 1 << 2)
+    static let control = ScoreReaderShortcutModifiers(rawValue: 1 << 3)
+}
+
+extension ScoreReaderKeyboardShortcut {
+    /// The reader's hardware keyboard shortcuts.
+    static func resolve(_ key: ScoreReaderShortcutKey, modifiers: ScoreReaderShortcutModifiers) -> ScoreReaderKeyboardShortcut? {
+        switch (key, modifiers) {
+        case (.character("z"), .command):
+            return .undo
+        case (.character("z"), [.command, .shift]), (.character("y"), .command):
+            return .redo
+        case (.character("c"), .command):
+            return .copy
+        case (.character("x"), .command):
+            return .cut
+        case (.character("v"), .command):
+            return .paste
+        case (.character("a"), .command):
+            return .selectAll
+        case (.delete, []):
+            return .delete
+        case (.character(" "), []):
+            return .togglePlayback
+        case (.escape, []):
+            return .clearSelection
+        case (.character("n"), []):
+            return .toggleNoteInput
+        case (.character("a"), []):
+            return .enterPitch(9)
+        case (.character("b"), []):
+            return .enterPitch(11)
+        case (.character("c"), []):
+            return .enterPitch(0)
+        case (.character("d"), []):
+            return .enterPitch(2)
+        case (.character("e"), []):
+            return .enterPitch(4)
+        case (.character("f"), []):
+            return .enterPitch(5)
+        case (.character("g"), []):
+            return .enterPitch(7)
+        case (.character("0"), []):
+            return .enterRest
+        case (.character("3"), []):
+            return .applyDuration(.sixteenth)
+        case (.character("4"), []):
+            return .applyDuration(.eighth)
+        case (.character("5"), []):
+            return .applyDuration(.quarter)
+        case (.character("6"), []):
+            return .applyDuration(.half)
+        case (.character("7"), []):
+            return .applyDuration(.whole)
+        case (.character("."), []):
+            return .toggleDot
+        case (.character("+"), []), (.character("="), .shift):
+            return .toggleTie
+        case (.character("s"), []):
+            return .addSlur
+        case (.character("1"), .command):
+            return .selectVoice(0)
+        case (.character("2"), .command):
+            return .selectVoice(1)
+        case (.character("3"), .command):
+            return .selectVoice(2)
+        case (.character("4"), .command):
+            return .selectVoice(3)
+        case (.leftArrow, []):
+            return .selectPrevious
+        case (.rightArrow, []):
+            return .selectNext
+        case (.upArrow, []):
+            return .movePitch(up: true)
+        case (.downArrow, []):
+            return .movePitch(up: false)
+        case (.upArrow, .alternate):
+            return .shiftOctave(1)
+        case (.downArrow, .alternate):
+            return .shiftOctave(-1)
+        case (.upArrow, .command), (.upArrow, .shift):
+            return .shiftSemitone(1)
+        case (.downArrow, .command), (.downArrow, .shift):
+            return .shiftSemitone(-1)
+        default:
+            return nil
+        }
+    }
+}
+
 enum ScoreAutoSystemBreaksMode: String, CaseIterable, Identifiable {
     case measuresPerSystem
     case lockCurrentLayout

@@ -111,3 +111,27 @@ extension View {
         #endif
     }
 }
+
+/// A button style whose look is modifiers around the label. Android's SwiftUI (Skip) runs
+/// only its built-in styles, so there the same look goes around a plain button.
+protocol AriaLabelButtonStyle: ButtonStyle {
+    associatedtype StyledLabel: View
+    @ViewBuilder func styled(_ label: AnyView, isPressed: Bool) -> StyledLabel
+}
+
+extension AriaLabelButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        styled(AnyView(configuration.label), isPressed: configuration.isPressed)
+    }
+}
+
+#if !os(Android)
+extension View {
+    /// A row the user drags to reorder its list, with `onDrop` delegates on the rows. iOS
+    /// drags the whole row after a long press; Android drags it by the grip at its
+    /// leading edge (AndroidSwiftUIShims.swift), so the list still scrolls.
+    func onReorderDrag(_ data: @escaping () -> NSItemProvider) -> some View {
+        onDrag(data)
+    }
+}
+#endif

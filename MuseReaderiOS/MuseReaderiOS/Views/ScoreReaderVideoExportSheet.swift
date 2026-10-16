@@ -845,17 +845,17 @@ struct ScoreReaderVideoSegmentedControl<Value: Hashable>: View {
     }
 }
 
-struct ScoreReaderVideoButtonStyle: ButtonStyle {
+struct ScoreReaderVideoButtonStyle: AriaLabelButtonStyle {
     let isPrimary: Bool
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+    func styled(_ label: AnyView, isPressed: Bool) -> some View {
+        label
             .font(.body.weight(.semibold))
             .foregroundStyle(isPrimary ? Color.white : Color.primary)
             .frame(height: 54)
             .background(
-                isPrimary ? Color.accentColor.opacity(configuration.isPressed ? 0.8 : 1)
-                    : Color(uiColor: .secondarySystemBackground).opacity(configuration.isPressed ? 0.7 : 1),
+                isPrimary ? Color.accentColor.opacity(isPressed ? 0.8 : 1)
+                    : Color(uiColor: .secondarySystemBackground).opacity(isPressed ? 0.7 : 1),
                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
             .contentShape(Rectangle())

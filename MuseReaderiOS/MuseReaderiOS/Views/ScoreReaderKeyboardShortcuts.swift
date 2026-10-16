@@ -144,122 +144,51 @@ final class KeyboardShortcutHostingView: UIView {
     }
 
     static func resolveShortcut(input: String, modifiers: UIKeyModifierFlags) -> ScoreReaderKeyboardShortcut? {
-        let normalizedModifiers = modifiers.intersection([.command, .shift, .alternate, .control])
-        switch (input, normalizedModifiers) {
-        case ("z", .command):
-            return .undo
-        case ("z", [.command, .shift]), ("y", .command):
-            return .redo
-        case ("c", .command):
-            return .copy
-        case ("x", .command):
-            return .cut
-        case ("v", .command):
-            return .paste
-        case ("a", .command):
-            return .selectAll
-        case (UIKeyCommand.inputDelete, []):
-            return .delete
-        case (" ", []):
-            return .togglePlayback
-        case (UIKeyCommand.inputEscape, []):
-            return .clearSelection
-        case ("n", []):
-            return .toggleNoteInput
-        case ("a", []):
-            return .enterPitch(9)
-        case ("b", []):
-            return .enterPitch(11)
-        case ("c", []):
-            return .enterPitch(0)
-        case ("d", []):
-            return .enterPitch(2)
-        case ("e", []):
-            return .enterPitch(4)
-        case ("f", []):
-            return .enterPitch(5)
-        case ("g", []):
-            return .enterPitch(7)
-        case ("0", []):
-            return .enterRest
-        case ("3", []):
-            return .applyDuration(.sixteenth)
-        case ("4", []):
-            return .applyDuration(.eighth)
-        case ("5", []):
-            return .applyDuration(.quarter)
-        case ("6", []):
-            return .applyDuration(.half)
-        case ("7", []):
-            return .applyDuration(.whole)
-        case (".", []):
-            return .toggleDot
-        case ("+", []), ("=", .shift):
-            return .toggleTie
-        case ("s", []):
-            return .addSlur
-        case ("1", .command):
-            return .selectVoice(0)
-        case ("2", .command):
-            return .selectVoice(1)
-        case ("3", .command):
-            return .selectVoice(2)
-        case ("4", .command):
-            return .selectVoice(3)
-        case (UIKeyCommand.inputLeftArrow, []):
-            return .selectPrevious
-        case (UIKeyCommand.inputRightArrow, []):
-            return .selectNext
-        case (UIKeyCommand.inputUpArrow, []):
-            return .movePitch(up: true)
-        case (UIKeyCommand.inputDownArrow, []):
-            return .movePitch(up: false)
-        case (UIKeyCommand.inputUpArrow, .alternate):
-            return .shiftOctave(1)
-        case (UIKeyCommand.inputDownArrow, .alternate):
-            return .shiftOctave(-1)
-        case (UIKeyCommand.inputUpArrow, .command), (UIKeyCommand.inputUpArrow, .shift):
-            return .shiftSemitone(1)
-        case (UIKeyCommand.inputDownArrow, .command), (UIKeyCommand.inputDownArrow, .shift):
-            return .shiftSemitone(-1)
-        default:
-            return nil
+        let key: ScoreReaderShortcutKey
+        switch input {
+        case UIKeyCommand.inputDelete: key = .delete
+        case UIKeyCommand.inputEscape: key = .escape
+        case UIKeyCommand.inputLeftArrow: key = .leftArrow
+        case UIKeyCommand.inputRightArrow: key = .rightArrow
+        case UIKeyCommand.inputUpArrow: key = .upArrow
+        case UIKeyCommand.inputDownArrow: key = .downArrow
+        default: key = .character(input)
         }
+        return ScoreReaderKeyboardShortcut.resolve(key, modifiers: Self.modifiers(modifiers))
     }
 
+    private static func modifiers(_ flags: UIKeyModifierFlags) -> ScoreReaderShortcutModifiers {
+        var modifiers: ScoreReaderShortcutModifiers = []
+        if flags.contains(.command) { modifiers.insert(.command) }
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        if flags.contains(.alternate) { modifiers.insert(.alternate) }
+        if flags.contains(.control) { modifiers.insert(.control) }
+        return modifiers
+    }
+
+    /// Keys whose presses arrive outside key commands: Command-1...4 and the arrows.
     private func shortcut(for press: UIPress) -> ScoreReaderKeyboardShortcut? {
         guard let key = press.key else {
             return nil
         }
 
-        let normalizedModifiers = key.modifierFlags.intersection([.command, .shift, .alternate, .control])
-        switch (key.keyCode, normalizedModifiers) {
-        case (.keyboard1, .command):
-            return .selectVoice(0)
-        case (.keyboard2, .command):
-            return .selectVoice(1)
-        case (.keyboard3, .command):
-            return .selectVoice(2)
-        case (.keyboard4, .command):
-            return .selectVoice(3)
-        case (.keyboardLeftArrow, []):
-            return .selectPrevious
-        case (.keyboardRightArrow, []):
-            return .selectNext
-        case (.keyboardUpArrow, []):
-            return .movePitch(up: true)
-        case (.keyboardDownArrow, []):
-            return .movePitch(up: false)
-        case (.keyboardUpArrow, .alternate):
-            return .shiftOctave(1)
-        case (.keyboardDownArrow, .alternate):
-            return .shiftOctave(-1)
-        case (.keyboardUpArrow, .command), (.keyboardUpArrow, .shift):
-            return .shiftSemitone(1)
-        case (.keyboardDownArrow, .command), (.keyboardDownArrow, .shift):
-            return .shiftSemitone(-1)
-        default:
+        let shortcutKey: ScoreReaderShortcutKey
+        switch key.keyCode {
+        case .keyboard1: shortcutKey = .character("1")
+        case .keyboard2: shortcutKey = .character("2")
+        case .keyboard3: shortcutKey = .character("3")
+        case .keyboard4: shortcutKey = .character("4")
+        case .keyboardLeftArrow: shortcutKey = .leftArrow
+        case .keyboardRightArrow: shortcutKey = .rightArrow
+        case .keyboardUpArrow: shortcutKey = .upArrow
+        case .keyboardDownArrow: shortcutKey = .downArrow
+        default: return nil
+        }
+        let modifiers = Self.modifiers(key.modifierFlags)
+        // Digits only with Command (voices); plain digits are durations, sent as key commands.
+        if case .character = shortcutKey, modifiers != .command {
             return nil
         }
+        return ScoreReaderKeyboardShortcut.resolve(shortcutKey, modifiers: modifiers)
     }
 }

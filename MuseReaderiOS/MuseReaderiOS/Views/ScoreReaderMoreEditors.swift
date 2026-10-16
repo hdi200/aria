@@ -1358,7 +1358,7 @@ struct ScoreReaderInstrumentLayoutSheet: View {
 
                         ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
                             instrumentLayoutRow(part: part, index: index, metrics: metrics)
-                                .onDrag {
+                                .onReorderDrag {
                                     draggedPartID = part.id
                                     draggedOriginalIndex = index
                                     return NSItemProvider(object: part.id as NSString)
