@@ -557,7 +557,7 @@ struct ScoreReaderVideoExportSheet: View {
         .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.15), value: selected)
         .accessibilityLabel("\(title), \(subtitle)")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilitySelected(selected)
     }
 
     private func appearanceCard<Content: View>(title: String, selected: Bool, height: CGFloat? = nil,
@@ -582,7 +582,7 @@ struct ScoreReaderVideoExportSheet: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilitySelected(selected)
     }
 
     // MARK: Result
@@ -741,7 +741,7 @@ struct ScoreReaderVideoExportSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilitySelected(selected)
     }
 
     private func selectBuiltInPhoto(_ photo: ScoreVideoBackgroundPhoto) {
@@ -929,7 +929,7 @@ struct ScoreReaderVideoSegmentedControl<Value: Hashable>: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilitySelected(selected)
             }
         }
         .padding(2)

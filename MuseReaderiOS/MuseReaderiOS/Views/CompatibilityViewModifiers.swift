@@ -93,3 +93,21 @@ struct OldNewOnChangeCompatibilityModifier<Value: Equatable>: ViewModifier {
             }
     }
 }
+
+extension View {
+    /// Tells VoiceOver whether this control is the selected one.
+    @ViewBuilder
+    func accessibilitySelected(_ isSelected: Bool) -> some View {
+        #if os(Android)
+        // Skip's empty AccessibilityTraits (`[]`) recurses until the stack overflows, so the
+        // trait is only added when it applies.
+        if isSelected {
+            accessibilityAddTraits(.isSelected)
+        } else {
+            self
+        }
+        #else
+        accessibilityAddTraits(isSelected ? .isSelected : [])
+        #endif
+    }
+}

@@ -379,7 +379,7 @@ struct ScoreReaderMixerPanel: View {
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityName)
         .accessibilityValue(selected.wrappedValue ? "On" : "Off")
-        .accessibilityAddTraits(selected.wrappedValue ? .isSelected : [])
+        .accessibilitySelected(selected.wrappedValue)
     }
 
     private func channelColor(_ index: Int) -> Color {

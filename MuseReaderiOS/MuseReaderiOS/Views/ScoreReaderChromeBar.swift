@@ -505,7 +505,7 @@ struct ScoreReaderChromeBar: View {
         .buttonStyle(.plain)
         .disabled(isEditingBusy || interactionMode != .view)
         .accessibilityLabel(annotationModeActive ? "Exit annotation mode" : "Annotate score")
-        .accessibilityAddTraits(annotationModeActive ? .isSelected : [])
+        .accessibilitySelected(annotationModeActive)
     }
 
     private var partsPanelContent: some View {
