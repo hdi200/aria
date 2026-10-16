@@ -134,17 +134,12 @@ struct ScoreReaderExportPanel: View {
                 }
             }
             .padding(isPhone ? 14 : 22)
+            .popoverPanelScrollContent()
         }
         .font(.system(size: isPhone ? 13 : 14, weight: .medium))
         .foregroundStyle(Color.black.opacity(0.86))
-        .frame(width: panelWidth)
-        .frame(maxHeight: panelMaxHeight)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.62), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(0.18), radius: 28, y: 16)
+        .popoverPanelCard(width: panelWidth, maxHeight: panelMaxHeight, cornerRadius: 18,
+                          stroke: Color.white.opacity(0.62), shadowOpacity: 0.18, shadowY: 16)
         .onAppear {
             if draft.fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 draft.fileName = scoreTitle

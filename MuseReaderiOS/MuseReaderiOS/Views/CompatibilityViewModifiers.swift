@@ -38,8 +38,8 @@ extension View {
     @ViewBuilder
     func presentationCompactPopoverWhenAvailable() -> some View {
         #if os(Android)
-        // Android presents these as bottom sheets; there is no compact popover.
-        self
+        // Android has no compact popover: a sheet sized to the content (AndroidSwiftUIShims).
+        modifier(AndroidCompactPopoverSizing())
         #else
         if #available(iOS 16.4, *) {
             presentationCompactAdaptation(.popover)
@@ -135,3 +135,36 @@ extension View {
     }
 }
 #endif
+
+extension View {
+    /// The card a popover panel sits on: iOS shows these panels as popovers. Android shows
+    /// them as bottom sheets, which have their own surface, so there the panel fills the
+    /// sheet's width with no card.
+    @ViewBuilder
+    func popoverPanelCard(width: CGFloat, maxHeight: CGFloat, alignment: Alignment = .center,
+                          cornerRadius: CGFloat, stroke: Color, shadowOpacity: Double, shadowY: CGFloat) -> some View {
+        #if os(Android)
+        frame(maxWidth: .infinity, alignment: .top)
+        #else
+        frame(width: width)
+            .frame(maxHeight: maxHeight, alignment: alignment)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(stroke, lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(shadowOpacity), radius: 28, y: shadowY)
+        #endif
+    }
+
+    /// Marks all of a popover panel's content inside its scroll view, so Android can size
+    /// the panel's sheet to it (a scroll view itself takes whatever height it is given).
+    @ViewBuilder
+    func popoverPanelScrollContent() -> some View {
+        #if os(Android)
+        modifier(AndroidPopoverContentMeasure())
+        #else
+        self
+        #endif
+    }
+}

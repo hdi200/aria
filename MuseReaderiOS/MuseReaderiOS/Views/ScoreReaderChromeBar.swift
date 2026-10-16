@@ -324,33 +324,63 @@ struct ScoreReaderChromeBar: View {
         return playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)"
     }
 
-    private func metronomeButton(compact: Bool, iconSize: CGFloat) -> some View {
-        Button(action: toggleMetronomeAction) {
-            Image(systemName: "metronome")
-                .font(.system(size: iconSize, weight: .medium))
-                .scaleEffect(x: 0.86, y: 1.0, anchor: .center)
-                .overlay(alignment: .topTrailing) {
-                    if countInEnabled {
-                        Text("1")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 14, height: 14)
-                            .background(Color.blue, in: Circle())
-                            .offset(x: 7, y: -5)
-                            .accessibilityHidden(true)
-                    }
+    private func metronomeIcon(compact: Bool, iconSize: CGFloat) -> some View {
+        Image(systemName: "metronome")
+            .font(.system(size: iconSize, weight: .medium))
+            .scaleEffect(x: 0.86, y: 1.0, anchor: .center)
+            .overlay(alignment: .topTrailing) {
+                if countInEnabled {
+                    Text("1")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 14, height: 14)
+                        .background(Color.blue, in: Circle())
+                        .offset(x: 7, y: -5)
+                        .accessibilityHidden(true)
                 }
-                .frame(width: compact ? 24 : 44, height: compact ? 30 : 44)
+            }
+            .frame(width: compact ? 24 : 44, height: compact ? 30 : 44)
+    }
+
+    private func presentMetronomeSettings() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        isMetronomeSettingsPresented = true
+    }
+
+    private func metronomeButton(compact: Bool, iconSize: CGFloat) -> some View {
+        let isEnabled = playbackState.isAvailable && !isPlaybackBusy
+        #if os(Android)
+        // Android: a long press on a Button never reaches its gesture (the button takes the
+        // press), so tap and hold are both gestures on the icon.
+        return metronomeIcon(compact: compact, iconSize: iconSize)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if isEnabled { toggleMetronomeAction() }
+            }
+            .onLongPressGesture(minimumDuration: 0.22, maximumDistance: 18) {
+                if isEnabled { presentMetronomeSettings() }
+            }
+            .accessibilityAddTraits(.isButton)
+            .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
+            .opacity(playbackState.isAvailable ? 1 : 0.45)
+            .popover(isPresented: $isMetronomeSettingsPresented, arrowEdge: .top) {
+                metronomeSettingsPopover
+                    .presentationCompactPopoverWhenAvailable()
+            }
+            .accessibilityLabel("Metronome")
+            .accessibilityHint("Touch and hold for count-in settings")
+        #else
+        return Button(action: toggleMetronomeAction) {
+            metronomeIcon(compact: compact, iconSize: iconSize)
         }
         .buttonStyle(.plain)
         .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
-        .disabled(!playbackState.isAvailable || isPlaybackBusy)
+        .disabled(!isEnabled)
         .opacity(playbackState.isAvailable ? 1 : 0.45)
         .highPriorityGesture(
             LongPressGesture(minimumDuration: 0.22, maximumDistance: 18)
                 .onEnded { _ in
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    isMetronomeSettingsPresented = true
+                    presentMetronomeSettings()
                 }
         )
         .popover(isPresented: $isMetronomeSettingsPresented, arrowEdge: .top) {
@@ -359,6 +389,7 @@ struct ScoreReaderChromeBar: View {
         }
         .accessibilityLabel("Metronome")
         .accessibilityHint("Touch and hold for count-in settings")
+        #endif
     }
 
     private var metronomeSettingsPopover: some View {
@@ -387,7 +418,11 @@ struct ScoreReaderChromeBar: View {
         .toggleStyle(.switch)
         .padding(.horizontal, 16)
         .frame(height: 64)
+        #if os(Android)
+        .frame(maxWidth: .infinity)
+        #else
         .frame(width: 275)
+        #endif
         .presentationDetents([.height(64)])
     }
 
@@ -816,14 +851,9 @@ struct ScoreReaderPartsPanel: View {
             }
         }
         .padding(isPhone ? 12 : 18)
-        .frame(width: min(isPhone ? 300 : 330, max(UIScreen.main.bounds.width - 24, 284)))
-        .frame(maxHeight: panelMaxHeight, alignment: .top)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: isPhone ? 18 : 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: isPhone ? 18 : 22, style: .continuous)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(0.16), radius: 28, y: 14)
+        .popoverPanelCard(width: min(isPhone ? 300 : 330, max(UIScreen.main.bounds.width - 24, 284)),
+                          maxHeight: panelMaxHeight, alignment: .top, cornerRadius: isPhone ? 18 : 22,
+                          stroke: Color.black.opacity(0.08), shadowOpacity: 0.16, shadowY: 14)
     }
 
     private var panelMaxHeight: CGFloat {

@@ -50,27 +50,53 @@ struct ScoreReaderViewKeyControl: View {
     let isBusy: Bool
     let selectKey: (ScoreTransposeTargetKey) -> Void
 
+    private var chipLabel: some View {
+        HStack(spacing: 7) {
+            if isBusy {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "music.note")
+            }
+            Text(currentKey.compactTitle)
+                .font(.system(size: 13, weight: .semibold))
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 9, weight: .bold))
+        }
+        .foregroundStyle(Color.black.opacity(0.78))
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
+    }
+
     var body: some View {
+        #if os(Android)
+        // Android: a dropdown menu from the chip, as Android pickers do (iOS: a popover list).
+        Menu {
+            ForEach(ScoreTransposeTargetKey.allCases, id: \.self) { key in
+                Button {
+                    selectKey(key)
+                } label: {
+                    let title = key == originalKey ? "\(key.title) (original)" : key.title
+                    if key == currentKey {
+                        Label(title, systemImage: "checkmark")
+                    } else {
+                        Text(title)
+                    }
+                }
+            }
+        } label: {
+            chipLabel
+        }
+        .disabled(isBusy)
+        .accessibilityLabel("Viewing key, \(currentKey.title)")
+        .accessibilityHint("Choose a temporary key for this score view")
+        #else
         Button {
             isKeyPickerPresented = true
         } label: {
-            HStack(spacing: 7) {
-                if isBusy {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "music.note")
-                }
-                Text(currentKey.compactTitle)
-                    .font(.system(size: 13, weight: .semibold))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            .foregroundStyle(Color.black.opacity(0.78))
-            .padding(.horizontal, 12)
-            .frame(height: 34)
-            .background(.regularMaterial, in: Capsule())
-            .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
+            chipLabel
         }
         .buttonStyle(.plain)
         .disabled(isBusy)
@@ -84,6 +110,7 @@ struct ScoreReaderViewKeyControl: View {
             )
             .presentationCompactPopoverWhenAvailable()
         }
+        #endif
     }
 }
 

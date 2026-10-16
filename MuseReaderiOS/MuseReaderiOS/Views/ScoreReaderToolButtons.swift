@@ -380,23 +380,44 @@ struct ScoreReaderVoiceSelector: View {
     let isEnabled: Bool
     let action: (Int) -> Void
 
+    private var currentVoiceChip: some View {
+        Text("\(currentVoice + 1)")
+            .font(.system(size: 15, weight: .bold))
+            .foregroundStyle(voiceForegroundColor(currentVoice, isSelected: true))
+            .frame(width: 34, height: 34)
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(voiceBackgroundColor(currentVoice, isSelected: true))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(voiceStrokeColor(currentVoice, isSelected: true), lineWidth: 0.75)
+            }
+            .contentShape(Rectangle())
+    }
+
     var body: some View {
+        #if os(Android)
+        // Android: a dropdown menu of the other voices (iOS: a popover row).
+        Menu {
+            ForEach(0..<4, id: \.self) { voice in
+                if voice != currentVoice {
+                    Button("Voice \(voice + 1)") {
+                        action(voice)
+                    }
+                }
+            }
+        } label: {
+            currentVoiceChip
+        }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.42)
+        .accessibilityLabel("Voice \(currentVoice + 1)")
+        #else
         Button {
             isExpanded = true
         } label: {
-            Text("\(currentVoice + 1)")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(voiceForegroundColor(currentVoice, isSelected: true))
-                .frame(width: 34, height: 34)
-                .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(voiceBackgroundColor(currentVoice, isSelected: true))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(voiceStrokeColor(currentVoice, isSelected: true), lineWidth: 0.75)
-                }
-                .contentShape(Rectangle())
+            currentVoiceChip
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
@@ -431,6 +452,7 @@ struct ScoreReaderVoiceSelector: View {
             .padding(10)
             .presentationCompactPopoverWhenAvailable()
         }
+        #endif
     }
 
     private func voiceForegroundColor(_ voice: Int, isSelected: Bool) -> Color {
