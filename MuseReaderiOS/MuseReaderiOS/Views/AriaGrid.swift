@@ -17,15 +17,20 @@ struct AriaGrid<Item, ID: Hashable, Cell: View>: View {
     var spacing: CGFloat? = nil
     let items: [Item]
     let id: KeyPath<Item, ID>
+    /// Android: an adaptive grid doesn't leave one cell alone on its last row (a short,
+    /// fixed set such as the New Score templates). iOS lays out as LazyVGrid does.
+    var avoidsLoneLastItem = false
     @ViewBuilder let cell: (Item) -> Cell
 
     init(columns: [GridItem], alignment: HorizontalAlignment = .center, spacing: CGFloat? = nil,
-         items: [Item], id: KeyPath<Item, ID>, @ViewBuilder cell: @escaping (Item) -> Cell) {
+         items: [Item], id: KeyPath<Item, ID>, avoidsLoneLastItem: Bool = false,
+         @ViewBuilder cell: @escaping (Item) -> Cell) {
         self.columns = columns
         self.alignment = alignment
         self.spacing = spacing
         self.items = items
         self.id = id
+        self.avoidsLoneLastItem = avoidsLoneLastItem
         self.cell = cell
     }
 
@@ -33,7 +38,8 @@ struct AriaGrid<Item, ID: Hashable, Cell: View>: View {
     @State var width: CGFloat = UIScreen.main.bounds.width
 
     var body: some View {
-        let layout = AriaGridRowLayout(columns: columns, width: width)
+        let layout = AriaGridRowLayout(columns: columns, width: width,
+                                       itemCount: avoidsLoneLastItem ? items.count : nil)
         let rows = stride(from: 0, to: items.count, by: max(layout.columnCount, 1)).map { start in
             Array(items[start..<min(start + max(layout.columnCount, 1), items.count)])
         }
@@ -75,8 +81,9 @@ struct AriaGrid<Item, ID: Hashable, Cell: View>: View {
 
 extension AriaGrid where Item: Identifiable, ID == Item.ID {
     init(columns: [GridItem], alignment: HorizontalAlignment = .center, spacing: CGFloat? = nil,
-         items: [Item], @ViewBuilder cell: @escaping (Item) -> Cell) {
-        self.init(columns: columns, alignment: alignment, spacing: spacing, items: items, id: \.id, cell: cell)
+         items: [Item], avoidsLoneLastItem: Bool = false, @ViewBuilder cell: @escaping (Item) -> Cell) {
+        self.init(columns: columns, alignment: alignment, spacing: spacing, items: items, id: \.id,
+                  avoidsLoneLastItem: avoidsLoneLastItem, cell: cell)
     }
 }
 
@@ -89,11 +96,23 @@ struct AriaGridRowLayout {
     /// nil: the cells share the row width.
     let cellWidth: CGFloat?
 
-    init(columns: [GridItem], width: CGFloat) {
+    /// `itemCount`: when given, an adaptive grid avoids a lone cell on its last row, by
+    /// fitting one more column if the cells stay at least 85% of their minimum width, or
+    /// else by spreading the cells evenly over the rows.
+    init(columns: [GridItem], width: CGFloat, itemCount: Int? = nil) {
         let spacing = columns.first?.spacing ?? 8
         columnSpacing = spacing
         if columns.count == 1, case .adaptive(let minimum, let maximum) = columns[0].size {
-            let count = max(1, Int((width + spacing) / (minimum + spacing)))
+            var count = max(1, Int((width + spacing) / (minimum + spacing)))
+            if let itemCount, count > 1, itemCount > count, itemCount % count == 1 {
+                let oneMore = (width - spacing * CGFloat(count)) / CGFloat(count + 1)
+                if oneMore >= minimum * 0.85 {
+                    count += 1
+                } else {
+                    let rows = (itemCount + count - 1) / count
+                    count = (itemCount + rows - 1) / rows
+                }
+            }
             columnCount = count
             let fitted = (width - spacing * CGFloat(count - 1)) / CGFloat(count)
             cellWidth = maximum.isFinite ? min(fitted, maximum) : nil

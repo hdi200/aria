@@ -791,6 +791,22 @@ struct ScoreReaderPartsPanel: View {
     let allowsManagingParts: Bool
 
     var body: some View {
+        #if os(Android)
+        // Android sizes the sheet to the panel's content: one scroll view around the whole
+        // panel, whose content is measured. The rows' own scroll view took whatever height
+        // the sheet had, so the sheet's height kept changing.
+        ScrollView(.vertical, showsIndicators: false) {
+            panelContent(scrollsRows: false)
+                .popoverPanelScrollContent()
+        }
+        .modifier(ScoreReaderPartsPanelCard(panelMaxHeight: panelMaxHeight))
+        #else
+        panelContent(scrollsRows: true)
+            .modifier(ScoreReaderPartsPanelCard(panelMaxHeight: panelMaxHeight))
+        #endif
+    }
+
+    private func panelContent(scrollsRows: Bool) -> some View {
         VStack(spacing: isPhone ? 8 : 12) {
             Capsule()
                 .fill(Color.black.opacity(0.16))
@@ -823,30 +839,14 @@ struct ScoreReaderPartsPanel: View {
                 .padding(.horizontal, 2)
             }
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: isPhone ? 6 : 9) {
-                    partRow(
-                        id: "full-score",
-                        title: "Full Score",
-                        partIndex: nil,
-                        clefSymbol: nil,
-                        systemImage: "list.bullet.indent",
-                        showsChevron: false
-                    )
-
-                    ForEach(parts) { part in
-                        partRow(
-                            id: part.id,
-                            title: part.name,
-                            partIndex: part.index,
-                            clefSymbol: part.clef.symbol,
-                            systemImage: nil,
-                            showsChevron: true
-                        )
-                    }
+            if scrollsRows {
+                ScrollView(.vertical, showsIndicators: false) {
+                    partRows
                 }
+                .frame(maxHeight: isPhone ? min(UIScreen.main.bounds.height * 0.66, 470) : min(UIScreen.main.bounds.height * 0.66, 640))
+            } else {
+                partRows
             }
-            .frame(maxHeight: isPhone ? min(UIScreen.main.bounds.height * 0.66, 470) : min(UIScreen.main.bounds.height * 0.66, 640))
 
             if !isPhone {
                 VStack(spacing: 9) {
@@ -858,9 +858,30 @@ struct ScoreReaderPartsPanel: View {
             }
         }
         .padding(isPhone ? 12 : 18)
-        .popoverPanelCard(width: min(isPhone ? 300 : 330, max(UIScreen.main.bounds.width - 24, 284)),
-                          maxHeight: panelMaxHeight, alignment: .top, cornerRadius: isPhone ? 18 : 22,
-                          stroke: Color.black.opacity(0.08), shadowOpacity: 0.16, shadowY: 14)
+    }
+
+    private var partRows: some View {
+        VStack(spacing: isPhone ? 6 : 9) {
+            partRow(
+                id: "full-score",
+                title: "Full Score",
+                partIndex: nil,
+                clefSymbol: nil,
+                systemImage: "list.bullet.indent",
+                showsChevron: false
+            )
+
+            ForEach(parts) { part in
+                partRow(
+                    id: part.id,
+                    title: part.name,
+                    partIndex: part.index,
+                    clefSymbol: part.clef.symbol,
+                    systemImage: nil,
+                    showsChevron: true
+                )
+            }
+        }
     }
 
     private var panelMaxHeight: CGFloat {
@@ -990,5 +1011,21 @@ struct ScoreReaderTopToolButton: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.42)
+    }
+}
+
+/// The parts panel's card (`popoverPanelCard`): a popover card on iOS, the sheet on Android.
+struct ScoreReaderPartsPanelCard: ViewModifier {
+    let panelMaxHeight: CGFloat
+
+    private var isPhone: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .popoverPanelCard(width: min(isPhone ? 300 : 330, max(UIScreen.main.bounds.width - 24, 284)),
+                              maxHeight: panelMaxHeight, alignment: .top, cornerRadius: isPhone ? 18 : 22,
+                              stroke: Color.black.opacity(0.08), shadowOpacity: 0.16, shadowY: 14)
     }
 }

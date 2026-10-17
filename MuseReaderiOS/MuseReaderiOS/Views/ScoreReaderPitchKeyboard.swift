@@ -30,6 +30,12 @@ struct ScoreReaderWidePitchKeyboard: View {
     private let blackKeyTouchHeight: CGFloat = 72
 
     var body: some View {
+        #if os(Android)
+        // On Android the keyboard's own state changes from its drag gesture didn't redraw
+        // it (the keys moved only when something else redrew them); an observable counter
+        // the drag bumps does.
+        let _ = AndroidRedrawTrigger.pitchKeyboard.count
+        #endif
         GeometryReader { geometry in
             let visibleNaturalKeyCount = visibleNaturalKeyCountForWidth(geometry.size.width)
             let keyHeight = max(geometry.size.height, 1)
@@ -176,6 +182,9 @@ struct ScoreReaderWidePitchKeyboard: View {
                 updateContinuousScroll(for: value.translation.width, whiteWidth: whiteWidth, visibleNaturalKeyCount: visibleNaturalKeyCount)
             }
             .onEnded { value in
+                #if os(Android)
+                defer { AndroidRedrawTrigger.pitchKeyboard.count &+= 1 }
+                #endif
                 guard isEnabled else {
                     dragTranslation = 0
                     dragStartNaturalKeyOffset = nil
@@ -208,6 +217,9 @@ struct ScoreReaderWidePitchKeyboard: View {
             return
         }
 
+        #if os(Android)
+        defer { AndroidRedrawTrigger.pitchKeyboard.count &+= 1 }
+        #endif
         let startingOffset = dragStartNaturalKeyOffset ?? naturalKeyOffset
         let keyDelta = Int((horizontalMovement / whiteWidth).rounded(.towardZero))
         let baseNaturalIndex = naturalIndex(forMIDIPitch: lockedStartMIDIPitch ?? defaultStartMIDIPitch)

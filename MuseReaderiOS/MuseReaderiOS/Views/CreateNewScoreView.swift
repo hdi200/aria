@@ -305,7 +305,8 @@ struct CreateScoreTemplateSection: View {
 
     var body: some View {
         CreateScoreSection(number: 2, title: "Template", isPhone: isPhone) {
-            AriaGrid(columns: columns, spacing: isPhone ? 8 : 10, items: NewScoreTemplate.allCases) { template in
+            AriaGrid(columns: columns, spacing: isPhone ? 8 : 10, items: NewScoreTemplate.allCases,
+                     avoidsLoneLastItem: true) { template in
                 CreateScoreTemplateCard(
                     template: template,
                     isSelected: draft.template == template && template != .custom,
@@ -411,7 +412,12 @@ struct CreateScoreTemplateIcon: View {
         case .blank:
             // The "Treble Clef" template — show an actual clef glyph.
             Text(ScorePartClef.treble.symbol)
+                #if os(Android)
+                // Android's music font draws the clef much larger than iOS's at the same size.
+                .font(.system(size: glyphSize * 0.9, weight: .regular))
+                #else
                 .font(.system(size: glyphSize * 1.45, weight: .regular))
+                #endif
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
         case .piano:

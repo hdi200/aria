@@ -9,6 +9,9 @@ struct ScoreReaderModeToolbar: View {
     let noteInputModeAction: () -> Void
     let isMeasureSelection: Bool
     let isSingleMeasureSelection: Bool
+    /// Narrower tabs, so the toolbar and its side controls fit one row on an Android tablet
+    /// in portrait (iOS fits them by shrinking the labels, which Android doesn't).
+    var isTight = false
 
     var body: some View {
         Group {
@@ -24,7 +27,7 @@ struct ScoreReaderModeToolbar: View {
                 }
             }
         }
-        .padding(.horizontal, isCompact ? 0 : 10)
+        .padding(.horizontal, isCompact ? 0 : (isTight ? 4 : 10))
         .padding(.vertical, isCompact ? 0 : 8)
         .frame(maxWidth: isCompact ? .infinity : nil)
         .modifier(ScoreReaderModeToolbarChromeModifier(isCompact: isCompact))
@@ -32,12 +35,12 @@ struct ScoreReaderModeToolbar: View {
 
     @ViewBuilder
     private var regularButtons: some View {
-        ScoreReaderModeToolbarButton(title: "Note\nEntry", systemImage: "music.note.list", showsPlusBadge: true, isActive: selectedToolCategory == .notes, isEnabled: categoryEnabled(.notes), action: noteInputModeAction)
-        ScoreReaderModeToolbarButton(title: "Select", systemImage: "cursorarrow", isActive: selectedToolCategory == .select, isEnabled: !isBusy, action: selectModeAction)
+        ScoreReaderModeToolbarButton(title: "Note\nEntry", systemImage: "music.note.list", showsPlusBadge: true, isActive: selectedToolCategory == .notes, isEnabled: categoryEnabled(.notes), isTight: isTight, action: noteInputModeAction)
+        ScoreReaderModeToolbarButton(title: "Select", systemImage: "cursorarrow", isActive: selectedToolCategory == .select, isEnabled: !isBusy, isTight: isTight, action: selectModeAction)
 
         Divider()
             .frame(height: 34)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, isTight ? 3 : 6)
 
         categoryButton(.repeats, title: "Repeats", systemImage: "repeat")
         categoryButton(.text, title: "Text", systemImage: "textformat")
@@ -58,7 +61,7 @@ struct ScoreReaderModeToolbar: View {
     }
 
     private func categoryButton(_ category: ScoreReaderToolCategory, title: String, systemImage: String? = nil, textSymbol: String? = nil) -> some View {
-        ScoreReaderModeToolbarButton(title: title, systemImage: systemImage, textSymbol: textSymbol, isActive: selectedToolCategory == category, isEnabled: categoryEnabled(category), action: {
+        ScoreReaderModeToolbarButton(title: title, systemImage: systemImage, textSymbol: textSymbol, isActive: selectedToolCategory == category, isEnabled: categoryEnabled(category), isTight: isTight, action: {
             selectModeAction()
             selectedToolCategory = category
         })
@@ -267,11 +270,12 @@ struct ScoreReaderModeToolbarButton: View {
     var showsPlusBadge = false
     let isActive: Bool
     let isEnabled: Bool
+    var isTight = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: isTight ? 4 : 7) {
                 ZStack(alignment: .bottomTrailing) {
                     if let systemImage {
                         Image(systemName: systemImage)
@@ -292,14 +296,14 @@ struct ScoreReaderModeToolbarButton: View {
                 }
                 .frame(width: 22, height: 22)
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: isTight ? 11 : 12, weight: .medium))
                     .lineLimit(title.contains("\n") ? 2 : 1)
                     .multilineTextAlignment(.leading)
                     .minimumScaleFactor(0.58)
             }
             .foregroundStyle(isActive ? Color(red: 0.08, green: 0.42, blue: 0.92) : Color.black.opacity(0.78))
             .frame(height: 34)
-            .padding(.horizontal, 11)
+            .padding(.horizontal, isTight ? 6 : 11)
             .scoreReaderActiveModeSelection(isActive: isActive, cornerRadius: 9)
             .contentShape(Rectangle())
         }

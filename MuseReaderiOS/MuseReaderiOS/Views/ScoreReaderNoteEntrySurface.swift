@@ -105,8 +105,8 @@ struct ScoreReaderNoteEntrySurface: View {
 
             VStack(spacing: 8) {
                 #if os(Android)
-                if usesStackedTopMenu {
-                    stackedTopMenu
+                if usesTightTopMenu {
+                    tightTopMenu
                 } else {
                     sideBySideTopMenu
                 }
@@ -146,26 +146,50 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     #if os(Android)
-    /// Android tablets in portrait: the mode toolbar and its side controls don't fit on
-    /// one row (Android's controls are wider), so the side controls go on a row above.
-    private var usesStackedTopMenu: Bool {
+    /// Android tablets in portrait: iOS fits the mode toolbar and its side controls on one
+    /// row by shrinking the tab labels, which Android doesn't. Here the side controls take
+    /// their natural width and the tabs are narrower.
+    private var usesTightTopMenu: Bool {
         UIScreen.main.bounds.width < 1000
     }
 
-    private var stackedTopMenu: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
+    private var tightTopMenu: some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 voiceSelector
                 undoRedoControls
-                Spacer(minLength: 0)
+            }
+            .fixedSize()
+
+            Spacer(minLength: 0)
+
+            ScoreReaderModeToolbar(
+                editingState: editingState,
+                isBusy: isBusy,
+                selectedToolCategory: $selectedToolCategory,
+                selectModeAction: {
+                    selectedToolCategory = .select
+                    selectModeAction()
+                },
+                noteInputModeAction: {
+                    selectedToolCategory = .notes
+                    noteInputModeAction()
+                },
+                isMeasureSelection: isMeasureSelection,
+                isSingleMeasureSelection: isSingleMeasureSelection,
+                isTight: true
+            )
+            .fixedSize()
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 4) {
                 previousNextControls
                 globalDeleteButton
             }
-            .padding(.horizontal, 24)
-
-            modeToolbar
-                .padding(.horizontal, 12)
+            .fixedSize()
         }
+        .padding(.horizontal, 12)
     }
     #endif
 

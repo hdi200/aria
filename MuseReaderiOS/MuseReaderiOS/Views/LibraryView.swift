@@ -243,6 +243,11 @@ struct LibraryView: View {
             isTargeted: $isScoreDropTargeted,
             perform: receiveScoreDrop
         )
+        #if os(Android)
+        // The chip under the finger while a score is dragged onto a setlist (iOS lifts the
+        // score's own preview).
+        .overlay { AndroidDragPreviewLayer() }
+        #endif
         .overlay {
             if isScoreDropTargeted {
                 ZStack {
@@ -2929,6 +2934,10 @@ struct SearchField: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(LibraryPalette.ink)
+                #if os(Android)
+                // One line in a narrow field (a setlist's header in portrait).
+                .lineLimit(1)
+                #endif
 
             if !text.isEmpty {
                 Button {
