@@ -204,18 +204,18 @@ struct ScoreReaderKeyboardContextToolbar: View {
     private var regularBody: some View {
         #if os(Android)
         // Skip's maxWidth frame doesn't shrink to the panel, so a row wider than the panel
-        // (tablet portrait) ran off both edges; there it scrolls instead.
+        // (tablet portrait) ran off both edges. There the row is laid out at its narrowest
+        // and scaled down to the panel's width, so every button shows without scrolling.
         GeometryReader { proxy in
             if proxy.size.width >= Self.regularRowMinimumWidth {
                 regularRowCard(regularRow, maxWidth: min(900, proxy.size.width - 20))
                     .frame(maxWidth: .infinity)
             } else {
-                regularRowCard(
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        regularRow
-                    },
-                    maxWidth: nil
-                )
+                let scale = max(proxy.size.width, 1) / Self.regularRowMinimumWidth
+                regularRowCard(regularRow, maxWidth: nil)
+                    .frame(width: Self.regularRowMinimumWidth, height: 72)
+                    .scaleEffect(scale, anchor: .center)
+                    .frame(width: proxy.size.width, height: 72)
             }
         }
         .frame(height: 72)
