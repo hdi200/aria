@@ -722,8 +722,17 @@ struct ScoreReaderCompactPaletteButton: View {
                         .scaledToFit()
                         .frame(width: 25, height: 25)
                 } else if let textSymbol {
+                    #if os(Android)
+                    if AndroidAccidentalGlyph.isAccidental(textSymbol) {
+                        AndroidAccidentalGlyph(symbol: textSymbol, size: 26)
+                    } else {
+                        Text(textSymbol)
+                            .font(usesMusicFont ? MusicNotationFont.font(size: 23) : .system(size: 22, weight: .semibold))
+                    }
+                    #else
                     Text(textSymbol)
                         .font(usesMusicFont ? MusicNotationFont.font(size: 23) : .system(size: 22, weight: .semibold))
+                    #endif
                 }
             }
             .foregroundStyle(isSelected ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82))
@@ -841,10 +850,21 @@ struct ScoreReaderCompactGridPaletteButton: View {
                         .scaledToFit()
                         .frame(width: 25, height: 25)
                 } else if let textSymbol {
+                    #if os(Android)
+                    if AndroidAccidentalGlyph.isAccidental(textSymbol) {
+                        AndroidAccidentalGlyph(symbol: textSymbol, size: 26)
+                    } else {
+                        Text(textSymbol)
+                            .font(usesMusicFont ? MusicNotationFont.font(size: musicFontSize) : .system(size: 23, weight: .semibold))
+                            .baselineOffset(glyphBaselineOffset)
+                            .offset(y: glyphVerticalOffset)
+                    }
+                    #else
                     Text(textSymbol)
                         .font(usesMusicFont ? MusicNotationFont.font(size: musicFontSize) : .system(size: 23, weight: .semibold))
                         .baselineOffset(glyphBaselineOffset)
                         .offset(y: glyphVerticalOffset)
+                    #endif
                 } else if let systemImage {
                     Image(systemName: systemImage)
                         .font(.system(size: 19, weight: .semibold))

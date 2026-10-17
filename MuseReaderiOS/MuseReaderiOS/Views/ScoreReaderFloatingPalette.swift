@@ -348,10 +348,20 @@ struct ScoreReaderPaletteButton: View {
                         Image(systemName: systemImage)
                             .font(.system(size: 19, weight: .semibold))
                     } else if let textSymbol {
+                        #if os(Android)
+                        if AndroidAccidentalGlyph.isAccidental(textSymbol) {
+                            AndroidAccidentalGlyph(symbol: textSymbol, size: 24)
+                        } else {
+                            Text(textSymbol)
+                                .font(usesMusicFont ? MusicNotationFont.font(size: musicFontSize) : .system(size: textFontSize, weight: .medium))
+                                .baselineOffset(glyphBaselineOffset ?? (usesMusicFont ? 2 : 0))
+                                .naturalSizeOnAndroid()
+                        }
+                        #else
                         Text(textSymbol)
                             .font(usesMusicFont ? MusicNotationFont.font(size: musicFontSize) : .system(size: textFontSize, weight: .medium))
                             .baselineOffset(glyphBaselineOffset ?? (usesMusicFont ? 2 : 0))
-                            .naturalSizeOnAndroid()
+                        #endif
                     }
                 }
                 .frame(height: title == nil ? 28 : 22)
