@@ -103,11 +103,54 @@ final class ScoreReaderState {
     var cachedPagesByIndex: [Int: ScorePage]
     var loadingPageIndices: Set<Int> = []
     var pageErrorMessages: [Int: String] = [:]
+    #if os(Android)
+    // Only status/capability/duration invalidate the reader. The accurate audio clock
+    // remains available to logic, while its UI consumers observe the small child model.
+    @ObservationIgnored private var currentPlaybackState: ScorePlaybackState = .unavailable
+    let androidPlaybackVisualState = AndroidPlaybackVisualState()
+    var playbackState: ScorePlaybackState {
+        get {
+            access(keyPath: \.playbackState)
+            return currentPlaybackState
+        }
+        set {
+            let old = currentPlaybackState
+            if old.status != newValue.status || old.isAvailable != newValue.isAvailable
+                || old.durationSeconds != newValue.durationSeconds {
+                withMutation(keyPath: \.playbackState) { currentPlaybackState = newValue }
+            } else {
+                currentPlaybackState = newValue
+            }
+            androidPlaybackVisualState.publishClock(newValue)
+        }
+    }
+    #else
     var playbackState: ScorePlaybackState
+    #endif
     var playbackErrorMessage: String?
     var isPlaybackActionInFlight = false
     var playbackPreparationMessage: String?
+    #if os(Android)
+    @ObservationIgnored private var currentPlaybackHighlight: ScorePlaybackMeasureHighlight?
+    var playbackMeasureHighlight: ScorePlaybackMeasureHighlight? {
+        get {
+            access(keyPath: \.playbackMeasureHighlight)
+            return currentPlaybackHighlight
+        }
+        set {
+            // Scrolling/following only depends on the measure rectangle, not progress.
+            let old = currentPlaybackHighlight
+            if old?.pageIndex != newValue?.pageIndex || old?.normalizedRect != newValue?.normalizedRect {
+                withMutation(keyPath: \.playbackMeasureHighlight) { currentPlaybackHighlight = newValue }
+            } else {
+                currentPlaybackHighlight = newValue
+            }
+            androidPlaybackVisualState.publishHighlight(newValue)
+        }
+    }
+    #else
     var playbackMeasureHighlight: ScorePlaybackMeasureHighlight?
+    #endif
     var playFromHereTarget: ScorePlayFromHereTarget?
     var playbackLoopRange: ScorePlaybackLoopRange?
     var playbackLoopIsActive = false

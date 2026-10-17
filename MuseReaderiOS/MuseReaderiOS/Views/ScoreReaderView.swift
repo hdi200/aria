@@ -410,6 +410,9 @@ struct ScoreReaderView: View {
     var body: some View {
         readerBody
             .overlay { featureTourOverlay }
+            #if os(Android)
+            .environment(readerState.androidPlaybackVisualState)
+            #endif
     }
 
     private var readerBody: some View {
@@ -1787,13 +1790,23 @@ struct ScoreReaderView: View {
             height: max(geometry.size.height - 24, 1)
         )
         let pageTurnViewport = pageTurnViewportOverride ?? defaultPageTurnViewport
+        let currentHighlight = readerState.playbackMeasureHighlight(for: pageIndex)
+        #if os(Android)
+        // Fractional playback position belongs to the child overlay model. The
+        // page/follow inputs carry only the measure's spatial identity.
+        let pageHighlight = currentHighlight.map {
+            ScorePlaybackMeasureHighlight(pageIndex: $0.pageIndex, normalizedRect: $0.normalizedRect, progress: 0)
+        }
+        #else
+        let pageHighlight = currentHighlight
+        #endif
 
         return ScoreReaderPageCanvas(
             pageIndex: pageIndex,
             page: readerState.page(at: pageIndex),
             isLoading: readerState.isLoadingPage(pageIndex),
             errorText: readerState.pageErrorMessage(for: pageIndex),
-            playbackHighlight: readerState.playbackMeasureHighlight(for: pageIndex),
+            playbackHighlight: pageHighlight,
             playFromHereTarget: readerState.playFromHereTarget(for: pageIndex),
             playbackLoopRange: readerState.playbackLoopRange(for: pageIndex),
             playbackLoopIsActive: readerState.playbackLoopIsActive,
@@ -1893,6 +1906,9 @@ struct ScoreReaderView: View {
             },
             annotationConfiguration: annotationConfiguration(for: pageIndex)
         )
+        #if os(Android)
+        .environment(\.ariaPlaybackPageIndex, pageIndex)
+        #endif
     }
 
     private var annotationColor: ScoreAnnotationColor {

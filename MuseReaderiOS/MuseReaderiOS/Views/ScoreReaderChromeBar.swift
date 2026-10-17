@@ -300,12 +300,22 @@ struct ScoreReaderChromeBar: View {
             mixerButton
 
             if showsElapsedTime {
+                #if os(Android)
+                AndroidPlaybackTimeLabel(fallback: playbackState, isCountingIn: isCountingIn,
+                                         preparationMessage: playbackPreparationMessage)
+                    .font(.system(size: isCompactHeader ? 11 : 13, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+                    .fixedSize(horizontal: true, vertical: false)
+                #else
                 Text(playbackTimeLabel)
                     .font(.system(size: isCompactHeader ? 11 : 13, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.68)
                     .fixedSize(horizontal: true, vertical: false)
+                #endif
             }
         }
     }
@@ -680,12 +690,22 @@ struct ScoreReaderChromeBar: View {
             compactMixerButton
 
             if showsElapsedTime {
+                #if os(Android)
+                AndroidPlaybackTimeLabel(fallback: playbackState, isCountingIn: isCountingIn,
+                                         preparationMessage: playbackPreparationMessage)
+                    .font(.system(size: 10, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: true, vertical: false)
+                #else
                 Text(playbackTimeLabel)
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .fixedSize(horizontal: true, vertical: false)
+                #endif
             }
         }
     }
