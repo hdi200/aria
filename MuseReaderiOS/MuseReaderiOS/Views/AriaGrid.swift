@@ -79,6 +79,26 @@ struct AriaGrid<Item, ID: Hashable, Cell: View>: View {
     #endif
 }
 
+/// `LazyVStack` on iOS. On Android, Skip makes a lazy stack inside a ScrollView a
+/// separate scrolling list of its own height, so a library list ended early and scrolled
+/// inside itself; there the rows are a plain VStack (libraries are short enough).
+struct AriaLazyVStack<Content: View>: View {
+    var spacing: CGFloat? = nil
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        #if os(Android)
+        VStack(spacing: spacing) {
+            content()
+        }
+        #else
+        LazyVStack(spacing: spacing) {
+            content()
+        }
+        #endif
+    }
+}
+
 extension AriaGrid where Item: Identifiable, ID == Item.ID {
     init(columns: [GridItem], alignment: HorizontalAlignment = .center, spacing: CGFloat? = nil,
          items: [Item], avoidsLoneLastItem: Bool = false, @ViewBuilder cell: @escaping (Item) -> Cell) {

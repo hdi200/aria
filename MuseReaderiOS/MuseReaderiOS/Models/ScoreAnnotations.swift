@@ -10,6 +10,9 @@ import SkipFuse
 #endif
 import CryptoKit
 import Foundation
+#if !os(Android)
+import CoreGraphics
+#endif
 
 enum ScoreAnnotationTool: String, Codable, CaseIterable, Sendable {
     case pen
@@ -507,11 +510,22 @@ final class ScoreAnnotationController {
         scheduleSave()
     }
 
+    /// Android erases as the finger moves: the erases of one gesture share one undo step,
+    /// until `endEraseGesture()`.
+    private var isContinuingEraseGesture = false
+
+    func endEraseGesture() {
+        isContinuingEraseGesture = false
+    }
+
+    /// `continuesGesture`: part of a gesture that erases as it goes (Android); only its
+    /// first erase records an undo step.
     func erase(
         pageIndex: Int,
         partID: String,
         along pagePoints: [CGPoint],
-        regions: [ScorePlaybackMeasureRegion]
+        regions: [ScorePlaybackMeasureRegion],
+        continuesGesture: Bool = false
     ) {
         guard isEditable, !pagePoints.isEmpty else { return }
         let renderedByID = Dictionary(
@@ -585,7 +599,10 @@ final class ScoreAnnotationController {
         }
 
         guard !replacements.isEmpty else { return }
-        recordUndoSnapshot()
+        if !(continuesGesture && isContinuingEraseGesture) {
+            recordUndoSnapshot()
+        }
+        isContinuingEraseGesture = continuesGesture
         document.strokes = document.strokes.flatMap { stroke in
             replacements[stroke.id] ?? [stroke]
         }

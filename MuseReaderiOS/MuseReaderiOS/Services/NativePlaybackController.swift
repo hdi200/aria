@@ -27,7 +27,11 @@ final class NativePlaybackController {
         var errorDescription: String? {
             switch self {
             case .audioSessionUnavailable(let message):
+                #if os(Android)
+                return "Aria could not prepare the audio session: \(message)"
+                #else
                 return "Aria could not prepare the iPad audio session: \(message)"
+                #endif
             case .soundBankUnavailable(let message):
                 return "Aria could not find the MuseScore sound bank: \(message)"
             case .sequenceLoadFailed(let message):

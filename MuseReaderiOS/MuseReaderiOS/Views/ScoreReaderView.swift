@@ -1468,7 +1468,11 @@ struct ScoreReaderView: View {
                     twoPageViewButton
                 }
             }
+            #if os(Android)
+            .frame(width: viewModeBottomBarWidths.side, alignment: .leading)
+            #else
             .frame(maxWidth: .infinity, alignment: .leading)
+            #endif
 
             if showsViewModePageControls {
                 ScoreReaderPageScrubber(
@@ -1477,7 +1481,11 @@ struct ScoreReaderView: View {
                     usesTwoPageSpread: usesTwoPageSpread,
                     commitAction: showPageFromScrubber
                 )
+                #if os(Android)
+                .frame(width: viewModeBottomBarWidths.scrubber)
+                #else
                 .frame(minWidth: 120, maxWidth: 520)
+                #endif
                 .padding(.bottom, 10)
             }
 
@@ -1492,10 +1500,25 @@ struct ScoreReaderView: View {
                     .padding(.bottom, 10)
                 }
             }
+            #if os(Android)
+            .frame(width: viewModeBottomBarWidths.side, alignment: .trailing)
+            #else
             .frame(maxWidth: .infinity, alignment: .trailing)
+            #endif
         }
         .padding(.horizontal, 14)
     }
+
+    #if os(Android)
+    /// Skip's HStack doesn't share width between flexible children (the slider took the
+    /// whole row), so the iOS layout's widths are worked out here: the slider gets a
+    /// third of the row, between 120 and 520, and the side slots split the rest.
+    private var viewModeBottomBarWidths: (side: CGFloat, scrubber: CGFloat) {
+        let available = UIScreen.main.bounds.width - 28 - (showsViewModePageControls ? 24 : 12)
+        let scrubber = showsViewModePageControls ? min(520, max(120, available / 3)) : 0
+        return (max((available - scrubber) / 2, 0), scrubber)
+    }
+    #endif
 
     private var twoPageViewButton: some View {
         Button(action: toggleTwoPageView) {
@@ -1935,12 +1958,28 @@ struct ScoreReaderView: View {
                 finishAutomaticAnnotationEntryIfNeeded()
             },
             eraseAction: { pagePoints in
+                #if os(Android)
+                // Android erases as the finger moves (AndroidZoomableImageView); an empty
+                // call ends the gesture.
+                guard !pagePoints.isEmpty else {
+                    annotationController.endEraseGesture()
+                    return
+                }
+                annotationController.erase(
+                    pageIndex: pageIndex,
+                    partID: selectedPartID,
+                    along: pagePoints,
+                    regions: readerState.playbackMeasureRegions,
+                    continuesGesture: true
+                )
+                #else
                 annotationController.erase(
                     pageIndex: pageIndex,
                     partID: selectedPartID,
                     along: pagePoints,
                     regions: readerState.playbackMeasureRegions
                 )
+                #endif
             },
             lassoAction: { pageRect in
                 annotationController.selectStrokes(

@@ -5,6 +5,9 @@
 //
 
 import Foundation
+#if !os(Android)
+import CoreGraphics
+#endif
 
 enum LiveScoreRenderSessionError: LocalizedError {
     case missingEditState

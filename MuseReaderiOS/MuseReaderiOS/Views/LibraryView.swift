@@ -1925,7 +1925,7 @@ struct PhoneScoreList: View {
     let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
 
     var body: some View {
-        LazyVStack(spacing: 0) {
+        AriaLazyVStack(spacing: 0) {
             ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
                 PhoneScoreListRow(
                     score: score,
@@ -2594,7 +2594,7 @@ struct LibraryScoreList: View {
     let removeFromSetlistAction: ((ReaderRecentDocument) -> Void)?
 
     var body: some View {
-        LazyVStack(spacing: 0) {
+        AriaLazyVStack(spacing: 0) {
             ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
                 LibraryScoreListRow(
                     score: score,

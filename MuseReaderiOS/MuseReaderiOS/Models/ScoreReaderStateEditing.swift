@@ -1,4 +1,7 @@
 import Foundation
+#if !os(Android)
+import CoreGraphics
+#endif
 
 enum ScorePageTapInputKind {
     case direct

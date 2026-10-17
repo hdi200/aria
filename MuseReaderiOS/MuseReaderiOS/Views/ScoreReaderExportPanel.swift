@@ -25,128 +25,160 @@ struct ScoreReaderExportPanel: View {
     var openVideoSettingsAction: () -> Void = {}
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: isPhone ? 10 : 18) {
-                VStack(alignment: .leading, spacing: isPhone ? 2 : 4) {
-                    Text("Export Score")
-                        .font(.system(size: isPhone ? 18 : 20, weight: .semibold))
-                    if !isPhone {
-                        Text("Choose content and format")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.black.opacity(0.52))
-                    }
-                    Text("Sharing: \(sharingDescription)")
-                        .font(.system(size: isPhone ? 12 : 13, weight: .semibold))
-                        .foregroundStyle(Color.blue.opacity(0.86))
+        panelBody
+            .font(.system(size: isPhone ? 13 : 14, weight: .medium))
+            .foregroundStyle(Color.black.opacity(0.86))
+            .popoverPanelCard(width: panelWidth, maxHeight: panelMaxHeight, cornerRadius: 18,
+                              stroke: Color.white.opacity(0.62), shadowOpacity: 0.18, shadowY: 16)
+            .onAppear {
+                if draft.fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    draft.fileName = scoreTitle
                 }
-
-                VStack(alignment: .leading, spacing: isPhone ? 5 : 8) {
-                    sectionTitle("What to export")
-                    VStack(spacing: 0) {
-                        exportContentRow(
-                            title: "Full Score",
-                            isSelected: draft.includesFullScore,
-                            isRequiredSelection: !draft.includesParts
-                        ) {
-                            if draft.includesFullScore && !draft.includesParts {
-                                return
-                            }
-                            draft.includesFullScore.toggle()
-                        }
-                        Divider().padding(.leading, 40)
-                        exportContentRow(
-                            title: "Parts",
-                            isSelected: draft.includesParts,
-                            isRequiredSelection: !draft.includesFullScore
-                        ) {
-                            if draft.includesParts && !draft.includesFullScore {
-                                return
-                            }
-                            draft.includesParts.toggle()
-                        }
-                        if draft.includesParts, !parts.isEmpty {
-                            Divider().padding(.leading, 40)
-                            partSelector
-                        }
-                    }
-                    .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(panelBorder)
-                }
-
-                VStack(alignment: .leading, spacing: isPhone ? 5 : 8) {
-                    sectionTitle("Format")
-                    VStack(spacing: 0) {
-                        ForEach(Array(ScoreReaderExportFormat.allCases.enumerated()), id: \.element.id) { index, format in
-                            if index > 0 {
-                                Divider().padding(.leading, 54)
-                            }
-                            formatRow(format)
-                        }
-                    }
-                    .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(panelBorder)
-                }
-
-                if draft.format == .video {
-                    videoSettingsRow
-                }
-
-                if showsExportPartsInConcertRow {
-                    exportPartsInConcertRow
-                }
-
-                if showsExportPartsInOriginalKeyRow {
-                    exportPartsInOriginalKeyRow
-                }
-
-                filenameRow
-
-                HStack(spacing: isPhone ? 8 : 10) {
-                    Button(action: cancelAction) {
-                        Text("Cancel")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: false, isCompact: isPhone))
-
-                    Button {
-                        if draft.format == .video {
-                            openVideoSettingsAction()
-                        } else {
-                            exportAction()
-                        }
-                    } label: {
-                        if isPreparingExport, let exportProgress {
-                            Text("Rendering \(Int((exportProgress * 100).rounded()))%")
-                                .monospacedDigit()
-                                .frame(maxWidth: .infinity)
-                        } else if isPreparingExport {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.white)
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text(draft.format == .video ? "Video Export" : "Export")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: true, isCompact: isPhone))
-                    .disabled(isPreparingExport || !draft.format.isAvailable || !draft.hasExportContent)
+                if draft.selectedPartIDs.isEmpty {
+                    draft.selectedPartIDs = Set(parts.map(\.id))
                 }
             }
-            .padding(isPhone ? 14 : 22)
-            .popoverPanelScrollContent()
+    }
+
+    @ViewBuilder
+    private var panelBody: some View {
+        #if os(Android)
+        // Android: the sheet is at most 88% of the screen, so on a shorter phone the
+        // buttons at the end of the scrolling content were below the edge. They stay at
+        // the bottom of the sheet instead.
+        VStack(spacing: 0) {
+            ScrollView(.vertical, showsIndicators: false) {
+                panelContent(includesFooter: false)
+                    .padding(isPhone ? 14 : 22)
+                    .popoverPanelScrollContent()
+            }
+            footerButtons
+                .padding(.horizontal, isPhone ? 14 : 22)
+                .padding(.vertical, 10)
+                .popoverPanelFixedFooter()
         }
-        .font(.system(size: isPhone ? 13 : 14, weight: .medium))
-        .foregroundStyle(Color.black.opacity(0.86))
-        .popoverPanelCard(width: panelWidth, maxHeight: panelMaxHeight, cornerRadius: 18,
-                          stroke: Color.white.opacity(0.62), shadowOpacity: 0.18, shadowY: 16)
-        .onAppear {
-            if draft.fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                draft.fileName = scoreTitle
+        #else
+        ScrollView(.vertical, showsIndicators: false) {
+            panelContent(includesFooter: true)
+                .padding(isPhone ? 14 : 22)
+                .popoverPanelScrollContent()
+        }
+        #endif
+    }
+
+    private func panelContent(includesFooter: Bool) -> some View {
+        VStack(alignment: .leading, spacing: isPhone ? 10 : 18) {
+            VStack(alignment: .leading, spacing: isPhone ? 2 : 4) {
+                Text("Export Score")
+                    .font(.system(size: isPhone ? 18 : 20, weight: .semibold))
+                if !isPhone {
+                    Text("Choose content and format")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.black.opacity(0.52))
+                }
+                Text("Sharing: \(sharingDescription)")
+                    .font(.system(size: isPhone ? 12 : 13, weight: .semibold))
+                    .foregroundStyle(Color.blue.opacity(0.86))
             }
-            if draft.selectedPartIDs.isEmpty {
-                draft.selectedPartIDs = Set(parts.map(\.id))
+
+            VStack(alignment: .leading, spacing: isPhone ? 5 : 8) {
+                sectionTitle("What to export")
+                VStack(spacing: 0) {
+                    exportContentRow(
+                        title: "Full Score",
+                        isSelected: draft.includesFullScore,
+                        isRequiredSelection: !draft.includesParts
+                    ) {
+                        if draft.includesFullScore && !draft.includesParts {
+                            return
+                        }
+                        draft.includesFullScore.toggle()
+                    }
+                    Divider().padding(.leading, 40)
+                    exportContentRow(
+                        title: "Parts",
+                        isSelected: draft.includesParts,
+                        isRequiredSelection: !draft.includesFullScore
+                    ) {
+                        if draft.includesParts && !draft.includesFullScore {
+                            return
+                        }
+                        draft.includesParts.toggle()
+                    }
+                    if draft.includesParts, !parts.isEmpty {
+                        Divider().padding(.leading, 40)
+                        partSelector
+                    }
+                }
+                .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(panelBorder)
             }
+
+            VStack(alignment: .leading, spacing: isPhone ? 5 : 8) {
+                sectionTitle("Format")
+                VStack(spacing: 0) {
+                    ForEach(Array(ScoreReaderExportFormat.allCases.enumerated()), id: \.element.id) { index, format in
+                        if index > 0 {
+                            Divider().padding(.leading, 54)
+                        }
+                        formatRow(format)
+                    }
+                }
+                .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(panelBorder)
+            }
+
+            if draft.format == .video {
+                videoSettingsRow
+            }
+
+            if showsExportPartsInConcertRow {
+                exportPartsInConcertRow
+            }
+
+            if showsExportPartsInOriginalKeyRow {
+                exportPartsInOriginalKeyRow
+            }
+
+            filenameRow
+
+            if includesFooter {
+                footerButtons
+            }
+        }
+    }
+
+    private var footerButtons: some View {
+        HStack(spacing: isPhone ? 8 : 10) {
+            Button(action: cancelAction) {
+                Text("Cancel")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: false, isCompact: isPhone))
+
+            Button {
+                if draft.format == .video {
+                    openVideoSettingsAction()
+                } else {
+                    exportAction()
+                }
+            } label: {
+                if isPreparingExport, let exportProgress {
+                    Text("Rendering \(Int((exportProgress * 100).rounded()))%")
+                        .monospacedDigit()
+                        .frame(maxWidth: .infinity)
+                } else if isPreparingExport {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text(draft.format == .video ? "Video Export" : "Export")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(ScoreReaderExportFooterButtonStyle(isPrimary: true, isCompact: isPhone))
+            .disabled(isPreparingExport || !draft.format.isAvailable || !draft.hasExportContent)
         }
     }
 
@@ -293,11 +325,21 @@ struct ScoreReaderExportPanel: View {
     private var filenameRow: some View {
         HStack {
             Text("Filename")
+            #if os(Android)
+            // Android's field scrolls a long name to its end and clips it mid-letter, so
+            // it takes the row's spare width (with a Spacer beside it, Skip's HStack
+            // wouldn't share the width).
+            TextField(scoreTitle, text: $draft.fileName)
+                .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
+                .frame(maxWidth: .infinity)
+            #else
             Spacer()
             TextField(scoreTitle, text: $draft.fileName)
                 .multilineTextAlignment(.trailing)
                 .textFieldStyle(.plain)
                 .frame(maxWidth: isPhone ? 160 : 190)
+            #endif
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(Color.black.opacity(0.32))

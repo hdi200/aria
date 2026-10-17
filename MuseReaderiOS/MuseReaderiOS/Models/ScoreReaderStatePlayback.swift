@@ -1,4 +1,7 @@
 import Foundation
+#if !os(Android)
+import CoreGraphics
+#endif
 
 private let playbackPreparationStartingMessage = "Preparing playback..."
 private let playbackVisualSyncTrimSeconds: TimeInterval = 0.05

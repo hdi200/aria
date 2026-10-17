@@ -236,6 +236,7 @@ struct ScoreReaderCompactModeToolbarLabel: View {
                             .font(.system(size: 23, weight: .bold, design: .serif))
                             .italic()
                             .rotationEffect(.degrees(-3))
+                            .naturalSizeOnAndroid()
                     }
                 }
                 .frame(width: ScoreReaderCompactModeMetrics.iconSlotHeight, height: ScoreReaderCompactModeMetrics.iconSlotHeight)
@@ -286,6 +287,7 @@ struct ScoreReaderModeToolbarButton: View {
                             .italic()
                             .rotationEffect(.degrees(-3))
                             .baselineOffset(-1)
+                            .naturalSizeOnAndroid()
                     }
                     if showsPlusBadge {
                         Image(systemName: "plus.circle.fill")
@@ -606,6 +608,7 @@ struct ScoreReaderNotationButton: View {
                     } else if let textSymbol {
                         Text(textSymbol)
                             .font(.system(size: 20, weight: .medium))
+                            .naturalSizeOnAndroid()
                     } else if let symbol {
                         Image(systemName: symbol)
                             .font(.system(size: 18, weight: .semibold))

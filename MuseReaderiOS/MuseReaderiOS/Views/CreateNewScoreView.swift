@@ -57,6 +57,11 @@ struct CreateNewScoreView: View {
                     cancelAction: { dismiss() },
                     createAction: createScore
                 )
+                #if os(Android)
+                // The scroll view draws under the gesture bar, so the bar reaches the
+                // bottom edge too (its padding keeps the buttons above the handle).
+                .ignoresSafeArea(edges: .bottom)
+                #endif
             }
         }
     }
@@ -1932,8 +1937,15 @@ struct CreateScoreBottomBar: View {
         }
         .padding(.horizontal, isPhone ? 16 : 28)
         .padding(.top, 12)
+        #if os(Android)
+        // The bar reaches under the gesture bar on Android (see CreateNewScoreView), and
+        // without a blur it needs a solid fill to hide the scrolling content.
+        .padding(.bottom, isPhone ? 40 : 32)
+        .background(Color(red: 0.985, green: 0.986, blue: 0.993))
+        #else
         .padding(.bottom, isPhone ? 24 : 20)
         .background(.ultraThinMaterial)
+        #endif
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(CreateScorePalette.divider)

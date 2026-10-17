@@ -160,6 +160,17 @@ extension View {
         #endif
     }
 
+    /// Android: a popover panel's footer that stays below its scrolling content; its height
+    /// is added to the content's when sizing the sheet. iOS: as is.
+    @ViewBuilder
+    func popoverPanelFixedFooter() -> some View {
+        #if os(Android)
+        modifier(AndroidPopoverFooterMeasure())
+        #else
+        self
+        #endif
+    }
+
     /// Android: scrolls vertically within `maxHeight` (the tablet floating palette, whose
     /// Android controls are taller, would otherwise run under the bottom panel). iOS: as is.
     @ViewBuilder
