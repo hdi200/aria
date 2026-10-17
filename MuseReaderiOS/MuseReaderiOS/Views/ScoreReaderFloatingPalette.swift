@@ -336,6 +336,7 @@ struct ScoreReaderPaletteButton: View {
                     if let duration {
                         Text(duration.bravuraTextGlyph)
                             .font(MusicNotationFont.font(size: 25))
+                            .naturalSizeOnAndroid()
                             .frame(width: 24, height: 26)
                     } else if stackedChordIcon {
                         Image("ScoreReaderStackedChord")
@@ -350,6 +351,7 @@ struct ScoreReaderPaletteButton: View {
                         Text(textSymbol)
                             .font(usesMusicFont ? MusicNotationFont.font(size: musicFontSize) : .system(size: textFontSize, weight: .medium))
                             .baselineOffset(glyphBaselineOffset ?? (usesMusicFont ? 2 : 0))
+                            .naturalSizeOnAndroid()
                     }
                 }
                 .frame(height: title == nil ? 28 : 22)

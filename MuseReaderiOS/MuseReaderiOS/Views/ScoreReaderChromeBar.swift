@@ -236,20 +236,24 @@ struct ScoreReaderChromeBar: View {
                     floatingIsland(horizontalPadding: 8) {
                         partsIslandButton()
                     }
+                    .naturalWidthOnAndroid()
                 }
 
                 if supportsAnnotations {
                     annotationModeIslandButton
+                        .naturalWidthOnAndroid()
                 }
 
                 floatingIsland(horizontalPadding: 5) {
                     exportIslandButton(fontSize: 21, minWidth: 44)
                 }
+                .naturalWidthOnAndroid()
 
                 if supportsEditing {
                     floatingIsland(horizontalPadding: 5) {
                         editModeIslandButton(iconOnly: false)
                     }
+                    .naturalWidthOnAndroid()
                 }
             }
         }
@@ -327,7 +331,10 @@ struct ScoreReaderChromeBar: View {
     private func metronomeIcon(compact: Bool, iconSize: CGFloat) -> some View {
         Image(systemName: "metronome")
             .font(.system(size: iconSize, weight: .medium))
+            #if !os(Android)
+            // Android's glyph is drawn at the right width (generate-symbols.py).
             .scaleEffect(x: 0.86, y: 1.0, anchor: .center)
+            #endif
             .overlay(alignment: .topTrailing) {
                 if countInEnabled {
                     Text("1")

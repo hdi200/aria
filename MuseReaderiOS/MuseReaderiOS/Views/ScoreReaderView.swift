@@ -563,6 +563,7 @@ struct ScoreReaderView: View {
                                 openTempoEditorAction: { isTempoEditorPresented = true },
                                 toggleDockSideAction: { floatingPaletteDockedLeft.toggle() }
                             )
+                            .scrollsVerticallyOnAndroid(maxHeight: floatingPaletteMaxHeight)
                             .padding(.top, floatingPaletteTopPadding)
                             .padding(floatingPaletteDockedLeft ? .leading : .trailing, 16)
                         }
@@ -695,6 +696,12 @@ struct ScoreReaderView: View {
                             }
                         }
                     }
+                    #if os(Android)
+                    // The tablet mixer is an overlay, not a sheet; Back closes it.
+                    .androidBackAction(isEnabled: isMixerPresented && UIDevice.current.userInterfaceIdiom != .phone) {
+                        withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
+                    }
+                    #endif
                     .overlay(alignment: .top) {
                         if isAnnotationModeActive && !isPhoneInterface {
                             ScoreReaderAnnotationPalette(
@@ -1391,6 +1398,11 @@ struct ScoreReaderView: View {
             return 108
         }
         return 148
+    }
+
+    /// The space between the palette's top and the bottom panel.
+    private var floatingPaletteMaxHeight: CGFloat {
+        UIScreen.main.bounds.height - floatingPaletteTopPadding - measuredNoteEntryPanelHeight - 16
     }
 
     private var isIPadLandscapeLayout: Bool {

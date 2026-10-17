@@ -1585,7 +1585,13 @@ struct AddInstrumentSheetLayout {
     let instrumentWidth: CGFloat
 
     init(width: CGFloat) {
+        #if os(Android)
+        // Android's controls are wider and its HStack doesn't squeeze fixed columns, so the
+        // regular columns overflowed a tablet's portrait width (736): use compact ones.
+        let compact = width < 780
+        #else
         let compact = width < 720
+        #endif
         outerPadding = width >= 820 ? 22 : 16
         genreWidth = width >= 820 ? 152 : (compact ? 128 : 140)
         categoryWidth = width >= 820 ? 172 : (compact ? 146 : 158)

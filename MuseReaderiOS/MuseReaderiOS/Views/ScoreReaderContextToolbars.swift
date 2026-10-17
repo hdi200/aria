@@ -202,6 +202,44 @@ struct ScoreReaderKeyboardContextToolbar: View {
     }
 
     private var regularBody: some View {
+        #if os(Android)
+        // Skip's maxWidth frame doesn't shrink to the panel, so a row wider than the panel
+        // (tablet portrait) ran off both edges; there it scrolls instead.
+        GeometryReader { proxy in
+            if proxy.size.width >= Self.regularRowMinimumWidth {
+                regularRowCard(regularRow, maxWidth: min(900, proxy.size.width - 20))
+                    .frame(maxWidth: .infinity)
+            } else {
+                regularRowCard(
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        regularRow
+                    },
+                    maxWidth: nil
+                )
+            }
+        }
+        .frame(height: 72)
+        #else
+        regularRowCard(regularRow, maxWidth: 900)
+        #endif
+    }
+
+    /// 6 icon buttons (38), 7 titled buttons (68), 12 dividers (5) and the card's padding.
+    private static let regularRowMinimumWidth: CGFloat = 6 * 38 + 7 * 68 + 12 * 5 + 20
+
+    private func regularRowCard<Row: View>(_ row: Row, maxWidth: CGFloat?) -> some View {
+        row
+            .frame(maxWidth: maxWidth, minHeight: 58)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.black.opacity(0.09), lineWidth: 0.7)
+            }
+    }
+
+    private var regularRow: some View {
         HStack(spacing: 0) {
             ScoreReaderPaletteButton(
                 stackedChordIcon: true,
@@ -278,14 +316,6 @@ struct ScoreReaderKeyboardContextToolbar: View {
             accidentalButton(.natural)
             ScoreReaderContextDivider()
             accidentalButton(.sharp)
-        }
-        .frame(maxWidth: 900, minHeight: 58)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.black.opacity(0.09), lineWidth: 0.7)
         }
     }
 

@@ -96,8 +96,13 @@ struct LibraryPaywallView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         PaywallBenefitRow(systemImage: "music.note.list", title: "Unlimited score library")
                         PaywallBenefitRow(systemImage: "sparkles", title: "Every feature Aria offers today")
+                        #if os(Android)
+                        PaywallBenefitRow(systemImage: "laptopcomputer.and.iphone", title: "Works on your Android phones and tablets")
+                        PaywallBenefitRow(systemImage: "person.2", title: "Restores with your Google account")
+                        #else
                         PaywallBenefitRow(systemImage: "laptopcomputer.and.iphone", title: "Works across your iPhone, iPad, and Mac")
                         PaywallBenefitRow(systemImage: "person.2", title: "Included with Family Sharing")
+                        #endif
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(20)
@@ -170,7 +175,11 @@ struct LibraryPaywallView: View {
 
     private var primaryButtonTitle: String {
         if accessController.isPerformingPurchase {
+            #if os(Android)
+            return "Contacting Google Play…"
+            #else
             return "Contacting App Store…"
+            #endif
         }
         if let displayPrice = accessController.displayPrice {
             return "Unlock Forever — \(displayPrice)"
@@ -758,7 +767,11 @@ struct LibraryAccessSettingsCard: View {
         case .rolloutDisabled:
             return ""
         case .checking:
+            #if os(Android)
+            return "Checking Google Play access…"
+            #else
             return "Checking App Store access…"
+            #endif
         case .free:
             if let displayPrice {
                 return "2 scores free · Aria Pro for \(displayPrice)"

@@ -2441,12 +2441,23 @@ struct LibraryScoreDisplayBar: View {
             Spacer(minLength: 8)
 
             Menu {
+                #if os(Android)
+                // Android shows a Picker in a Menu as a second dropdown; list the options.
+                ForEach(LibraryScoreSortOrder.allCases.filter { includesSetlistOrder || $0 != .setlistOrder }) { option in
+                    Button {
+                        sortOrder = option
+                    } label: {
+                        Label(option.title, systemImage: option == sortOrder ? "checkmark" : option.systemImage)
+                    }
+                }
+                #else
                 Picker("Sort Order", selection: $sortOrder) {
                     ForEach(LibraryScoreSortOrder.allCases.filter { includesSetlistOrder || $0 != .setlistOrder }) { option in
                         Label(option.title, systemImage: option.systemImage)
                             .tag(option)
                     }
                 }
+                #endif
             } label: {
                 LibraryDisplayMenuLabel(
                     systemImage: "arrow.up.arrow.down",
@@ -2457,12 +2468,22 @@ struct LibraryScoreDisplayBar: View {
             }
 
             Menu {
+                #if os(Android)
+                ForEach(LibraryScoreLayout.allCases) { option in
+                    Button {
+                        scoreLayout = option
+                    } label: {
+                        Label(option.title, systemImage: option == scoreLayout ? "checkmark" : option.systemImage)
+                    }
+                }
+                #else
                 Picker("View", selection: $scoreLayout) {
                     ForEach(LibraryScoreLayout.allCases) { option in
                         Label(option.title, systemImage: option.systemImage)
                             .tag(option)
                     }
                 }
+                #endif
             } label: {
                 LibraryDisplayMenuLabel(
                     systemImage: scoreLayout.systemImage,
@@ -2720,136 +2741,177 @@ struct LibraryDashboardHeader: View {
     @Binding var isEditingSetlist: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 20) {
-            Text(title)
-                .font(.system(size: 30, weight: .bold))
-                .foregroundStyle(LibraryPalette.ink)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        headerLayout
+            .padding(.horizontal, 34)
+            .padding(.top, 22)
+            .padding(.bottom, 18)
+            .background(LibraryPalette.background)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(LibraryPalette.divider)
+                    .frame(height: 1)
+            }
+    }
 
-            HStack(spacing: 16) {
-                SearchField(text: $searchText)
-                    .frame(width: activeSetlist == nil ? 320 : 260)
-                    .disabled(isEditingSetlist)
+    private var titleText: some View {
+        Text(title)
+            .font(.system(size: 30, weight: .bold))
+            .foregroundStyle(LibraryPalette.ink)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+    }
 
-                if let activeSetlist {
-                    Button {
-                        showAddScoresAction(activeSetlist)
-                    } label: {
-                        Label("Add", systemImage: "plus")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(LibraryPalette.accent)
-                            .frame(width: 76, height: 48)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isEditingSetlist)
-                    .accessibilityLabel("Add Scores to Setlist")
-
-                    Button {
-                        isEditingSetlist.toggle()
-                    } label: {
-                        Text(isEditingSetlist ? "Done" : "Edit")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(LibraryPalette.accent)
-                            .frame(width: 68, height: 48)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canEditSetlist)
-                    .accessibilityLabel(isEditingSetlist ? "Done Editing Setlist" : "Edit Setlist")
-
-                    Button {
-                        shareSetlistAction(activeSetlist)
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(LibraryPalette.accent)
-                            .frame(width: 48, height: 48)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canEditSetlist || isEditingSetlist)
-                    .accessibilityLabel("Share Setlist")
-
-                    Menu {
-                        Button(action: importAction) {
-                            Label("Import Score", systemImage: "doc.badge.plus")
-                        }
-                        Button(action: createAction) {
-                            Label("New Score", systemImage: "plus")
-                        }
-                        Button(role: .destructive) {
-                            deleteSetlistAction(activeSetlist)
-                        } label: {
-                            Label("Delete Setlist", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(LibraryPalette.accent)
-                            .frame(width: 48, height: 48)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
-                            }
-                    }
-                    .accessibilityLabel("More Library Actions")
-                } else {
-                    Button(action: importAction) {
-                        Image(systemName: "doc.badge.plus")
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                            .foregroundStyle(.white)
-                            .frame(width: 74, height: 48)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(LibraryPalette.accent)
-                            )
-                            .shadow(color: LibraryPalette.accent.opacity(0.22), radius: 12, y: 4)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: createAction) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                            .foregroundStyle(LibraryPalette.accent)
-                            .frame(width: 70, height: 48)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.white)
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
+    @ViewBuilder
+    private var headerLayout: some View {
+        #if os(Android)
+        if UIScreen.main.bounds.width < UIScreen.main.bounds.height {
+            // Android tablets in portrait: the detail pane is too narrow for the title, the
+            // search field and the buttons on one row, so the title gets its own.
+            VStack(alignment: .leading, spacing: 14) {
+                titleText
+                HStack(spacing: 16) {
+                    headerControls(searchWidth: nil)
                 }
             }
+        } else {
+            sideBySideHeader
         }
-        .padding(.horizontal, 34)
-        .padding(.top, 22)
-        .padding(.bottom, 18)
-        .background(LibraryPalette.background)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(LibraryPalette.divider)
-                .frame(height: 1)
+        #else
+        sideBySideHeader
+        #endif
+    }
+
+    private var sideBySideHeader: some View {
+        HStack(alignment: .center, spacing: 20) {
+            titleText
+
+            HStack(spacing: 16) {
+                headerControls(searchWidth: activeSetlist == nil ? 320 : 260)
+            }
+        }
+    }
+
+    /// `searchWidth` nil: the search field takes the row's spare width.
+    @ViewBuilder
+    private func headerControls(searchWidth: CGFloat?) -> some View {
+        Group {
+            if let searchWidth {
+                SearchField(text: $searchText)
+                    .frame(width: searchWidth)
+            } else {
+                SearchField(text: $searchText)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .disabled(isEditingSetlist)
+
+        if let activeSetlist {
+            Button {
+                showAddScoresAction(activeSetlist)
+            } label: {
+                Label("Add", systemImage: "plus")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.accent)
+                    .frame(width: 76, height: 48)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(isEditingSetlist)
+            .accessibilityLabel("Add Scores to Setlist")
+
+            Button {
+                isEditingSetlist.toggle()
+            } label: {
+                Text(isEditingSetlist ? "Done" : "Edit")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.accent)
+                    .frame(width: 68, height: 48)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(!canEditSetlist)
+            .accessibilityLabel(isEditingSetlist ? "Done Editing Setlist" : "Edit Setlist")
+
+            Button {
+                shareSetlistAction(activeSetlist)
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.accent)
+                    .frame(width: 48, height: 48)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(!canEditSetlist || isEditingSetlist)
+            .accessibilityLabel("Share Setlist")
+
+            Menu {
+                Button(action: importAction) {
+                    Label("Import Score", systemImage: "doc.badge.plus")
+                }
+                Button(action: createAction) {
+                    Label("New Score", systemImage: "plus")
+                }
+                Button(role: .destructive) {
+                    deleteSetlistAction(activeSetlist)
+                } label: {
+                    Label("Delete Setlist", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(LibraryPalette.accent)
+                    .frame(width: 48, height: 48)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                    }
+            }
+            .accessibilityLabel("More Library Actions")
+        } else {
+            Button(action: importAction) {
+                Image(systemName: "doc.badge.plus")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .foregroundStyle(.white)
+                    .frame(width: 74, height: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(LibraryPalette.accent)
+                    )
+                    .shadow(color: LibraryPalette.accent.opacity(0.22), radius: 12, y: 4)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: createAction) {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .foregroundStyle(LibraryPalette.accent)
+                    .frame(width: 70, height: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
         }
     }
 }

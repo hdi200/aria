@@ -137,6 +137,44 @@ extension View {
 #endif
 
 extension View {
+    /// Keeps a chrome button at its natural width. On Android a sheet attached to a button
+    /// inside an HStack can make that button take all the row's spare width; iOS sizes it
+    /// the same either way, so this does nothing there.
+    @ViewBuilder
+    func naturalWidthOnAndroid() -> some View {
+        #if os(Android)
+        fixedSize(horizontal: true, vertical: false)
+        #else
+        self
+        #endif
+    }
+
+    /// Android: a glyph keeps its natural size inside a smaller frame and overflows it, as
+    /// iOS text does; Compose clips text to the frame (music glyphs lost their tops).
+    @ViewBuilder
+    func naturalSizeOnAndroid() -> some View {
+        #if os(Android)
+        fixedSize()
+        #else
+        self
+        #endif
+    }
+
+    /// Android: scrolls vertically within `maxHeight` (the tablet floating palette, whose
+    /// Android controls are taller, would otherwise run under the bottom panel). iOS: as is.
+    @ViewBuilder
+    func scrollsVerticallyOnAndroid(maxHeight: CGFloat) -> some View {
+        #if os(Android)
+        ScrollView(.vertical, showsIndicators: false) {
+            self
+        }
+        .frame(maxHeight: max(maxHeight, 120))
+        .fixedSize(horizontal: true, vertical: false)
+        #else
+        self
+        #endif
+    }
+
     /// The card a popover panel sits on: iOS shows these panels as popovers. Android shows
     /// them as bottom sheets, which have their own surface, so there the panel fills the
     /// sheet's width with no card.

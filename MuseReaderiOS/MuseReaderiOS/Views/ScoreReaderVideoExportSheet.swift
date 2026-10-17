@@ -76,8 +76,10 @@ struct ScoreReaderVideoExportSheet: View {
 
     private var contentWidth: CGFloat {
         #if os(Android)
-        // Skip's maxWidth frames don't shrink to a narrower screen; stay within it.
-        return min(isTablet ? 752 : 560, UIScreen.main.bounds.width - horizontalPadding * 2)
+        // Skip's maxWidth frames don't shrink to a narrower screen, and Android sheets are
+        // at most 640 wide (Material's sheet max width); stay within the sheet.
+        let sheetWidth = min(640, UIScreen.main.bounds.width)
+        return min(isTablet ? 752 : 560, sheetWidth - horizontalPadding * 2)
         #else
         return isTablet ? 752 : 560
         #endif

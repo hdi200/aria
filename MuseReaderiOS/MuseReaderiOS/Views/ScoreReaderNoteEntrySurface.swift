@@ -104,22 +104,15 @@ struct ScoreReaderNoteEntrySurface: View {
             }
 
             VStack(spacing: 8) {
-                HStack(spacing: 10) {
-                    HStack(spacing: 8) {
-                        voiceSelectorSlot
-                        undoRedoControls
-                    }
-                    .frame(width: topMenuSideSlotWidth, alignment: .trailing)
-
-                    modeToolbar
-
-                    HStack(spacing: 8) {
-                        previousNextControls
-                        globalDeleteButton
-                    }
-                    .frame(width: topMenuSideSlotWidth, alignment: .leading)
+                #if os(Android)
+                if usesStackedTopMenu {
+                    stackedTopMenu
+                } else {
+                    sideBySideTopMenu
                 }
-                .padding(.horizontal, 24)
+                #else
+                sideBySideTopMenu
+                #endif
 
                 detailToolbar
 
@@ -132,6 +125,49 @@ struct ScoreReaderNoteEntrySurface: View {
             .scoreReaderRegularNoteEntryPanelBackground()
         }
     }
+
+    private var sideBySideTopMenu: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                voiceSelectorSlot
+                undoRedoControls
+            }
+            .frame(width: topMenuSideSlotWidth, alignment: .trailing)
+
+            modeToolbar
+
+            HStack(spacing: 8) {
+                previousNextControls
+                globalDeleteButton
+            }
+            .frame(width: topMenuSideSlotWidth, alignment: .leading)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    #if os(Android)
+    /// Android tablets in portrait: the mode toolbar and its side controls don't fit on
+    /// one row (Android's controls are wider), so the side controls go on a row above.
+    private var usesStackedTopMenu: Bool {
+        UIScreen.main.bounds.width < 1000
+    }
+
+    private var stackedTopMenu: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                voiceSelector
+                undoRedoControls
+                Spacer(minLength: 0)
+                previousNextControls
+                globalDeleteButton
+            }
+            .padding(.horizontal, 24)
+
+            modeToolbar
+                .padding(.horizontal, 12)
+        }
+    }
+    #endif
 
     private var globalDeleteButton: some View {
         Button(action: deleteSelectionAction) {
