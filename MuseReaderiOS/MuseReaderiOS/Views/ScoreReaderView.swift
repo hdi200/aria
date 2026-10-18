@@ -1470,6 +1470,15 @@ struct ScoreReaderView: View {
                 if showsViewModePageControls {
                     twoPageViewButton
                 }
+                #if os(Android)
+                if !showsViewModePageControls {
+                    // Skip removes an empty Group, including its width modifier.
+                    // Keep the leading slot so a lone key chip stays at the right edge.
+                    Color.clear.frame(width: 1, height: 1)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+                #endif
             }
             #if os(Android)
             .frame(width: viewModeBottomBarWidths.side, alignment: .leading)
@@ -1502,6 +1511,13 @@ struct ScoreReaderView: View {
                     )
                     .padding(.bottom, 10)
                 }
+                #if os(Android)
+                if readerState.viewTransposeKey == nil {
+                    Color.clear.frame(width: 1, height: 1)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+                #endif
             }
             #if os(Android)
             .frame(width: viewModeBottomBarWidths.side, alignment: .trailing)

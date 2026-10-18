@@ -47,28 +47,27 @@ struct ScoreReaderWidePitchKeyboard: View {
             let whiteWidth = geometry.size.width / CGFloat(max(visibleNaturalKeyCount, 1))
             let blackWidth = min(whiteWidth * 0.58, maximumBlackKeyWidth)
             let leadingBufferOffset = -whiteWidth
+            #if os(Android)
+            let blackKeyTranslation = leadingBufferOffset + dragTranslation
+            #else
+            let blackKeyTranslation: CGFloat = 0
+            #endif
 
             ZStack(alignment: .topLeading) {
+                #if os(Android)
+                // Measure keys independently: a constrained Compose Row drops the
+                // trailing overscan keys, leaving a blank strip after the left shift.
+                ForEach(Array(renderedKeys.enumerated()), id: \.offset) { index, key in
+                    naturalKeyView(key, width: whiteWidth, height: keyHeight)
+                        .offset(x: whiteWidth * CGFloat(index) + leadingBufferOffset + dragTranslation)
+                }
+                #else
                 HStack(spacing: 0) {
                     ForEach(Array(renderedKeys.enumerated()), id: \.offset) { _, key in
-                        VStack {
-                            Spacer()
-                            if key.shouldShowLabel {
-                                Text(key.label)
-                                    .font(.title3.weight(.medium))
-                                    .foregroundStyle(Color.black.opacity(0.78))
-                                    .padding(.bottom, 8)
-                            }
-                        }
-                        .frame(width: whiteWidth, height: keyHeight)
-                        .background((!key.isPlaceholder && isActive(midiPitch: key.midiPitch)) ? Color(red: 0.88, green: 0.93, blue: 1.0) : Color.white)
-                        .overlay(alignment: .trailing) {
-                            Rectangle()
-                                .fill(Color.black.opacity(0.18))
-                                .frame(width: 1)
-                        }
+                        naturalKeyView(key, width: whiteWidth, height: keyHeight)
                     }
                 }
+                #endif
 
                 ForEach(blackKeys, id: \.midiPitch) { key in
                     ZStack(alignment: .bottom) {
@@ -84,11 +83,13 @@ struct ScoreReaderWidePitchKeyboard: View {
                         }
                     }
                     .frame(width: blackWidth, height: 62)
-                    .offset(x: whiteWidth * CGFloat(key.leftNaturalIndex + 1) - (blackWidth / 2))
+                    .offset(x: whiteWidth * CGFloat(key.leftNaturalIndex + 1) - (blackWidth / 2) + blackKeyTranslation)
                 }
             }
             .opacity(isEnabled ? 1 : 0.55)
+            #if !os(Android)
             .offset(x: leadingBufferOffset + dragTranslation)
+            #endif
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .clipped()
             .contentShape(Rectangle())
@@ -113,6 +114,25 @@ struct ScoreReaderWidePitchKeyboard: View {
                     updateLockedRange(for: activeMIDIPitch, visibleNaturalKeyCount: visibleNaturalKeyCount)
                 }
             }
+        }
+    }
+
+    private func naturalKeyView(_ key: PianoNaturalKey, width: CGFloat, height: CGFloat) -> some View {
+        VStack {
+            Spacer()
+            if key.shouldShowLabel {
+                Text(key.label)
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(Color.black.opacity(0.78))
+                    .padding(.bottom, 8)
+            }
+        }
+        .frame(width: width, height: height)
+        .background((!key.isPlaceholder && isActive(midiPitch: key.midiPitch)) ? Color(red: 0.88, green: 0.93, blue: 1.0) : Color.white)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color.black.opacity(0.18))
+                .frame(width: 1)
         }
     }
 
