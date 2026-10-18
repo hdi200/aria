@@ -1908,6 +1908,7 @@ struct ScoreReaderView: View {
         )
         #if os(Android)
         .environment(\.ariaPlaybackPageIndex, pageIndex)
+        .environment(\.ariaRasterVisible, isActivePage)
         #endif
     }
 
