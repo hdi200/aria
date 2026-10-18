@@ -257,13 +257,14 @@ extension ScoreReaderState {
         }
 
         if waitsForInFlightAction {
+            await editingCommandTask?.value
             let deadline = Date().addingTimeInterval(5)
             while isEditingActionInFlight, Date() < deadline {
                 try? await Task.sleep(for: .milliseconds(25))
             }
         }
 
-        guard !isEditingActionInFlight else {
+        guard !isEditingActionInFlight, editingCommandTask == nil else {
             editingErrorMessage = busyMessage
             return false
         }
@@ -357,6 +358,7 @@ extension ScoreReaderState {
             }
 
             do {
+                await editingCommandTask?.value
                 while isEditingActionInFlight {
                     try await Task.sleep(for: .milliseconds(25))
                 }

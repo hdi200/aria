@@ -3,6 +3,32 @@ import Foundation
 import CoreGraphics
 #endif
 
+/// Values chosen by the player, kept separate from older engine replies in flight.
+struct ScoreNoteInputIntent {
+    var enabled: Bool
+    var rests: Bool
+    var dotted: Bool
+    var duration: ScoreNoteDuration
+    var voice: Int
+    var chord: Bool
+
+    init(_ state: ScoreEditingState, chord: Bool) {
+        enabled = state.noteInputEnabled
+        rests = state.noteInputInsertsRests
+        dotted = state.noteInputIsDotted
+        duration = state.duration
+        voice = state.currentVoice
+        self.chord = chord
+    }
+}
+
+struct ScoreQueuedEditingCommand {
+    let mutatesScore: Bool
+    let auditionNote: Bool
+    let revealActiveNotation: Bool
+    let action: (LiveScoreRenderSession) async throws -> ScoreEditingState
+}
+
 enum ScorePageTapInputKind {
     case direct
     case pencil
@@ -749,73 +775,60 @@ extension ScoreReaderState {
     }
 
     func toggleNoteInput() {
-        setNoteInputEnabled(!editingState.noteInputEnabled)
+        setNoteInputEnabled(!noteInputIntent.enabled)
     }
 
     func setNoteInputEnabled(_ enabled: Bool) {
-        guard
-            supportsEditing,
-            isEditingMode,
-            let liveRenderSession = session.liveRenderSession,
-            !isEditingActionInFlight
-        else {
-            return
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        var intent = noteInputIntent
+        intent.enabled = enabled
+        queuedNoteInputIntent = intent
+        hasContinuousNoteInputCursor = enabled
+        if !enabled {
+            noteInputWasActivatedByPencil = false
+            lastKeyboardInputCanReceiveAccidental = false
+            stackedChordInputEnabled = false
+            queuedNoteInputIntent?.chord = false
+            updateNoteEntryPreview(pageIndex: selectedPageIndex, normalizedPoint: nil)
         }
-
-        isEditingActionInFlight = true
-        editingErrorMessage = nil
-        let targetValue = enabled
-        let preferredVoice = editingState.currentVoice
-
-        Task { @MainActor [weak self] in
-            defer {
-                self?.isEditingActionInFlight = false
-            }
-
-            do {
-                var newState = try await liveRenderSession.setNoteInputEnabled(targetValue)
-                if targetValue && newState.currentVoice != preferredVoice {
-                    newState = try await liveRenderSession.setCurrentVoice(preferredVoice)
-                }
-                if !targetValue {
-                    self?.hasContinuousNoteInputCursor = false
-                    self?.noteInputWasActivatedByPencil = false
-                    self?.lastKeyboardInputCanReceiveAccidental = false
-                    self?.stackedChordInputEnabled = false
-                    self?.updateNoteEntryPreview(pageIndex: self?.selectedPageIndex ?? 0, normalizedPoint: nil)
-                } else {
-                    self?.lastKeyboardInputCanReceiveAccidental = false
-                }
-                self?.applyEditingState(newState)
-                if targetValue {
-                    self?.revealActiveSelection(in: newState)
-                }
-            } catch {
-                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
+        let voice = intent.voice
+        performEditingAction(mutatesScore: false, revealActiveNotation: enabled) { session in
+            var state = try await session.setNoteInputEnabled(enabled)
+            if enabled && state.currentVoice != voice { state = try await session.setCurrentVoice(voice) }
+            return state
         }
     }
 
     func applyDuration(_ duration: ScoreNoteDuration) {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        var intent = noteInputIntent
+        intent.duration = duration
+        intent.dotted = false // The engine clears augmentation dots on a duration change.
+        queuedNoteInputIntent = intent
         performEditingAction(mutatesScore: editingState.selection != nil) { liveRenderSession in
             try await liveRenderSession.applyDuration(duration)
         }
     }
 
     func toggleRest() {
-        if !editingState.noteInputInsertsRests {
-            stackedChordInputEnabled = false
-        }
-        let shouldEnterRestAtCursor = editingState.noteInputEnabled && !noteInputWasActivatedByPencil
-        performEditingAction(mutatesScore: editingState.noteInputEnabled || editingState.selection != nil) { liveRenderSession in
-            if shouldEnterRestAtCursor {
-                return try await liveRenderSession.enterRestAtCursor()
-            }
-            return try await liveRenderSession.toggleRest()
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        var intent = noteInputIntent
+        if !intent.rests { stackedChordInputEnabled = false; intent.chord = false }
+        let shouldEnterRestAtCursor = intent.enabled && !noteInputWasActivatedByPencil
+        if shouldEnterRestAtCursor { intent.rests = true }
+        else { intent.rests.toggle() }
+        queuedNoteInputIntent = intent
+        performEditingAction(mutatesScore: intent.enabled || editingState.selection != nil) { session in
+            if shouldEnterRestAtCursor { return try await session.enterRestAtCursor() }
+            return try await session.toggleRest()
         }
     }
 
     func toggleDot() {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        var intent = noteInputIntent
+        intent.dotted.toggle()
+        queuedNoteInputIntent = intent
         performEditingAction(mutatesScore: editingState.selection != nil) { liveRenderSession in
             try await liveRenderSession.toggleDot()
         }
@@ -954,37 +967,7 @@ extension ScoreReaderState {
         revealActiveNotation: Bool,
         action: @escaping (LiveScoreRenderSession) async throws -> ScoreEditingState
     ) {
-        let previous = lyricsActionTail
-        lyricsActionTail = Task { @MainActor [weak self] in
-            await previous?.value
-            // Bounded wait (about 10 s) for an unrelated edit to finish.
-            for _ in 0..<1000 {
-                guard let self, self.isEditingActionInFlight else {
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 10_000_000)
-            }
-            guard
-                let self,
-                self.supportsEditing,
-                self.isEditingMode,
-                let liveRenderSession = self.session.liveRenderSession,
-                !self.isEditingActionInFlight
-            else {
-                return
-            }
-            self.isEditingActionInFlight = true
-            self.editingErrorMessage = nil
-            defer {
-                self.isEditingActionInFlight = false
-            }
-            do {
-                let newState = try await action(liveRenderSession)
-                self.refreshAfterScoreMutation(with: newState, auditionNote: false, revealActiveNotation: revealActiveNotation)
-            } catch {
-                self.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
-        }
+        performEditingAction(mutatesScore: true, revealActiveNotation: revealActiveNotation, action: action)
     }
 
     func addRepeatJump(_ repeatJumpKind: String) {
@@ -1642,98 +1625,19 @@ extension ScoreReaderState {
     }
 
     func handleKeyboardPitch(_ pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
-        guard isEditingMode else {
-            return
-        }
-
-        pendingPitchClass = pitchClass
-        pendingMIDIPitch = midiPitch
-        pendingPreferFlats = preferFlats
-        pendingAccidentalKind = nil
-        noteInputWasActivatedByPencil = false
-
-        if shouldEditSelectedPitchBeforeContinuingKeyboardInput,
-           editingState.selection?.canChangePitch == true {
-            shouldEditSelectedPitchBeforeContinuingKeyboardInput = false
-            changeSelectedPitchThenEnterNoteInput(pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats, exactMIDIPitch: exactMIDIPitch)
-            return
-        }
-
-        let noteInputWasEnabled = editingState.noteInputEnabled
-        let preferredVoice = editingState.currentVoice
-        if noteInputWasEnabled || hasContinuousNoteInputCursor {
-            let addToCurrentChord = stackedChordInputEnabled
-                && !editingState.noteInputInsertsRests
-            guard noteInputWasEnabled || hasContinuousNoteInputCursor || editingState.selection?.kind == .note || editingState.selection?.kind == .rest || editingState.selection?.kind == .measure else {
-                editingErrorMessage = nil
-                return
-            }
-
-            performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { liveRenderSession in
-                if !noteInputWasEnabled {
-                    let enabledState = try await liveRenderSession.setNoteInputEnabled(true)
-                    if enabledState.currentVoice != preferredVoice {
-                        _ = try await liveRenderSession.setCurrentVoice(preferredVoice)
-                    }
-                }
-                if exactMIDIPitch, let midiPitch {
-                    return try await liveRenderSession.insertMIDIPitchAtCursor(midiPitch, preferFlats: preferFlats, addToCurrentChord: addToCurrentChord)
-                }
-
-                return try await liveRenderSession.insertPitchAtCursor(pitchClass, preferFlats: preferFlats, addToCurrentChord: addToCurrentChord)
-            }
-            hasContinuousNoteInputCursor = true
-            lastKeyboardInputCanReceiveAccidental = true
-        } else {
-            if editingState.selection?.canChangePitch == true || editingState.selection?.kind == .rest || editingState.selection?.kind == .measure {
-                changeSelectedPitchThenEnterNoteInput(pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats, exactMIDIPitch: exactMIDIPitch)
-            } else {
-                enableNoteInputThenInsertKeyboardPitch(pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats, exactMIDIPitch: exactMIDIPitch)
-            }
-        }
+        guard supportsEditing, isEditingMode else { return }
+        let replaceSelection = (shouldEditSelectedPitchBeforeContinuingKeyboardInput
+            && editingState.selection?.canChangePitch == true)
+            || (!noteInputIntent.enabled && !hasContinuousNoteInputCursor
+                && (editingState.selection?.canChangePitch == true || editingState.selection?.kind == .rest
+                    || editingState.selection?.kind == .measure))
+        enqueueKeyboardPitch(pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats,
+            exactMIDIPitch: exactMIDIPitch, replaceSelection: replaceSelection)
     }
 
     func enableNoteInputThenInsertKeyboardPitch(pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
-        guard
-            supportsEditing,
-            isEditingMode,
-            let liveRenderSession = session.liveRenderSession,
-            !isEditingActionInFlight
-        else {
-            return
-        }
-
-        isEditingActionInFlight = true
-        editingErrorMessage = nil
-        let preferredVoice = editingState.currentVoice
-        let addToCurrentChord = stackedChordInputEnabled
-            && !editingState.noteInputInsertsRests
-
-        Task { @MainActor [weak self] in
-            defer {
-                self?.isEditingActionInFlight = false
-            }
-
-            do {
-                let enabledState = try await liveRenderSession.setNoteInputEnabled(true)
-                if enabledState.currentVoice != preferredVoice {
-                    _ = try await liveRenderSession.setCurrentVoice(preferredVoice)
-                }
-
-                let insertedState: ScoreEditingState
-                if exactMIDIPitch, let midiPitch {
-                    insertedState = try await liveRenderSession.insertMIDIPitchAtCursor(midiPitch, preferFlats: preferFlats, addToCurrentChord: addToCurrentChord)
-                } else {
-                    insertedState = try await liveRenderSession.insertPitchAtCursor(pitchClass, preferFlats: preferFlats, addToCurrentChord: addToCurrentChord)
-                }
-
-                self?.hasContinuousNoteInputCursor = true
-                self?.lastKeyboardInputCanReceiveAccidental = true
-                self?.refreshAfterScoreMutation(with: insertedState, auditionNote: true, revealActiveNotation: true)
-            } catch {
-                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
-        }
+        enqueueKeyboardPitch(pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats,
+            exactMIDIPitch: exactMIDIPitch, replaceSelection: false)
     }
 
     func toggleStackedChordInput() {
@@ -1741,22 +1645,27 @@ extension ScoreReaderState {
             return
         }
         stackedChordInputEnabled.toggle()
-        if stackedChordInputEnabled && editingState.noteInputInsertsRests {
+        if queuedNoteInputIntent != nil { queuedNoteInputIntent?.chord = stackedChordInputEnabled }
+        if stackedChordInputEnabled && noteInputIntent.rests {
             toggleRest()
         }
     }
 
     func setCurrentVoice(_ voice: Int) {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
         let clampedVoice = min(max(voice, 0), 3)
-        guard clampedVoice != editingState.currentVoice else {
+        guard clampedVoice != noteInputIntent.voice else {
             return
         }
 
         noteEntryPreviewRevision += 1
         noteEntryPreviewTask?.cancel()
         noteEntryPreview = nil
-        let changesSelectedVoice = !editingState.noteInputEnabled
+        var intent = noteInputIntent
+        let changesSelectedVoice = !intent.enabled
             && (editingState.selection?.kind == .note || editingState.selection?.kind == .rest)
+        intent.voice = clampedVoice
+        queuedNoteInputIntent = intent
         performEditingAction(mutatesScore: changesSelectedVoice) { liveRenderSession in
             try await liveRenderSession.setCurrentVoice(clampedVoice)
         }
@@ -1769,15 +1678,18 @@ extension ScoreReaderState {
 
         activeMIDIPitches.removeAll()
         pendingMIDIChordPitches.removeAll()
+        pendingMIDIInputIntent = nil
         midiChordCaptureTask?.cancel()
         midiChordCaptureTask = nil
         midiInputController.start()
     }
 
     func stopMIDIInput() {
+        if isEditingMode { commitPendingMIDIChordCapture() }
         midiInputController.stop()
         activeMIDIPitches.removeAll()
         pendingMIDIChordPitches.removeAll()
+        pendingMIDIInputIntent = nil
         midiChordCaptureTask?.cancel()
         midiChordCaptureTask = nil
     }
@@ -1789,6 +1701,17 @@ extension ScoreReaderState {
 
         if activeMIDIPitches.isEmpty, !pendingMIDIChordPitches.isEmpty {
             commitPendingMIDIChordCapture()
+        }
+
+        if pendingMIDIChordPitches.isEmpty {
+            let intent = noteInputIntent
+            pendingMIDIInputIntent = intent
+            pendingMIDIPreferFlats = pendingPreferFlats
+            pendingMIDIReplacesSelection = (shouldEditSelectedPitchBeforeContinuingKeyboardInput
+                && editingState.selection?.canChangePitch == true)
+                || (!intent.enabled && !hasContinuousNoteInputCursor
+                    && (editingState.selection?.canChangePitch == true || editingState.selection?.kind == .rest
+                        || editingState.selection?.kind == .measure))
         }
 
         guard activeMIDIPitches.insert(midiPitch).inserted else {
@@ -1829,78 +1752,53 @@ extension ScoreReaderState {
     private func scheduleMIDIChordCapture(after delay: Duration) {
         midiChordCaptureTask?.cancel()
         midiChordCaptureTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: delay)
+            do { try await Task.sleep(for: delay) } catch { return }
+            guard !Task.isCancelled else { return }
             self?.commitPendingMIDIChordCapture()
         }
     }
 
-    private func commitPendingMIDIChordCapture() {
-        guard !isEditingActionInFlight else {
-            scheduleMIDIChordCapture(after: midiChordReleaseSettleDelay)
-            return
-        }
-
+    func commitPendingMIDIChordCapture() {
+        // A new press can flush the previous group before its release timer fires.
+        midiChordCaptureTask?.cancel()
         let midiPitches = pendingMIDIChordPitches.sorted()
+        let intent = pendingMIDIInputIntent ?? noteInputIntent
+        let preferFlats = pendingMIDIPreferFlats
         pendingMIDIChordPitches.removeAll()
+        pendingMIDIInputIntent = nil
         midiChordCaptureTask = nil
-
-        guard !midiPitches.isEmpty else {
-            return
+        guard !midiPitches.isEmpty else { return }
+        if midiPitches.count == 1 {
+            let pitch = midiPitches[0]
+            let replace = pendingMIDIReplacesSelection
+            enqueueKeyboardPitch(pitchClass: normalizedPitchClass(pitch), midiPitch: pitch,
+                preferFlats: preferFlats, exactMIDIPitch: true, replaceSelection: replace, capturedIntent: intent)
+        } else {
+            insertMIDIChordAtCursor(midiPitches, preferFlats: preferFlats, capturedIntent: intent)
         }
-
-        guard midiPitches.count > 1 else {
-            handleMIDIPitchInput(midiPitches[0])
-            return
-        }
-
-        insertMIDIChordAtCursor(midiPitches, preferFlats: pendingPreferFlats)
     }
 
-    private func insertMIDIChordAtCursor(_ midiPitches: [Int], preferFlats: Bool) {
-        guard
-            supportsEditing,
-            isEditingMode,
-            let liveRenderSession = session.liveRenderSession,
-            !isEditingActionInFlight
-        else {
-            return
-        }
-
-        let validPitches = midiPitches.filter { (0...127).contains($0) }
-        guard !validPitches.isEmpty else {
-            return
-        }
-
-        pendingMIDIPitch = validPitches.first
-        pendingPitchClass = validPitches.first.map(normalizedPitchClass)
+    private func insertMIDIChordAtCursor(_ midiPitches: [Int], preferFlats: Bool,
+                                       capturedIntent: ScoreNoteInputIntent? = nil) {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        let pitches = midiPitches.filter { (0...127).contains($0) }
+        guard !pitches.isEmpty else { return }
+        let intent = capturedIntent ?? noteInputIntent
+        var nextIntent = intent
+        nextIntent.enabled = true
+        nextIntent.rests = false
+        nextIntent.chord = intent.chord && !intent.rests
+        queuedNoteInputIntent = nextIntent
+        let submittedIntent = nextIntent
+        pendingMIDIPitch = pitches.first
+        pendingPitchClass = pitches.first.map(normalizedPitchClass)
         pendingPreferFlats = preferFlats
         pendingAccidentalKind = nil
-
-        isEditingActionInFlight = true
-        editingErrorMessage = nil
-        let noteInputWasEnabled = editingState.noteInputEnabled
-        let preferredVoice = editingState.currentVoice
-
-        Task { @MainActor [weak self] in
-            defer {
-                self?.isEditingActionInFlight = false
-            }
-
-            do {
-                if !noteInputWasEnabled {
-                    let enabledState = try await liveRenderSession.setNoteInputEnabled(true)
-                    if enabledState.currentVoice != preferredVoice {
-                        _ = try await liveRenderSession.setCurrentVoice(preferredVoice)
-                    }
-                }
-
-                let insertedState = try await liveRenderSession.insertMIDIChordAtCursor(validPitches, preferFlats: preferFlats)
-                self?.hasContinuousNoteInputCursor = true
-                self?.lastKeyboardInputCanReceiveAccidental = true
-                self?.refreshAfterScoreMutation(with: insertedState, auditionNote: true, revealActiveNotation: true)
-            } catch {
-                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
+        hasContinuousNoteInputCursor = true
+        lastKeyboardInputCanReceiveAccidental = true
+        performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { session in
+            _ = try await Self.prepareNoteInput(submittedIntent, in: session)
+            return try await session.insertMIDIChordAtCursor(pitches, preferFlats: preferFlats)
         }
     }
 
@@ -1918,45 +1816,8 @@ extension ScoreReaderState {
     }
 
     func changeSelectedPitchThenEnterNoteInput(pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
-        guard
-            supportsEditing,
-            isEditingMode,
-            let liveRenderSession = session.liveRenderSession,
-            !isEditingActionInFlight
-        else {
-            return
-        }
-
-        isEditingActionInFlight = true
-        editingErrorMessage = nil
-        let preferredVoice = editingState.currentVoice
-
-        Task { @MainActor [weak self] in
-            defer {
-                self?.isEditingActionInFlight = false
-            }
-
-            do {
-                let changedState: ScoreEditingState
-                if exactMIDIPitch, let midiPitch {
-                    changedState = try await liveRenderSession.setSelectedMIDIPitch(midiPitch, preferFlats: preferFlats)
-                } else {
-                    changedState = try await liveRenderSession.setSelectedPitchClass(pitchClass, preferFlats: preferFlats)
-                }
-
-                self?.refreshAfterScoreMutation(with: changedState, auditionNote: true)
-
-                var noteInputState = try await liveRenderSession.setNoteInputEnabled(true)
-                if noteInputState.currentVoice != preferredVoice {
-                    noteInputState = try await liveRenderSession.setCurrentVoice(preferredVoice)
-                }
-                self?.hasContinuousNoteInputCursor = true
-                self?.lastKeyboardInputCanReceiveAccidental = false
-                self?.applyEditingState(noteInputState)
-            } catch {
-                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
-        }
+        enqueueKeyboardPitch(pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats,
+            exactMIDIPitch: exactMIDIPitch, replaceSelection: true)
     }
 
     func prepareAccidental(_ accidentalKind: ScoreAccidentalKind) {
@@ -2039,40 +1900,133 @@ extension ScoreReaderState {
         revealActiveNotation: Bool = false,
         action: @escaping (LiveScoreRenderSession) async throws -> ScoreEditingState
     ) {
-        guard
-            supportsEditing,
-            isEditingMode,
-            let liveRenderSession = session.liveRenderSession,
-            !isEditingActionInFlight
-        else {
-            return
-        }
-
-        isEditingActionInFlight = true
-        editingErrorMessage = nil
-
-        Task { @MainActor [weak self] in
-            defer {
-                self?.isEditingActionInFlight = false
+        guard supportsEditing, isEditingMode, let liveRenderSession = session.liveRenderSession else { return }
+        editingCommandQueue.append(ScoreQueuedEditingCommand(mutatesScore: mutatesScore,
+            auditionNote: auditionNote, revealActiveNotation: revealActiveNotation, action: action))
+        guard editingCommandTask == nil else { return }
+        let waitsForExistingAction = isEditingActionInFlight
+        if !waitsForExistingAction { isEditingActionInFlight = true }
+        // Keep the reader/session alive until accepted commands and their refresh finish.
+        editingCommandTask = Task { @MainActor [self] in
+            if waitsForExistingAction {
+                while isEditingActionInFlight {
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
+                isEditingActionInFlight = true
             }
-
-            do {
-                let newState = try await action(liveRenderSession)
-                if mutatesScore {
-                    self?.refreshAfterScoreMutation(with: newState, auditionNote: auditionNote, revealActiveNotation: revealActiveNotation)
-                } else {
-                    self?.applyEditingState(newState)
-                    if revealActiveNotation {
-                        self?.revealActiveSelection(in: newState)
+            #if ARIA_EDIT_AUDIT && os(Android)
+            await AndroidEditingAudit.capture(liveRenderSession, kind: "before")
+            #endif
+            var failure: String?
+            var lastEngineState: ScoreEditingState?
+            defer {
+                if editingVisualRefreshDeferred {
+                    editingVisualRefreshDeferred = false
+                    invalidateRenderedPages(scope: .all,
+                        focusedPageIndex: editingState.selection?.pageIndex ?? selectedPageIndex)
+                }
+                let requestedChordMode = queuedNoteInputIntent?.chord
+                queuedNoteInputIntent = nil
+                editingCommandTask = nil
+                if let lastEngineState {
+                    applyEditingState(lastEngineState)
+                    if let requestedChordMode { stackedChordInputEnabled = requestedChordMode }
+                }
+                isEditingActionInFlight = false
+                if let failure {
+                    hasContinuousNoteInputCursor = lastEngineState?.noteInputEnabled ?? false
+                    editingErrorMessage = failure
+                }
+            }
+            while !editingCommandQueue.isEmpty {
+                let command = editingCommandQueue.removeFirst()
+                do {
+                    let newState = try await command.action(liveRenderSession)
+                    lastEngineState = newState
+                    #if ARIA_EDIT_AUDIT && os(Android)
+                    await AndroidEditingAudit.capture(liveRenderSession, kind: command.mutatesScore ? "mutation" : "state", state: newState)
+                    #endif
+                    if command.mutatesScore {
+                        refreshAfterScoreMutation(with: newState, auditionNote: command.auditionNote,
+                            revealActiveNotation: command.revealActiveNotation)
+                    } else {
+                        applyEditingState(newState)
+                        if command.revealActiveNotation { revealActiveSelection(in: newState) }
+                    }
+                } catch {
+                    failure = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    if let state = try? await liveRenderSession.currentEditingState() {
+                        lastEngineState = state
+                        applyEditingState(state)
                     }
                 }
-            } catch {
-                self?.editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
         }
     }
 
-    func applyEditingState(_ editingState: ScoreEditingState) {
+    private var noteInputIntent: ScoreNoteInputIntent {
+        queuedNoteInputIntent ?? ScoreNoteInputIntent(editingState, chord: stackedChordInputEnabled)
+    }
+
+    private static func prepareNoteInput(_ intent: ScoreNoteInputIntent,
+                                         in session: LiveScoreRenderSession) async throws -> ScoreEditingState {
+        var state = try await session.currentEditingState()
+        if !state.noteInputEnabled { state = try await session.setNoteInputEnabled(true) }
+        if state.currentVoice != intent.voice { state = try await session.setCurrentVoice(intent.voice) }
+        if state.duration != intent.duration { state = try await session.applyDuration(intent.duration) }
+        if state.noteInputIsDotted != intent.dotted { state = try await session.toggleDot() }
+        if state.noteInputInsertsRests != intent.rests { state = try await session.toggleRest() }
+        return state
+    }
+
+    private func enqueueKeyboardPitch(pitchClass: Int, midiPitch: Int?, preferFlats: Bool,
+                                      exactMIDIPitch: Bool, replaceSelection: Bool,
+                                      capturedIntent: ScoreNoteInputIntent? = nil) {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        pendingPitchClass = pitchClass
+        pendingMIDIPitch = midiPitch
+        pendingPreferFlats = preferFlats
+        pendingAccidentalKind = nil
+        noteInputWasActivatedByPencil = false
+        shouldEditSelectedPitchBeforeContinuingKeyboardInput = false
+        let intent = capturedIntent ?? noteInputIntent
+        var nextIntent = intent
+        nextIntent.enabled = true
+        nextIntent.rests = false
+        nextIntent.chord = intent.chord && !intent.rests
+        queuedNoteInputIntent = nextIntent
+        let submittedIntent = nextIntent
+        hasContinuousNoteInputCursor = true
+        lastKeyboardInputCanReceiveAccidental = !replaceSelection
+        let addToChord = intent.chord && !intent.rests
+        performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { session in
+            if replaceSelection {
+                if exactMIDIPitch, let midiPitch {
+                    _ = try await session.setSelectedMIDIPitch(midiPitch, preferFlats: preferFlats)
+                } else {
+                    _ = try await session.setSelectedPitchClass(pitchClass, preferFlats: preferFlats)
+                }
+                return try await Self.prepareNoteInput(submittedIntent, in: session)
+            }
+            _ = try await Self.prepareNoteInput(submittedIntent, in: session)
+            if exactMIDIPitch, let midiPitch {
+                return try await session.insertMIDIPitchAtCursor(midiPitch, preferFlats: preferFlats,
+                    addToCurrentChord: addToChord)
+            }
+            return try await session.insertPitchAtCursor(pitchClass, preferFlats: preferFlats,
+                addToCurrentChord: addToChord)
+        }
+    }
+
+    func applyEditingState(_ incomingState: ScoreEditingState) {
+        var editingState = incomingState
+        if editingCommandTask != nil, let intent = queuedNoteInputIntent {
+            editingState.noteInputEnabled = intent.enabled
+            editingState.noteInputInsertsRests = intent.rests
+            editingState.noteInputIsDotted = intent.dotted
+            editingState.duration = intent.duration
+            editingState.currentVoice = intent.voice
+        }
         if let selection = editingState.selection,
            selection.kind != .instrumentName,
            let measureIndex = selection.measureIndex,
@@ -2085,7 +2039,9 @@ extension ScoreReaderState {
             updateScoreParts(editingState.scoreParts)
         }
         let selectedChordPitchCount = editingState.selection?.chordMidiPitches.count ?? 0
-        if selectedChordPitchCount > 1 {
+        if editingCommandTask != nil, let intent = queuedNoteInputIntent {
+            stackedChordInputEnabled = intent.chord
+        } else if selectedChordPitchCount > 1 {
             stackedChordInputEnabled = true
         } else {
             stackedChordInputEnabled = false
@@ -2179,10 +2135,14 @@ extension ScoreReaderState {
         invalidatePlaybackAfterScoreMutation()
         refreshScoreMetadata()
         let playbackInvalidatedAt = Date()
-        invalidateRenderedPages(
-            scope: editingState.refreshScope,
-            focusedPageIndex: editingState.selection?.pageIndex ?? selectedPageIndex
-        )
+        if !editingCommandQueue.isEmpty {
+            editingVisualRefreshDeferred = true
+        } else {
+            let scope: ScoreEditRefreshScope = editingVisualRefreshDeferred ? .all : editingState.refreshScope
+            editingVisualRefreshDeferred = false
+            invalidateRenderedPages(scope: scope,
+                focusedPageIndex: editingState.selection?.pageIndex ?? selectedPageIndex)
+        }
         let pagesInvalidatedAt = Date()
         let saveDelay = autosaveDelay(for: editingState.refreshScope)
         scheduleAutosave(delay: saveDelay)

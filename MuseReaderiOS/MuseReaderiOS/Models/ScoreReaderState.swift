@@ -173,9 +173,13 @@ final class ScoreReaderState {
     var saveNeedsChordSymbolRemovalApproval = false
     var hasUnsavedAutosaveChanges = false
     var isEditingActionInFlight = false
-    /// Lyric commands run one after another: typing "glo-ri-a " quickly sends several before the
-    /// first one finishes, and an edit that arrives while another is running would be dropped.
-    @ObservationIgnored var lyricsActionTail: Task<Void, Never>?
+    @ObservationIgnored var editingCommandQueue: [ScoreQueuedEditingCommand] = []
+    @ObservationIgnored var editingCommandTask: Task<Void, Never>?
+    @ObservationIgnored var queuedNoteInputIntent: ScoreNoteInputIntent?
+    @ObservationIgnored var editingVisualRefreshDeferred = false
+    @ObservationIgnored var pendingMIDIInputIntent: ScoreNoteInputIntent?
+    @ObservationIgnored var pendingMIDIPreferFlats = false
+    @ObservationIgnored var pendingMIDIReplacesSelection = false
     //! NOTE Live score info. session.document is a snapshot from when the score was opened,
     //! so it goes stale after metadata edits, on-page title edits, and undo/redo.
     var scoreMetadata: ScoreEditableMetadata
@@ -451,6 +455,8 @@ final class ScoreReaderState {
 
     @discardableResult
     func finishEditingAndEnterViewMode() async -> Bool {
+        if isEditingMode { stopMIDIInput() }
+        await editingCommandTask?.value
         guard supportsEditing else {
             interactionMode = .view
             return true

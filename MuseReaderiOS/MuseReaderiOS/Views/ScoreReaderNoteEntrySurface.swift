@@ -370,7 +370,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 activeMIDIPitch: activeMIDIPitch,
                 activeMIDIPitches: activeChordMIDIPitches,
                 followsActiveMIDIPitch: !editingState.noteInputEnabled && !isBusy,
-                isEnabled: keyboardEnabled && !isBusy,
+                isEnabled: keyboardEnabled,
                 action: { key in
                     handlePitchKeyboardTap(key)
                 }
@@ -410,7 +410,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 activeMIDIPitch: activeMIDIPitch,
                 activeMIDIPitches: activeChordMIDIPitches,
                 followsActiveMIDIPitch: !editingState.noteInputEnabled && !isBusy,
-                isEnabled: keyboardEnabled && !isBusy,
+                isEnabled: keyboardEnabled,
                 minimumVisibleNaturalKeyCount: 7,
                 maximumVisibleNaturalKeyCount: 8,
                 targetWhiteKeyWidth: 42,
@@ -445,7 +445,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 activeMIDIPitch: activeMIDIPitch,
                 activeMIDIPitches: activeChordMIDIPitches,
                 followsActiveMIDIPitch: !editingState.noteInputEnabled && !isBusy,
-                isEnabled: keyboardEnabled && !isBusy,
+                isEnabled: keyboardEnabled,
                 minimumVisibleNaturalKeyCount: 5,
                 maximumVisibleNaturalKeyCount: 7,
                 targetWhiteKeyWidth: 35,

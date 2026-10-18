@@ -209,7 +209,7 @@ struct ScoreReaderEditingDeck: View {
                 ScoreReaderPitchKeyboard(
                     useFlats: preferFlats,
                     activePitchClass: activePitchClass,
-                    isEnabled: keyboardEnabled && !isBusy,
+                    isEnabled: keyboardEnabled,
                     action: { pitchClass in
                         setPitchClassAction(pitchClass, preferFlats)
                     }
