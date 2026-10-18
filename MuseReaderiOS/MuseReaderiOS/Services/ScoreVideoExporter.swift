@@ -9,11 +9,17 @@ import CoreImage
 import CoreMedia
 import Metal
 import UIKit
+#if ARIA_VIDEO_AUDIT && os(Android)
+import CryptoKit
+#endif
 
 /// Renders a scrolling or piano video of the displayed score with its audio: either
 /// the whole piece on one line scrolling past a fixed playhead, or the pages
 /// with a camera that follows the music. Frames and audio are produced in
 /// playback order and written as MP4.
+#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+@AndroidVideoRenderActor
+#endif
 enum ScoreVideoExporter {
     private static let tailSeconds: TimeInterval = 2
     private static let audioChunkSeconds: TimeInterval = 1
@@ -25,6 +31,16 @@ enum ScoreVideoExporter {
         options: ScoreVideoExportOptions,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
+        #if ARIA_VIDEO_AUDIT && os(Android)
+        let auditStarted = ProcessInfo.processInfo.systemUptime
+        #if ARIA_VIDEO_MAIN_BASELINE
+        print("ARIA_VIDEO_MODE main_baseline")
+        #else
+        print("ARIA_VIDEO_MODE serial_worker")
+        #endif
+        print("ARIA_VIDEO_EXPORT_BEGIN style=\(options.style.rawValue) width=\(options.frameSize.width) height=\(options.frameSize.height)")
+        defer { print("ARIA_VIDEO_EXPORT_RETURN seconds=\(ProcessInfo.processInfo.systemUptime - auditStarted)") }
+        #endif
         if options.style.usesPhoto, options.backgroundImageData == nil {
             throw ScoreVideoExportError.missingBackgroundImage
         }
@@ -52,7 +68,7 @@ enum ScoreVideoExporter {
 
     /// What a preview frame is drawn from: the pages, timing and beat points
     /// of either the one-line layout (scrolling) or the page layout.
-    struct PreviewMaterial: @unchecked Sendable {
+    nonisolated struct PreviewMaterial: @unchecked Sendable {
         fileprivate let pages: [ScoreVideoPageSource]
         fileprivate let timeline: ScoreVideoTimeline
         fileprivate let beatPoints: [ScorePlaybackBeatPoint]
@@ -155,6 +171,14 @@ enum ScoreVideoExporter {
             // audio's own playback sequence; MuseScore's MIDI export misplaces
             // section-break pauses and tempos on repeats.
             let notes = try await liveRenderSession.playbackNotes()
+            #if ARIA_VIDEO_AUDIT && os(Android)
+            let records = notes.map { "\($0.pitch):\($0.track):\($0.startSeconds.bitPattern):\($0.endSeconds.bitPattern)" }
+            func fingerprint(_ values: [String]) -> String {
+                SHA256.hash(data: Data(values.joined(separator: ";").utf8))
+                    .map { String(format: "%02x", $0) }.joined()
+            }
+            print("ARIA_VIDEO_INPUT notes=\(notes.count) ordered=\(fingerprint(records)) set=\(fingerprint(records.sorted()))")
+            #endif
             guard !notes.isEmpty else {
                 throw ScoreVideoExportError.noPianoNotes
             }
@@ -259,10 +283,15 @@ enum ScoreVideoExporter {
                     let remaining = totalAudioFrames - audioFramesWritten
                     let frames = min(Int64(pendingAudio.frameCount), remaining)
                     if frames > 0 {
-                        let sampleBuffer = try pendingAudio.sampleBuffer(frameCount: Int(frames), startFrame: audioFramesWritten)
-                        guard audioInput.append(sampleBuffer) else {
-                            throw ScoreVideoExportError.writerFailed(writer.error?.localizedDescription ?? "Audio was rejected.")
+                        #if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+                        try AndroidVideoRenderActor.withJNIFrame {
+                            try appendAudio(pendingAudio, frames: Int(frames), startFrame: audioFramesWritten,
+                                            input: audioInput, writer: writer)
                         }
+                        #else
+                        try appendAudio(pendingAudio, frames: Int(frames), startFrame: audioFramesWritten,
+                                        input: audioInput, writer: writer)
+                        #endif
                         audioFramesWritten += frames
                     }
                     if audioFramesWritten >= totalAudioFrames {
@@ -272,21 +301,15 @@ enum ScoreVideoExporter {
                         needsAudio = true
                     }
                 } else if videoReady {
-                    guard let pool = adaptor.pixelBufferPool else {
-                        throw ScoreVideoExportError.writerFailed("No pixel buffer pool.")
+                    #if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+                    try AndroidVideoRenderActor.withJNIFrame(videoFrame: frameIndex) {
+                        try appendVideoFrame(painter: painter, adaptor: adaptor, writer: writer,
+                                             index: frameIndex, time: videoTime, frameRate: options.frameRate)
                     }
-                    var pixelBuffer: CVPixelBuffer?
-                    CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
-                    guard let pixelBuffer else {
-                        throw ScoreVideoExportError.writerFailed("No pixel buffer.")
-                    }
-                    autoreleasepool {
-                        painter.draw(into: pixelBuffer, at: videoTime, frameDuration: 1 / frameRate)
-                    }
-                    let presentationTime = CMTime(value: CMTimeValue(frameIndex), timescale: options.frameRate)
-                    guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime) else {
-                        throw ScoreVideoExportError.writerFailed(writer.error?.localizedDescription ?? "A frame was rejected.")
-                    }
+                    #else
+                    try appendVideoFrame(painter: painter, adaptor: adaptor, writer: writer,
+                                         index: frameIndex, time: videoTime, frameRate: options.frameRate)
+                    #endif
                     frameIndex += 1
                     if frameIndex == totalFrames {
                         videoInput.markAsFinished()
@@ -314,10 +337,37 @@ enum ScoreVideoExporter {
             throw error
         }
     }
+
+    private static func appendAudio(_ chunk: ScoreVideoAudioChunk, frames: Int, startFrame: Int64,
+                                    input: AVAssetWriterInput, writer: AVAssetWriter) throws {
+        let sampleBuffer = try chunk.sampleBuffer(frameCount: frames, startFrame: startFrame)
+        guard input.append(sampleBuffer) else {
+            throw ScoreVideoExportError.writerFailed(writer.error?.localizedDescription ?? "Audio was rejected.")
+        }
+    }
+
+    private static func appendVideoFrame(painter: ScoreVideoPainter, adaptor: AVAssetWriterInputPixelBufferAdaptor,
+                                        writer: AVAssetWriter, index: Int, time: TimeInterval,
+                                        frameRate: Int32) throws {
+        guard let pool = adaptor.pixelBufferPool else {
+            throw ScoreVideoExportError.writerFailed("No pixel buffer pool.")
+        }
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
+        guard let pixelBuffer else { throw ScoreVideoExportError.writerFailed("No pixel buffer.") }
+        autoreleasepool { painter.draw(into: pixelBuffer, at: time, frameDuration: 1 / Double(frameRate)) }
+        let presentationTime = CMTime(value: CMTimeValue(index), timescale: frameRate)
+        guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime) else {
+            throw ScoreVideoExportError.writerFailed(writer.error?.localizedDescription ?? "A frame was rejected.")
+        }
+    }
 }
 
 /// A page's picture: its vector PDF when the renderer produced one, otherwise
 /// its raster image. Rasterized at the size the video needs when first used.
+#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+@AndroidVideoRenderActor
+#endif
 struct ScoreVideoPageSource {
     let size: CGSize
     private let pdfPage: CGPDFPage?
@@ -379,12 +429,15 @@ struct ScoreVideoPageSource {
 }
 
 /// Draws the frames of a video, in order.
+#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+@AndroidVideoRenderActor
+#endif
 protocol ScoreVideoPainter: AnyObject {
     func draw(into pixelBuffer: CVPixelBuffer, at time: TimeInterval, frameDuration: TimeInterval)
 }
 
 /// All coordinates use the same top-left pixel space as the CPU painter.
-private struct ScoreVideoLayer {
+private nonisolated struct ScoreVideoLayer {
     let image: CGImage?
     let color: UIColor?
     let rect: CGRect
@@ -407,6 +460,9 @@ private struct ScoreVideoLayer {
 /// Core Image composes the cached, full resolution assets on Metal directly
 /// into the encoder's IOSurface buffer. No CPU full-frame bitmap or upload of
 /// the completed frame. Retain a bounded set of source images across frames.
+#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+@AndroidVideoRenderActor
+#endif
 private final class ScoreVideoGPUCompositor {
     private let context: CIContext
     private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
@@ -463,8 +519,11 @@ private final class ScoreVideoGPUCompositor {
 
 /// What every video style shares: the backdrop, the title card, the progress
 /// bar and the measure highlight.
+#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+@AndroidVideoRenderActor
+#endif
 class ScoreVideoPainterBase {
-    private struct OverlaySize: Hashable {
+    private nonisolated struct OverlaySize: Hashable {
         let width: Int
         let height: Int
     }
@@ -718,6 +777,9 @@ class ScoreVideoPainterBase {
 }
 
 /// The pages stacked in a column; a camera glides to each system as it plays.
+#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+@AndroidVideoRenderActor
+#endif
 final class ScoreVideoPagesPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     private static let pageCacheLimit = 4
     /// Where the playing system sits in the frame, from the top.
@@ -821,6 +883,9 @@ final class ScoreVideoPagesPainter: ScoreVideoPainterBase, ScoreVideoPainter {
 /// The whole piece on one line on a white frame, like one long sheet of paper.
 /// The music slides past a fixed playhead; what has played is dimmed and the
 /// line fades out at the frame's edges.
+#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+@AndroidVideoRenderActor
+#endif
 final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     private static let maximumScale: CGFloat = 2.2
     private static let tileWidth = 1024
@@ -1093,7 +1158,7 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
         return ScoreVideoLayer(image: image, rect: bounds)
     }
 
-    private struct StickyHeader {
+    private nonisolated struct StickyHeader {
         /// Clefs, signatures, part names and brackets.
         let ink: CGImage
         let backdrop: CGImage?
@@ -1144,7 +1209,7 @@ final class ScoreVideoScrollingPainter: ScoreVideoPainterBase, ScoreVideoPainter
     /// Text on the first bar that is not attached to the staves (a rehearsal
     /// mark, tempo, chord symbol) and reaches into the pinned header. In
     /// score pixels: x = 0 is the left edge of the line.
-    private struct OpeningText {
+    private nonisolated struct OpeningText {
         let ink: CGImage
         let bounds: CGRect
         /// Row-major over `bounds`: pixels that belong to the text.
@@ -1646,7 +1711,7 @@ private actor ScoreVideoAudioPrefetch {
     }
 }
 
-struct ScoreVideoAudioChunk: Sendable {
+nonisolated struct ScoreVideoAudioChunk: Sendable {
     let samples: [Float]
     let channelCount: Int
     let sampleRate: Double
@@ -1764,7 +1829,12 @@ final class ScoreVideoPreviewCache {
                                               backgroundImageData: background, pinsStaffHeader: pinsStaffHeader,
                                               vertical: vertical)
         return await Task.detached(priority: .userInitiated) {
-            ScoreVideoExporter.previewFrame(material, options: options).map { UIImage(cgImage: $0) }
+            #if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+            let frame = await ScoreVideoExporter.previewFrame(material, options: options)
+            return frame.map { UIImage(cgImage: $0) }
+            #else
+            return ScoreVideoExporter.previewFrame(material, options: options).map { UIImage(cgImage: $0) }
+            #endif
         }.value
     }
 }

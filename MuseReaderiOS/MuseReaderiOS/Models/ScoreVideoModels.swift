@@ -11,7 +11,7 @@ import Foundation
 import CoreGraphics
 #endif
 
-enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
     /// The whole piece on one continuous line that scrolls past a fixed playhead.
     case scrolling
     case scrollingPhoto
@@ -86,13 +86,13 @@ enum ScoreVideoStyle: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-struct ScoreVideoTextFont: Sendable {
+nonisolated struct ScoreVideoTextFont: Sendable {
     var family: String = "Edwin"
     var bold = false
     var italic = false
 }
 
-struct ScoreVideoExportOptions: Sendable {
+nonisolated struct ScoreVideoExportOptions: Sendable {
     var style: ScoreVideoStyle
     var title: String
     var composer: String
@@ -118,7 +118,7 @@ struct ScoreVideoExportOptions: Sendable {
 
 /// Which measure is playing at a moment of the performance, and how far
 /// through it the music is. Regions follow playback order, repeats included.
-struct ScoreVideoTimeline: Equatable {
+nonisolated struct ScoreVideoTimeline: Equatable {
     let regions: [ScorePlaybackMeasureRegion]
 
     init(regions: [ScorePlaybackMeasureRegion]) {
@@ -158,7 +158,7 @@ struct ScoreVideoTimeline: Equatable {
 }
 
 /// The pages stacked top to bottom, as the page-style camera sees them.
-struct ScoreVideoCanvas: Equatable {
+nonisolated struct ScoreVideoCanvas: Equatable {
     static let pageGap: CGFloat = 56
 
     let pageFrames: [CGRect]
@@ -193,7 +193,7 @@ struct ScoreVideoCanvas: Equatable {
 
 /// A critically damped spring: the camera eases into each new system
 /// without overshooting, and the motion is the same at any frame rate.
-struct ScoreVideoCamera: Equatable {
+nonisolated struct ScoreVideoCamera: Equatable {
     var position: CGFloat
     var velocity: CGFloat = 0
     var angularFrequency: CGFloat = 6.5
@@ -212,8 +212,8 @@ struct ScoreVideoCamera: Equatable {
 /// blends the speed between them (monotone cubic interpolation) so uneven
 /// spacing and tempo changes do not jolt. A repeat, or any jump that is not to
 /// the next measure, starts a new segment, which the video cuts to.
-struct ScoreVideoScrollPath: Equatable {
-    struct Knot: Equatable {
+nonisolated struct ScoreVideoScrollPath: Equatable {
+    nonisolated struct Knot: Equatable {
         let time: TimeInterval
         let x: CGFloat
     }
@@ -337,7 +337,7 @@ struct ScoreVideoScrollPath: Equatable {
     }
 }
 
-enum ScoreVideoExportError: LocalizedError {
+nonisolated enum ScoreVideoExportError: LocalizedError {
     case noPlayback
     case noPages
     case writerFailed(String)
@@ -361,7 +361,7 @@ enum ScoreVideoExportError: LocalizedError {
 }
 
 /// One sounding note of the performance, in playback time.
-struct ScoreVideoPianoNote: Equatable, Sendable {
+nonisolated struct ScoreVideoPianoNote: Equatable, Sendable {
     let pitch: Int
     let startSeconds: TimeInterval
     let endSeconds: TimeInterval
@@ -371,7 +371,7 @@ struct ScoreVideoPianoNote: Equatable, Sendable {
 }
 
 /// The keys shown, fitted to the music's range across the frame's width.
-struct ScoreVideoPianoKeyboard: Equatable {
+nonisolated struct ScoreVideoPianoKeyboard: Equatable {
     static let lowestPianoPitch = 21
     static let highestPianoPitch = 108
 
@@ -437,7 +437,7 @@ struct ScoreVideoPianoKeyboard: Equatable {
 
 /// How the piano video looks: neon notes on black, the light piano roll,
 /// or glassy notes over the user's blurred photo.
-enum ScoreVideoPianoTheme: Sendable {
+nonisolated enum ScoreVideoPianoTheme: Sendable {
     case dark
     case light
     case photo

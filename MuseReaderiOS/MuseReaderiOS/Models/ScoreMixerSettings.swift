@@ -1,13 +1,13 @@
 import Foundation
 
-struct ScoreMixerPartSettings: Codable, Equatable, Sendable {
+nonisolated struct ScoreMixerPartSettings: Codable, Equatable, Sendable {
     var volume: Float = 1
     var pan: Float = 0
     var muted = false
     var solo = false
 }
 
-struct ScoreMixerSettings: Codable, Equatable, Sendable {
+nonisolated struct ScoreMixerSettings: Codable, Equatable, Sendable {
     var masterVolume: Float = 1
     var masterPan: Float = 0
     var masterMuted = false
