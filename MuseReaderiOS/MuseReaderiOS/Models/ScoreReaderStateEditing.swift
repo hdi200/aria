@@ -2035,6 +2035,12 @@ extension ScoreReaderState {
             updateLastSelectedMeasure(index: measureIndex, tick: tick)
         }
         self.editingState = editingState
+        #if os(Android)
+        if isEditingMode, !editingState.activeStaffIsPercussion,
+           let program = editingState.selection?.playbackProgram {
+            notePreviewController.prewarm(playbackProgram: program)
+        }
+        #endif
         if !editingState.scoreParts.isEmpty {
             updateScoreParts(editingState.scoreParts)
         }

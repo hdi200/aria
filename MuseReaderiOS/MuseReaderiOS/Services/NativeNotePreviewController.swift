@@ -10,6 +10,39 @@ import Foundation
 
 @MainActor
 final class NativeNotePreviewController {
+    #if os(Android)
+    private let worker = AndroidNotePreviewWorker()
+    private var tail: Task<Void, Never>?
+    private var requestedProgram: Int?
+
+    func prewarm(playbackProgram: Int) {
+        guard requestedProgram != playbackProgram else { return }
+        requestedProgram = playbackProgram
+        let previous = tail
+        tail = Task { [worker] in
+            await previous?.value
+            await worker.prewarm(program: playbackProgram)
+        }
+    }
+
+    func play(midiPitches: [Int]?, fallbackMIDIPitch: Int?, playbackBank: Int?, playbackProgram: Int?, playbackSetupData: String?) {
+        let pitches = midiPitches?.isEmpty == false ? midiPitches ?? [] : fallbackMIDIPitch.map { [$0] } ?? []
+        let previous = tail
+        tail = Task { [worker] in
+            await previous?.value
+            await worker.play(pitches: pitches, bank: playbackBank, program: playbackProgram, setup: playbackSetupData)
+        }
+    }
+
+    func stopAll() {
+        requestedProgram = nil
+        let previous = tail
+        tail = Task { [worker] in
+            await previous?.value
+            await worker.stopAll()
+        }
+    }
+    #else
     private let noteDurationSeconds: TimeInterval = 0.55
     private let velocity: UInt8 = 96
     private var engine: AVAudioEngine?
@@ -111,4 +144,5 @@ final class NativeNotePreviewController {
         self.loadedProgram = program
         print("MuseReader note preview ready: soundbank=\(soundBankURL.lastPathComponent) program=\(program)")
     }
+    #endif
 }
