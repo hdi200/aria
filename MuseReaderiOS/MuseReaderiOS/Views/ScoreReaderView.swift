@@ -1626,6 +1626,10 @@ struct ScoreReaderView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .padding(12)
         }
+        #if !os(Android)
+        // Android's page-local pointer detector arbitrates held selection versus
+        // page swipes. An ancestor simultaneous observer ignores consumed moves
+        // and would turn the page even after the child owns a held range drag.
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
                 .onEnded { value in
@@ -1643,6 +1647,7 @@ struct ScoreReaderView: View {
                     }
                 }
         )
+        #endif
     }
 
     private var continuousReaderCanvas: some View {

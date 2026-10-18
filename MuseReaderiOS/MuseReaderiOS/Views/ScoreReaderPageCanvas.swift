@@ -843,7 +843,13 @@ struct ScoreReaderPlayFromHereOverlay: View {
                             .strokeBorder(Self.accent.opacity(0.55), lineWidth: 1.5)
                     )
                     .frame(width: max(rect.width, 1), height: max(rect.height, 1))
+                    #if os(Android)
+                    // Android: keep the decorative hit-test node at the bar's size.
+                    // Skip's position wrapper fills the page and blocks page gestures.
+                    .offset(x: rect.minX, y: rect.minY)
+                    #else
                     .position(x: rect.midX, y: rect.midY)
+                    #endif
                     .allowsHitTesting(false)
 
                 HStack(spacing: 6) {
@@ -924,7 +930,11 @@ struct ScoreReaderPlaybackLoopOverlay: View {
                                 )
                         )
                         .frame(width: max(rect.width, 1), height: max(rect.height, 1))
+                        #if os(Android)
+                        .offset(x: rect.minX, y: rect.minY)
+                        #else
                         .position(x: rect.midX, y: rect.midY)
+                        #endif
                         .allowsHitTesting(false)
                 }
 
