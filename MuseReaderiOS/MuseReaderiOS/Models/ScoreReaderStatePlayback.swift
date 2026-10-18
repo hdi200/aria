@@ -866,11 +866,40 @@ extension ScoreReaderState {
 
     func toggleSelectedPlaybackLoop() {
         if playbackLoopIsActive {
+            #if os(Android)
+            endSelectedPlaybackLoop()
+            #else
             clearPlaybackLoop()
+            #endif
         } else {
             startSelectedPlaybackLoop()
         }
     }
+
+    #if os(Android)
+    private func endSelectedPlaybackLoop() {
+        // Stop first: clearing a running loop rebuilds and resumes the forward queue.
+        // Do not use stopPlayback's in-flight guard: End loop also cancels preparation.
+        do {
+            if let playbackController, playbackController.isLoaded {
+                try playbackController.stop()
+            }
+            playbackWasExplicitlyStopped = true
+            clearPlaybackLoop()
+            playbackPreparationMessage = nil
+            playbackErrorMessage = nil
+            isCountingIn = false
+            countInBeatNumber = nil
+            if let playbackController {
+                let latestPlaybackState = playbackController.state()
+                playbackState = latestPlaybackState
+                updatePlaybackFollowState(with: latestPlaybackState)
+            }
+        } catch {
+            playbackErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+    #endif
 
     private func startSelectedPlaybackLoop() {
         guard
@@ -921,11 +950,26 @@ extension ScoreReaderState {
                     startTimeSeconds: range.startTimeSeconds,
                     endTimeSeconds: range.endTimeSeconds
                 )
+                #if os(Android)
+                guard self.playbackLoopIsActive, self.playbackLoopRange == range else {
+                    playbackController.clearLoopRange()
+                    return
+                }
+                let countIn = self.countInEnabled
+                    ? try await liveRenderSession.playbackCountIn(startTimeSeconds: range.startTimeSeconds)
+                    : nil
+                // End loop can run while count-in preparation is suspended.
+                guard self.playbackLoopIsActive, self.playbackLoopRange == range else {
+                    return
+                }
+                try playbackController.play(countIn: countIn)
+                #else
                 try await self.playWithOptionalCountIn(
                     at: range.startTimeSeconds,
                     liveRenderSession: liveRenderSession,
                     playbackController: playbackController
                 )
+                #endif
 
                 let latestPlaybackState = playbackController.state()
                 self.playbackState = latestPlaybackState
