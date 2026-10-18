@@ -80,6 +80,9 @@ struct ScoreReaderNoteEntrySurface: View {
     let octaveShiftAction: (Int) -> Void
 
     var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("panel")
+        #endif
         if isCompactPhoneLayout {
             if isCompactPhoneLandscapeLayout && selectedToolCategory != .chord && selectedToolCategory != .lyrics {
                 compactLandscapeBody

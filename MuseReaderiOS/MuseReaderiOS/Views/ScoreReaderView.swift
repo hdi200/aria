@@ -326,8 +326,12 @@ struct ScoreReaderView: View {
     @State var instrumentsToAdd: [NewScoreInstrument] = []
     @State var currentScoreInstruments: [NewScoreInstrument] = []
     @State var instrumentLayoutParts: [ScorePart] = []
+    #if os(Android)
+    @State var selectionCommandPresentation = AndroidSelectionCommandPresentation()
+    #else
     @State var selectionCommandAnchor: ScoreReaderSelectionCommandAnchor?
     @State var dismissedSelectionCommandIdentity: String?
+    #endif
     @State var pencilAutoNoteEntryAllowed = true
     @State var zoomScaleBeforeTextEntry: CGFloat?
     @State var isClosingScore = false
@@ -408,6 +412,9 @@ struct ScoreReaderView: View {
     }
 
     var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("reader")
+        #endif
         readerBody
             .overlay { featureTourOverlay }
             #if os(Android)
@@ -778,32 +785,18 @@ struct ScoreReaderView: View {
                         }
                     }
                     .overlay(alignment: .topLeading) {
-                        if let selectionCommandAnchor, readerState.isEditingMode {
-                            ScoreReaderSelectionCommandOverlay(
-                                anchor: selectionCommandAnchor,
-                                copyAction: readerState.copySelectedMeasureRange,
-                                cutAction: readerState.cutSelectedMeasureRange,
-                                pasteAction: readerState.pasteMeasureRange,
-                                deleteSelectionAction: readerState.deleteSelection,
-                                clearSelectedMeasureAction: readerState.clearSelectedMeasure,
-                                removeSelectedMeasureAction: readerState.removeSelectedMeasure,
-                                addMeasureAction: readerState.addMeasure,
-                                addMultipleMeasuresAction: { isAddMeasuresPresented = true },
-                                transposeAction: readerState.transposeSelectedMeasureRange,
-                                useTransposeSheet: isPhoneInterface,
-                                openTransposeSheetAction: openTransposeSheet,
-                                changeEnharmonicAction: readerState.changeSelectedEnharmonicSpelling,
-                                flipStemAction: readerState.flipSelectedStemDirection,
-                                changeInstrumentAction: presentInstrumentReplacement,
-                                keySignatureAction: { isKeySignaturePresented = true },
-                                timeSignatureAction: { isTimeSignaturePresented = true },
-                                tempoAction: { isTempoEditorPresented = true },
-                                pickupMeasureAction: { readerState.presentPickupEditor(createNewMeasure: false) },
-                                accentAction: readerState.addExpression,
-                                dismissAction: dismissSelectionCommandMenu
-                            )
+                        #if os(Android)
+                        if readerState.isEditingMode {
+                            AndroidSelectionCommandOverlayHost(presentation: selectionCommandPresentation) { anchor in
+                                AnyView(selectionCommandOverlay(for: anchor))
+                            }
                             .zIndex(100)
                         }
+                        #else
+                        if let selectionCommandAnchor, readerState.isEditingMode {
+                            selectionCommandOverlay(for: selectionCommandAnchor)
+                        }
+                        #endif
                     }
                     .overlay(alignment: .center) {
                         if isClosingScore {
@@ -1734,11 +1727,15 @@ struct ScoreReaderView: View {
                         }
                 )
                 .coordinateSpace(name: ScoreReaderSelectionCommandAnchor.coordinateSpaceName)
+                #if os(Android)
+                .environment(selectionCommandPresentation)
+                #else
                 .onPreferenceChange(ScoreReaderSelectionCommandAnchorPreferenceKey.self) { anchor in
                     if anchor?.identity != dismissedSelectionCommandIdentity {
                         selectionCommandAnchor = anchor
                     }
                 }
+                #endif
                 .task {
                     applyPreferredPhoneZoomIfNeeded(for: geometry.size)
                     proxy.scrollTo(readerState.selectedPageIndex, anchor: .top)
@@ -3282,14 +3279,49 @@ struct ScoreReaderView: View {
         }
     }
 
+    private func selectionCommandOverlay(for anchor: ScoreReaderSelectionCommandAnchor) -> some View {
+        ScoreReaderSelectionCommandOverlay(
+            anchor: anchor,
+            copyAction: readerState.copySelectedMeasureRange,
+            cutAction: readerState.cutSelectedMeasureRange,
+            pasteAction: readerState.pasteMeasureRange,
+            deleteSelectionAction: readerState.deleteSelection,
+            clearSelectedMeasureAction: readerState.clearSelectedMeasure,
+            removeSelectedMeasureAction: readerState.removeSelectedMeasure,
+            addMeasureAction: readerState.addMeasure,
+            addMultipleMeasuresAction: { isAddMeasuresPresented = true },
+            transposeAction: readerState.transposeSelectedMeasureRange,
+            useTransposeSheet: isPhoneInterface,
+            openTransposeSheetAction: openTransposeSheet,
+            changeEnharmonicAction: readerState.changeSelectedEnharmonicSpelling,
+            flipStemAction: readerState.flipSelectedStemDirection,
+            changeInstrumentAction: presentInstrumentReplacement,
+            keySignatureAction: { isKeySignaturePresented = true },
+            timeSignatureAction: { isTimeSignaturePresented = true },
+            tempoAction: { isTempoEditorPresented = true },
+            pickupMeasureAction: { readerState.presentPickupEditor(createNewMeasure: false) },
+            accentAction: readerState.addExpression,
+            dismissAction: dismissSelectionCommandMenu
+        )
+        .zIndex(100)
+    }
+
     private func dismissSelectionCommandMenu(identity: String) {
+        #if os(Android)
+        selectionCommandPresentation.dismiss(identity: identity)
+        #else
         dismissedSelectionCommandIdentity = identity
         selectionCommandAnchor = nil
+        #endif
     }
 
     private func clearSelectionCommandMenu() {
+        #if os(Android)
+        selectionCommandPresentation.reset()
+        #else
         dismissedSelectionCommandIdentity = nil
         selectionCommandAnchor = nil
+        #endif
     }
 
     private func openTransposeSheet(currentKey: Int) {

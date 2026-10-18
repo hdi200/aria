@@ -28,6 +28,9 @@ struct ScoreReaderFloatingToolPalette: View {
     let toggleDockSideAction: () -> Void
 
     var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("palette")
+        #endif
         VStack(spacing: 5) {
             switch selectedToolCategory {
             case .select:

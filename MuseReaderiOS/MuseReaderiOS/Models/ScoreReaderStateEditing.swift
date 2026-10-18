@@ -2019,6 +2019,10 @@ extension ScoreReaderState {
     }
 
     func applyEditingState(_ incomingState: ScoreEditingState) {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        AndroidPanAudit.hit("selectionApply")
+        if self.editingState.selection != incomingState.selection { AndroidPanAudit.hit("selectionChanged") }
+        #endif
         var editingState = incomingState
         if editingCommandTask != nil, let intent = queuedNoteInputIntent {
             editingState.noteInputEnabled = intent.enabled

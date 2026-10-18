@@ -473,6 +473,9 @@ struct ScoreReaderPageSurface: View {
     }
 
     var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("surface")
+        #endif
         ZStack(alignment: .topTrailing) {
             Group {
                 if let page, page.hasRenderableContent {
@@ -558,39 +561,115 @@ struct ScoreReaderPageSurface: View {
                     .padding(18)
             }
 
-            if let selectedElement = actionableSelectedElement, selectedElement.kind == .text || selectedElement.kind == .chordText || selectedElement.kind == .instrumentChange {
+            ScoreReaderPageViewportOverlays(
+                zoomViewport: $zoomViewport,
+                selectedElement: actionableSelectedElement,
+                imageSize: page?.displaySize,
+                playFromHereTarget: playFromHereTarget,
+                playbackLoopRange: playbackLoopRange,
+                playbackLoopIsActive: playbackLoopIsActive,
+                editSelectedTextAction: editSelectedTextAction,
+                editTempoAction: editTempoAction,
+                editTimeSignatureAction: editTimeSignatureAction,
+                editKeySignatureAction: editKeySignatureAction,
+                deleteSelectionAction: deleteSelectionAction,
+                clearSelectedMeasureAction: clearSelectedMeasureAction,
+                removeSelectedMeasureAction: removeSelectedMeasureAction,
+                addMeasureAction: addMeasureAction,
+                addMultipleMeasuresAction: addMultipleMeasuresAction,
+                copySelectedMeasureRangeAction: copySelectedMeasureRangeAction,
+                cutSelectedMeasureRangeAction: cutSelectedMeasureRangeAction,
+                pasteMeasureRangeAction: pasteMeasureRangeAction,
+                transposeSelectedMeasureRangeAction: transposeSelectedMeasureRangeAction,
+                changeSelectedEnharmonicSpellingAction: changeSelectedEnharmonicSpellingAction,
+                addExpressionAction: addExpressionAction,
+                playFromHereAction: playFromHereAction,
+                loopFromHereAction: loopFromHereAction,
+                togglePlaybackLoopAction: togglePlaybackLoopAction
+            )
+        }
+    }
+
+    private var placeholderAlignment: Alignment {
+        let horizontal: HorizontalAlignment
+        switch pageHorizontalAlignment {
+        case .leading:
+            horizontal = .leading
+        case .center:
+            horizontal = .center
+        case .trailing:
+            horizontal = .trailing
+        }
+        return Alignment(horizontal: horizontal, vertical: centersPageVertically ? .center : .top)
+    }
+}
+
+/// This child alone reads the published viewport; the page surface passes its binding.
+/// The overlay geometry and actions are unchanged on both platforms.
+struct ScoreReaderPageViewportOverlays: View {
+    @Binding var zoomViewport: ScoreReaderZoomViewport
+    let selectedElement: ScoreSelectedElement?
+    let imageSize: CGSize?
+    let playFromHereTarget: ScorePlayFromHereTarget?
+    let playbackLoopRange: ScorePlaybackLoopRange?
+    let playbackLoopIsActive: Bool
+    let editSelectedTextAction: (ScoreSelectedElement) -> Void
+    let editTempoAction: () -> Void
+    let editTimeSignatureAction: () -> Void
+    let editKeySignatureAction: () -> Void
+    let deleteSelectionAction: () -> Void
+    let clearSelectedMeasureAction: () -> Void
+    let removeSelectedMeasureAction: () -> Void
+    let addMeasureAction: () -> Void
+    let addMultipleMeasuresAction: () -> Void
+    let copySelectedMeasureRangeAction: () -> Void
+    let cutSelectedMeasureRangeAction: () -> Void
+    let pasteMeasureRangeAction: () -> Void
+    let transposeSelectedMeasureRangeAction: (ScoreTransposeRequest) -> Void
+    let changeSelectedEnharmonicSpellingAction: () -> Void
+    let addExpressionAction: (String) -> Void
+    let playFromHereAction: () -> Void
+    let loopFromHereAction: () -> Void
+    let togglePlaybackLoopAction: () -> Void
+
+    var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("pageOverlays")
+        #endif
+        ZStack(alignment: .topTrailing) {
+            if let selectedElement = selectedElement, selectedElement.kind == .text || selectedElement.kind == .chordText || selectedElement.kind == .instrumentChange {
                 ScoreReaderSelectedTextActions(
                     selectedElement: selectedElement,
-                    imageSize: page?.displaySize,
-                    zoomViewport: zoomViewport,
+                    imageSize: imageSize,
+                    zoomViewport: $zoomViewport,
                     editAction: { editSelectedTextAction(selectedElement) },
                     deleteAction: deleteSelectionAction
                 )
             }
 
-            if let selectedElement = actionableSelectedElement, selectedElement.kind == .dynamic || selectedElement.kind == .tie || selectedElement.kind == .layoutBreak || selectedElement.kind == .marker || selectedElement.kind == .other {
+            if let selectedElement = selectedElement, selectedElement.kind == .dynamic || selectedElement.kind == .tie || selectedElement.kind == .layoutBreak || selectedElement.kind == .marker || selectedElement.kind == .other {
                 ScoreReaderSelectedDynamicActions(
                     selectedElement: selectedElement,
-                    imageSize: page?.displaySize,
-                    zoomViewport: zoomViewport,
+                    imageSize: imageSize,
+                    zoomViewport: $zoomViewport,
                     deleteAction: deleteSelectionAction
                 )
             }
 
-            if let selectedElement = actionableSelectedElement, selectedElement.kind == .tempo || selectedElement.kind == .timeSignature || selectedElement.kind == .keySignature {
+            if let selectedElement = selectedElement, selectedElement.kind == .tempo || selectedElement.kind == .timeSignature || selectedElement.kind == .keySignature {
                 ScoreReaderSelectedSignatureActions(
                     selectedElement: selectedElement,
-                    imageSize: page?.displaySize,
-                    zoomViewport: zoomViewport,
+                    imageSize: imageSize,
+                    zoomViewport: $zoomViewport,
                     editAction: editAction(for: selectedElement.kind)
                 )
             }
 
-            if let selectedElement = actionableSelectedElement, selectedElement.kind == .measure {
+            if let selectedElement = selectedElement, selectedElement.kind == .measure {
                 ScoreReaderSelectedMeasureActions(
                     selectedElement: selectedElement,
-                    imageSize: page?.displaySize,
-                    zoomViewport: zoomViewport,
+                    imageSize: imageSize,
+                    zoomViewport: $zoomViewport,
                     clearAction: clearSelectedMeasureAction,
                     removeAction: removeSelectedMeasureAction,
                     addMeasureAction: addMeasureAction,
@@ -605,11 +684,11 @@ struct ScoreReaderPageSurface: View {
                 )
             }
 
-            if let selectedElement = actionableSelectedElement, selectedElement.kind == .note || selectedElement.kind == .rest {
+            if let selectedElement = selectedElement, selectedElement.kind == .note || selectedElement.kind == .rest {
                 ScoreReaderSelectedNoteRestActions(
                     selectedElement: selectedElement,
-                    imageSize: page?.displaySize,
-                    zoomViewport: zoomViewport,
+                    imageSize: imageSize,
+                    zoomViewport: $zoomViewport,
                     copyAction: copySelectedMeasureRangeAction,
                     cutAction: cutSelectedMeasureRangeAction,
                     pasteAction: pasteMeasureRangeAction,
@@ -629,8 +708,8 @@ struct ScoreReaderPageSurface: View {
             if let playFromHereTarget {
                 ScoreReaderPlayFromHereOverlay(
                     target: playFromHereTarget,
-                    imageSize: page?.displaySize,
-                    zoomViewport: zoomViewport,
+                    imageSize: imageSize,
+                    zoomViewport: $zoomViewport,
                     playAction: playFromHereAction,
                     loopAction: loopFromHereAction
                 )
@@ -640,25 +719,12 @@ struct ScoreReaderPageSurface: View {
                 ScoreReaderPlaybackLoopOverlay(
                     range: playbackLoopRange,
                     isActive: playbackLoopIsActive,
-                    imageSize: page?.displaySize,
-                    zoomViewport: zoomViewport,
+                    imageSize: imageSize,
+                    zoomViewport: $zoomViewport,
                     toggleAction: togglePlaybackLoopAction
                 )
             }
         }
-    }
-
-    private var placeholderAlignment: Alignment {
-        let horizontal: HorizontalAlignment
-        switch pageHorizontalAlignment {
-        case .leading:
-            horizontal = .leading
-        case .center:
-            horizontal = .center
-        case .trailing:
-            horizontal = .trailing
-        }
-        return Alignment(horizontal: horizontal, vertical: centersPageVertically ? .center : .top)
     }
 
     private func editAction(for kind: ScoreSelectedElementKind) -> () -> Void {
@@ -678,7 +744,7 @@ struct ScoreReaderPageSurface: View {
 struct ScoreReaderSelectedSignatureActions: View {
     let selectedElement: ScoreSelectedElement
     let imageSize: CGSize?
-    let zoomViewport: ScoreReaderZoomViewport
+    @Binding var zoomViewport: ScoreReaderZoomViewport
     let editAction: () -> Void
 
     var body: some View {
@@ -720,7 +786,7 @@ struct ScoreReaderSelectedSignatureActions: View {
 struct ScoreReaderSelectedTextActions: View {
     let selectedElement: ScoreSelectedElement
     let imageSize: CGSize?
-    let zoomViewport: ScoreReaderZoomViewport
+    @Binding var zoomViewport: ScoreReaderZoomViewport
     let editAction: () -> Void
     let deleteAction: () -> Void
 
@@ -770,7 +836,7 @@ struct ScoreReaderSelectedTextActions: View {
 struct ScoreReaderSelectedDynamicActions: View {
     let selectedElement: ScoreSelectedElement
     let imageSize: CGSize?
-    let zoomViewport: ScoreReaderZoomViewport
+    @Binding var zoomViewport: ScoreReaderZoomViewport
     let deleteAction: () -> Void
 
     var body: some View {
@@ -825,7 +891,7 @@ struct ScoreReaderSelectedDynamicActions: View {
 struct ScoreReaderPlayFromHereOverlay: View {
     let target: ScorePlayFromHereTarget
     let imageSize: CGSize?
-    let zoomViewport: ScoreReaderZoomViewport
+    @Binding var zoomViewport: ScoreReaderZoomViewport
     let playAction: () -> Void
     let loopAction: () -> Void
 
@@ -905,7 +971,7 @@ struct ScoreReaderPlaybackLoopOverlay: View {
     let range: ScorePlaybackLoopRange
     let isActive: Bool
     let imageSize: CGSize?
-    let zoomViewport: ScoreReaderZoomViewport
+    @Binding var zoomViewport: ScoreReaderZoomViewport
     let toggleAction: () -> Void
 
     private static let accent = Color(red: 0.46, green: 0.24, blue: 0.82)
@@ -1055,9 +1121,12 @@ struct ScoreReaderSelectionCommandAnchorPreferenceKey: PreferenceKey {
 }
 
 struct ScoreReaderSelectedNoteRestActions: View {
+    #if os(Android)
+    @Environment(AndroidSelectionCommandPresentation.self) var commandPresentation: AndroidSelectionCommandPresentation?
+    #endif
     let selectedElement: ScoreSelectedElement
     let imageSize: CGSize?
-    let zoomViewport: ScoreReaderZoomViewport
+    @Binding var zoomViewport: ScoreReaderZoomViewport
     let copyAction: () -> Void
     let cutAction: () -> Void
     let pasteAction: () -> Void
@@ -1067,14 +1136,30 @@ struct ScoreReaderSelectedNoteRestActions: View {
     let accentAction: (String) -> Void
 
     var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("anchorView")
+        #endif
         GeometryReader { geometry in
+            #if os(Android)
+            let anchor = commandAnchor(in: geometry)
+            Color.clear
+                .onChange(of: anchor, initial: true) { _, next in
+                    commandPresentation?.publish(next, from: selectedElement.pageIndex)
+                }
+                .onDisappear {
+                    commandPresentation?.remove(identity: anchor.identity, from: selectedElement.pageIndex)
+                }
+            #else
             Color.clear
                 .preference(
                     key: ScoreReaderSelectionCommandAnchorPreferenceKey.self,
                     value: commandAnchor(in: geometry)
                 )
+            #endif
         }
+        #if !os(Android)
         .allowsHitTesting(false)
+        #endif
     }
 
     private func actionPosition(in size: CGSize) -> CGPoint {
@@ -1114,6 +1199,9 @@ struct ScoreReaderSelectedNoteRestActions: View {
 }
 
 struct ScoreReaderSelectionCommandOverlay: View {
+    #if os(Android)
+    @Environment(AndroidSelectionCommandPresentation.self) var commandPresentation: AndroidSelectionCommandPresentation?
+    #endif
     @State var isMenuPresented = false
     @State var isTransposePresented = false
 
@@ -1139,6 +1227,16 @@ struct ScoreReaderSelectionCommandOverlay: View {
     let accentAction: (String) -> Void
     let dismissAction: (String) -> Void
 
+    // Keep observation of live geometry inside the small GeometryReader content.
+    // Identity, action callbacks and semantic selection do not change during pan.
+    private var positionAnchor: ScoreReaderSelectionCommandAnchor {
+        #if os(Android)
+        commandPresentation?.anchor ?? anchor
+        #else
+        anchor
+        #endif
+    }
+
     private var selectedElement: ScoreSelectedElement {
         anchor.selectedElement
     }
@@ -1161,6 +1259,9 @@ struct ScoreReaderSelectionCommandOverlay: View {
     }
 
     var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("commandOverlay")
+        #endif
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
                 if isMenuPresented {
@@ -1196,7 +1297,11 @@ struct ScoreReaderSelectionCommandOverlay: View {
                         .accessibilityLabel(isInstrumentSelection ? "Instrument options" : (isNoteRestSelection ? "Selection options" : "Measure options"))
                 }
                 .buttonStyle(.plain)
-                .position(anchor.actionPosition)
+                #if os(Android)
+                .androidSelectionOverlayPosition(commandPresentation?.positioner, fallback: anchor.actionPosition)
+                #else
+                .position(positionAnchor.actionPosition)
+                #endif
                 .zIndex(3)
             }
         }
@@ -1311,8 +1416,8 @@ struct ScoreReaderSelectionCommandOverlay: View {
         } else {
             menuSize = CGSize(width: 238, height: selectedElement.isSingleMeasure ? 508 : 362)
         }
-        let rawX = anchor.actionPosition.x - menuSize.width / 2 + 2
-        let rawY = anchor.actionPosition.y + 16 + menuSize.height / 2
+        let rawX = positionAnchor.actionPosition.x - menuSize.width / 2 + 2
+        let rawY = positionAnchor.actionPosition.y + 16 + menuSize.height / 2
         return CGPoint(
             x: min(max(rawX, menuSize.width / 2 + 8), max(size.width - menuSize.width / 2 - 8, menuSize.width / 2 + 8)),
             y: clampedPopoverY(rawY, popoverSize: menuSize, x: rawX, in: size)
@@ -1321,8 +1426,8 @@ struct ScoreReaderSelectionCommandOverlay: View {
 
     private func transposePosition(in size: CGSize) -> CGPoint {
         let panelSize = CGSize(width: 288, height: 454)
-        let rawX = anchor.actionPosition.x - panelSize.width / 2 + 16
-        let rawY = anchor.actionPosition.y + 16 + panelSize.height / 2
+        let rawX = positionAnchor.actionPosition.x - panelSize.width / 2 + 16
+        let rawY = positionAnchor.actionPosition.y + 16 + panelSize.height / 2
         return CGPoint(
             x: min(max(rawX, panelSize.width / 2 + 8), max(size.width - panelSize.width / 2 - 8, panelSize.width / 2 + 8)),
             y: clampedPopoverY(rawY, popoverSize: panelSize, x: rawX, in: size)
@@ -1336,7 +1441,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
         let unobscuredMaximumY = size.height - popoverHeight / 2 - bottomDeckClearance
         let maximumY = max(minimumY, unobscuredMaximumY)
         let clampedX = min(max(rawX, popoverSize.width / 2 + 8), max(size.width - popoverSize.width / 2 - 8, popoverSize.width / 2 + 8))
-        let anchorRects = anchor.selectionRects
+        let anchorRects = positionAnchor.selectionRects
 
         func clamp(_ y: CGFloat) -> CGFloat {
             min(max(y, minimumY), maximumY)
@@ -1351,11 +1456,11 @@ struct ScoreReaderSelectionCommandOverlay: View {
             )
         }
 
-        let selectionTop = anchorRects.map(\.minY).min() ?? anchor.actionPosition.y
-        let selectionBottom = anchorRects.map(\.maxY).max() ?? anchor.actionPosition.y
+        let selectionTop = anchorRects.map(\.minY).min() ?? positionAnchor.actionPosition.y
+        let selectionBottom = anchorRects.map(\.maxY).max() ?? positionAnchor.actionPosition.y
         let candidates = [
             rawY,
-            anchor.actionPosition.y - 28 - popoverHeight / 2,
+            positionAnchor.actionPosition.y - 28 - popoverHeight / 2,
             selectionTop - popoverHeight / 2 - 12,
             selectionBottom + popoverHeight / 2 + 12
         ].map(clamp)
@@ -1479,9 +1584,12 @@ struct ScoreReaderNoteRestCommandMenu: View {
 }
 
 struct ScoreReaderSelectedMeasureActions: View {
+    #if os(Android)
+    @Environment(AndroidSelectionCommandPresentation.self) var commandPresentation: AndroidSelectionCommandPresentation?
+    #endif
     let selectedElement: ScoreSelectedElement
     let imageSize: CGSize?
-    let zoomViewport: ScoreReaderZoomViewport
+    @Binding var zoomViewport: ScoreReaderZoomViewport
     let clearAction: () -> Void
     let removeAction: () -> Void
     let addMeasureAction: () -> Void
@@ -1496,13 +1604,26 @@ struct ScoreReaderSelectedMeasureActions: View {
 
     var body: some View {
         GeometryReader { geometry in
+            #if os(Android)
+            let anchor = commandAnchor(in: geometry)
+            Color.clear
+                .onChange(of: anchor, initial: true) { _, next in
+                    commandPresentation?.publish(next, from: selectedElement.pageIndex)
+                }
+                .onDisappear {
+                    commandPresentation?.remove(identity: anchor.identity, from: selectedElement.pageIndex)
+                }
+            #else
             Color.clear
                 .preference(
                     key: ScoreReaderSelectionCommandAnchorPreferenceKey.self,
                     value: commandAnchor(in: geometry)
                 )
+            #endif
         }
+        #if !os(Android)
         .allowsHitTesting(false)
+        #endif
     }
 
     private func actionPosition(in size: CGSize) -> CGPoint {

@@ -82,6 +82,9 @@ struct ScoreReaderChromeBar: View {
     let exportPanelContent: () -> AnyView
 
     var body: some View {
+        #if os(Android) && ARIA_EDIT_AUDIT
+        let _ = AndroidPanAudit.hit("chrome")
+        #endif
         GeometryReader { proxy in
             let isPhoneHeader = UIDevice.current.userInterfaceIdiom == .phone
             let isPhoneLandscape = isPhoneHeader && proxy.size.width > proxy.size.height
