@@ -176,6 +176,9 @@ struct ScoreReaderPageCanvas: View {
     var annotationConfiguration: ScoreAnnotationPageConfiguration?
 
     var body: some View {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidPhoneAuditGeometry.evaluate("canvas")
+        #endif
         let fittedPageSize = fittedPageSize
         let pageWidth = fittedPageSize.width
         let pageHeight = fittedPageSize.height

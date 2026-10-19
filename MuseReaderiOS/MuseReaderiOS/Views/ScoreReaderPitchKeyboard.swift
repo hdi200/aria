@@ -30,6 +30,9 @@ struct ScoreReaderWidePitchKeyboard: View {
     private let blackKeyTouchHeight: CGFloat = 72
 
     var body: some View {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidPhoneAuditGeometry.evaluate("keyboard")
+        #endif
         #if os(Android) && ARIA_EDIT_AUDIT
         let _ = AndroidPanAudit.hit("keyboard")
         #endif

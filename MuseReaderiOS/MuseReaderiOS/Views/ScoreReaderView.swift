@@ -415,6 +415,9 @@ struct ScoreReaderView: View {
     }
 
     var body: some View {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidPhoneAuditGeometry.evaluate("reader")
+        #endif
         #if os(Android) && ARIA_EDIT_AUDIT
         let _ = AndroidPanAudit.hit("reader")
         #endif

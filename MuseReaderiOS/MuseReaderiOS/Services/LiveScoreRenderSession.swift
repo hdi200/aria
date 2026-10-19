@@ -376,6 +376,10 @@ actor LiveScoreRenderSession {
     }
 
     func currentEditingState() throws -> ScoreEditingState {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidPhoneAuditLog.mark("snapshot_worker_start")
+        defer { AndroidPhoneAuditLog.mark("snapshot_worker_end") }
+        #endif
         guard supportsEditing else {
             return inactiveEditingState()
         }
@@ -387,6 +391,10 @@ actor LiveScoreRenderSession {
     }
 
     func selectElement(pageIndex: Int, normalizedPoint: CGPoint, hitRadiusScale: Double = 1.0) throws -> ScoreEditingState {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidPhoneAuditLog.mark("select_worker_start")
+        defer { AndroidPhoneAuditLog.mark("select_worker_end") }
+        #endif
         guard supportsEditing else {
             return inactiveEditingState()
         }
@@ -855,6 +863,10 @@ actor LiveScoreRenderSession {
     }
 
     func insertPitchAtCursor(_ pitchClass: Int, preferFlats: Bool, addToCurrentChord: Bool = false) throws -> ScoreEditingState {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidPhoneAuditLog.mark("insert_pitch_worker_start")
+        defer { AndroidPhoneAuditLog.mark("insert_pitch_worker_end") }
+        #endif
         guard supportsEditing else {
             return inactiveEditingState()
         }
@@ -865,6 +877,10 @@ actor LiveScoreRenderSession {
     }
 
     func insertMIDIPitchAtCursor(_ midiPitch: Int, preferFlats: Bool, addToCurrentChord: Bool = false) throws -> ScoreEditingState {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidPhoneAuditLog.mark("insert_midi_worker_start")
+        defer { AndroidPhoneAuditLog.mark("insert_midi_worker_end") }
+        #endif
         guard supportsEditing else {
             return inactiveEditingState()
         }

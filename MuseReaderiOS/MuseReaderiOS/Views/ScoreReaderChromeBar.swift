@@ -82,6 +82,9 @@ struct ScoreReaderChromeBar: View {
     let exportPanelContent: () -> AnyView
 
     var body: some View {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidPhoneAuditGeometry.evaluate("chrome")
+        #endif
         #if os(Android) && ARIA_EDIT_AUDIT
         let _ = AndroidPanAudit.hit("chrome")
         #endif
