@@ -490,6 +490,13 @@ extension ScoreReaderState {
         inputKind: ScorePageTapInputKind = .direct,
         selectionAction: ((ScoreSelectedElement?) -> Void)? = nil
     ) {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("tap_handler_begin")
+        #endif
+        #if os(Android) && ARIA_PHONE_AUDIT
+        defer { AndroidInteractionTrace.point("tap_handler_end") }
+        #endif
+
         guard
             supportsEditing,
             isEditingMode,
@@ -516,6 +523,10 @@ extension ScoreReaderState {
         editingErrorMessage = nil
 
         Task { @MainActor [weak self] in
+            #if os(Android) && ARIA_PHONE_AUDIT
+            AndroidInteractionTrace.point("selection_main_task_start")
+            #endif
+
             defer {
                 self?.isEditingActionInFlight = false
             }
@@ -547,6 +558,9 @@ extension ScoreReaderState {
                     )
                 }
 
+                #if os(Android) && ARIA_PHONE_AUDIT
+                AndroidInteractionTrace.point("selection_main_resumed")
+                #endif
                 if shouldInsert {
                     if newState.noteInputEnabled {
                         self?.hasContinuousNoteInputCursor = true
@@ -2041,6 +2055,13 @@ extension ScoreReaderState {
     }
 
     func applyEditingState(_ incomingState: ScoreEditingState) {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("apply_state_begin")
+        #endif
+        #if os(Android) && ARIA_PHONE_AUDIT
+        defer { AndroidInteractionTrace.point("apply_state_end") }
+        #endif
+
         #if os(Android) && ARIA_EDIT_AUDIT
         AndroidPanAudit.hit("selectionApply")
         if self.editingState.selection != incomingState.selection { AndroidPanAudit.hit("selectionChanged") }
@@ -2060,15 +2081,39 @@ extension ScoreReaderState {
         {
             updateLastSelectedMeasure(index: measureIndex, tick: tick)
         }
+
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("editing_state_write_begin")
+        #endif
         self.editingState = editingState
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("editing_state_write_end")
+        #endif
+
         #if os(Android)
         if isEditingMode, !editingState.activeStaffIsPercussion,
            let program = editingState.selection?.playbackProgram {
+
+            #if os(Android) && ARIA_PHONE_AUDIT
+            AndroidInteractionTrace.point("preview_prewarm_begin")
+            #endif
             notePreviewController.prewarm(playbackProgram: program)
+            #if os(Android) && ARIA_PHONE_AUDIT
+            AndroidInteractionTrace.point("preview_prewarm_end")
+            #endif
+
         }
         #endif
         if !editingState.scoreParts.isEmpty {
+
+            #if os(Android) && ARIA_PHONE_AUDIT
+            AndroidInteractionTrace.point("parts_update_begin")
+            #endif
             updateScoreParts(editingState.scoreParts)
+            #if os(Android) && ARIA_PHONE_AUDIT
+            AndroidInteractionTrace.point("parts_update_end")
+            #endif
+
         }
         let selectedChordPitchCount = editingState.selection?.chordMidiPitches.count ?? 0
         if editingCommandTask != nil, let intent = queuedNoteInputIntent {
@@ -2149,6 +2194,13 @@ extension ScoreReaderState {
     }
 
     func refreshAfterScoreMutation(with editingState: ScoreEditingState, auditionNote: Bool = false, revealActiveNotation: Bool = false) {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("refresh_mutation_begin")
+        #endif
+        #if os(Android) && ARIA_PHONE_AUDIT
+        defer { AndroidInteractionTrace.point("refresh_mutation_end") }
+        #endif
+
         let startedAt = Date()
         applyEditingState(editingState)
         let appliedAt = Date()
@@ -2164,8 +2216,23 @@ extension ScoreReaderState {
         } else if let selectedPageIndex = editingState.selection?.pageIndex, isValid(selectedPageIndex) {
             self.selectedPageIndex = selectedPageIndex
         }
+
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("playback_invalidate_begin")
+        #endif
         invalidatePlaybackAfterScoreMutation()
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("playback_invalidate_end")
+        #endif
+
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("metadata_refresh_begin")
+        #endif
         refreshScoreMetadata()
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.point("metadata_refresh_end")
+        #endif
+
         let playbackInvalidatedAt = Date()
         if !editingCommandQueue.isEmpty {
             editingVisualRefreshDeferred = true

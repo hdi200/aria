@@ -321,6 +321,9 @@ struct ScoreReaderPageCanvas: View {
         }
         .frame(width: zoomViewportWidth, height: topPadding + zoomViewportHeight + bottomPadding)
         .frame(maxWidth: .infinity, alignment: outerCanvasAlignment)
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidInteractionTrace.point("evaluate_canvas_end")
+        #endif
     }
 
     private var isPortrait: Bool {

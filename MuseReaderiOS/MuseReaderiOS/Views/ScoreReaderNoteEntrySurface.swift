@@ -95,6 +95,9 @@ struct ScoreReaderNoteEntrySurface: View {
         } else {
             regularBody
         }
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidInteractionTrace.point("evaluate_panel_end")
+        #endif
     }
 
     private var regularBody: some View {

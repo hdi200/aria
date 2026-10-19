@@ -121,6 +121,9 @@ struct ScoreReaderChromeBar: View {
             }
         }
         .frame(height: 62)
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidInteractionTrace.point("evaluate_chrome_end")
+        #endif
     }
 
     private func floatingIslandHeader(

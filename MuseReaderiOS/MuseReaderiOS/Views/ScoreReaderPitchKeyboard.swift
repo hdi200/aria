@@ -126,6 +126,9 @@ struct ScoreReaderWidePitchKeyboard: View {
                 }
             }
         }
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidInteractionTrace.point("evaluate_keyboard_end")
+        #endif
     }
 
     private func naturalKeyView(_ key: PianoNaturalKey, width: CGFloat, height: CGFloat) -> some View {

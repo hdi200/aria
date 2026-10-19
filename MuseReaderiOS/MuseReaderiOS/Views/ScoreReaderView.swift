@@ -431,6 +431,9 @@ struct ScoreReaderView: View {
             #if os(Android)
             .environment(readerState.androidPlaybackVisualState)
             #endif
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidInteractionTrace.point("evaluate_reader_end")
+        #endif
     }
 
     private var readerBody: some View {
