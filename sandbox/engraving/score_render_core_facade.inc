@@ -229,6 +229,11 @@ bool msr::render::ScoreRenderSession::currentEditState(ScoreEditState& output, s
     return m_impl->currentEditState(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::currentNoteInputState(ScoreEditState& output, std::string& errorMessage) const
+{
+    return m_impl->currentNoteInputState(output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::selectElement(const int pageIndex,
                                                     const double normalizedX,
                                                     const double normalizedY,

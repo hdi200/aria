@@ -4942,7 +4942,7 @@ int currentKeyForSelection(const mu::engraving::Score* score,
     return 0;
 }
 
-msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score)
+msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score, const bool includeSelection = true)
 {
     msr::render::ScoreEditState editState;
     if (!score) {
@@ -4950,7 +4950,9 @@ msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score)
     }
 
     const mu::engraving::InputState& inputState = score->inputState();
-    editState.selection = makeSelectionState(score);
+    if (includeSelection) {
+        editState.selection = makeSelectionState(score);
+    }
     editState.noteInputEnabled = inputState.noteEntryMode();
     editState.noteInputInsertsRests = inputState.rest();
     editState.noteInputIsDotted = inputState.duration().dots() > 0;

@@ -375,6 +375,59 @@ actor LiveScoreRenderSession {
         return (try makeEditingState(from: bridgeEditState, refreshScope: .nearby), makeCorruptionReport(from: bridgeReport))
     }
 
+    #if os(Android)
+    /// One engine-lane transaction per accepted key. Preparation never yields
+    /// back to MainActor and an ordinary key queries no selection artwork.
+    func applyCapturedKeyboardPitch(intent: ScoreNoteInputIntent, pitchClass: Int,
+                                    midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool,
+                                    replaceSelection: Bool, addToChord: Bool) throws -> ScoreEditingState {
+        guard supportsEditing else { return inactiveEditingState() }
+        #if ARIA_PHONE_AUDIT
+        AndroidPhoneAuditLog.mark("keyboard_transaction_worker_start")
+        defer { AndroidPhoneAuditLog.mark("keyboard_transaction_worker_end") }
+        #endif
+        var state: MSREditState
+        if replaceSelection {
+            if exactMIDIPitch, let midiPitch {
+                state = try bridgeSession.setSelectedMIDIPitch(midiPitch, preferFlats: preferFlats)
+            } else {
+                state = try bridgeSession.setSelectedPitchClass(pitchClass, preferFlats: preferFlats)
+            }
+            invalidateCachedPlaybackArtifacts()
+        } else {
+            // Read the current engine state, not a potentially older UI reply.
+            #if ARIA_PHONE_AUDIT
+            AndroidPhoneAuditLog.mark("input_query_worker_start")
+            #endif
+            state = try bridgeSession.currentNoteInputState()
+            #if ARIA_PHONE_AUDIT
+            AndroidPhoneAuditLog.mark("input_query_worker_end")
+            #endif
+        }
+        if !state.noteInputEnabled { state = try bridgeSession.setNoteInputEnabled(true) }
+        if state.currentVoice != intent.voice { state = try bridgeSession.setCurrentVoice(intent.voice) }
+        if state.durationCode != intent.duration.rawValue {
+            state = try bridgeSession.applyDuration(code: intent.duration.rawValue)
+            invalidateCachedPlaybackArtifacts()
+        }
+        if state.noteInputIsDotted != intent.dotted {
+            state = try bridgeSession.toggleDot()
+            invalidateCachedPlaybackArtifacts()
+        }
+        if state.noteInputInsertsRests != intent.rests {
+            state = try bridgeSession.toggleRest()
+            invalidateCachedPlaybackArtifacts()
+        }
+        if replaceSelection { return try makeEditingState(from: state) }
+        if exactMIDIPitch, let midiPitch {
+            return try insertMIDIPitchAtCursor(midiPitch, preferFlats: preferFlats,
+                addToCurrentChord: addToChord)
+        }
+        return try insertPitchAtCursor(pitchClass, preferFlats: preferFlats,
+            addToCurrentChord: addToChord)
+    }
+    #endif
+
     func currentEditingState() throws -> ScoreEditingState {
         #if os(Android) && ARIA_PHONE_AUDIT
         AndroidPhoneAuditLog.mark("snapshot_worker_start")

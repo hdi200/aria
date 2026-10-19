@@ -9,6 +9,16 @@
         return true;
     }
 
+    bool currentNoteInputState(msr::render::ScoreEditState& output, std::string& errorMessage) const
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+        output = makeEditState(activeScore(), false);
+        return true;
+    }
+
     bool selectElement(const int pageIndex,
                        const double normalizedX,
                        const double normalizedY,

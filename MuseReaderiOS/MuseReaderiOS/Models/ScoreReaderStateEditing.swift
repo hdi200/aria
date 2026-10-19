@@ -4,7 +4,7 @@ import CoreGraphics
 #endif
 
 /// Values chosen by the player, kept separate from older engine replies in flight.
-struct ScoreNoteInputIntent {
+struct ScoreNoteInputIntent: Sendable {
     var enabled: Bool
     var rests: Bool
     var dotted: Bool
@@ -2015,6 +2015,12 @@ extension ScoreReaderState {
         lastKeyboardInputCanReceiveAccidental = !replaceSelection
         let addToChord = intent.chord && !intent.rests
         performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { session in
+            #if os(Android)
+            return try await session.applyCapturedKeyboardPitch(intent: submittedIntent,
+                pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats,
+                exactMIDIPitch: exactMIDIPitch, replaceSelection: replaceSelection,
+                addToChord: addToChord)
+            #else
             if replaceSelection {
                 if exactMIDIPitch, let midiPitch {
                     _ = try await session.setSelectedMIDIPitch(midiPitch, preferFlats: preferFlats)
@@ -2030,6 +2036,7 @@ extension ScoreReaderState {
             }
             return try await session.insertPitchAtCursor(pitchClass, preferFlats: preferFlats,
                 addToCurrentChord: addToChord)
+            #endif
         }
     }
 

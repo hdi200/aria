@@ -374,6 +374,9 @@ public:
     bool selectCorruptionIssue(int issueIndex, ScoreEditState& output, std::string& errorMessage);
     bool clearCorruptionIssue(int issueIndex, ScoreEditState& output, ScoreCorruptionReport& report, std::string& errorMessage);
     bool currentEditState(ScoreEditState& output, std::string& errorMessage) const;
+    //! Read input flags without producing selection artwork. This is a live query,
+    //! not a cached UI snapshot; the existing full-state API remains unchanged.
+    bool currentNoteInputState(ScoreEditState& output, std::string& errorMessage) const;
     bool selectElement(int pageIndex, double normalizedX, double normalizedY, double hitRadiusScale, ScoreEditState& output, std::string& errorMessage);
     bool setNoteInputEnabled(bool enabled, ScoreEditState& output, std::string& errorMessage);
     bool setCurrentVoice(int voice, ScoreEditState& output, std::string& errorMessage);

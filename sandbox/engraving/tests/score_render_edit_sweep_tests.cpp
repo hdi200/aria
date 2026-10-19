@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <vector>
 
 #include "score_render_core.h"
@@ -1030,6 +1031,47 @@ void testDragAndEndpointEdits(const std::filesystem::path& root)
     }
 }
 
+void testInputQueryMatchesWithoutMutatingSelection(const std::filesystem::path& root)
+{
+    auto session = openSession(root / "input-query", "input-query-source");
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    msr::render::ScoreEditState state;
+    std::string error;
+    const auto check = [&] {
+        msr::render::ScoreEditState before, input, after;
+        expect(session->currentEditState(before, error), "Full input baseline failed: " + error);
+        expect(session->currentNoteInputState(input, error), "Light input query failed: " + error);
+        expect(session->currentEditState(after, error), "Full input recheck failed: " + error);
+        expect(!input.selection.hasSelection && input.selection.overlayPngData.empty()
+               && input.selection.overlayPdfData.empty(), "Input query returned selection artwork");
+        const auto scalars = [](const auto& s) {
+            return std::make_tuple(s.noteInputEnabled, s.noteInputInsertsRests, s.noteInputIsDotted,
+                s.durationCode, s.currentVoice, s.canUndo, s.canRedo, s.activeStaffIsPercussion,
+                s.createMultiMeasureRests, s.hideEmptyStaves, s.pageWidthMillimeters,
+                s.pageHeightMillimeters, s.pageMarginMillimeters, s.staffSizeMillimeters,
+                s.staffSpacingSpatium, s.systemSpacingSpatium);
+        };
+        expect(scalars(input) == scalars(before) && scalars(after) == scalars(before),
+               "Input query changed or omitted live input settings");
+        expect(after.selection.hasSelection == before.selection.hasSelection
+               && after.selection.overlayPngData == before.selection.overlayPngData,
+               "Input query changed the active selection");
+    };
+    check();
+    expect(session->setNoteInputEnabled(true, state, error), "Enable input failed: " + error);
+    check();
+    expect(session->setCurrentVoice(1, state, error), "Voice change failed: " + error);
+    expect(session->applyDuration(8, state, error), "Duration change failed: " + error);
+    expect(session->toggleDot(state, error), "Dot change failed: " + error);
+    expect(session->toggleRest(state, error), "Rest change failed: " + error);
+    check();
+    expect(session->toggleRest(state, error), "Rest reset failed: " + error);
+    expect(session->insertMIDIPitchAtCursor(72, false, false, state, error), "Insertion failed: " + error);
+    check();
+    expect(session->undo(state, error), "Undo failed: " + error);
+    check();
+}
+
 void testNonPersistedEditingStateCommands(const std::filesystem::path& root)
 {
     const std::filesystem::path testRoot = root / "non-persisted-state";
@@ -1332,6 +1374,7 @@ int main()
 {
     TestDirectory directory;
     bool passed = true;
+    passed &= runTest("light input query preserves live settings and selection", [&] { testInputQueryMatchesWithoutMutatingSelection(directory.path); });
     passed &= runTest("tempo properties reach linked parts", [&] { testTempoPropertiesReachLinkedParts(directory.path); });
     passed &= runTest("tempo added from a part reaches the full score", [&] { testTempoAddedFromPartReachesFullScore(directory.path); });
     passed &= runTest("instrument-change init reaches linked part", [&] { testInstrumentChangeInitReachesLinkedPart(directory.path); });
