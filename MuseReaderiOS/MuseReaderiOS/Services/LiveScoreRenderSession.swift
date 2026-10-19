@@ -76,6 +76,10 @@ actor LiveScoreRenderSession {
         let startedAt = Date()
         let sessionID = ObjectIdentifier(self).hashValue
         print("Aria live page render begin: session=\(sessionID) page=\(index + 1) dpi=\(dpi)")
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidPhoneAuditLog.mark("pdf_start", value: index)
+        defer { AndroidPhoneAuditLog.mark("pdf_end", value: index) }
+        #endif
         let renderedPage = try RenderCoreWorkGate.sync {
             try bridgeSession.renderPage(index: index, dpi: dpi)
         }

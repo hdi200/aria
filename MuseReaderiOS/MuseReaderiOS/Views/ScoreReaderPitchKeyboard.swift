@@ -97,6 +97,11 @@ struct ScoreReaderWidePitchKeyboard: View {
             .clipped()
             .contentShape(Rectangle())
             .gesture(keyboardGesture(geometry: geometry, naturalKeys: renderedKeys, blackKeys: blackKeys, whiteWidth: whiteWidth, blackWidth: blackWidth, visibleNaturalKeyCount: visibleNaturalKeyCount))
+            #if os(Android) && ARIA_PHONE_AUDIT
+            .background(AndroidPhoneAuditKeyboardProbe(frame: geometry.frame(in: .global),
+                pitches: renderedKeys.map(\.midiPitch), keyWidth: whiteWidth,
+                translation: leadingBufferOffset + dragTranslation))
+            #endif
             .onChangeCompatible(of: activeMIDIPitch) { newValue in
                 guard followsActiveMIDIPitch else {
                     return
@@ -229,6 +234,9 @@ struct ScoreReaderWidePitchKeyboard: View {
                 dragTranslation = 0
                 dragStartNaturalKeyOffset = nil
                 if let key = key(at: value.location, naturalKeys: naturalKeys, blackKeys: blackKeys, whiteWidth: whiteWidth, blackWidth: blackWidth, height: geometry.size.height) {
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    AndroidPhoneAuditLog.mark("keyboard_action", value: key.midiPitch)
+                    #endif
                     action(key)
                 }
             }

@@ -1901,6 +1901,9 @@ extension ScoreReaderState {
         action: @escaping (LiveScoreRenderSession) async throws -> ScoreEditingState
     ) {
         guard supportsEditing, isEditingMode, let liveRenderSession = session.liveRenderSession else { return }
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidPhoneAuditLog.mark("command_enqueued", value: mutatesScore ? 1 : 0)
+        #endif
         editingCommandQueue.append(ScoreQueuedEditingCommand(mutatesScore: mutatesScore,
             auditionNote: auditionNote, revealActiveNotation: revealActiveNotation, action: action))
         guard editingCommandTask == nil else { return }
@@ -1941,7 +1944,13 @@ extension ScoreReaderState {
             while !editingCommandQueue.isEmpty {
                 let command = editingCommandQueue.removeFirst()
                 do {
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    AndroidPhoneAuditLog.mark("command_start", value: command.mutatesScore ? 1 : 0)
+                    #endif
                     let newState = try await command.action(liveRenderSession)
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    AndroidPhoneAuditLog.mark("command_engine_done", value: newState.selection?.midiPitch ?? -1)
+                    #endif
                     lastEngineState = newState
                     #if ARIA_EDIT_AUDIT && os(Android)
                     await AndroidEditingAudit.capture(liveRenderSession, kind: command.mutatesScore ? "mutation" : "state", state: newState)
@@ -1949,11 +1958,17 @@ extension ScoreReaderState {
                     if command.mutatesScore {
                         refreshAfterScoreMutation(with: newState, auditionNote: command.auditionNote,
                             revealActiveNotation: command.revealActiveNotation)
+                        #if os(Android) && ARIA_PHONE_AUDIT
+                        AndroidPhoneAuditLog.mark("mutation_applied", value: newState.selection?.midiPitch ?? -1)
+                        #endif
                     } else {
                         applyEditingState(newState)
                         if command.revealActiveNotation { revealActiveSelection(in: newState) }
                     }
                 } catch {
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    AndroidPhoneAuditLog.mark("command_failed", value: 0)
+                    #endif
                     failure = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                     if let state = try? await liveRenderSession.currentEditingState() {
                         lastEngineState = state

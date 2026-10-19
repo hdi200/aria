@@ -260,6 +260,9 @@ struct ScoreReaderView: View {
 
     @MainActor
     private func presentReaderIntroductionIfNeeded() async {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        return // Disposable benchmark app only: no tour interrupts its scripted input.
+        #endif
         guard readerState.pageCount > 0, !isClosingScore, !isTransitioningScore, !Task.isCancelled else { return }
         if await updateNoticeStore.shouldPresentNotice() {
             guard !Task.isCancelled, !isClosingScore, !isTransitioningScore, legacyRepairPrompt == nil else { return }
@@ -417,6 +420,11 @@ struct ScoreReaderView: View {
         #endif
         readerBody
             .overlay { featureTourOverlay }
+            #if os(Android) && ARIA_PHONE_AUDIT
+            .overlay(alignment: .top) {
+                AndroidPhoneAuditControls(reader: readerState, zoom: $zoomScale, tool: $selectedToolCategory)
+            }
+            #endif
             #if os(Android)
             .environment(readerState.androidPlaybackVisualState)
             #endif
