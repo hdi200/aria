@@ -188,6 +188,10 @@ struct ScoreReaderPageCanvas: View {
         let zoomViewportHeight = pageLayoutPolicy.usesFullCanvasZoom
             ? max(viewportSize.height, pageHeight)
             : pageHeight
+        #if os(Android) && ARIA_PHONE_AUDIT
+        let _ = AndroidPhoneAuditGeometry.surfaceTrace(page: pageIndex, size: fittedPageSize,
+            viewport: CGSize(width: zoomViewportWidth, height: zoomViewportHeight))
+        #endif
         let topPadding = topPagePadding
         let bottomPadding: CGFloat = fitsPageToViewport ? 0 : 6
         let usesActiveNotationFocus = selectedElement?.pageIndex == pageIndex
