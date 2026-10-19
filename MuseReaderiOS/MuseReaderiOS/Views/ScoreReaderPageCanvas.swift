@@ -278,6 +278,30 @@ struct ScoreReaderPageCanvas: View {
             .frame(width: zoomViewportWidth, height: zoomViewportHeight)
             .position(x: zoomViewportWidth * 0.5, y: topPadding + zoomViewportHeight * 0.5)
 
+            #if os(Android)
+            // Keep the page's parent child-ID list stable. Skip keys an all-tagged
+            // ZStack's AnimatedContent by that list; inserting/removing a scroll
+            // anchor would otherwise replace the unchanged page and its bitmaps.
+            ZStack(alignment: .topLeading) {
+                if let anchorY = activeNotationAnchorY(pageHeight: pageHeight, topPadding: topPadding) {
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .position(x: zoomViewportWidth * 0.5, y: anchorY)
+                        .id(Self.activeNotationAnchorID(for: pageIndex))
+                        .accessibilityHidden(true)
+                }
+                if let anchorY = playbackAnchorY(pageHeight: pageHeight, topPadding: topPadding) {
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .position(x: zoomViewportWidth * 0.5, y: anchorY)
+                        .id(Self.playbackAnchorID(for: pageIndex))
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(width: zoomViewportWidth, height: zoomViewportHeight)
+            .allowsHitTesting(false)
+            .id("page-scroll-anchors-\(pageIndex)")
+            #else
             if let anchorY = activeNotationAnchorY(pageHeight: pageHeight, topPadding: topPadding) {
                 Color.clear
                     .frame(width: 1, height: 1)
@@ -293,6 +317,7 @@ struct ScoreReaderPageCanvas: View {
                     .id(Self.playbackAnchorID(for: pageIndex))
                     .accessibilityHidden(true)
             }
+            #endif
         }
         .frame(width: zoomViewportWidth, height: topPadding + zoomViewportHeight + bottomPadding)
         .frame(maxWidth: .infinity, alignment: outerCanvasAlignment)
