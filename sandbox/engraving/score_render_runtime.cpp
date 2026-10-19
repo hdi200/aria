@@ -4034,8 +4034,17 @@ void renderSelectionOverlay(msr::render::ScoreSelectionState& selectionState,
     selectionState.overlayNormalizedY = clampUnitInterval(cropRect.top() / page->height());
     selectionState.overlayNormalizedWidth = clampUnitInterval(cropRect.width() / page->width());
     selectionState.overlayNormalizedHeight = clampUnitInterval(cropRect.height() / page->height());
+#if defined(Q_OS_ANDROID)
+    // Android displays the selection PDF. Avoid painting/encoding an unused crop;
+    // preserve the existing PNG fallback when PDF generation produces no data.
+    renderSelectionOverlayPdf(selectionState, page, cropRect, items);
+    if (selectionState.overlayPdfData.empty()) {
+        renderSelectionOverlayPng(selectionState, cropRect, items);
+    }
+#else
     renderSelectionOverlayPng(selectionState, cropRect, items);
     renderSelectionOverlayPdf(selectionState, page, cropRect, items);
+#endif
 }
 
 bool renderNoteEntryPreviewOverlay(msr::render::NoteEntryPreviewState& previewState,
