@@ -445,7 +445,7 @@ struct ScoreReaderView: View {
                 ScoreReaderUnavailableView(detailText: session.renderPipeline.detailText)
                     .padding(28)
             } else {
-                readerCanvas
+                isolatedReaderCanvas
                     .animation(.easeInOut(duration: 0.22), value: readerState.interactionMode)
                     .overlay(alignment: .center) {
                         if readerState.isCountingIn, let beat = readerState.countInBeatNumber {
@@ -462,242 +462,25 @@ struct ScoreReaderView: View {
                         }
                     }
                     .overlay(alignment: .bottom) {
-                        if readerState.isEditingMode && !plainTextEditorIsActive {
-                            ScoreReaderNoteEntrySurface(
-                                editingState: readerState.editingState,
-                                pendingPitchClass: readerState.pendingPitchClass,
-                                pendingMIDIPitch: readerState.pendingMIDIPitch,
-                                stackedChordInputEnabled: readerState.stackedChordInputEnabled,
-                                showsCompactModeToolbar: !isPhoneInterface,
-                                isBusy: readerState.isEditingActionInFlight,
-                                errorText: nil,
-                                selectModeAction: selectModeFromToolbar,
-                                noteInputModeAction: noteInputModeFromToolbar,
-                                deleteSelectionAction: readerState.deleteSelection,
-                                clearSelectedMeasureAction: readerState.clearSelectedMeasure,
-                                removeSelectedMeasureAction: readerState.removeSelectedMeasure,
-                                addMeasureAction: readerState.addMeasure,
-                                addMultipleMeasuresAction: { isAddMeasuresPresented = true },
-                                copySelectedMeasureRangeAction: readerState.copySelectedMeasureRange,
-                                cutSelectedMeasureRangeAction: readerState.cutSelectedMeasureRange,
-                                pasteMeasureRangeAction: readerState.pasteMeasureRange,
-                                selectPreviousElementAction: readerState.selectPreviousElement,
-                                selectNextElementAction: readerState.selectNextElement,
-                                undoAction: readerState.undoEdit,
-                                redoAction: readerState.redoEdit,
-                                setCurrentVoiceAction: readerState.setCurrentVoice,
-                                selectedToolCategory: $selectedToolCategory,
-                                pendingAccidentalKind: readerState.pendingAccidentalKind,
-                                applyDurationAction: readerState.applyDuration,
-                                toggleDotAction: readerState.toggleDot,
-                                toggleRestAction: readerState.toggleRest,
-                                toggleTieAction: readerState.toggleTie,
-                                addTupletAction: readerState.addTuplet,
-                                toggleStackedChordInputAction: readerState.toggleStackedChordInput,
-                                editSelectedTextAction: presentTextEditor,
-                                addTextAction: readerState.addText,
-                                addChordTextAction: readerState.addChordText,
-                                addChordTextAndSelectNextAction: readerState.addChordTextAndSelectNext,
-                                openLyricsEntryAction: openLyricsEntry,
-                                addLyricsTextAction: readerState.addLyricsText,
-                                addLyricsHyphenAction: readerState.addLyricsHyphen,
-                                addLyricsMelismaAction: readerState.addLyricsMelisma,
-                                addRepeatJumpAction: readerState.addRepeatJump,
-                                addExpressionAction: readerState.addExpression,
-                                addLayoutBreakAction: requestLayoutBreak,
-                                removeLayoutBreakAction: readerState.removeLayoutBreak,
-                                updateLayoutOptionsAction: readerState.updateLayoutOptions,
-                                fillSelectionWithSlashesAction: readerState.fillSelectionWithSlashes,
-                                replaceSelectionWithRhythmicSlashesAction: readerState.replaceSelectionWithRhythmicSlashes,
-                                openAddInstrumentAction: {
-                                    instrumentsToAdd = []
-                                    if currentScoreInstruments.isEmpty {
-                                        currentScoreInstruments = scoreInstrumentsFromDocumentParts()
-                                    }
-                                    isAddInstrumentPresented = true
-                                },
-                                openTransposeScoreAction: openTransposeScoreSheet,
-                                removeSelectedInstrumentAction: readerState.removeSelectedInstrument,
-                                openClefEditorAction: { isClefPickerPresented = true },
-                                openAutoBreaksAction: { isAutoBreaksPresented = true },
-                                openInstrumentLayoutAction: {
-                                    instrumentLayoutParts = displayedScoreParts
-                                    isInstrumentLayoutPresented = true
-                                },
-                                openPageSettingsAction: { isPageSettingsPresented = true },
-                                openScoreSetupAction: { isScoreSetupPresented = true },
-                                openTempoEditorAction: { isTempoEditorPresented = true },
-                                openTimeSignatureAction: { isTimeSignaturePresented = true },
-                                openKeySignatureAction: { isKeySignaturePresented = true },
-                                openPickupMeasureAction: { readerState.presentPickupEditor(createNewMeasure: false) },
-                                openCreatePickupMeasureAction: { readerState.presentPickupEditor(createNewMeasure: true) },
-                                concertPitchEnabled: readerState.concertPitchEnabled,
-                                showsConcertPitchControl: showsConcertPitchControl,
-                                toggleConcertPitchAction: readerState.toggleConcertPitch,
-                                setKeyboardPitchAction: { pitchClass, midiPitch, preferFlats in
-                                    readerState.handleKeyboardPitch(pitchClass, midiPitch: midiPitch, preferFlats: preferFlats, exactMIDIPitch: true)
-                                },
-                                setPitchClassAction: readerState.handleKeyboardPitchClass,
-                                prepareAccidentalAction: readerState.prepareAccidental,
-                                changeAccidentalAction: readerState.changeSelectedAccidental,
-                                removeChordPitchAction: readerState.removeMIDIPitchFromCurrentChord,
-                                semitoneShiftAction: readerState.shiftPitchBySemitones,
-                                octaveShiftAction: readerState.shiftPitchByOctaves
-                            )
-                            .padding(.bottom, 0)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            .background(
-                                GeometryReader { proxy in
-                                    Color.clear
-                                        .onAppear { measuredNoteEntryPanelHeight = proxy.size.height }
-                                        .onChangeCompatible(of: proxy.size.height) { newHeight in
-                                            measuredNoteEntryPanelHeight = newHeight
-                                        }
-                                }
-                            )
-                        }
+                        #if os(Android)
+                        AndroidReaderObservationScope { noteEntryOverlay }
+                        #else
+                        noteEntryOverlay
+                        #endif
                     }
                     .overlay(alignment: floatingPaletteAlignment) {
-                        if let floatingToolCategory, readerState.isEditingMode, !isPhoneInterface {
-                            ScoreReaderFloatingToolPalette(
-                                selectedToolCategory: floatingToolCategory,
-                                isDockedLeft: floatingPaletteDockedLeft,
-                                editingState: readerState.editingState,
-                                pendingPitchClass: readerState.pendingPitchClass,
-                                pendingAccidentalKind: readerState.pendingAccidentalKind,
-                                isBusy: readerState.isEditingActionInFlight,
-                                showsDockSideToggle: !isIPadLandscapeLayout,
-                                applyDurationAction: readerState.applyDuration,
-                                toggleDotAction: readerState.toggleDot,
-                                toggleRestAction: readerState.toggleRest,
-                                toggleTieAction: readerState.toggleTie,
-                                addTupletAction: readerState.addTuplet,
-                                deleteSelectionAction: readerState.deleteSelection,
-                                addTextAction: readerState.addText,
-                                openChordEntryAction: openChordEntry,
-                                openLyricsEntryAction: openLyricsEntry,
-                                addRepeatJumpAction: readerState.addRepeatJump,
-                                addExpressionAction: readerState.addExpression,
-                                setPitchClassAction: readerState.handleKeyboardPitchClass,
-                                prepareAccidentalAction: readerState.prepareAccidental,
-                                changeAccidentalAction: readerState.changeSelectedAccidental,
-                                openTempoEditorAction: { isTempoEditorPresented = true },
-                                toggleDockSideAction: { floatingPaletteDockedLeft.toggle() }
-                            )
-                            .scrollsVerticallyOnAndroid(maxHeight: floatingPaletteMaxHeight)
-                            .padding(.top, floatingPaletteTopPadding)
-                            .padding(floatingPaletteDockedLeft ? .leading : .trailing, 16)
-                        }
+                        #if os(Android)
+                        AndroidReaderObservationScope { floatingPaletteOverlay }
+                        #else
+                        floatingPaletteOverlay
+                        #endif
                     }
                     .overlay(alignment: .top) {
-                        if isChromeVisible || readerState.interactionMode != .view {
-                            ScoreReaderChromeBar(
-                            scoreTitle: readerState.scoreTitle,
-                            parts: displayedScoreParts,
-                            selectedPartID: $selectedPartID,
-                            isPartsPanelPresented: $isPartsPanelPresented,
-                            isExportPanelPresented: $isExportPanelPresented,
-                            supportsEditing: readerState.supportsEditing,
-                            interactionMode: readerState.interactionMode,
-                            readingStyle: $readingStyle,
-                            playbackFollowEnabled: $readerState.playbackFollowEnabled,
-                            supportsPlayback: session.capabilities.supportsPlayback,
-                            editingState: readerState.editingState,
-                            playbackState: readerState.playbackState,
-                            metronomeEnabled: readerState.metronomeEnabled,
-                            countInEnabled: readerState.countInEnabled,
-                            isCountingIn: readerState.isCountingIn,
-                            isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isTransitioningScore || isPreparingExport,
-                            isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
-                            isExportBusy: isPreparingExport,
-                            supportsAnnotations: !isPhoneInterface && readerState.interactionMode == .view && annotationController.isEditable,
-                            annotationModeActive: isAnnotationModeActive,
-                            playbackPreparationMessage: readerState.playbackPreparationMessage,
-                            closeAction: closeReader,
-                            selectModeAction: selectModeFromToolbar,
-                            noteInputModeAction: noteInputModeFromToolbar,
-                            togglePlaybackAction: readerState.togglePlayback,
-                            stopPlaybackAction: readerState.stopPlayback,
-                            toggleMetronomeAction: readerState.toggleMetronome,
-                            toggleCountInAction: readerState.toggleCountIn,
-                            toggleMixerAction: {
-                                isPartsPanelPresented = false
-                                isExportPanelPresented = false
-                                withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented.toggle() }
-                                isChromeVisible = true
-                            },
-                            isMixerPresented: isMixerPresented,
-                            exportAction: {
-                                isPartsPanelPresented = false
-                                if !isExportPanelPresented {
-                                    exportDraft.exportPartsInConcertPitch = readerState.concertPitchEnabled
-                                    exportDraft.exportPartsInOriginalKey = false
-                                    if selectedPartID == "full-score" {
-                                        exportDraft.includesFullScore = true
-                                        exportDraft.includesParts = false
-                                    } else {
-                                        exportDraft.includesFullScore = false
-                                        exportDraft.includesParts = true
-                                        exportDraft.selectedPartIDs = [selectedPartID]
-                                    }
-                                }
-                                isExportPanelPresented.toggle()
-                            },
-                            annotationAction: toggleAnnotationMode,
-                            editDoneAction: {
-                                if isAnnotationModeActive {
-                                    exitAnnotationMode()
-                                }
-                                toggleInteractionMode()
-                            },
-                            selectPartAction: { partIndex in
-                                readerState.selectScorePart(index: partIndex)
-                            },
-                            managePartsAction: {
-                                isPartsPanelPresented = false
-                                instrumentsToAdd = []
-                                if currentScoreInstruments.isEmpty {
-                                    currentScoreInstruments = scoreInstrumentsFromDocumentParts()
-                                }
-                                isAddInstrumentPresented = true
-                            },
-                            allowsManagingParts: readerState.isEditingMode,
-                            exportPanelContent: {
-                                AnyView(
-                                    ScoreReaderExportPanel(
-                                        scoreTitle: readerState.scoreTitle,
-                                        sharingDescription: sharingDescription,
-                                        parts: displayedScoreParts,
-                                        isShowingTemporaryTransposedView: isShowingTemporaryTransposedView,
-                                        draft: $exportDraft,
-                                        isPreparingExport: isPreparingExport,
-                                        cancelAction: { isExportPanelPresented = false },
-                                        exportAction: exportScore,
-                                        exportProgress: exportProgress,
-                                        exportErrorMessage: exportErrorMessage,
-                                        openVideoSettingsAction: {
-                                            // A sheet shown from the popover stays small on iPad.
-                                            isExportPanelPresented = false
-                                            Task { @MainActor in
-                                                try? await Task.sleep(for: .milliseconds(350))
-                                                isVideoSheetPresented = true
-                                            }
-                                        }
-                                    )
-                                )
-                            }
-                        )
-                        .background(
-                            GeometryReader { proxy in
-                                Color.clear
-                                    .onAppear { measuredTopChromeHeight = proxy.size.height }
-                                    .onChangeCompatible(of: proxy.size.height) { newHeight in
-                                        measuredTopChromeHeight = newHeight
-                                    }
-                            }
-                        )
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
+                        #if os(Android)
+                        AndroidReaderObservationScope { readerChromeOverlay }
+                        #else
+                        readerChromeOverlay
+                        #endif
                     }
                     .overlay(alignment: .bottom) {
                         if isMixerPresented && UIDevice.current.userInterfaceIdiom != .phone {
@@ -878,11 +661,272 @@ struct ScoreReaderView: View {
         }
     }
 
+    @ViewBuilder
+    private var noteEntryOverlay: some View {
+        if readerState.isEditingMode && !plainTextEditorIsActive {
+            ScoreReaderNoteEntrySurface(
+                editingState: readerState.editingState,
+                pendingPitchClass: readerState.pendingPitchClass,
+                pendingMIDIPitch: readerState.pendingMIDIPitch,
+                stackedChordInputEnabled: readerState.stackedChordInputEnabled,
+                showsCompactModeToolbar: !isPhoneInterface,
+                isBusy: readerState.isEditingActionInFlight,
+                errorText: nil,
+                selectModeAction: selectModeFromToolbar,
+                noteInputModeAction: noteInputModeFromToolbar,
+                deleteSelectionAction: readerState.deleteSelection,
+                clearSelectedMeasureAction: readerState.clearSelectedMeasure,
+                removeSelectedMeasureAction: readerState.removeSelectedMeasure,
+                addMeasureAction: readerState.addMeasure,
+                addMultipleMeasuresAction: { isAddMeasuresPresented = true },
+                copySelectedMeasureRangeAction: readerState.copySelectedMeasureRange,
+                cutSelectedMeasureRangeAction: readerState.cutSelectedMeasureRange,
+                pasteMeasureRangeAction: readerState.pasteMeasureRange,
+                selectPreviousElementAction: readerState.selectPreviousElement,
+                selectNextElementAction: readerState.selectNextElement,
+                undoAction: readerState.undoEdit,
+                redoAction: readerState.redoEdit,
+                setCurrentVoiceAction: readerState.setCurrentVoice,
+                selectedToolCategory: $selectedToolCategory,
+                pendingAccidentalKind: readerState.pendingAccidentalKind,
+                applyDurationAction: readerState.applyDuration,
+                toggleDotAction: readerState.toggleDot,
+                toggleRestAction: readerState.toggleRest,
+                toggleTieAction: readerState.toggleTie,
+                addTupletAction: readerState.addTuplet,
+                toggleStackedChordInputAction: readerState.toggleStackedChordInput,
+                editSelectedTextAction: presentTextEditor,
+                addTextAction: readerState.addText,
+                addChordTextAction: readerState.addChordText,
+                addChordTextAndSelectNextAction: readerState.addChordTextAndSelectNext,
+                openLyricsEntryAction: openLyricsEntry,
+                addLyricsTextAction: readerState.addLyricsText,
+                addLyricsHyphenAction: readerState.addLyricsHyphen,
+                addLyricsMelismaAction: readerState.addLyricsMelisma,
+                addRepeatJumpAction: readerState.addRepeatJump,
+                addExpressionAction: readerState.addExpression,
+                addLayoutBreakAction: requestLayoutBreak,
+                removeLayoutBreakAction: readerState.removeLayoutBreak,
+                updateLayoutOptionsAction: readerState.updateLayoutOptions,
+                fillSelectionWithSlashesAction: readerState.fillSelectionWithSlashes,
+                replaceSelectionWithRhythmicSlashesAction: readerState.replaceSelectionWithRhythmicSlashes,
+                openAddInstrumentAction: {
+                    instrumentsToAdd = []
+                    if currentScoreInstruments.isEmpty {
+                        currentScoreInstruments = scoreInstrumentsFromDocumentParts()
+                    }
+                    isAddInstrumentPresented = true
+                },
+                openTransposeScoreAction: openTransposeScoreSheet,
+                removeSelectedInstrumentAction: readerState.removeSelectedInstrument,
+                openClefEditorAction: { isClefPickerPresented = true },
+                openAutoBreaksAction: { isAutoBreaksPresented = true },
+                openInstrumentLayoutAction: {
+                    instrumentLayoutParts = displayedScoreParts
+                    isInstrumentLayoutPresented = true
+                },
+                openPageSettingsAction: { isPageSettingsPresented = true },
+                openScoreSetupAction: { isScoreSetupPresented = true },
+                openTempoEditorAction: { isTempoEditorPresented = true },
+                openTimeSignatureAction: { isTimeSignaturePresented = true },
+                openKeySignatureAction: { isKeySignaturePresented = true },
+                openPickupMeasureAction: { readerState.presentPickupEditor(createNewMeasure: false) },
+                openCreatePickupMeasureAction: { readerState.presentPickupEditor(createNewMeasure: true) },
+                concertPitchEnabled: readerState.concertPitchEnabled,
+                showsConcertPitchControl: showsConcertPitchControl,
+                toggleConcertPitchAction: readerState.toggleConcertPitch,
+                setKeyboardPitchAction: { pitchClass, midiPitch, preferFlats in
+                    readerState.handleKeyboardPitch(pitchClass, midiPitch: midiPitch, preferFlats: preferFlats, exactMIDIPitch: true)
+                },
+                setPitchClassAction: readerState.handleKeyboardPitchClass,
+                prepareAccidentalAction: readerState.prepareAccidental,
+                changeAccidentalAction: readerState.changeSelectedAccidental,
+                removeChordPitchAction: readerState.removeMIDIPitchFromCurrentChord,
+                semitoneShiftAction: readerState.shiftPitchBySemitones,
+                octaveShiftAction: readerState.shiftPitchByOctaves
+            )
+            .padding(.bottom, 0)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { measuredNoteEntryPanelHeight = proxy.size.height }
+                        .onChangeCompatible(of: proxy.size.height) { newHeight in
+                            measuredNoteEntryPanelHeight = newHeight
+                        }
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var floatingPaletteOverlay: some View {
+        if let floatingToolCategory, readerState.isEditingMode, !isPhoneInterface {
+            ScoreReaderFloatingToolPalette(
+                selectedToolCategory: floatingToolCategory,
+                isDockedLeft: floatingPaletteDockedLeft,
+                editingState: readerState.editingState,
+                pendingPitchClass: readerState.pendingPitchClass,
+                pendingAccidentalKind: readerState.pendingAccidentalKind,
+                isBusy: readerState.isEditingActionInFlight,
+                showsDockSideToggle: !isIPadLandscapeLayout,
+                applyDurationAction: readerState.applyDuration,
+                toggleDotAction: readerState.toggleDot,
+                toggleRestAction: readerState.toggleRest,
+                toggleTieAction: readerState.toggleTie,
+                addTupletAction: readerState.addTuplet,
+                deleteSelectionAction: readerState.deleteSelection,
+                addTextAction: readerState.addText,
+                openChordEntryAction: openChordEntry,
+                openLyricsEntryAction: openLyricsEntry,
+                addRepeatJumpAction: readerState.addRepeatJump,
+                addExpressionAction: readerState.addExpression,
+                setPitchClassAction: readerState.handleKeyboardPitchClass,
+                prepareAccidentalAction: readerState.prepareAccidental,
+                changeAccidentalAction: readerState.changeSelectedAccidental,
+                openTempoEditorAction: { isTempoEditorPresented = true },
+                toggleDockSideAction: { floatingPaletteDockedLeft.toggle() }
+            )
+            .scrollsVerticallyOnAndroid(maxHeight: floatingPaletteMaxHeight)
+            .padding(.top, floatingPaletteTopPadding)
+            .padding(floatingPaletteDockedLeft ? .leading : .trailing, 16)
+        }
+    }
+
+    @ViewBuilder
+    private var readerChromeOverlay: some View {
+        if isChromeVisible || readerState.interactionMode != .view {
+            ScoreReaderChromeBar(
+            scoreTitle: readerState.scoreTitle,
+            parts: displayedScoreParts,
+            selectedPartID: $selectedPartID,
+            isPartsPanelPresented: $isPartsPanelPresented,
+            isExportPanelPresented: $isExportPanelPresented,
+            supportsEditing: readerState.supportsEditing,
+            interactionMode: readerState.interactionMode,
+            readingStyle: $readingStyle,
+            playbackFollowEnabled: $readerState.playbackFollowEnabled,
+            supportsPlayback: session.capabilities.supportsPlayback,
+            playbackState: readerState.playbackState,
+            metronomeEnabled: readerState.metronomeEnabled,
+            countInEnabled: readerState.countInEnabled,
+            isCountingIn: readerState.isCountingIn,
+            isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isTransitioningScore || isPreparingExport,
+            isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
+            isExportBusy: isPreparingExport,
+            supportsAnnotations: !isPhoneInterface && readerState.interactionMode == .view && annotationController.isEditable,
+            annotationModeActive: isAnnotationModeActive,
+            playbackPreparationMessage: readerState.playbackPreparationMessage,
+            closeAction: closeReader,
+            selectModeAction: selectModeFromToolbar,
+            noteInputModeAction: noteInputModeFromToolbar,
+            togglePlaybackAction: readerState.togglePlayback,
+            stopPlaybackAction: readerState.stopPlayback,
+            toggleMetronomeAction: readerState.toggleMetronome,
+            toggleCountInAction: readerState.toggleCountIn,
+            toggleMixerAction: {
+                isPartsPanelPresented = false
+                isExportPanelPresented = false
+                withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented.toggle() }
+                isChromeVisible = true
+            },
+            isMixerPresented: isMixerPresented,
+            exportAction: {
+                isPartsPanelPresented = false
+                if !isExportPanelPresented {
+                    exportDraft.exportPartsInConcertPitch = readerState.concertPitchEnabled
+                    exportDraft.exportPartsInOriginalKey = false
+                    if selectedPartID == "full-score" {
+                        exportDraft.includesFullScore = true
+                        exportDraft.includesParts = false
+                    } else {
+                        exportDraft.includesFullScore = false
+                        exportDraft.includesParts = true
+                        exportDraft.selectedPartIDs = [selectedPartID]
+                    }
+                }
+                isExportPanelPresented.toggle()
+            },
+            annotationAction: toggleAnnotationMode,
+            editDoneAction: {
+                if isAnnotationModeActive {
+                    exitAnnotationMode()
+                }
+                toggleInteractionMode()
+            },
+            selectPartAction: { partIndex in
+                readerState.selectScorePart(index: partIndex)
+            },
+            managePartsAction: {
+                isPartsPanelPresented = false
+                instrumentsToAdd = []
+                if currentScoreInstruments.isEmpty {
+                    currentScoreInstruments = scoreInstrumentsFromDocumentParts()
+                }
+                isAddInstrumentPresented = true
+            },
+            allowsManagingParts: readerState.isEditingMode,
+            exportPanelContent: {
+                AnyView(
+                    ScoreReaderExportPanel(
+                        scoreTitle: readerState.scoreTitle,
+                        sharingDescription: sharingDescription,
+                        parts: displayedScoreParts,
+                        isShowingTemporaryTransposedView: isShowingTemporaryTransposedView,
+                        draft: $exportDraft,
+                        isPreparingExport: isPreparingExport,
+                        cancelAction: { isExportPanelPresented = false },
+                        exportAction: exportScore,
+                        exportProgress: exportProgress,
+                        exportErrorMessage: exportErrorMessage,
+                        openVideoSettingsAction: {
+                            // A sheet shown from the popover stays small on iPad.
+                            isExportPanelPresented = false
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(350))
+                                isVideoSheetPresented = true
+                            }
+                        }
+                    )
+                )
+            }
+        )
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { measuredTopChromeHeight = proxy.size.height }
+                    .onChangeCompatible(of: proxy.size.height) { newHeight in
+                        measuredTopChromeHeight = newHeight
+                    }
+            }
+        )
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder
+    private var isolatedReaderCanvas: some View {
+        #if os(Android)
+        AndroidReaderObservationScope { readerCanvas }
+        #else
+        readerCanvas
+        #endif
+    }
+
+    @ViewBuilder
+    private var isolatedPhoneModeBar: some View {
+        #if os(Android)
+        AndroidReaderObservationScope { compactPhoneModeBar }
+        #else
+        compactPhoneModeBar
+        #endif
+    }
+
     private var readerLifecycleBody: some View {
         readerContent
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if readerState.isEditingMode && isPhoneInterface && !plainTextEditorIsActive {
-                compactPhoneModeBar
+                isolatedPhoneModeBar
             }
         }
         .onAppear { handleReaderAppear() }
@@ -931,6 +975,13 @@ struct ScoreReaderView: View {
                 break
             }
         }
+        #if os(Android)
+        .background(AndroidReaderObservationScope { AndroidReaderEditObservers(reader: readerState,
+            selectedToolCategory: $selectedToolCategory, clearSelectionMenu: clearSelectionCommandMenu,
+            anchorAnnotations: { regions in
+                annotationController.anchorPendingStrokes(partID: selectedPartID, regions: regions)
+            }) })
+        #else
         .onChangeCompatible(of: readerState.editingState.noteInputEnabled) { noteInputEnabled in
             selectedToolCategory = ScoreReaderToolModePolicy.category(
                 afterSettingNoteInputEnabled: noteInputEnabled,
@@ -946,6 +997,7 @@ struct ScoreReaderView: View {
                 selectedToolCategory = .select
             }
         }
+        #endif
         .onChangeCompatible(of: readerState.interactionMode) { mode in
             updatePhoneOrientation(for: mode)
             isChromeVisible = true
@@ -977,9 +1029,11 @@ struct ScoreReaderView: View {
             annotationController.clearSelection()
             saveRememberedReaderState()
         }
+        #if !os(Android)
         .onChangeCompatible(of: readerState.playbackMeasureRegions) { regions in
             annotationController.anchorPendingStrokes(partID: selectedPartID, regions: regions)
         }
+        #endif
         .onChangeCompatible(of: zoomScale) { _ in
             saveRememberedReaderState()
         }
@@ -1008,20 +1062,20 @@ struct ScoreReaderView: View {
 
     private var readerSheetsBody: some View {
         readerLifecycleBody
-        .sheet(item: $legacyRepairPrompt, onDismiss: {
+        .scoreReaderSheet(item: $legacyRepairPrompt, onDismiss: {
             Task { await presentReaderIntroductionIfNeeded() }
         }) { prompt in
             ScoreLegacyRepairSheet(issues: prompt.issues) { selectedIndexes in
                 try await applyLegacyRepairs(selectedIndexes, from: prompt)
             }
         }
-        .sheet(isPresented: $isUpdateNoticePresented, onDismiss: {
+        .scoreReaderSheet(isPresented: $isUpdateNoticePresented, onDismiss: {
             Task { await presentFeatureTourIfNeeded() }
         }) {
             UpdateNoticeSheet()
                 .onAppear { updateNoticeStore.markNoticeSeen() }
         }
-        .sheet(isPresented: Binding(
+        .scoreReaderSheet(isPresented: Binding(
             get: { isMixerPresented && UIDevice.current.userInterfaceIdiom == .phone },
             set: { isMixerPresented = $0 }
         )) {
@@ -1032,7 +1086,7 @@ struct ScoreReaderView: View {
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled)
         }
-        .sheet(item: $textEditorDraft) { draft in
+        .scoreReaderSheet(item: $textEditorDraft) { draft in
             ScoreReaderTextEditSheet(
                 draft: draft,
                 isBusy: readerState.isEditingActionInFlight,
@@ -1054,10 +1108,10 @@ struct ScoreReaderView: View {
                 }
             )
         }
-        .sheet(item: $sharedExportItems) { export in
+        .scoreReaderSheet(item: $sharedExportItems) { export in
             ScoreReaderShareSheetView(activityItems: export.urls)
         }
-        .sheet(isPresented: $isVideoSheetPresented, onDismiss: {
+        .scoreReaderSheet(isPresented: $isVideoSheetPresented, onDismiss: {
             videoPreviewCache.reset()
             // A finished video returns to the score; otherwise back to the export options.
             if completedVideoURLs.isEmpty {
@@ -1088,28 +1142,28 @@ struct ScoreReaderView: View {
                 }
             )
         }
-        .sheet(isPresented: $isTempoEditorPresented) {
+        .scoreReaderSheet(isPresented: $isTempoEditorPresented) {
             ScoreReaderTempoEditorSheet(
                 initialValue: readerState.editingState.selection?.tempoValue ?? TempoValue(beatUnit: .quarter, bpm: 112),
                 isBusy: readerState.isEditingActionInFlight,
                 commitAction: readerState.addTempo
             )
         }
-        .sheet(isPresented: $isTimeSignaturePresented) {
+        .scoreReaderSheet(isPresented: $isTimeSignaturePresented) {
             ScoreReaderTimeSignatureSheet(
                 currentValue: readerState.editingState.selection?.currentTimeSignatureValue ?? ScoreTimeSignatureValue(numerator: 4, denominator: 4),
                 isBusy: readerState.isEditingActionInFlight,
                 commitAction: readerState.updateTimeSignature
             )
         }
-        .sheet(isPresented: $isKeySignaturePresented) {
+        .scoreReaderSheet(isPresented: $isKeySignaturePresented) {
             ScoreReaderKeySignatureSheet(
                 currentKeyValue: readerState.editingState.selection?.currentKey ?? 0,
                 isBusy: readerState.isEditingActionInFlight,
                 commitAction: readerState.updateKeySignature
             )
         }
-        .sheet(item: $readerState.pickupEditorContext) { context in
+        .scoreReaderSheet(item: $readerState.pickupEditorContext) { context in
             ScoreReaderPickupEditorSheet(
                 context: context,
                 isBusy: readerState.isEditingActionInFlight,
@@ -1119,21 +1173,21 @@ struct ScoreReaderView: View {
                 removeAction: readerState.removePickupMeasure
             )
         }
-        .sheet(isPresented: $isScoreSetupPresented) {
+        .scoreReaderSheet(isPresented: $isScoreSetupPresented) {
             ScoreReaderSetupSheet(
                 metadata: readerState.scoreMetadata,
                 isBusy: readerState.isEditingActionInFlight,
                 commitAction: { try await readerState.updateScoreSetupMetadata($0) }
             )
         }
-        .sheet(isPresented: $isPageSettingsPresented) {
+        .scoreReaderSheet(isPresented: $isPageSettingsPresented) {
             ScoreReaderPageSettingsSheet(
                 initialValue: readerState.editingState.pageSettings,
                 isBusy: readerState.isEditingActionInFlight,
                 commitAction: readerState.updatePageLayout
             )
         }
-        .sheet(isPresented: $isInstrumentLayoutPresented) {
+        .scoreReaderSheet(isPresented: $isInstrumentLayoutPresented) {
             ScoreReaderInstrumentLayoutSheet(
                 parts: $instrumentLayoutParts,
                 isBusy: readerState.isEditingActionInFlight,
@@ -1145,7 +1199,7 @@ struct ScoreReaderView: View {
                 }
             )
         }
-        .sheet(item: $instrumentReplacementContext) { context in
+        .scoreReaderSheet(item: $instrumentReplacementContext) { context in
             ScoreReaderInstrumentReplacementSheet(
                 context: context,
                 isBusy: readerState.isEditingActionInFlight,
@@ -1154,7 +1208,7 @@ struct ScoreReaderView: View {
                 }
             )
         }
-        .sheet(item: $transposeSheetContext) { context in
+        .scoreReaderSheet(item: $transposeSheetContext) { context in
             ScoreReaderTransposePanel(
                 currentKey: context.currentKey,
                 title: context.scope == .score ? "Transpose Score" : "Transpose",
@@ -1172,13 +1226,13 @@ struct ScoreReaderView: View {
             )
             .presentationDetents([.large])
         }
-        .sheet(isPresented: $isAutoBreaksPresented) {
+        .scoreReaderSheet(isPresented: $isAutoBreaksPresented) {
             ScoreReaderAutoSystemBreaksSheet(
                 isBusy: readerState.isEditingActionInFlight,
                 commitAction: readerState.applyAutoSystemBreaks
             )
         }
-        .sheet(isPresented: $isAddMeasuresPresented) {
+        .scoreReaderSheet(isPresented: $isAddMeasuresPresented) {
             ScoreReaderAddMeasuresSheet(
                 isBusy: readerState.isEditingActionInFlight,
                 commitAction: { count in
@@ -1335,7 +1389,6 @@ struct ScoreReaderView: View {
 
     private var compactPhoneModeBar: some View {
         ScoreReaderModeToolbar(
-            editingState: readerState.editingState,
             isBusy: readerState.isEditingActionInFlight,
             isCompact: true,
             selectedToolCategory: $selectedToolCategory,
@@ -3519,5 +3572,34 @@ struct ScoreReaderSavingHUD: View {
 private extension String {
     func nonEmptyOrFallback(_ fallback: String) -> String {
         isEmpty ? fallback : self
+    }
+}
+
+// Skip Fuse constructs Boolean sheet content eagerly, even while it is closed.
+// Keep model reads inside a deferred, concrete child on Android. iOS keeps its
+// normal sheet content and presentation behavior.
+private extension View {
+    @ViewBuilder
+    func scoreReaderSheet<Content: View>(isPresented: Binding<Bool>,
+        onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Content) -> some View {
+        #if os(Android)
+        sheet(isPresented: isPresented, onDismiss: onDismiss) {
+            AndroidReaderObservationScope(content: content)
+        }
+        #else
+        sheet(isPresented: isPresented, onDismiss: onDismiss, content: content)
+        #endif
+    }
+
+    @ViewBuilder
+    func scoreReaderSheet<Item: Identifiable, Content: View>(item: Binding<Item?>,
+        onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping (Item) -> Content) -> some View {
+        #if os(Android)
+        sheet(item: item, onDismiss: onDismiss) { item in
+            AndroidReaderObservationScope { content(item) }
+        }
+        #else
+        sheet(item: item, onDismiss: onDismiss, content: content)
+        #endif
     }
 }

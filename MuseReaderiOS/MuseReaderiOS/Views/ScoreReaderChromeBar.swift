@@ -53,7 +53,6 @@ struct ScoreReaderChromeBar: View {
     @Binding var readingStyle: ScoreReaderReadingStyle
     @Binding var playbackFollowEnabled: Bool
     let supportsPlayback: Bool
-    let editingState: ScoreEditingState
     let playbackState: ScorePlaybackState
     let metronomeEnabled: Bool
     let countInEnabled: Bool

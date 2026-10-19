@@ -170,7 +170,6 @@ struct ScoreReaderNoteEntrySurface: View {
             Spacer(minLength: 0)
 
             ScoreReaderModeToolbar(
-                editingState: editingState,
                 isBusy: isBusy,
                 selectedToolCategory: $selectedToolCategory,
                 selectModeAction: {
@@ -996,7 +995,6 @@ struct ScoreReaderNoteEntrySurface: View {
 
     private var modeToolbar: some View {
         ScoreReaderModeToolbar(
-            editingState: editingState,
             isBusy: isBusy,
             selectedToolCategory: $selectedToolCategory,
             selectModeAction: {
@@ -1014,7 +1012,6 @@ struct ScoreReaderNoteEntrySurface: View {
 
     private var compactModeToolbar: some View {
         ScoreReaderModeToolbar(
-            editingState: editingState,
             isBusy: isBusy,
             isCompact: true,
             selectedToolCategory: $selectedToolCategory,

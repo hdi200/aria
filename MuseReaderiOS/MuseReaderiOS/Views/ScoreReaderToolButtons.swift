@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ScoreReaderModeToolbar: View {
-    let editingState: ScoreEditingState
     let isBusy: Bool
     var isCompact = false
     @Binding var selectedToolCategory: ScoreReaderToolCategory
