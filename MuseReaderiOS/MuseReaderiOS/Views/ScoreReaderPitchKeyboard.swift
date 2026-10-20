@@ -114,6 +114,11 @@ struct ScoreReaderWidePitchKeyboard: View {
                     #endif
                 }
             }
+            #if os(Android) && ARIA_PHONE_AUDIT
+            // TEST: retain only concrete key drawing. Live hit testing, actions,
+            // enabled opacity and range-following callbacks remain outside.
+            .auditKeyboardDrawingBoundary(inputs: "\(useFlats)|\(activePitchClass ?? -1)|\(activeMIDIPitch ?? -1)|\(activeMIDIPitches)|\(renderedKeys.first?.midiPitch ?? -1)|\(renderedKeys.count)|\(whiteWidth)|\(blackWidth)|\(keyHeight)|\(dragTranslation)|\(activeAccidentalLabelFontSize)")
+            #endif
             .opacity(isEnabled ? 1 : 0.55)
             #if !os(Android)
             .offset(x: leadingBufferOffset + dragTranslation)
@@ -491,6 +496,20 @@ struct ScoreReaderWidePitchKeyboard: View {
         }
     }
 }
+
+#if os(Android) && ARIA_PHONE_AUDIT
+private extension View {
+    @ViewBuilder func auditKeyboardDrawingBoundary(inputs: @autoclosure () -> String) -> some View {
+        if AndroidPhoneAuditExperiment.current == "keyboard" {
+            // A retained Compose host, unlike ordinary child-view extraction.
+            // The key covers every value used by the drawing; no action is cached.
+            self.androidCompositionBoundary(id: "aria-test-pitch-key-drawing", inputs: inputs())
+        } else {
+            self
+        }
+    }
+}
+#endif
 
 struct PianoNaturalKey {
     let midiPitch: Int
