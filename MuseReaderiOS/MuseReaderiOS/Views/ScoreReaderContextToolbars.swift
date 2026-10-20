@@ -823,6 +823,30 @@ struct ScoreReaderCompactGroupedPaletteButton: View {
     }
 }
 
+#if os(Android) && ARIA_PHONE_AUDIT
+private struct AndroidAuditPaletteLabelInputs: Equatable {
+    let duration: ScoreNoteDuration?
+    let textSymbol: String?
+    let systemImage: String?
+    let stacked: Bool
+    let usesMusicFont: Bool
+    let baseline: CGFloat
+    let musicSize: CGFloat
+    let verticalOffset: CGFloat
+    let selected: Bool
+}
+
+private extension View {
+    @ViewBuilder func auditStablePaletteLabel(_ inputs: AndroidAuditPaletteLabelInputs) -> some View {
+        if AndroidPhoneAuditExperiment.current == "b" {
+            self.androidEquatable(recomposeOverride: inputs)
+        } else {
+            self
+        }
+    }
+}
+#endif
+
 struct ScoreReaderCompactGridPaletteButton: View {
     var duration: ScoreNoteDuration? = nil
     var textSymbol: String? = nil
@@ -883,6 +907,14 @@ struct ScoreReaderCompactGridPaletteButton: View {
                     .allowsHitTesting(false)
             }
             .contentShape(Rectangle())
+            #if os(Android) && ARIA_PHONE_AUDIT
+            // Experiment B: busy/enabled changes affect the live Button wrapper,
+            // while glyphs, highlights and background are reused when equal.
+            .auditStablePaletteLabel(AndroidAuditPaletteLabelInputs(duration: duration,
+                textSymbol: textSymbol, systemImage: systemImage, stacked: stackedChordIcon,
+                usesMusicFont: usesMusicFont, baseline: glyphBaselineOffset,
+                musicSize: musicFontSize, verticalOffset: glyphVerticalOffset, selected: isSelected))
+            #endif
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
