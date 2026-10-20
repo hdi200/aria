@@ -43,6 +43,9 @@ struct ScoreReaderWidePitchKeyboard: View {
         let _ = AndroidRedrawTrigger.pitchKeyboard.count
         #endif
         GeometryReader { geometry in
+            #if os(Android) && ARIA_PHONE_AUDIT
+            let _ = AndroidInteractionTrace.focusedPoint("keyboard_geometry_begin")
+            #endif
             let visibleNaturalKeyCount = visibleNaturalKeyCountForWidth(geometry.size.width)
             let keyHeight = max(geometry.size.height, 1)
             // Render one extra natural key on each side (overscan) so keys can
@@ -50,6 +53,13 @@ struct ScoreReaderWidePitchKeyboard: View {
             // the edges. whiteWidth stays based on the *visible* count.
             let renderedKeys = renderedNaturalKeys(visibleNaturalKeyCount: visibleNaturalKeyCount)
             let blackKeys = visibleBlackKeys(for: renderedKeys)
+            #if os(Android) && ARIA_PHONE_AUDIT
+            let _ = AndroidInteractionTrace.focusedPoint("keyboard_active_midi", value: activeMIDIPitch ?? -1)
+            let _ = AndroidInteractionTrace.focusedPoint("keyboard_follows", value: followsActiveMIDIPitch ? 1 : 0)
+            let _ = AndroidInteractionTrace.focusedPoint("keyboard_enabled", value: isEnabled ? 1 : 0)
+            let _ = AndroidInteractionTrace.focusedPoint("keyboard_first_midi", value: renderedKeys.first?.midiPitch ?? -1)
+            let _ = AndroidInteractionTrace.focusedPoint("keyboard_key_count", value: renderedKeys.count + blackKeys.count)
+            #endif
             let whiteWidth = geometry.size.width / CGFloat(max(visibleNaturalKeyCount, 1))
             let blackWidth = min(whiteWidth * 0.58, maximumBlackKeyWidth)
             let leadingBufferOffset = -whiteWidth
@@ -64,8 +74,14 @@ struct ScoreReaderWidePitchKeyboard: View {
                 // Measure keys independently: a constrained Compose Row drops the
                 // trailing overscan keys, leaving a blank strip after the left shift.
                 ForEach(Array(renderedKeys.enumerated()), id: \.offset) { index, key in
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    let _ = AndroidInteractionTrace.focusedPoint("keyboard_white_begin")
+                    #endif
                     naturalKeyView(key, width: whiteWidth, height: keyHeight)
                         .offset(x: whiteWidth * CGFloat(index) + leadingBufferOffset + dragTranslation)
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    let _ = AndroidInteractionTrace.focusedPoint("keyboard_white_end")
+                    #endif
                 }
                 #else
                 HStack(spacing: 0) {
@@ -76,6 +92,9 @@ struct ScoreReaderWidePitchKeyboard: View {
                 #endif
 
                 ForEach(blackKeys, id: \.midiPitch) { key in
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    let _ = AndroidInteractionTrace.focusedPoint("keyboard_black_begin")
+                    #endif
                     ZStack(alignment: .bottom) {
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(isActive(midiPitch: key.midiPitch) ? Color(red: 0.12, green: 0.34, blue: 0.78) : Color(red: 0.08, green: 0.09, blue: 0.10))
@@ -90,6 +109,9 @@ struct ScoreReaderWidePitchKeyboard: View {
                     }
                     .frame(width: blackWidth, height: 62)
                     .offset(x: whiteWidth * CGFloat(key.leftNaturalIndex + 1) - (blackWidth / 2) + blackKeyTranslation)
+                    #if os(Android) && ARIA_PHONE_AUDIT
+                    let _ = AndroidInteractionTrace.focusedPoint("keyboard_black_end")
+                    #endif
                 }
             }
             .opacity(isEnabled ? 1 : 0.55)
@@ -125,6 +147,9 @@ struct ScoreReaderWidePitchKeyboard: View {
                     updateLockedRange(for: activeMIDIPitch, visibleNaturalKeyCount: visibleNaturalKeyCount)
                 }
             }
+            #if os(Android) && ARIA_PHONE_AUDIT
+            let _ = AndroidInteractionTrace.focusedPoint("keyboard_geometry_end")
+            #endif
         }
         #if os(Android) && ARIA_PHONE_AUDIT
         let _ = AndroidInteractionTrace.point("evaluate_keyboard_end")

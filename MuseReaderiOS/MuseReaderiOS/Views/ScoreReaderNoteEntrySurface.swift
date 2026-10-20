@@ -101,7 +101,11 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var regularBody: some View {
-        VStack(spacing: 0) {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.focusedPoint("palette_regularBody_begin")
+        defer { AndroidInteractionTrace.focusedPoint("palette_regularBody_end") }
+        #endif
+        return VStack(spacing: 0) {
             if let errorText = errorText?.trimmedToNil {
                 Text(errorText)
                     .font(.caption.weight(.semibold))
@@ -216,7 +220,12 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var compactBody: some View {
-        VStack(spacing: 0) {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.focusedPoint("palette_compactBody_begin")
+        AndroidInteractionTrace.focusedPoint("palette_busy", value: isBusy ? 1 : 0)
+        defer { AndroidInteractionTrace.focusedPoint("palette_compactBody_end") }
+        #endif
+        return VStack(spacing: 0) {
             if let errorText = errorText?.trimmedToNil {
                 Text(errorText)
                     .font(.caption2.weight(.semibold))
@@ -293,7 +302,11 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var compactLandscapeBody: some View {
-        VStack(spacing: 0) {
+        #if os(Android) && ARIA_PHONE_AUDIT
+        AndroidInteractionTrace.focusedPoint("palette_compactLandscapeBody_begin")
+        defer { AndroidInteractionTrace.focusedPoint("palette_compactLandscapeBody_end") }
+        #endif
+        return VStack(spacing: 0) {
             if let errorText = errorText?.trimmedToNil {
                 Text(errorText)
                     .font(.caption2.weight(.semibold))
