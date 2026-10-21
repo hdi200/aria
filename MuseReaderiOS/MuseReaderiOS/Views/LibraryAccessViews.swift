@@ -40,6 +40,18 @@ struct LibraryPaywallView: View {
     @State var didUnlock = false
 
     var body: some View {
+        #if os(Android)
+        // Skip's finite-width frame can exceed a narrower sheet proposal.
+        // Measure outside the ScrollView so its column stays within the sheet.
+        GeometryReader { geometry in
+            paywallContent(maximumWidth: min(520, geometry.size.width))
+        }
+        #else
+        paywallContent(maximumWidth: 520)
+        #endif
+    }
+
+    private func paywallContent(maximumWidth: CGFloat) -> some View {
         ScrollView {
             VStack(spacing: 0) {
                 HStack(spacing: 11) {
@@ -154,7 +166,7 @@ struct LibraryPaywallView: View {
             .padding(.horizontal, horizontalSizeClass == .regular ? 34 : 22)
             .padding(.top, 18)
             .padding(.bottom, 32)
-            .frame(maxWidth: 520)
+            .frame(maxWidth: maximumWidth)
             .frame(maxWidth: .infinity)
         }
         .background(LibraryPalette.mainBackground)
