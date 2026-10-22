@@ -197,7 +197,9 @@ enum NewScoreInstrumentCatalog {
                                    genres: Set<NewScoreInstrumentGenre>) -> NewScoreInstrument
     {
         NewScoreInstrument(
-            instanceID: instrumentID,
+            // Catalog aliases can share an engine ID (e.g. concert/marching drums).
+            // List identity must distinguish those rows, just as score instances do.
+            instanceID: "\(category.rawValue):\(instrumentID)",
             instrumentID: instrumentID,
             name: name,
             category: category,
