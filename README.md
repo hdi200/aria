@@ -1,12 +1,27 @@
 # Aria
 
-Aria is an iOS score reader and editor for MuseScore and MusicXML files. It pairs a SwiftUI library/reader interface with a MuseScore Studio-derived render core so scores can be opened, rendered, edited, played back, saved, and exported on iPhone and iPad.
+Aria is a score reader and editor for MuseScore and MusicXML files on iPhone, iPad, and Android phones and tablets. It combines a touch-oriented library and editor with a MuseScore Studio-derived render core for notation, playback, saving, and export.
 
 Aria is not affiliated with, sponsored by, or endorsed by MuseScore, Muse Group, or MuseScore Studio. MuseScore names are used descriptively to identify supported file formats and the upstream codebase this project derives from.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
+## Get the App
+
+- [App Store — iPhone and iPad](https://apps.apple.com/app/id6779437781): iOS/iPadOS 17 or later.
+- [Google Play — Android](https://play.google.com/store/apps/details?id=com.hdi200.ariascore): Android 9 (Pie/API 28) or later, on 64-bit ARM devices.
+
+## Features
+
+- Create scores or import existing MuseScore and MusicXML files.
+- Enter and edit notes, chords, voices, instruments, and score text, with selection and undo.
+- Read full scores and individual parts, zoom and pan, annotate pages, and play scores back.
+- Organize scores into setlists and combine setlist scores into a PDF.
+- Autosave supported edits and export MuseScore, PDF, MusicXML, MIDI, WAV audio, PNG images, and video.
+
 ## What Is Here
+
+This public checkout contains the iOS app and the shared Swift and render-core sources. Shared Swift files include Android-specific branches. The Android-specific Skip/Gradle project, platform shims, and vendored Android dependencies are maintained in a separate private repository and are not included in this checkout. The build instructions below cover iOS.
 
 - `MuseReaderiOS/`: the iOS app, Xcode project, SwiftUI views, document library, import flow, playback, editing state, legal resources, tests, and Objective-C++ bridge.
 - `sandbox/engraving/`: the reusable MuseScore-derived render core used by the app for page rendering, score edits, playback data, MusicXML export, and saving.
@@ -24,11 +39,15 @@ Aria can import and open:
 - `.musicxml`
 - `.xml`
 
-The app stores imported scores in its visible iOS Documents area under `Scores/`, keeps a private index in Application Support, and autosaves supported edits back to the managed score file.
+The app autosaves supported edits to its managed score file. On iOS, imported scores are stored in the visible Documents area under `Scores/`, with a private index in Application Support.
+
+## MuseScore Compatibility
+
+The render core uses MuseScore Studio **4.7.5**, with Aria patches, and saves genuine **4.70-format** scores for desktop MuseScore Studio compatibility. Engine provenance, patches, and upgrade instructions are documented in [ENGINE.md](sandbox/engraving/compat/ENGINE.md); compatibility checks are in the [compatibility README](sandbox/engraving/compat/README.md).
 
 ## Architecture
 
-At a high level:
+The iOS path, at a high level:
 
 1. `MuseReaderiOSApp` launches the SwiftUI app and shows `LibraryView`.
 2. `MuseReaderAppModel` handles imports, recent scores, setlists, score creation, and opening sessions.
@@ -39,6 +58,8 @@ At a high level:
 7. `sandbox/engraving/score_render_core.*` uses MuseScore Studio engraving, MusicXML, playback, and save APIs for the actual notation behavior.
 
 Edits are intentionally routed through the MuseScore-derived engine. The Swift layer manages UI state, page cache invalidation, playback invalidation, and save timing around the edit state returned by the render core.
+
+The Android app reuses the shared Swift logic and SwiftUI views through Skip Fuse, which compiles Swift natively for Android and presents the views through Jetpack Compose. Its separate platform project supplies the Android engine bridge and framework shims.
 
 ## Getting The Source
 
@@ -59,7 +80,7 @@ wc -c MuseReaderiOS/MuseReaderiOS/Resources/MuseScore_General.sf2
 
 `MuseReaderiOS/MuseReaderiOS/Resources/MuseScore_General.sf2` is required for current iOS playback. Do not remove it or replace it with only an `.sf3` file; the iOS audio path depends on the `.sf2` SoundFont.
 
-## Build Requirements
+## iOS Build Requirements
 
 - macOS with Xcode and the iOS SDK.
 - CMake.
@@ -107,7 +128,15 @@ Build directories are created under `/tmp`:
 
 If you build for Simulator, make sure an iOS Simulator runtime is installed. A physical device build does not require a local Simulator runtime.
 
-## Tests
+## iOS Tests and Source Checks
+
+For a focused video-export source check that does not invoke Xcode or rebuild the render core:
+
+```sh
+python3 MuseReaderiOS/Checks/check_video_export.py
+```
+
+See [the export-check README](MuseReaderiOS/Checks/README.md) for its scope and optional runtime checks.
 
 The iOS test target includes parser, package inspection, session-opening, and render-core bridge coverage:
 
