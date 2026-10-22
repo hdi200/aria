@@ -307,30 +307,28 @@ struct LibraryView: View {
         .alert(item: visibleErrorAlert) { alert in
             Alert(title: Text(alert.title), message: Text(alert.message))
         }
-        .alert("Delete Score?", isPresented: deleteConfirmationIsPresented) {
+        // Capture alert data: Android dismisses (and clears the pending target)
+        // before invoking the button action.
+        .alert("Delete Score?", isPresented: deleteConfirmationIsPresented, presenting: scorePendingDeletion) { score in
             Button("Cancel", role: .cancel) {
                 scorePendingDeletion = nil
             }
             Button("Delete", role: .destructive) {
-                if let scorePendingDeletion {
-                    model.deleteScore(scorePendingDeletion)
-                }
+                model.deleteScore(score)
                 scorePendingDeletion = nil
             }
-        } message: {
+        } message: { _ in
             Text("This removes the score from your library.")
         }
-        .alert("Delete Setlist?", isPresented: setlistDeleteConfirmationIsPresented) {
+        .alert("Delete Setlist?", isPresented: setlistDeleteConfirmationIsPresented, presenting: folderPendingDeletion) { folder in
             Button("Cancel", role: .cancel) {
                 folderPendingDeletion = nil
             }
             Button("Delete", role: .destructive) {
-                if let folderPendingDeletion {
-                    deleteSetlist(folderPendingDeletion)
-                }
+                deleteSetlist(folder)
                 folderPendingDeletion = nil
             }
-        } message: {
+        } message: { _ in
             Text("This deletes the setlist but keeps all of its scores in your library.")
         }
         .alert("Could Not Save Score Info", isPresented: scoreInfoSaveErrorIsPresented) {
@@ -350,18 +348,17 @@ struct LibraryView: View {
         } message: {
             Text("Create a setlist for organizing scores in performance order.")
         }
-        .alert("Rename Setlist", isPresented: renameConfirmationIsPresented) {
+        .alert("Rename Setlist", isPresented: renameConfirmationIsPresented, presenting: folderPendingRename) { folder in
+            let proposedName = renameSetlistName
             TextField("Setlist name", text: $renameSetlistName)
             Button("Cancel", role: .cancel) {
                 folderPendingRename = nil
                 renameSetlistName = ""
             }
             Button("Rename") {
-                if let folderPendingRename {
-                    model.renameSetlistFolder(folderPendingRename, to: renameSetlistName)
-                    if selectedCategory == .setlist(folderPendingRename.id) {
-                        selectedCategory = .setlist(folderPendingRename.id)
-                    }
+                model.renameSetlistFolder(folder, to: proposedName)
+                if selectedCategory == .setlist(folder.id) {
+                    selectedCategory = .setlist(folder.id)
                 }
                 folderPendingRename = nil
                 renameSetlistName = ""
