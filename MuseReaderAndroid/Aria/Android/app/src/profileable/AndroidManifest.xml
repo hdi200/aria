@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Local release profiling overlay. Never used for an upload bundle. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <profileable android:shell="true" tools:targetApi="29" />
+    </application>
+</manifest>

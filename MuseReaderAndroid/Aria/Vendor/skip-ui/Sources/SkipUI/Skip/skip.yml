@@ -1,0 +1,101 @@
+# Skip configuration for SkipUI module
+
+#skip:
+#  package: 'skip.ui'
+
+# the blocks to add to the settings.gradle.kts
+settings:
+  contents:
+    - block: 'dependencyResolutionManagement'
+      contents:
+        - block: 'versionCatalogs'
+          contents:
+            - block: 'create("libs")'
+              contents:
+                - 'version("coil", "3.4.0")'
+                - 'version("androidx-nav3", "1.0.1")'
+                - 'version("kotlinx-serialization-json", "1.8.1")'
+                - 'version("androidx-appcompat", "1.7.1")'
+                - 'version("androidx-activity", "1.13.0")'
+                - 'version("androidx-lifecycle-process", "2.10.0")'
+                - 'version("androidx-material3-adaptive", "1.2.0")'
+                - 'version("androidx-work", "2.11.1")'
+
+                # the version for these libraries is derived from the kotlin-bom declared is skip-model/Sources/SkipModel/Skip/skip.yml
+                - 'library("androidx-core-ktx", "androidx.core", "core-ktx").withoutVersion()'
+                - 'library("androidx-compose-ui", "androidx.compose.ui", "ui").withoutVersion()'
+                - 'library("androidx-compose-ui-tooling", "androidx.compose.ui", "ui-tooling").withoutVersion()'
+                - 'library("androidx-compose-animation", "androidx.compose.animation", "animation").withoutVersion()'
+                - 'library("androidx-compose-material", "androidx.compose.material", "material").withoutVersion()'
+                - 'library("androidx-compose-material3", "androidx.compose.material3", "material3").withoutVersion()'
+                - 'library("androidx-compose-material-icons-extended", "androidx.compose.material", "material-icons-extended").withoutVersion()'
+                - 'library("androidx-compose-foundation", "androidx.compose.foundation", "foundation").withoutVersion()'
+                - 'library("androidx-appcompat", "androidx.appcompat", "appcompat").versionRef("androidx-appcompat")'
+                - 'library("androidx-appcompat-resources", "androidx.appcompat", "appcompat-resources").versionRef("androidx-appcompat")'
+
+                - 'library("androidx-navigation3-runtime", "androidx.navigation3", "navigation3-runtime").versionRef("androidx-nav3")'
+                - 'library("androidx-navigation3-ui", "androidx.navigation3", "navigation3-ui").versionRef("androidx-nav3")'
+                - 'library("kotlinx-serialization-json", "org.jetbrains.kotlinx", "kotlinx-serialization-json").versionRef("kotlinx-serialization-json")'
+                - 'plugin("kotlin-serialization", "org.jetbrains.kotlin.plugin.serialization").versionRef("kotlin")'
+                - 'library("androidx-activity-compose", "androidx.activity", "activity-compose").versionRef("androidx-activity")'
+                - 'library("androidx-lifecycle-process", "androidx.lifecycle", "lifecycle-process").versionRef("androidx-lifecycle-process")'
+                - 'library("androidx-compose-material3-adaptive", "androidx.compose.material3.adaptive", "adaptive").versionRef("androidx-material3-adaptive")'
+                - 'library("androidx-compose-material3-adaptive-navigation-suite", "androidx.compose.material3", "material3-adaptive-navigation-suite").versionRef("androidx-material3-adaptive")'
+
+                - 'library("androidx-work-runtime", "androidx.work", "work-runtime-ktx").versionRef("androidx-work")'
+
+                - 'library("coil-compose", "io.coil-kt.coil3", "coil-compose").versionRef("coil")'
+                - 'library("coil-network-okhttp", "io.coil-kt.coil3", "coil-network-okhttp").versionRef("coil")'
+                - 'library("coil-svg", "io.coil-kt.coil3", "coil-svg").versionRef("coil")'
+                #- 'library("coil-gif", "io.coil-kt.coil3", "coil-gif").versionRef("coil")'
+
+                - 'library("androidx-compose-ui-test", "androidx.compose.ui", "ui-test").withoutVersion()'
+                - 'library("androidx-compose-ui-test-junit4", "androidx.compose.ui", "ui-test-junit4").withoutVersion()'
+                - 'library("androidx-compose-ui-test-manifest", "androidx.compose.ui", "ui-test-manifest").withoutVersion()'
+
+# the blocks to add to the build.gradle.kts
+build:
+  contents:
+    - block: 'plugins'
+      contents:
+        - 'alias(libs.plugins.kotlin.compose)'
+        - 'alias(libs.plugins.kotlin.serialization)'
+
+    - block: 'android'
+      contents:
+        - block: 'buildFeatures'
+          contents:
+            #- 'compose = true'
+
+    - block: 'dependencies'
+      export: false
+      contents:
+        - 'api(libs.androidx.core.ktx)'
+        - 'api(libs.androidx.compose.ui)'
+        - 'api(libs.androidx.compose.ui.tooling)'
+        - 'api(libs.androidx.compose.animation)'
+        - 'api(libs.androidx.compose.material)'
+        - 'api(libs.androidx.compose.material.icons.extended)'
+        - 'api(libs.androidx.compose.material3)'
+        - 'api(libs.androidx.compose.material3.adaptive)'
+        - 'api(libs.androidx.compose.material3.adaptive.navigation.suite)'
+        - 'api(libs.androidx.compose.foundation)'
+        - 'api(libs.androidx.navigation3.runtime)'
+        - 'api(libs.androidx.navigation3.ui)'
+        - 'api(libs.kotlinx.serialization.json)'
+        - 'api(libs.androidx.appcompat)'
+        - 'api(libs.androidx.appcompat.resources)'
+        - 'api(libs.androidx.activity.compose)'
+        - 'api(libs.androidx.lifecycle.process)'
+        - 'api(libs.androidx.work.runtime)'
+        - 'implementation(libs.coil.compose)'
+        - 'implementation(libs.coil.network.okhttp)'
+        - 'implementation(libs.coil.svg)'
+        #- 'implementation(libs.coil.gif)'
+
+        - 'testImplementation(libs.androidx.compose.ui.test)'
+        - 'androidTestImplementation(libs.androidx.compose.ui.test)'
+        - 'testImplementation(libs.androidx.compose.ui.test.junit4)'
+        - 'androidTestImplementation(libs.androidx.compose.ui.test.junit4)'
+        - 'testImplementation(libs.androidx.compose.ui.test.manifest)'
+        - 'androidTestImplementation(libs.androidx.compose.ui.test.manifest)'

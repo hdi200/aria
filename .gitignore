@@ -112,5 +112,4 @@ MuseReaderiOS/MuseReaderiOSUITests/PromoTrailerUITests.swift
 MuseReaderiOS/MuseReaderiOS/Resources/VideoBackgrounds/
 MuseReaderiOS/MuseReaderiOS/Resources/WhatsNew/
 
-# Android app, private until release (has its own private repo inside)
-/MuseReaderAndroid/
+# Android source is tracked; its own ignore rules exclude local reports and builds.

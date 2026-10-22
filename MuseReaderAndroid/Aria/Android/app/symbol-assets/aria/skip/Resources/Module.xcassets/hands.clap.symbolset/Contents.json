@@ -1,0 +1,12 @@
+{
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "symbols": [
+    {
+      "filename": "hands.clap.svg",
+      "idiom": "universal"
+    }
+  ]
+}

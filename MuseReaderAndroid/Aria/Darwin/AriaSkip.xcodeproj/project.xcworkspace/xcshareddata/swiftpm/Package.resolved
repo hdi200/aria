@@ -1,0 +1,114 @@
+{
+  "originHash" : "be640bf45545041f54faf2fd9172675c5581987077b63ae2dc787bf923627893",
+  "pins" : [
+    {
+      "identity" : "skip",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip.git",
+      "state" : {
+        "revision" : "2d1573ab56761bc334272d8ef4f16566c49970d8",
+        "version" : "1.9.16"
+      }
+    },
+    {
+      "identity" : "skip-android-bridge",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-android-bridge.git",
+      "state" : {
+        "revision" : "19e85888165f952421b11d90f11793b33d2d75a4",
+        "version" : "0.7.4"
+      }
+    },
+    {
+      "identity" : "skip-bridge",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-bridge.git",
+      "state" : {
+        "revision" : "83866d718c09ca508f499744fc8896a891074a3f",
+        "version" : "0.18.0"
+      }
+    },
+    {
+      "identity" : "skip-foundation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-foundation.git",
+      "state" : {
+        "revision" : "c5d74ef694ba21a0d42542ef58b598b638f2b7fc",
+        "version" : "1.4.7"
+      }
+    },
+    {
+      "identity" : "skip-fuse",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-fuse.git",
+      "state" : {
+        "revision" : "8b69bb0b5be7df880b8f9b3d2eb6659909a5b5c5",
+        "version" : "1.0.3"
+      }
+    },
+    {
+      "identity" : "skip-fuse-ui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-fuse-ui.git",
+      "state" : {
+        "revision" : "36479f246560f72c64af30fc8e8927c84550f70c",
+        "version" : "1.19.0"
+      }
+    },
+    {
+      "identity" : "skip-lib",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-lib.git",
+      "state" : {
+        "revision" : "21a1c7c8f97730b3a3d88058daf8c9d78a9c7c43",
+        "version" : "1.4.3"
+      }
+    },
+    {
+      "identity" : "skip-model",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-model.git",
+      "state" : {
+        "revision" : "3de7c8315f35035a905225b9057d4272772aa0ef",
+        "version" : "1.8.0"
+      }
+    },
+    {
+      "identity" : "skip-ui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-ui.git",
+      "state" : {
+        "revision" : "fa339f6001bde88f02fbfd76417b805acd73b0aa",
+        "version" : "1.63.0"
+      }
+    },
+    {
+      "identity" : "skip-unit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/skip-unit.git",
+      "state" : {
+        "revision" : "fc58e058f3d25675e047a758281c39dba5d52570",
+        "version" : "1.7.2"
+      }
+    },
+    {
+      "identity" : "swift-android-native",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/swift-android-native.git",
+      "state" : {
+        "revision" : "d757c18d7126dea382534e6e4f484b29240f3545",
+        "version" : "1.5.3"
+      }
+    },
+    {
+      "identity" : "swift-jni",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/skiptools/swift-jni.git",
+      "state" : {
+        "revision" : "71385f88cfff14409fe105e27fcad3ebd44348d0",
+        "version" : "0.5.1"
+      }
+    }
+  ],
+  "version" : 3
+}

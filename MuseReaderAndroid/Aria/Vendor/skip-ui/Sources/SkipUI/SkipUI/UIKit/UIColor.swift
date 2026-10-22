@@ -1,0 +1,30 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+#if !SKIP
+import struct CoreGraphics.CGFloat
+#endif
+
+// SKIP @bridge
+public final class UIColor {
+    public let red: CGFloat
+    public let green: CGFloat
+    public let blue: CGFloat
+    public let alpha: CGFloat
+
+    // SKIP @bridge
+    public init(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+        self.alpha = alpha
+    }
+
+    #if SKIP
+    // We can't resolve actual RGB values unless we're in a @Composable context.
+    // Use with `Color(.systemBackground)` to get the adaptive semantic color.
+    public static let systemBackground: UIColor = UIColor(red: 1, green: 1, blue: 1, alpha: 1)
+    #endif
+}
+
+#endif

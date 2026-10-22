@@ -1,0 +1,424 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+import Foundation
+#if SKIP
+import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import java.nio.ByteBuffer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+#endif
+
+// SKIP @bridge
+public class UIImage {
+    #if SKIP
+    let bitmap: Bitmap?
+
+    private static func decodeBitmapFromData(bytes: kotlin.ByteArray) -> Bitmap? {
+        if Build.VERSION.SDK_INT >= Build.VERSION_CODES.P {
+            let source = ImageDecoder.createSource(ByteBuffer.wrap(bytes))
+            return ImageDecoder.decodeBitmap(source)
+        }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }
+
+    private static func decodeBitmapFromUri(contentResolver: ContentResolver, uri: Uri) -> Bitmap? {
+        if Build.VERSION.SDK_INT >= Build.VERSION_CODES.P {
+            let source = ImageDecoder.createSource(contentResolver, uri)
+            return ImageDecoder.decodeBitmap(source)
+        }
+        return contentResolver.openInputStream(uri)?.use { stream in BitmapFactory.decodeStream(stream) }
+    }
+    #endif
+
+    @available(*, unavailable)
+    public init?(named: String, in bundle: Bundle? = nil, compatibleWith traitCollection: Any? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public init?(named: String, in bundle: Bundle?, with configuration: UIImage.Configuration?, unusedp: Void? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public init?(named: String, in bundle: Bundle? = nil, variableValue: Double, configuration: UIImage.Configuration? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public init(imageLiteralResourceName: String, unusedp_0: Void? = nil, unusedp_1: Void? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public init?(systemName: String, withConfiguration configuration: UIImage.Configuration? = nil, unusedp_0: Void? = nil, unusedp_1: Void? = nil, unusedp_2: Void? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public init?(systemName: String, variableValue: Double, configuration: UIImage.Configuration? = nil, unusedp: Void? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public init?(systemName: String, compatibleWith traitCollection: Any?, unusedp_0: Void? = nil, unusedp_1: Void? = nil, unusedp_2: Void? = nil, unusedp_3: Void? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public init(resource: Any, unusedp_0: Void? = nil, unusedp_1: Void? = nil, unusedp_2: Void? = nil, unusedp_3: Void? = nil) {
+        #if SKIP
+        self.bitmap = nil
+        #endif
+        self.scale = 1.0
+    }
+    @available(*, unavailable)
+    public func preparingForDisplay() -> UIImage? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func prepareForDisplay(completionHandler: @escaping (UIImage?) -> Void) {
+        fatalError()
+    }
+    
+    public func preparingThumbnail(of size: CGSize) -> UIImage? {
+        #if SKIP
+        if let bitmap {
+            let newBitmap = Bitmap.createScaledBitmap(bitmap, Int(size.width), Int(size.height), true)
+            return UIImage(bitmap: newBitmap, scale: 1.0)
+        }
+        #endif
+        return nil
+    }
+    
+    // SKIP @bridge
+    public func preparingThumbnail(width: CGFloat, height: CGFloat) -> UIImage? {
+        return preparingThumbnail(of: .init(width: width, height: height))
+    }
+    
+    @available(*, unavailable)
+    public func prepareThumbnail(of size: CGSize, completionHandler: @escaping (UIImage?) -> Void) {
+        fatalError()
+    }
+
+    public func byPreparingThumbnail(ofSize size: CGSize) async -> UIImage? {
+        #if SKIP
+        return await withContext(Dispatchers.Default) {
+            preparingThumbnail(of: size)
+        }
+        #endif
+        return nil
+    }
+    
+    // SKIP @bridge
+    public func byPreparingThumbnail(width: CGFloat, height: CGFloat) async -> UIImage? {
+        return await byPreparingThumbnail(ofSize: .init(width: width, height: height))
+    }
+
+    public init?(contentsOfFile path: String) {
+        #if SKIP
+        // ARIA PATCH: a bitmap the app just drew in Kotlin, handed over without encoding it
+        // (see UIImageBitmapHandoff).
+        if path.hasPrefix(UIImageBitmapHandoff.scheme) {
+            guard let bitmap = UIImageBitmapHandoff.take(key: path) else {
+                return nil
+            }
+            self.bitmap = bitmap
+            self.size = .init(width: Double(bitmap.getWidth()), height: Double(bitmap.getHeight()))
+            self.scale = 1.0
+            return
+        }
+        do {
+            let contentResolver = ProcessInfo.processInfo.androidContext.getContentResolver()
+            let uri = Uri.parse(path)
+            
+            guard let bitmap = Self.decodeBitmapFromUri(contentResolver: contentResolver, uri: uri) else {
+                return nil
+            }
+            
+            self.bitmap = bitmap
+            self.size = .init(width: Double(bitmap.getWidth()), height: Double(bitmap.getHeight()))
+        } catch {
+            android.util.Log.w("SkipUI", "Error initializing UIImage from contentsOfFile", error as? Throwable)
+            return nil
+        }
+        #endif
+        self.scale = 1.0
+    }
+
+    // SKIP @bridge
+    public static func bridgedInit(contentsOfFile path: String) -> UIImage? {
+        return UIImage(contentsOfFile: path)
+    }
+
+    public init?(data: Data, scale: CGFloat = 1.0) {
+        #if SKIP
+        do {
+            let bytes = data.kotlin(nocopy: true)
+            
+            guard let bitmap = Self.decodeBitmapFromData(bytes: bytes) else {
+                return nil
+            }
+            
+            self.bitmap = bitmap
+            self.size = .init(width: Double(bitmap.getWidth()), height: Double(bitmap.getHeight()))
+        } catch {
+            android.util.Log.w("SkipUI", "Error initializing UIImage from data", error as? Throwable)
+            return nil
+        }
+        #endif
+        self.scale = scale
+    }
+
+    // SKIP @bridge
+    public static func bridgedInit(data: Data, scale: CGFloat) -> UIImage? {
+        return UIImage(data: data, scale: scale)
+    }
+    
+    #if SKIP
+    // ARIA PATCH: lets Kotlin give Swift a ready Bitmap. Kotlin puts it here and passes the
+    // returned key to Swift, which opens it with UIImage(contentsOfFile:). Saves the PNG
+    // encode and decode a byte-array handoff needs.
+    public final class UIImageBitmapHandoff {
+        public static let scheme = "aria-bitmap:"
+        private static let nextKey = java.util.concurrent.atomic.AtomicInteger(0)
+        private static let pending = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+        // Bitmaps put here but never taken (the Swift task was cancelled) are dropped,
+        // oldest first, so they can't pile up.
+        private static let order = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+        public static func put(bitmap: Bitmap) -> String {
+            let key = scheme + "\(nextKey.incrementAndGet())"
+            pending.put(key, bitmap)
+            order.add(key)
+            while order.size > 8 {
+                if let oldest = order.poll() {
+                    pending.remove(oldest)?.recycle()
+                }
+            }
+            return key
+        }
+
+        public static func take(key: String) -> Bitmap? {
+            return pending.remove(key)
+        }
+    }
+
+    private init(bitmap: Bitmap, scale: CGFloat) {
+        self.bitmap = bitmap
+        self.size = .init(width: Double(bitmap.getWidth()), height: Double(bitmap.getHeight()))
+        self.scale = scale
+    }
+    #endif
+
+    @available(*, unavailable)
+    public struct UIImageReader {
+    }
+    @available(*, unavailable)
+    public static func animatedImageNamed(_ name: String, duration: TimeInterval) -> UIImage? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public static func animatedImage(with images: [UIImage], duration: TimeInterval) -> UIImage? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public static func animatedResizableImageNamed(_ name: String, capInsets: Any, resizingMode: Any? = nil, duration: TimeInterval) -> UIImage? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func withConfiguration(_ configuration: UIImage.Configuration) -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func applyingSymbolConfiguration(_ configuration: Any) -> UIImage? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func imageFlippedForRightToLeftLayoutDirection() -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func withHorizontallyFlippedOrientation() -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func withRenderingMode(_ renderingMode: Any) -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func withAlignmentRectInsets(_ insets: Any) -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func resizableImage(withCapInsets insets: Any, resizingMode: Any? = nil) -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func imageWithoutBaseline() -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func withBaselineOffset(fromBottom offset: CGFloat) -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public static var add: UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public static var remove: UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public static var actions: UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public static var checkmark: UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public static var strokedCheckmark: UIImage {
+        fatalError()
+    }
+
+    // SKIP @bridge
+    public let scale: CGFloat
+    
+    public private(set) var size: CGSize = .zero
+    
+    // SKIP @bridge
+    public var bridgedWidth: CGFloat {
+        return size.width
+    }
+    // SKIP @bridge
+    public var bridgedHeight: CGFloat {
+        return size.height
+    }
+    
+    @available(*, unavailable)
+    public var imageOrientation: Any {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var flipsForRightToLeftLayoutDirection: Bool {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var resizingMode: Any {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var duration: TimeInterval {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var capInsets: Any {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var alignmentRectInsets: Any {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var isSymbolImage: Bool {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var configuration: Any? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var symbolConfiguration: Any? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var traitCollection: Any {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var isHighDynamicRange: Bool {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func imageRestrictedToStandardDynamicRange() -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func heicData() -> Data? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var baselineOffsetFromBottom: CGFloat? {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public var renderingMode: Any {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func withTintColor(_ color: Any, renderingMode: Any? = nil) -> UIImage {
+        fatalError()
+    }
+    @available(*, unavailable)
+    public func draw(at point: CGPoint, blendMode: Any? = nil, alpha: CGFloat? = nil) {
+    }
+    @available(*, unavailable)
+    func draw(in rect: CGRect, blendMode: Any? = nil, alpha: CGFloat? = nil) {
+    }
+    @available(*, unavailable)
+    public func drawAsPattern(in rect: CGRect) {
+    }
+
+    // SKIP @bridge
+    public func jpegData(compressionQuality: CGFloat) -> Data? {
+        #if !SKIP
+        return nil
+        #else
+        guard let bitmap else { return nil }
+        let outputStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, Int(compressionQuality * 100.0), outputStream)
+        let bytes = outputStream.toByteArray()
+        return Data(platformValue: bytes)
+        #endif
+    }
+
+    // SKIP @bridge
+    public func pngData() -> Data? {
+        #if !SKIP
+        return nil
+        #else
+        guard let bitmap else { return nil }
+        let outputStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+        let bytes = outputStream.toByteArray()
+        return Data(platformValue: bytes)
+        #endif
+    }
+
+    public struct Configuration {
+    }
+}
+
+#endif

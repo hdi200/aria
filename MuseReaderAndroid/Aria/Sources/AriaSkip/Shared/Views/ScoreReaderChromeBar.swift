@@ -1,0 +1,1 @@
+../../../../../../MuseReaderiOS/MuseReaderiOS/Views/ScoreReaderChromeBar.swift

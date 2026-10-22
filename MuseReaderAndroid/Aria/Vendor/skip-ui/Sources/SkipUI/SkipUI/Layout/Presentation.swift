@@ -1,0 +1,1406 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+import Foundation
+#if SKIP
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeightIn
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialogDefaults
+import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalLayoutDirection
+#elseif canImport(CoreGraphics)
+import struct CoreGraphics.CGFloat
+#endif
+
+#if SKIP
+
+/// Common corner radius for our overlay presentations.
+let overlayPresentationCornerRadius = 16.0
+
+// Material3 AlertDialog padding and spacing (match AlertDialog.kt).
+private let AlertDialogPadding: PaddingValues = PaddingValues(start: 24.dp, top: 24.dp, end: 24.dp, bottom: 24.dp)
+private let AlertIconPadding: PaddingValues = PaddingValues(start: 0.dp, top: 0.dp, end: 0.dp, bottom: 16.dp)
+private let AlertTitlePadding: PaddingValues = PaddingValues(start: 0.dp, top: 0.dp, end: 0.dp, bottom: 16.dp)
+private let AlertTextPadding: PaddingValues = PaddingValues(start: 0.dp, top: 0.dp, end: 0.dp, bottom: 24.dp)
+private let ButtonsMainAxisSpacing: Dp = 8.dp
+private let ButtonsCrossAxisSpacing: Dp = 12.dp
+private let AlertDialogMinWidth: Dp = 280.dp
+private let AlertDialogMaxWidth: Dp = 560.dp
+
+// SKIP INSERT: @OptIn(ExperimentalMaterial3Api::class)
+@Composable func SheetPresentation(isPresented: Binding<Bool>, isFullScreen: Bool, context: ComposeContext, content: () -> any View, onDismiss: (() -> Void)?) {
+    let interactiveDismissDisabledPreference = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<Bool>, Any>) { mutableStateOf(Preference<Bool>(key: InteractiveDismissDisabledPreferenceKey.self)) }
+    let interactiveDismissDisabledCollector = PreferenceCollector<Bool>(key: InteractiveDismissDisabledPreferenceKey.self, state: interactiveDismissDisabledPreference)
+
+    let sheetState = rememberModalBottomSheetState(skipPartiallyExpanded: true)
+    let isPresentedValue = isPresented.get()
+    if isPresentedValue || sheetState.isVisible {
+        // Don't fully evaluate content until we set up the presented environment. For now we just want
+        // to get at the modifiers to look for `BackDismissDisabled`
+        let contentRenderables = ComposeBuilder.from(content).Evaluate(context: context, options: EvaluateOptions(isKeepNonModified: true).value)
+        let topInset = remember { mutableStateOf(0.dp) }
+        let density = LocalDensity.current
+        let handleHeight = isFullScreen ? 0.dp : 8.dp
+        let handleHeightPx = with(LocalDensity.current) { handleHeight.toPx() }
+        let handlePadding = isFullScreen ? 0.dp : 10.dp
+        let handlePaddingPx = with(LocalDensity.current) { handlePadding.toPx() }
+        let sheetMaxWidth = isFullScreen ? Dp.Unspecified : BottomSheetDefaults.SheetMaxWidth
+        let shape = GenericShape { size, _ in
+            // The modal content resolves window insets later in composition. Read here,
+            // when constructing the outline, so clipping and content use the same inset.
+            let topInsetPx = with(density) { topInset.value.toPx() }
+            let y = topInsetPx - handleHeightPx - handlePaddingPx
+            addRect(Rect(offset = Offset(x: Float(0.0), y: y), size: Size(width: size.width, height: size.height - y)))
+        }
+        let interactiveDismissDisabled = isFullScreen || interactiveDismissDisabledPreference.value.reduced
+        // Implementing backDismissDisabled as a preference doesn't work because preferences require an extra composition
+        // and only the first composition of `ModalBottomSheetProperties` is taken into account. So we require the
+        // modifier directly on the content view
+        let backDismissDisabled = isBackDismissDisabled(on: contentRenderables)
+        let presentationColor = contentRenderables.firstNotNullOfOrNull { renderable in
+            renderable.forEachModifier { ($0 as? PresentationBackgroundColorModifier)?.color }
+        }
+        let onDismissRequest = {
+            isPresented.set(false)
+        }
+        let properties = ModalBottomSheetProperties(shouldDismissOnBackPress: !backDismissDisabled)
+        // ARIA PATCH: the empty area above the sheet's card is part of the sheet (clipped
+        // away by `shape`), so taps there reached neither the content nor the scrim. Dismiss
+        // on a tap above the card, as the scrim does. On the sheet's outer modifier, outside
+        // the clip, so it sees taps there; the card's own taps are consumed by its content.
+        let outsideTapModifier = interactiveDismissDisabled ? Modifier : Modifier.pointerInput(true) {
+            detectTapGestures(onTap: { offsetPx in
+                let cardTopPx = with(density) { topInset.value.toPx() } - handleHeightPx - handlePaddingPx
+                if offsetPx.y < cardTopPx {
+                    onDismissRequest()
+                }
+            })
+        }
+        ModalBottomSheet(onDismissRequest: onDismissRequest, modifier: outsideTapModifier, sheetState: sheetState, sheetMaxWidth: sheetMaxWidth, sheetGesturesEnabled: !interactiveDismissDisabled, containerColor: presentationColor != nil ? androidx.compose.ui.graphics.Color.Transparent : androidx.compose.ui.graphics.Color.Unspecified, shape: shape, dragHandle: nil, contentWindowInsets: { WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) }, properties: properties) {
+            
+            SyncSystemBarsWithTheme()
+            
+            let verticalSizeClass = EnvironmentValues.shared.verticalSizeClass
+            let isEdgeToEdge = EnvironmentValues.shared._isEdgeToEdge == true
+            let sheetDepth = EnvironmentValues.shared._sheetDepth
+            var systemBarEdges: Edge.Set = isFullScreen ? .all : [.top, .bottom]
+
+            let detentPreferences = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<PresentationDetentPreferences>, Any>) { mutableStateOf(Preference<PresentationDetentPreferences>(key: PresentationDetentPreferenceKey.self)) }
+            let detentPreferencesCollector = PreferenceCollector<PresentationDetentPreferences>(key: PresentationDetentPreferences.self, state: detentPreferences)
+            let reducedDetentPreferences = detentPreferences.value.reduced
+            let dragIndicatorPreferences = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<PresentationDragIndicatorPreferences>, Any>) { mutableStateOf(Preference<PresentationDragIndicatorPreferences>(key: PresentationDragIndicatorPreferenceKey.self)) }
+            let dragIndicatorPreferencesCollector = PreferenceCollector<PresentationDragIndicatorPreferences>(key: PresentationDragIndicatorPreferences.self, state: dragIndicatorPreferences)
+            let reducedDragIndicatorVisibility = dragIndicatorPreferences.value.reduced.visibility
+
+            if !isFullScreen && verticalSizeClass != .compact {
+                systemBarEdges.remove(.top)
+                if !isEdgeToEdge {
+                    systemBarEdges.remove(.bottom)
+                }
+
+                // TODO: add custom cases
+                // Add inset depending on the presentation detent
+                let inset: Dp
+                let screenHeight = LocalConfiguration.current.screenHeightDp.dp
+                let detent: PresentationDetent = reducedDetentPreferences.detent
+                switch detent {
+                case .medium:
+                    inset = screenHeight / 2
+                case let .height(h):
+                    // A fixed detent describes usable content height, excluding system bars.
+                    // The bottom inset is consumed by PresentationRoot or the spacer below it.
+                    let bottomBarHeight = max(0.dp, WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - WindowInsets.ime.asPaddingValues().calculateBottomPadding())
+                    let topBarHeight = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+                    inset = max(topBarHeight + (24 * sheetDepth).dp + 44.dp, screenHeight - h.dp - bottomBarHeight)
+                case let .fraction(f):
+                    inset = screenHeight * Float(1 - f)
+                default:
+                    // We have to delay access to WindowInsets until inside the ModalBottomSheet composable to get accurate values
+                    let topBarHeight = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+                    // Add 44 for draggable area in case content is not draggable
+                    inset = topBarHeight + (24 * sheetDepth).dp + 44.dp
+                }
+
+                topInset.value = inset
+                // Draw the drag handle and the presentation root content area below it
+                androidx.compose.foundation.layout.Spacer(modifier: Modifier.height(inset - handleHeight - handlePadding))
+                Row(modifier: Modifier.fillMaxWidth(), horizontalArrangement: Arrangement.Center) {
+                    // Honor `presentationDragIndicator(.hidden)` by suppressing the capsule while
+                    // preserving its vertical footprint so the content does not shift.
+                    // ARIA PATCH: show it only when asked for; it draws above the sheet's card.
+                    if reducedDragIndicatorVisibility != Visibility.visible {
+                        androidx.compose.foundation.layout.Spacer(modifier: Modifier.height(handleHeight))
+                    } else {
+                        Capsule().fill(Color.primary.opacity(0.4)).frame(width: 60.0, height: Double(handleHeight.value)).Compose(context: context)
+                    }
+                }
+                androidx.compose.foundation.layout.Spacer(modifier: Modifier.height(handlePadding))
+            } else if !isEdgeToEdge {
+                systemBarEdges.remove(.top)
+                systemBarEdges.remove(.bottom)
+                let inset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+                topInset.value = inset
+                // Push the presentation root content area below the top bar
+                androidx.compose.foundation.layout.Spacer(modifier: Modifier.height(inset))
+            } else {
+                topInset.value = 0.dp
+            }
+
+            let clipShape = RoundedCornerShape(topStart: isFullScreen ? 0.dp : overlayPresentationCornerRadius.dp, topEnd: isFullScreen ? 0.dp : overlayPresentationCornerRadius.dp)
+            let contentModifier = Modifier.weight(Float(1.0)).clip(clipShape)
+            Box(modifier: interactiveDismissDisabled ? contentModifier.nestedScroll(DisableScrollToDismissConnection()) : contentModifier) {
+                // Place outside of PresentationRoot recomposes
+                let stateSaver = remember { ComposeStateSaver() }
+                let presentationContext = context.content(stateSaver: stateSaver)
+                // Place inside of ModalBottomSheet, which renders content async
+                PresentationRoot(backgroundColor: presentationColor, context: presentationContext, absoluteSystemBarEdges: systemBarEdges) { context in
+                    EnvironmentValues.shared.setValues {
+                        if !isFullScreen {
+                            $0.set_sheetDepth(sheetDepth + 1)
+                        }
+                        $0.setdismiss(DismissAction(action: { isPresented.set(false) }))
+                        return ComposeResult.ok
+                    } in: {
+                        PreferenceValues.shared.collectPreferences([interactiveDismissDisabledCollector, detentPreferencesCollector, dragIndicatorPreferencesCollector]) {
+                            for renderable in contentRenderables {
+                                renderable.Render(context: context)
+                            }
+                        }
+                    }
+                }
+            }
+            if !isEdgeToEdge {
+                // Move the presentation root content area above the bottom bar
+                let inset = max(0.dp, WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - WindowInsets.ime.asPaddingValues().calculateBottomPadding())
+                androidx.compose.foundation.layout.Spacer(modifier: Modifier.height(inset))
+            }
+        }
+    }
+
+    // When our isPresented binding flips from true to false, hide the sheet if needed and invoke onDismiss
+    let wasPresented = remember { mutableStateOf(isPresentedValue) }
+    let onDismissState = rememberUpdatedState(onDismiss)
+    if isPresentedValue {
+        wasPresented.value = true
+    } else {
+        LaunchedEffect(true) {
+            if sheetState.targetValue != SheetValue.Hidden {
+                sheetState.hide()
+            }
+            if wasPresented.value {
+                wasPresented.value = false
+                onDismissState.value?()
+            }
+        }
+    }
+}
+
+@Composable private func SyncSystemBarsWithTheme() {
+    let view = LocalView.current
+    let dark = MaterialTheme.colorScheme.background.luminance() < 0.5
+    DisposableEffect(dark) {
+        if let window = (view.parent as? DialogWindowProvider)?.window {
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+        onDispose { }
+    }
+}
+
+func isBackDismissDisabled(on renderables: kotlin.collections.List<Renderable>) -> Bool {
+    for renderable in renderables {
+        if let disabled = renderable.forEachModifier(perform: { ($0 as? BackDismissDisabledModifier)?.disabled  }) {
+            return disabled
+        }
+    }
+    return false
+}
+
+final class DisableScrollToDismissConnection : NestedScrollConnection {
+    override func onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) -> Offset {
+        return available.copy(x: Float(0.0))
+    }
+
+    override func onPostFling(consumed: Velocity, available: Velocity) async -> Velocity {
+        return available.copy(x: Float(0.0))
+    }
+}
+
+// SKIP INSERT: @OptIn(ExperimentalMaterial3Api::class)
+@Composable func ConfirmationDialogPresentation(title: Text?, isPresented: Binding<Bool>, context: ComposeContext, actions: any View, message: (any View)? = nil) {
+    let sheetState = rememberModalBottomSheetState(skipPartiallyExpanded: true)
+    if isPresented.get() || sheetState.isVisible {
+        // Collect buttons and message text
+        let actionRenderables = actions.Evaluate(context: context, options: 0)
+        let composableActions: kotlin.collections.List<Renderable> = actionRenderables.mapNotNull {
+            let stripped = $0.strip()
+            return stripped as? Button ?? stripped as? Link ?? stripped as? NavigationLink
+        }
+        let messageRenderables: kotlin.collections.List<Renderable> = message?.Evaluate(context: context, options: 0) ?? listOf()
+        let messageText = messageRenderables.mapNotNull {
+            $0.strip() as? Text
+        }.firstOrNull()
+
+        // ARIA PATCH: an action sheet is a short list; at the 640 sheet width with title-size
+        // buttons it looked oversized on tablets.
+        ModalBottomSheet(onDismissRequest: { isPresented.set(false) }, sheetState: sheetState, sheetMaxWidth: 440.dp, containerColor: androidx.compose.ui.graphics.Color.Transparent, dragHandle: nil, contentWindowInsets: { WindowInsets(0.dp, 0.dp, 0.dp, 0.dp) }) {
+            // Add padding to always keep the sheet away from the top of the screen. It should tap to dismiss like the background
+            let interactionSource = remember { MutableInteractionSource() }
+            Box(modifier: Modifier.fillMaxWidth().height(128.dp).clickable(interactionSource: interactionSource, indication: nil, onClick: { isPresented.set(false) }))
+
+            let stateSaver = remember { ComposeStateSaver() }
+            let scrollState = rememberScrollState()
+            let isEdgeToEdge = EnvironmentValues.shared._isEdgeToEdge == true
+            let bottomSystemBarPadding = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+            let modifier = Modifier
+                .fillMaxWidth()
+                .padding(start: 8.dp, end: 8.dp, bottom: isEdgeToEdge ? 0.dp : bottomSystemBarPadding)
+                .clip(shape: RoundedCornerShape(topStart: overlayPresentationCornerRadius.dp, topEnd: overlayPresentationCornerRadius.dp))
+                // ARIA PATCH: opaque; at 90% the panel behind showed through the actions.
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(bottom: isEdgeToEdge ? bottomSystemBarPadding : 0.dp)
+                .verticalScroll(scrollState)
+            let contentContext = context.content(stateSaver: stateSaver)
+            Column(modifier: modifier, horizontalAlignment: androidx.compose.ui.Alignment.CenterHorizontally) {
+                RenderConfirmationDialog(title: title, context: contentContext, isPresented: isPresented, actionRenderables: composableActions, message: messageText)
+            }
+        }
+    }
+    if !isPresented.get() {
+        LaunchedEffect(true) {
+            if sheetState.targetValue != SheetValue.Hidden {
+                sheetState.hide()
+            }
+        }
+    }
+}
+
+@Composable func RenderConfirmationDialog(title: Text?, context: ComposeContext, isPresented: Binding<Bool>, actionRenderables: kotlin.collections.List<Renderable>, message: Text?) {
+    let padding = 16.dp
+    if let title {
+        androidx.compose.material3.Text(modifier: Modifier.padding(horizontal: padding, vertical: 8.dp), color: Color.secondary.colorImpl(), text: title.localizedTextString(), style: Font.callout.bold().fontImpl())
+    }
+    if let message {
+        androidx.compose.material3.Text(modifier: Modifier.padding(start: padding, top: 8.dp, end: padding, bottom: padding), color: Color.secondary.colorImpl(), text: message.localizedTextString(), style: Font.callout.fontImpl())
+    }
+    if title != nil || message != nil {
+        androidx.compose.material3.Divider()
+    }
+
+    // ARIA PATCH: body-size buttons with less padding (was title3, 16 vertical).
+    let buttonModifier = Modifier.padding(horizontal: padding, vertical: 12.dp)
+    let buttonFont = Font.body
+    let tint = (EnvironmentValues.shared._tint ?? Color.accentColor).colorImpl()
+    guard actionRenderables.size > 0 else {
+        ConfirmationDialogButton(action: { isPresented.set(false) }) {
+            androidx.compose.material3.Text(modifier: buttonModifier, color: tint, text: stringResource(android.R.string.ok), style: buttonFont.fontImpl())
+        }
+        return
+    }
+
+    var cancelButton: Button? = nil
+    for actionRenderable in actionRenderables {
+        var button = actionRenderable.strip() as? Button
+        if let link = actionRenderable.strip() as? Link {
+            link.ComposeAction()
+            button = link.content
+        }
+        if let button {
+            guard button.role != .cancel else {
+                cancelButton = button
+                continue
+            }
+            ConfirmationDialogButton(action: { isPresented.set(false); button.action() }) {
+                let text = button.label.Evaluate(context: context, options: 0).mapNotNull {
+                    $0.strip() as? Text
+                }.firstOrNull()
+                let color = button.role == .destructive ? Color.red.colorImpl() : tint
+                androidx.compose.material3.Text(modifier: buttonModifier, color: color, text: text?.localizedTextString() ?? "", maxLines: 1, style: buttonFont.fontImpl())
+            }
+        } else if let navigationLink = actionRenderable.strip() as? NavigationLink {
+            let navigationAction = navigationLink.navigationAction()
+            ConfirmationDialogButton(action: { isPresented.set(false); navigationAction() }) {
+                let text = navigationLink.label.Evaluate(context: context, options: 0).mapNotNull {
+                    $0.strip() as? Text
+                }.firstOrNull()
+                androidx.compose.material3.Text(modifier: buttonModifier, color: tint, text: text?.localizedTextString() ?? "", maxLines: 1, style: buttonFont.fontImpl())
+            }
+        }
+        androidx.compose.material3.Divider()
+    }
+    if let cancelButton {
+        ConfirmationDialogButton(action: { isPresented.set(false); cancelButton.action() }) {
+            let text = cancelButton.label.Evaluate(context: context, options: 0).mapNotNull {
+                $0.strip() as? Text
+            }.firstOrNull()
+            androidx.compose.material3.Text(modifier: buttonModifier, color: tint, text: text?.localizedTextString() ?? "", maxLines: 1, style: buttonFont.bold().fontImpl())
+        }
+    } else {
+        ConfirmationDialogButton(action: { isPresented.set(false) }) {
+            androidx.compose.material3.Text(modifier: buttonModifier, color: tint, text: stringResource(android.R.string.cancel), style: buttonFont.bold().fontImpl())
+        }
+    }
+}
+
+@Composable func ConfirmationDialogButton(action: () -> Void, content: @Composable () -> Void) {
+    Box(modifier: Modifier.fillMaxWidth().requiredHeightIn(min: 60.dp).clickable(onClick: action), contentAlignment: androidx.compose.ui.Alignment.Center) {
+        content()
+    }
+}
+
+/// Simple clone of FlowRow that arranges its children in a horizontal flow (Material3 AlertDialogFlowRow).
+/// Wraps to new rows when needed; confirming actions appear above dismissive actions.
+@Composable func AlertDialogFlowRow(mainAxisSpacing: Dp, crossAxisSpacing: Dp, content: @Composable () -> Void) {
+    let density = LocalDensity.current
+    let layoutDirection = LocalLayoutDirection.current
+    let mainAxisSpacingPx = with(density) { mainAxisSpacing.roundToPx() }
+    let crossAxisSpacingPx = with(density) { crossAxisSpacing.roundToPx() }
+    Layout(content: content) { measurables, constraints in
+        var sequences: [[Placeable]] = []
+        var crossAxisSizes: [Int] = []
+        var crossAxisPositions: [Int] = []
+        var mainAxisSpace = 0
+        var crossAxisSpace = 0
+        var currentSequence: [Placeable] = []
+        var currentMainAxisSize = 0
+        var currentCrossAxisSize = 0
+        func canAddToCurrentSequence(_ placeable: Placeable) -> Bool {
+            currentSequence.isEmpty || currentMainAxisSize + mainAxisSpacingPx + placeable.width <= constraints.maxWidth
+        }
+        func startNewSequence() {
+            if !sequences.isEmpty {
+                crossAxisSpace += crossAxisSpacingPx
+            }
+            sequences.insert(currentSequence, at: 0)
+            crossAxisSizes.append(currentCrossAxisSize)
+            crossAxisPositions.append(crossAxisSpace)
+            crossAxisSpace += currentCrossAxisSize
+            mainAxisSpace = max(mainAxisSpace, currentMainAxisSize)
+            currentSequence = []
+            currentMainAxisSize = 0
+            currentCrossAxisSize = 0
+        }
+        for measurable in measurables {
+            let placeable = measurable.measure(constraints)
+            if !canAddToCurrentSequence(placeable) {
+                startNewSequence()
+            }
+            if !currentSequence.isEmpty {
+                currentMainAxisSize += mainAxisSpacingPx
+            }
+            currentSequence.append(placeable)
+            currentMainAxisSize += placeable.width
+            currentCrossAxisSize = max(currentCrossAxisSize, placeable.height)
+        }
+        if !currentSequence.isEmpty {
+            startNewSequence()
+        }
+        let mainAxisLayoutSize = max(mainAxisSpace, constraints.minWidth)
+        let crossAxisLayoutSize = max(crossAxisSpace, constraints.minHeight)
+        return layout(width: mainAxisLayoutSize, height: crossAxisLayoutSize) {
+            for i in 0..<sequences.count {
+                let placeables = sequences[i]
+                var childrenMainAxisSizes: [Int] = []
+                for j in 0..<placeables.count {
+                    let w = placeables[j].width
+                    childrenMainAxisSizes.append(j < placeables.count - 1 ? w + mainAxisSpacingPx : w)
+                }
+                var mainAxisPositions: [Int] = Array(repeating: 0, count: placeables.count)
+                var offset = mainAxisLayoutSize
+                if layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl {
+                    for j in 0..<placeables.count {
+                        offset -= placeables[j].width
+                        mainAxisPositions[j] = offset
+                        if j < placeables.count - 1 {
+                            offset -= mainAxisSpacingPx
+                        }
+                    }
+                } else {
+                    for j in (0..<placeables.count).reversed() {
+                        offset -= placeables[j].width
+                        mainAxisPositions[j] = offset
+                        if j > 0 {
+                            offset -= mainAxisSpacingPx
+                        }
+                    }
+                }
+                for j in 0..<placeables.count {
+                    placeables[j].placeRelative(x: mainAxisPositions[j], y: crossAxisPositions[i])
+                }
+            }
+        }
+    }
+}
+
+// SKIP INSERT: @OptIn(ExperimentalMaterial3Api::class)
+@Composable func AlertPresentation(title: Text? = nil, titleResource: Int? = nil, isPresented: Binding<Bool>, context: ComposeContext, actions: any View, message: (any View)? = nil) {
+    guard isPresented.get() else {
+        return
+    }
+    // Collect buttons and message text
+    let actionRenderables = actions.Evaluate(context: context, options: 0)
+    let textFields: kotlin.collections.List<TextField> = actionRenderables.mapNotNull {
+        let stripped = $0.strip()
+        return stripped as? TextField ?? (stripped as? SecureField)?.textField
+    }
+    let optionRenderables: kotlin.collections.List<Renderable> = actionRenderables.mapNotNull {
+        let stripped = $0.strip()
+        return stripped as? Button ?? stripped as? NavigationLink ?? stripped as? Link
+    }
+    let messageRenderables: kotlin.collections.List<Renderable> = message?.Evaluate(context: context, options: 0) ?? listOf()
+    let messageText = messageRenderables.mapNotNull {
+        $0.strip() as? Text
+    }.firstOrNull()
+
+    let contentContext = context.content()
+    let buttonModifier = Modifier.padding(horizontal: 12.dp, vertical: 8.dp)
+    let buttonFont = Font.title3
+    let tint = (EnvironmentValues.shared._tint ?? Color.accentColor).colorImpl()
+    let flowRowButtonModifier = Modifier.wrapContentWidth().wrapContentHeight()
+
+    // Use native Material3-style dialog for all cases. N buttons and text fields supported.
+    let cancelBtn = actionRenderables.firstOrNull { ($0.strip() as? Button)?.role == .cancel }
+    // Confirm: first destructive, else first non-cancel (primary). Others go to neutralButtons.
+    let confirmRenderable = optionRenderables.firstOrNull { ($0.strip() as? Button)?.role == .destructive }
+        ?? optionRenderables.firstOrNull { ($0.strip() as? Button)?.role != .cancel }
+    let neutralRenderables = optionRenderables.filter { r in
+        (r.strip() as? Button)?.role != .cancel && r !== confirmRenderable
+    }
+    var confirmAction: (() -> Void)?
+    if let r = confirmRenderable {
+        let stripped = r.strip()
+        if let button = stripped as? Button { confirmAction = button.action }
+        else if let link = stripped as? Link { link.ComposeAction(); confirmAction = link.content.action }
+        else if let nav = stripped as? NavigationLink { confirmAction = nav.navigationAction() }
+    }
+    var dismissAction: (() -> Void)?
+    if let c = cancelBtn {
+        let stripped = c.strip()
+        if let button = stripped as? Button { dismissAction = button.action }
+        else if let link = stripped as? Link { link.ComposeAction(); dismissAction = link.content.action }
+        else if let nav = stripped as? NavigationLink { dismissAction = nav.navigationAction() }
+    }
+    let neutralButtonsList: kotlin.collections.MutableList<@Composable () -> Void> = mutableListOf()
+    for r in neutralRenderables {
+        let renderable = r
+        var neutralAction: (() -> Void)?
+        let stripped = renderable.strip()
+        if let button = stripped as? Button { neutralAction = button.action }
+        else if let link = stripped as? Link { link.ComposeAction(); neutralAction = link.content.action }
+        else if let nav = stripped as? NavigationLink { neutralAction = nav.navigationAction() }
+        neutralButtonsList.add {
+            androidx.compose.material3.TextButton(onClick: { isPresented.set(false); neutralAction?() }) {
+                let s = renderable.strip()
+                let button = s as? Button ?? (s as? Link)?.content
+                let label = button?.label ?? (s as? NavigationLink)?.label
+                let bt = label?.Evaluate(context: contentContext, options: 0).mapNotNull { $0.strip() as? Text }.firstOrNull()
+                androidx.compose.material3.Text(color: tint, text: bt?.localizedTextString() ?? "", style: MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+    SkipAlertDialog(
+        onDismissRequest: { isPresented.set(false) },
+        neutralButtons: neutralButtonsList,
+        confirmButton: {
+            if let r = confirmRenderable {
+                androidx.compose.material3.TextButton(onClick: { isPresented.set(false); confirmAction?() }) {
+                    let stripped = r.strip()
+                    let button = stripped as? Button ?? (stripped as? Link)?.content
+                    let label = button?.label ?? (stripped as? NavigationLink)?.label
+                    let bt = label?.Evaluate(context: contentContext, options: 0).mapNotNull { $0.strip() as? Text }.firstOrNull()
+                    let color = button?.role == .destructive ? MaterialTheme.colorScheme.error : tint
+                    androidx.compose.material3.Text(color: color, text: bt?.localizedTextString() ?? "", style: MaterialTheme.typography.labelLarge)
+                }
+            } else if let c = cancelBtn {
+                // ARIA PATCH: a lone cancel button (an "OK" alert) is the dialog's only
+                // button. Skip added its own OK beside it, so such alerts showed two.
+                androidx.compose.material3.TextButton(onClick: { isPresented.set(false); dismissAction?() }) {
+                    let button = c.strip() as? Button
+                    let bt = button?.label.Evaluate(context: contentContext, options: 0).mapNotNull { $0.strip() as? Text }.firstOrNull()
+                    androidx.compose.material3.Text(color: tint, text: bt?.localizedTextString() ?? "", style: MaterialTheme.typography.labelLarge)
+                }
+            } else {
+                androidx.compose.material3.TextButton(onClick: { isPresented.set(false) }) {
+                    androidx.compose.material3.Text(color: tint, text: stringResource(android.R.string.ok), style: MaterialTheme.typography.labelLarge)
+                }
+            }
+        },
+        dismissButton: cancelBtn != nil && confirmRenderable != nil ? {
+            if let c = cancelBtn {
+                androidx.compose.material3.TextButton(onClick: { isPresented.set(false); dismissAction?() }) {
+                    let stripped = c.strip()
+                    let button = stripped as? Button
+                    let label = button?.label
+                    let bt = label?.Evaluate(context: contentContext, options: 0).mapNotNull { $0.strip() as? Text }.firstOrNull()
+                    androidx.compose.material3.Text(color: tint, text: bt?.localizedTextString() ?? "", style: MaterialTheme.typography.labelLarge)
+                }
+            }
+        } : nil,
+        title: title != nil ? {
+            androidx.compose.material3.Text(color: Color.primary.colorImpl(), text: title!.localizedTextString(), style: MaterialTheme.typography.headlineSmall)
+        } : (titleResource != nil ? {
+            androidx.compose.material3.Text(color: Color.primary.colorImpl(), text: stringResource(titleResource!), style: MaterialTheme.typography.headlineSmall)
+        } : nil),
+        text: messageText != nil ? {
+            androidx.compose.material3.Text(text: messageText!.localizedTextString(), style: MaterialTheme.typography.bodyMedium)
+        } : nil,
+        textFields: textFields.size > 0 ? {
+            for textField in textFields {
+                let topPadding = textField == textFields.firstOrNull() ? 16.dp : 8.dp
+                let textFieldContext = contentContext.content(modifier: Modifier.padding(top: topPadding))
+                textField.Compose(context: textFieldContext)
+            }
+        } : nil,
+        modifier: Modifier.wrapContentHeight().then(context.modifier),
+        containerColor: MaterialTheme.colorScheme.surfaceContainerHigh
+    )
+}
+
+@Composable func RenderAlert(title: Text?, titleResource: Int? = nil, context: ComposeContext, isPresented: Binding<Bool>, textFields: kotlin.collections.List<TextField>, actionRenderables: kotlin.collections.List<Renderable>, message: Text?) {
+    if let title {
+        Box(modifier: Modifier.padding(AlertTitlePadding).fillMaxWidth(), contentAlignment: androidx.compose.ui.Alignment.CenterStart) {
+            androidx.compose.material3.Text(color: Color.primary.colorImpl(), text: title.localizedTextString(), style: MaterialTheme.typography.headlineSmall)
+        }
+    } else if let titleResource {
+        Box(modifier: Modifier.padding(AlertTitlePadding).fillMaxWidth(), contentAlignment: androidx.compose.ui.Alignment.CenterStart) {
+            androidx.compose.material3.Text(color: Color.primary.colorImpl(), text: stringResource(titleResource), style: MaterialTheme.typography.headlineSmall)
+        }
+    }
+    if let message {
+        Box(modifier: Modifier.padding(AlertTextPadding).fillMaxWidth(), contentAlignment: androidx.compose.ui.Alignment.CenterStart) {
+            androidx.compose.material3.Text(color: Color.primary.colorImpl(), text: message.localizedTextString(), style: Font.callout.fontImpl())
+        }
+    }
+
+    for textField in textFields {
+        let topPadding = textField == textFields.firstOrNull() ? 16.dp : 8.dp
+        let textFieldContext = context.content(modifier: Modifier.padding(top: topPadding))
+        textField.Compose(context: textFieldContext)
+    }
+
+    let buttonModifier = Modifier.padding(horizontal: 12.dp, vertical: 8.dp)
+    let buttonFont = Font.title3
+    let tint = (EnvironmentValues.shared._tint ?? Color.accentColor).colorImpl()
+    let flowRowButtonModifier = Modifier.wrapContentWidth().wrapContentHeight()
+    guard actionRenderables.size > 0 else {
+        Box(modifier: Modifier.fillMaxWidth(), contentAlignment: androidx.compose.ui.Alignment.CenterEnd) {
+            AlertDialogFlowRow(mainAxisSpacing: ButtonsMainAxisSpacing, crossAxisSpacing: ButtonsCrossAxisSpacing) {
+                AlertButton(modifier: flowRowButtonModifier, renderable: nil, isPresented: isPresented) {
+                    androidx.compose.material3.Text(modifier: buttonModifier, color: tint, text: stringResource(android.R.string.ok), style: buttonFont.fontImpl())
+                }
+            }
+        }
+        return
+    }
+
+    let buttonContent: @Composable (Renderable, Bool) -> Void = { renderable, isCancel in
+        let stripped = renderable.strip()
+        let button = stripped as? Button ?? (stripped as? Link)?.content
+        let label = button?.label ?? (stripped as? NavigationLink)?.label
+        let text = label?.Evaluate(context: context, options: 0).mapNotNull {
+            $0.strip() as? Text
+        }.firstOrNull()
+        let color = button?.role == .destructive ? Color.red.colorImpl() : tint
+        let style = isCancel ? buttonFont.bold().fontImpl() : buttonFont.fontImpl()
+        androidx.compose.material3.Text(modifier: buttonModifier, color: color, text: text?.localizedTextString() ?? "", style: style)
+    }
+
+    let optionRenderables = actionRenderables.filter {
+        let stripped = $0.strip()
+        if let button = stripped as? Button {
+            return button.role != .cancel
+        }
+        return stripped is Link || stripped is NavigationLink
+    }
+    let cancelButton = actionRenderables.firstOrNull {
+        guard let button = $0.strip() as? Button else { return false }
+        return button.role == .cancel
+    }
+    Box(modifier: Modifier.fillMaxWidth(), contentAlignment: androidx.compose.ui.Alignment.CenterEnd) {
+        AlertDialogFlowRow(mainAxisSpacing: ButtonsMainAxisSpacing, crossAxisSpacing: ButtonsCrossAxisSpacing) {
+            if let cancelButton {
+                AlertButton(modifier: flowRowButtonModifier, renderable: cancelButton, isPresented: isPresented) {
+                    buttonContent(cancelButton, true)
+                }
+            }
+            for actionRenderable in optionRenderables {
+                AlertButton(modifier: flowRowButtonModifier, renderable: actionRenderable, isPresented: isPresented) {
+                    buttonContent(actionRenderable, false)
+                }
+            }
+        }
+    }
+}
+
+@Composable func AlertButton(modifier: Modifier, renderable: Renderable?, isPresented: Binding<Bool>, content: @Composable () -> Void) {
+    var action: (() -> Void)?
+    let stripped = renderable?.strip()
+    if let button = stripped as? Button {
+        action = button.action
+    } else if let link = stripped as? Link {
+        link.ComposeAction()
+        action = link.content.action
+    } else if let navigationLink = stripped as? NavigationLink {
+        action = navigationLink.navigationAction()
+    }
+    Box(modifier: modifier.clickable(onClick: { isPresented.set(false); action?() }), contentAlignment: androidx.compose.ui.Alignment.Center) {
+        content()
+    }
+}
+#endif
+
+public enum PresentationAdaptation {
+    case automatic
+    case none
+    case popover
+    case sheet
+    case fullScreenCover
+}
+
+public struct PresentationBackgroundInteraction {
+    let enabled: Bool?
+    let upThrough: PresentationDetent?
+
+    public static let automatic = PresentationBackgroundInteraction(enabled: nil, upThrough: nil)
+
+    public static let enabled = PresentationBackgroundInteraction(enabled: true, upThrough: nil)
+
+    public static func enabled(upThrough: PresentationDetent) -> PresentationBackgroundInteraction {
+        return PresentationBackgroundInteraction(enabled: true, upThrough: upThrough)
+    }
+
+    public static let disabled = PresentationBackgroundInteraction(enabled: false, upThrough: nil)
+}
+
+public enum PresentationContentInteraction : Equatable {
+    case automatic
+    case resizes
+    case scrolls
+}
+
+public enum PresentationDetent : Hashable {
+    case medium
+    case large
+    case fraction(CGFloat)
+    case height(CGFloat)
+    case custom(Any.Type)
+
+    public struct Context {
+        public let maxDetentValue: CGFloat
+
+        public init(maxDetentValue: CGFloat) {
+            self.maxDetentValue = maxDetentValue
+        }
+
+//        public subscript<T>(dynamicMember keyPath: KeyPath<EnvironmentValues, T>) -> T { get { fatalError() } }
+    }
+
+    static func forBridged(identifier: Int, value: CGFloat) -> PresentationDetent? {
+        switch identifier {
+        case 0: // For bridging
+            return .medium
+        case 1: // For bridging
+            return .large
+        case 2: // For bridging
+            return .fraction(value)
+        case 3: // For bridging
+            return .height(value)
+        default:
+            return nil
+        }
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        switch self {
+        case .medium:
+            hasher.combine(1)
+        case .large:
+            hasher.combine(2)
+        case .fraction(let fraction):
+            hasher.combine(3)
+            hasher.combine(fraction)
+        case .height(let height):
+            hasher.combine(4)
+            hasher.combine(height)
+        case .custom(let type):
+            hasher.combine(String(describing: type))
+        }
+    }
+
+    public static func == (lhs: PresentationDetent, rhs: PresentationDetent) -> Bool {
+        switch lhs {
+        case .medium:
+            if case .medium = rhs {
+                return true
+            } else {
+                return false
+            }
+        case .large:
+            if case .large = rhs {
+                return true
+            } else {
+                return false
+            }
+        case .fraction(let fraction1):
+            if case .fraction(let fraction2) = rhs {
+                return fraction1 == fraction2
+            } else {
+                return false
+            }
+        case .height(let height1):
+            if case .height(let height2) = rhs {
+                return height1 == height2
+            } else {
+                return false
+            }
+        case .custom(let type1):
+            if case .custom(let type2) = rhs {
+                return type1 == type2
+            } else {
+                return false
+            }
+        }
+    }
+}
+
+public protocol CustomPresentationDetent {
+//    static func height(in context: PresentationDetent.Context) -> CGFloat?
+}
+
+//public struct PresentedWindowContent<Data, Content> : View where Data : Decodable, Data : Encodable, Data : Hashable, Content : View {
+//
+//    public typealias Body = NeverView
+//    public var body: Body { fatalError() }
+//}
+
+#if SKIP
+struct PresentationDetentPreferenceKey: PreferenceKey {
+    static let defaultValue = PresentationDetentPreferences()
+
+    static func reduce(value: inout PresentationDetentPreferences, nextValue: () -> PresentationDetentPreferences) {
+        value = value.reduce(nextValue())
+    }
+}
+
+struct PresentationDetentPreferences: Equatable {
+    let detent: PresentationDetent
+
+    init(detent: PresentationDetent? = nil) {
+        self.detent = detent ?? PresentationDetent.large
+    }
+
+    func reduce(_ next: PresentationDetentPreferences) -> PresentationDetentPreferences {
+        return next
+    }
+
+    public static func ==(lhs: PresentationDetentPreferences, rhs: PresentationDetentPreferences) -> Bool {
+        return lhs.detent == rhs.detent
+    }
+}
+
+struct PresentationDragIndicatorPreferenceKey: PreferenceKey {
+    static let defaultValue = PresentationDragIndicatorPreferences()
+
+    static func reduce(value: inout PresentationDragIndicatorPreferences, nextValue: () -> PresentationDragIndicatorPreferences) {
+        value = value.reduce(nextValue())
+    }
+}
+
+struct PresentationDragIndicatorPreferences: Equatable {
+    let visibility: Visibility
+
+    init(visibility: Visibility = .automatic) {
+        self.visibility = visibility
+    }
+
+    func reduce(_ next: PresentationDragIndicatorPreferences) -> PresentationDragIndicatorPreferences {
+        return next
+    }
+
+    public static func ==(lhs: PresentationDragIndicatorPreferences, rhs: PresentationDragIndicatorPreferences) -> Bool {
+        return lhs.visibility == rhs.visibility
+    }
+}
+#endif
+
+
+// It is unfortunate that we have to NOWARN this entire extension just to prevent "This extension will be moved into its extended type definition when translated to Kotlin. It will not be able to access this file's private types or fileprivate members"; ideally, we would be able to squelch that specific warning, but leave on the possibility of warning about other potential issues with the code inside the extension (https://github.com/skiptools/skipstone/issues/198)
+// SKIP NOWARN
+extension View {
+    public func alert(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View) -> any View {
+        return alert(Text(titleKey), isPresented: isPresented, actions: actions)
+    }
+
+    public func alert(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View) -> any View {
+        return alert(Text(titleResource), isPresented: isPresented, actions: actions)
+    }
+
+    public func alert(_ title: String, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View) -> any View {
+        return alert(Text(verbatim: title), isPresented: isPresented, actions: actions)
+    }
+
+    public func alert(_ title: Text, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: true) { context in
+            AlertPresentation(title: title.localizedTextString().isEmpty ? nil : title, isPresented: isPresented, context: context, actions: actions())
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func alert(_ title: Text, getIsPresented: @escaping () -> Bool, setIsPresented: @escaping (Bool) -> Void, bridgedActions: any View) -> any View {
+        let isPresented = Binding(get: getIsPresented, set: setIsPresented)
+        return alert(title, isPresented: isPresented, actions: { bridgedActions })
+    }
+
+    public func alert(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> any View {
+        return alert(Text(titleKey), isPresented: isPresented, actions: actions, message: message)
+    }
+
+    public func alert(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> any View {
+        return alert(Text(titleResource), isPresented: isPresented, actions: actions, message: message)
+    }
+
+    public func alert(_ title: String, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> any View {
+        return alert(Text(verbatim: title), isPresented: isPresented, actions: actions, message: message)
+    }
+
+    public func alert(_ title: Text, isPresented: Binding<Bool>, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: true) { context in
+            AlertPresentation(title: title.localizedTextString().isEmpty ? nil : title, isPresented: isPresented, context: context, actions: actions(), message: message())
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func alert(_ title: Text, getIsPresented: @escaping () -> Bool, setIsPresented: @escaping (Bool) -> Void, bridgedActions: any View, bridgedMessage: any View) -> any View {
+        let isPresented = Binding(get: getIsPresented, set: setIsPresented)
+        return alert(title, isPresented: isPresented, actions: { bridgedActions }, message: { bridgedMessage })
+    }
+
+    public func alert<T>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View) -> any View {
+        return alert(Text(titleKey), isPresented: isPresented, presenting: data, actions: actions)
+    }
+
+    public func alert<T>(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View) -> any View {
+        return alert(Text(titleResource), isPresented: isPresented, presenting: data, actions: actions)
+    }
+
+    public func alert<T>(_ title: String, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View) -> any View {
+        return alert(Text(verbatim: title), isPresented: isPresented, presenting: data, actions: actions)
+    }
+
+    public func alert<T>(_ title: Text, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View) -> any View {
+        #if SKIP
+        let actionsWithData: () -> any View
+        if let data {
+            actionsWithData = { actions(data) }
+        } else {
+            actionsWithData = { EmptyView() }
+        }
+        return alert(title, isPresented: isPresented, actions: actionsWithData)
+        #else
+        return self
+        #endif
+    }
+
+    public func alert<T>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View, @ViewBuilder message: (T) -> any View) -> any View {
+        return alert(Text(titleKey), isPresented: isPresented, presenting: data, actions: actions, message: message)
+    }
+
+    public func alert<T>(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View, @ViewBuilder message: (T) -> any View) -> any View {
+        return alert(Text(titleResource), isPresented: isPresented, presenting: data, actions: actions, message: message)
+    }
+
+    public func alert<T>(_ title: String, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View, @ViewBuilder message: (T) -> any View) -> any View {
+        return alert(Text(verbatim: title), isPresented: isPresented, presenting: data, actions: actions, message: message)
+    }
+
+    public func alert<T>(_ title: Text, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: (T) -> any View, @ViewBuilder message: (T) -> any View) -> any View {
+        #if SKIP
+        let actionsWithData: () -> any View
+        let messageWithData: () -> any View
+        if let data {
+            actionsWithData = { actions(data) }
+            messageWithData = { message(data) }
+        } else {
+            actionsWithData = { EmptyView() }
+            messageWithData = { EmptyView() }
+        }
+        return alert(title, isPresented: isPresented, actions: actionsWithData, message: messageWithData)
+        #else
+        return self
+        #endif
+    }
+
+//    public func alert<E>(isPresented: Binding<Bool>, error: E?, @ViewBuilder actions: () -> any View) -> some View where E : LocalizedError {
+//        #if SKIP
+//        let titleText: Text?
+//        let titleResource: Int?
+//        let actions: any View
+//        if let error {
+//            titleText = Text(verbatim: error.errorDescription ?? error.localizedDescription)
+//            titleResource = nil
+//            actions = actions()
+//        } else {
+//            titleText = nil
+//            titleResource = android.R.string.dialog_alert_title
+//            actions = EmptyView()
+//        }
+//        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: true) { context in
+//            AlertPresentation(title: titleText, titleResource: titleResource, isPresented: isPresented, context: context, actions: actions)
+//        })
+//        #else
+//        return self
+//        #endif
+//    }
+//
+//    public func alert<E>(isPresented: Binding<Bool>, error: E?, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> some View where E : LocalizedError {
+//        #if SKIP
+//        let titleText: Text?
+//        let titleResource: Int?
+//        let actions: any View
+//        let message: any View
+//        if let error {
+//            titleText = Text(verbatim: error.localizedDescription)
+//            titleResource = nil
+//            actions = actions()
+//            message = message()
+//        } else {
+//            titleText = nil
+//            titleResource = android.R.string.dialog_alert_title
+//            actions = EmptyView()
+//            message = EmptyView()
+//        }
+//        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: true) { context in
+//            AlertPresentation(title: titleText, titleResource: titleResource, isPresented: isPresented, context: context, actions: actions, message: message)
+//        })
+//        #else
+//        return self
+//        #endif
+//    }
+
+    public func confirmationDialog(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View) -> any View {
+        return confirmationDialog(Text(titleKey), isPresented: isPresented, titleVisibility: titleVisibility, actions: actions)
+    }
+
+    public func confirmationDialog(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View) -> any View {
+        return confirmationDialog(Text(titleResource), isPresented: isPresented, titleVisibility: titleVisibility, actions: actions)
+    }
+
+    public func confirmationDialog(_ title: String, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View) -> any View {
+        return confirmationDialog(Text(verbatim: title), isPresented: isPresented, titleVisibility: titleVisibility, actions: actions)
+    }
+
+    public func confirmationDialog(_ title: Text, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: true) { context in
+            ConfirmationDialogPresentation(title: titleVisibility != .visible ? nil : title, isPresented: isPresented, context: context, actions: actions())
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func confirmationDialog(_ title: Text, getIsPresented: @escaping () -> Bool, setIsPresented: @escaping (Bool) -> Void, bridgedTitleVisibility: Int, bridgedActions: any View) -> any View {
+        let isPresented = Binding(get: getIsPresented, set: setIsPresented)
+        return confirmationDialog(title, isPresented: isPresented, titleVisibility: Visibility(rawValue: bridgedTitleVisibility) ?? .automatic, actions: { bridgedActions })
+    }
+
+    public func confirmationDialog(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> some View {
+        return confirmationDialog(Text(titleKey), isPresented: isPresented, titleVisibility: titleVisibility, actions: actions, message: message)
+    }
+
+    public func confirmationDialog(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> some View {
+        return confirmationDialog(Text(titleResource), isPresented: isPresented, titleVisibility: titleVisibility, actions: actions, message: message)
+    }
+
+    public func confirmationDialog(_ title: String, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> some View {
+        return confirmationDialog(Text(verbatim: title), isPresented: isPresented, titleVisibility: titleVisibility, actions: actions, message: message)
+    }
+
+    public func confirmationDialog(_ title: Text, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, @ViewBuilder actions: () -> any View, @ViewBuilder message: () -> any View) -> some View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: true) { context in
+            ConfirmationDialogPresentation(title: titleVisibility != .visible ? nil : title, isPresented: isPresented, context: context, actions: actions(), message: message())
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func confirmationDialog(_ title: Text, getIsPresented: @escaping () -> Bool, setIsPresented: @escaping (Bool) -> Void, bridgedTitleVisibility: Int, bridgedActions: any View, bridgedMessage: any View) -> any View {
+        let isPresented = Binding(get: getIsPresented, set: setIsPresented)
+        return confirmationDialog(title, isPresented: isPresented, titleVisibility: Visibility(rawValue: bridgedTitleVisibility) ?? .automatic, actions: { bridgedActions }, message: { bridgedMessage })
+    }
+
+    public func confirmationDialog<T>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View) -> any View {
+        return confirmationDialog(Text(titleKey), isPresented: isPresented, titleVisibility: titleVisibility, presenting: data, actions: actions)
+    }
+
+    public func confirmationDialog<T>(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View) -> any View {
+        return confirmationDialog(Text(titleResource), isPresented: isPresented, titleVisibility: titleVisibility, presenting: data, actions: actions)
+    }
+
+    public func confirmationDialog<T>(_ title: String, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View) -> any View {
+        return confirmationDialog(Text(verbatim: title), isPresented: isPresented, titleVisibility: titleVisibility, presenting: data, actions: actions)
+    }
+
+    public func confirmationDialog<T>(_ title: Text, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View) -> any View {
+        #if SKIP
+        let actionsWithData: () -> any View
+        if let data {
+            actionsWithData = { actions(data) }
+        } else {
+            actionsWithData = { EmptyView() }
+        }
+        return confirmationDialog(title, isPresented: isPresented, titleVisibility: titleVisibility, actions: actionsWithData)
+        #else
+        return self
+        #endif
+    }
+
+    public func confirmationDialog<T>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View, @ViewBuilder message: @escaping (T) -> any View) -> any View {
+        return confirmationDialog(Text(titleKey), isPresented: isPresented, titleVisibility: titleVisibility, presenting: data, actions: actions, message: message)
+    }
+
+    public func confirmationDialog<T>(_ titleResource: LocalizedStringResource, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View, @ViewBuilder message: @escaping (T) -> any View) -> any View {
+        return confirmationDialog(Text(titleResource), isPresented: isPresented, titleVisibility: titleVisibility, presenting: data, actions: actions, message: message)
+    }
+
+    public func confirmationDialog<T>(_ title: String, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View, @ViewBuilder message: @escaping (T) -> any View) -> any View {
+        return confirmationDialog(Text(verbatim: title), isPresented: isPresented, titleVisibility: titleVisibility, presenting: data, actions: actions, message: message)
+    }
+
+    public func confirmationDialog<T>(_ title: Text, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, presenting data: T?, @ViewBuilder actions: @escaping (T) -> any View, @ViewBuilder message: @escaping (T) -> any View) -> any View {
+        #if SKIP
+        let actionsWithData: () -> any View
+        let messageWithData: () -> any View
+        if let data {
+            actionsWithData = { actions(data) }
+            messageWithData = { message(data) }
+        } else {
+            actionsWithData = { EmptyView() }
+            messageWithData = { EmptyView() }
+        }
+        return confirmationDialog(title, isPresented: isPresented, titleVisibility: titleVisibility, actions: actionsWithData, message: messageWithData)
+        #else
+        return self
+        #endif
+    }
+
+    public func fullScreenCover<Item>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping (Item) -> any View) -> any View /* where Item : Identifiable, */ {
+        #if SKIP
+        let isPresented = Binding<Bool>(
+            get: {
+                return item.wrappedValue != nil
+            },
+            set: { newValue in
+                if !newValue {
+                    item.wrappedValue = nil
+                }
+            }
+        )
+
+        return fullScreenCover(isPresented: isPresented, onDismiss: onDismiss) {
+            if let unwrappedItem = item.wrappedValue {
+                content(unwrappedItem)
+            }
+        }
+        #else
+        return self
+        #endif
+    }
+
+    public func fullScreenCover(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> any View) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: false) { context in
+            SheetPresentation(isPresented: isPresented, isFullScreen: true, context: context, content: content, onDismiss: onDismiss)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func fullScreenCover(getIsPresented: @escaping () -> Bool, setIsPresented: @escaping (Bool) -> Void, onDismiss: (() -> Void)?, bridgedContent: any View) -> any View {
+        let isPresented = Binding(get: getIsPresented, set: setIsPresented)
+        return fullScreenCover(isPresented: isPresented, onDismiss: onDismiss, content: { bridgedContent })
+    }
+
+    // SKIP @bridge
+    public func interactiveDismissDisabled(_ isDisabled: Bool = true) -> any View {
+        #if SKIP
+        return preference(key: InteractiveDismissDisabledPreferenceKey.self, value: isDisabled)
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func backDismissDisabled(_ isDisabled: Bool = true) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: BackDismissDisabledModifier(disabled: isDisabled))
+        #else
+        return self
+        #endif
+    }
+
+    public func presentationDetents(_ detents: Set<PresentationDetent>) -> any View {
+        #if SKIP
+        // TODO: Add support for multiple detents
+        if detents.count == 0 {
+            return self
+        }
+        let selectedDetent = detents.first
+        return preference(key: PresentationDetentPreferences.self, value: PresentationDetentPreferences(detent: selectedDetent))
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func presentationDetents(bridgedDetents: [Int], values: [CGFloat]) -> any View {
+        var set: Set<PresentationDetent> = []
+        for i in 0..<bridgedDetents.count {
+            if let detent = PresentationDetent.forBridged(identifier: bridgedDetents[i], value: values[i]) {
+                set.insert(detent)
+            }
+        }
+        return presentationDetents(set)
+    }
+
+    @available(*, unavailable)
+    public func presentationDetents(_ detents: Set<PresentationDetent>, selection: Binding<PresentationDetent>) -> some View {
+        return self
+    }
+
+    public func presentationDragIndicator(_ visibility: Visibility) -> any View {
+        #if SKIP
+        return preference(key: PresentationDragIndicatorPreferences.self, value: PresentationDragIndicatorPreferences(visibility: visibility))
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func presentationDragIndicator(bridgedVisibility: Int) -> any View {
+        return presentationDragIndicator(Visibility(rawValue: bridgedVisibility) ?? .automatic)
+    }
+
+    @available(*, unavailable)
+    public func presentationBackgroundInteraction(_ interaction: PresentationBackgroundInteraction) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func presentationCompactAdaptation(_ adaptation: PresentationAdaptation) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func presentationCompactAdaptation(horizontal horizontalAdaptation: PresentationAdaptation, vertical verticalAdaptation: PresentationAdaptation) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func presentationCornerRadius(_ cornerRadius: CGFloat?) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func presentationContentInteraction(_ behavior: PresentationContentInteraction) -> some View {
+        return self
+    }
+
+    /// Sets a Color-only presentation background, including clear and partially opaque colors.
+    /// Apply directly to the root view returned by the sheet or fullScreenCover content closure.
+    /// Other ShapeStyles and custom background views are unsupported.
+    // SKIP @bridge
+    public func presentationBackground(_ color: Color) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PresentationBackgroundColorModifier(color: color))
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func presentationBackground(_ style: any ShapeStyle) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func presentationBackground(alignment: Alignment = .center, @ViewBuilder content: () -> any View) -> some View {
+        return self
+    }
+
+    public func sheet<Item>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping (Item) -> any View) -> some View /* where Item : Identifiable, */ {
+        #if SKIP
+        let isPresented = Binding<Bool>(
+            get: {
+                return item.wrappedValue != nil
+            },
+            set: { newValue in
+                if !newValue {
+                    item.wrappedValue = nil
+                }
+            }
+        )
+
+        return sheet(isPresented: isPresented, onDismiss: onDismiss) {
+            if let unwrappedItem = item.wrappedValue {
+                content(unwrappedItem)
+            }
+        }
+        #else
+        return self
+        #endif
+    }
+
+    public func sheet(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> any View) -> some View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PresentationModifier(providesNavigation: false) { context in
+            SheetPresentation(isPresented: isPresented, isFullScreen: false, context: context, content: content, onDismiss: onDismiss)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func sheet(getIsPresented: @escaping () -> Bool, setIsPresented: @escaping (Bool) -> Void, onDismiss: (() -> Void)?, bridgedContent: any View) -> any View {
+        let isPresented = Binding(get: getIsPresented, set: setIsPresented)
+        return sheet(isPresented: isPresented, onDismiss: onDismiss, content: { bridgedContent })
+    }
+}
+
+#if SKIP
+final class PresentationModifier: SideEffectModifier {
+    private let presentation: @Composable (ComposeContext) -> Void
+    private let providesNavigation: Bool
+
+    init(providesNavigation: Bool, presentation: @Composable (ComposeContext) -> Void) {
+        super.init()
+        self.providesNavigation = providesNavigation
+        self.presentation = presentation
+        self.action = { context in
+            // Clear environment state that should not transfer to presentations
+            // SKIP INSERT: val providedNavigator = LocalNavigator provides if (providesNavigation) LocalNavigator.current else null
+            CompositionLocalProvider(providedNavigator) {
+                EnvironmentValues.shared.setValues {
+                    $0.set_animation(nil)
+                    $0.set_searchableState(nil)
+                    return ComposeResult.ok
+                } in: {
+                    presentation(context.content())
+                }
+            }
+            return ComposeResult.ok
+        }
+    }
+}
+
+/// Carries the presentation color before the modal's first composition, avoiding an opaque first frame.
+final class PresentationBackgroundColorModifier: RenderModifier {
+    let color: Color
+
+    init(color: Color) {
+        self.color = color
+        super.init()
+    }
+}
+
+/// Used to disable the back button from dismissing a presentation.
+final class BackDismissDisabledModifier: RenderModifier {
+    let disabled: Bool
+
+    init(disabled: Bool) {
+        self.disabled = disabled
+        super.init()
+    }
+}
+
+struct InteractiveDismissDisabledPreferenceKey: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = nextValue()
+    }
+}
+#endif
+#endif

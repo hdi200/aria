@@ -1,0 +1,1 @@
+../../../../../../MuseReaderiOS/MuseReaderiOS/Views/ScoreReaderTextEditing.swift

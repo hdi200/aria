@@ -1,0 +1,89 @@
+# iOS Swift files built into the Android app (paths relative to MuseReaderiOS/MuseReaderiOS).
+# scripts/link-ios-sources.sh links each into Aria/Sources/AriaSkip/Shared/. Add a file once
+# it builds for Android; platform differences go behind #if os(Android) in the iOS file.
+
+Views/AriaGrid.swift
+Views/CompatibilityViewModifiers.swift
+Views/ScoreReaderPitchKeyboard.swift
+
+App/AppResources.swift
+App/MuseReaderAppModel.swift
+# App/MusicNotationFont.swift  -- needs an Android version: CoreText font registration
+Models/LibraryAccessPolicy.swift
+Models/LibraryMonetizationModels.swift
+Models/LibrarySetlistFolder.swift
+Models/NewScoreDraft.swift
+Models/NewScoreInstrumentCatalog.swift
+Models/ReaderRecentDocument.swift
+Models/ScoreAnnotations.swift
+Models/ScoreDocument.swift
+Models/ScoreMixerSettings.swift
+Models/ScoreReaderChordDraft.swift
+Models/ScoreReaderNotationModels.swift
+Models/ScoreReaderState.swift
+Models/ScoreReaderStateAutosave.swift
+Models/ScoreReaderStateEditing.swift
+Models/ScoreReaderStatePages.swift
+Models/ScoreReaderStatePlayback.swift
+Models/ScoreExportModels.swift
+Models/ScoreReaderZoomModels.swift
+Models/ScoreSession.swift
+Models/ScoreVideoModels.swift
+# Services/LibraryAccessController.swift  -- StoreKit; Android version: AndroidLibraryAccessController.swift (Play Billing)
+Services/LibrarySetlistStore.swift
+Services/LiveScoreRenderSession.swift
+# Services/MIDIInputController.swift  -- CoreMIDI; Android version: AndroidMIDIInputController.swift (Android MIDI)
+Services/MSCXMusicXMLConverter.swift
+Services/ManagedScoreLibrary.swift
+Services/NativeNotePreviewController.swift
+Services/NativePlaybackController.swift
+Services/PlaybackTimelineClock.swift
+Services/RecentDocumentsStore.swift
+Services/ReviewRequestTracker.swift
+Services/ScoreDocumentService.swift
+Services/ScoreLegacyRepairBackup.swift
+Services/ScoreSessionService.swift
+Services/ScoreVideoExporter.swift
+Services/ScoreVideoPianoPainter.swift
+Services/SetlistShareExporter.swift
+Services/StemSoftwareMixer.swift
+
+# Views (being brought up on Android)
+ContentView.swift
+Views/CreateNewScoreView.swift
+Views/DocumentRowView.swift
+Views/LibraryAccessViews.swift
+Views/LibraryView.swift
+Views/MobileHintingHorizontalScrollView.swift
+Views/OpenSourceLegalView.swift
+Views/OwnedState.swift
+# Views/ScoreAnnotationOverlayView.swift  -- UIKit drawing; Android: not ported (annotations)
+Views/ScoreDetailView.swift
+Views/ScoreLegacyRepairSheet.swift
+Views/ScoreReaderAnnotationControls.swift
+Views/ScoreReaderChordEntry.swift
+Views/ScoreReaderChromeBar.swift
+Views/ScoreReaderContextToolbars.swift
+Views/ScoreReaderEditingDeck.swift
+Views/ScoreReaderExportPanel.swift
+Views/ScoreReaderFeatureTour.swift
+Views/ScoreReaderFloatingPalette.swift
+Views/ScoreReaderInstrumentReplacementSheet.swift
+# Views/ScoreReaderKeyboardShortcuts.swift  -- UIKeyCommand; Android: AndroidPendingPorts.swift (not ported)
+Views/ScoreReaderMixerPanel.swift
+Views/ScoreReaderMoreEditors.swift
+Views/ScoreReaderNoteEntrySurface.swift
+Views/ScoreReaderPageCanvas.swift
+Views/ScoreReaderPageScrubber.swift
+Views/ScoreReaderPickupEditor.swift
+Views/ScoreReaderTextEditing.swift
+Views/ScoreReaderToolButtons.swift
+Views/ScoreReaderView.swift
+Views/SetlistShareSheet.swift
+Views/UpdateNoticeSheet.swift
+# Views/ZoomableImageView.swift  -- UIScrollView; Android: AndroidZoomableImageView.swift
+# Views/ScoreReaderTextInputFields.swift  -- UITextField; Android: AndroidTextInputFields.swift
+# Views/ShareSheetView.swift  -- UIActivityViewController; Android: AndroidShareSheet.swift
+# Views/UpdateNoticeLoopingVideo.swift  -- AVPlayerLooper; Android: AndroidPendingPorts.swift
+Views/ScoreReaderVideoExportSheet.swift
+# Views/ScoreReaderVideoPlatformViews.swift  -- AVPlayerViewController, UIView, PresentationSizing, Layout; Android: AndroidVideoExportViews.swift

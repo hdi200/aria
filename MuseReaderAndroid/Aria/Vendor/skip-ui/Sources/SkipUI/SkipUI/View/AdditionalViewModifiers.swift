@@ -1,0 +1,1908 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+import Foundation
+#if SKIP
+import SkipModel
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalOverscrollFactory
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
+#elseif canImport(CoreGraphics)
+import struct CoreGraphics.CGAffineTransform
+import struct CoreGraphics.CGFloat
+import struct CoreGraphics.CGPoint
+import struct CoreGraphics.CGSize
+import struct Foundation.URL
+#endif
+
+extension View {
+    // SKIP @bridge
+    public func allowsHitTesting(_ enabled: Bool) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            var context = context
+            context.modifier = context.modifier.skipHitTesting(enabled: enabled)
+            EnvironmentValues.shared.setValues {
+                $0.set_isHitTestingEnabled(enabled)
+                return ComposeResult.ok
+            } in: {
+                renderable.Render(context: context)
+            }
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func aspectRatio(_ ratio: CGFloat? = nil, contentMode: ContentMode) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: AspectRatioModifier(ratio: ratio, contentMode: contentMode))
+        #else
+        return self
+        #endif
+    }
+
+    public func aspectRatio(_ size: CGSize, contentMode: ContentMode) -> any View {
+        return aspectRatio(size.width / size.height, contentMode: contentMode)
+    }
+
+    // SKIP @bridge
+    public func aspectRatio(_ ratio: CGFloat? = nil, bridgedContentMode: Int) -> any View {
+        return aspectRatio(ratio, contentMode: ContentMode(rawValue: bridgedContentMode) ?? .fit)
+    }
+
+    public func background(_ background: any View, alignment: Alignment = .center) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            BackgroundLayout(content: renderable, context: context, background: background, alignment: alignment)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func background(alignment: Alignment = .center, @ViewBuilder content: () -> any View) -> any View {
+        return background(content(), alignment: alignment)
+    }
+
+    // SKIP @bridge
+    public func background(horizontalAlignmentKey: String, verticalAlignmentKey: String, bridgedContent: any View) -> any View {
+        return background(alignment: Alignment(horizontal: HorizontalAlignment(key: horizontalAlignmentKey), vertical: VerticalAlignment(key: verticalAlignmentKey)), content: { bridgedContent })
+    }
+
+    /// - Warning: The second argument here should default to `.all`. Our implementation is not yet sophisticated enough to auto-detect when it is
+    ///     against a safe area boundary, so this would cause problems. Therefore we default to `[]` and rely on ther user to specify the edges.
+    public func background(ignoresSafeAreaEdges edges: Edge.Set = []) -> any View {
+        return self.background(BackgroundStyle.shared, ignoresSafeAreaEdges: edges)
+    }
+
+    /// - Warning: The second argument here should default to `.all`. Our implementation is not yet sophisticated enough to auto-detect when it is
+    ///     against a safe area boundary, so this would cause problems. Therefore we default to `[]` and rely on ther user to specify the edges.
+    public func background(_ style: any ShapeStyle, ignoresSafeAreaEdges edges: Edge.Set = []) -> any View {
+        #if SKIP
+        if edges.isEmpty {
+            return ModifiedContent(content: self, modifier: RenderModifier { context in
+                if let color = style.asColor(opacity: 1.0, animationContext: context) {
+                    return context.modifier.background(color)
+                } else if let brush = style.asBrush(opacity: 1.0, animationContext: context) {
+                    return context.modifier.background(brush)
+                } else {
+                    return context.modifier
+                }
+            })
+        } else {
+            return background {
+                style.ignoresSafeArea(edges: edges)
+            }
+        }
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func background(_ style: any ShapeStyle, bridgedIgnoresSafeAreaEdges: Int) -> any View {
+        return background(style, ignoresSafeAreaEdges: Edge.Set(rawValue: bridgedIgnoresSafeAreaEdges))
+    }
+
+    public func background(in shape: any Shape, fillStyle: FillStyle = FillStyle()) -> any View {
+        return background(BackgroundStyle.shared, in: shape, fillStyle: fillStyle)
+    }
+
+    public func background(_ style: any ShapeStyle, in shape: any Shape, fillStyle: FillStyle = FillStyle()) -> any View {
+        return background(content: { shape.fill(style) })
+    }
+
+    // SKIP @bridge
+    public func background(_ style: any ShapeStyle, in shape: any Shape, eoFill: Bool, antialiased: Bool) -> any View {
+        return background(style, in: shape, fillStyle: FillStyle(eoFill: eoFill, antialiased: antialiased))
+    }
+
+    // SKIP @bridge
+    public func backgroundStyle(_ style: any ShapeStyle) -> any View {
+        #if SKIP
+        return environment(\.backgroundStyle, style)
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func badge(_ count: Int) -> any View {
+        #if SKIP
+        if count == 0 {
+            return ModifiedContent(content: self, modifier: BadgeModifier(badge: nil))
+        } else {
+            return ModifiedContent(content: self, modifier: BadgeModifier(badge: Text(verbatim: String(count))))
+        }
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func badge(_ label: Text?) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: BadgeModifier(badge: label))
+        #else
+        return self
+        #endif
+    }
+
+    public func badge(_ key: LocalizedStringKey) -> any View {
+        return badge(Text(key))
+    }
+
+    @available(*, unavailable)
+    public func badge(_ resource: LocalizedStringResource) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func badge(_ label: String) -> any View {
+        return badge(Text(verbatim: label))
+    }
+
+    public func badgeProminence(_ prominence: BadgeProminence) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: BadgeModifier(prominence: prominence))
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func badgeProminence(bridgedRawValue: Int) -> any View {
+        return badgeProminence(BadgeProminence(rawValue: bridgedRawValue) ?? .standard)
+    }
+
+    public func blendMode(_ blendMode: BlendMode) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier {
+            return $0.modifier.graphicsLayer(
+                compositingStrategy: CompositingStrategy.Offscreen,
+                blendMode: blendMode.asComposeBlendMode()
+            )
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func blendMode(bridgedRawValue: Int) -> any View {
+        return blendMode(BlendMode(rawValue: bridgedRawValue) ?? .normal)
+    }
+
+    // SKIP @bridge
+    public func blur(radius: CGFloat, opaque: Bool = false) -> any View {
+        #if SKIP
+        // Animatable modifiers begin by capturing the read cursor: arguments are evaluated
+        // before the call, so a tracked-state read in the caller's value expression has just
+        // recorded the transaction that wrote it. This pairs each modifier with the
+        // `withAnimation` scope (if any) that changed its inputs — no transpiler involvement.
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatedRadius = Float(radius).asAnimatable(context: context, animTx: animTx).value
+            return context.modifier.blur(radiusX: animatedRadius.dp, radiusY: animatedRadius.dp, edgeTreatment: BlurredEdgeTreatment.Unbounded)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func border(_ style: any ShapeStyle, width: CGFloat = 1.0) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: AnimatedBorderModifier(style: style, width: width))
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func brightness(_ amount: Double) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatedAmount = Float(amount).asAnimatable(context: context, animTx: animTx).value
+            return context.modifier.then(BrightnessModifier(amount: Double(animatedAmount)))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func clipShape(_ shape: any Shape, style: FillStyle = FillStyle()) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier {
+            return $0.modifier.clip(shape.asComposeShape(density: LocalDensity.current))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func clipShape(_ shape: any Shape, eoFill: Bool, antialiased: Bool) -> any View {
+        return clipShape(shape, style: FillStyle(eoFill: eoFill, antialiased: antialiased))
+    }
+
+    // SKIP @bridge
+    public func clipped(antialiased: Bool = false) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier {
+            return $0.modifier.clipToBounds()
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func colorInvert() -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier {
+            return $0.modifier.then(ColorInvertModifier())
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func colorMultiply(_ color: Color) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            return context.modifier.then(ColorMultiplyModifier(color: color.colorImpl()))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func compositingGroup() -> any View {
+        // Android: Not currently working - would require opacity modifier to detect
+        // compositingGroup and use saveLayer with alpha instead of graphicsLayer
+        return self
+    }
+
+    @available(*, unavailable)
+    public func containerBackground(_ style: any ShapeStyle, for container: ContainerBackgroundPlacement) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func containerBackground(for container: ContainerBackgroundPlacement, alignment: Alignment = .center, @ViewBuilder content: () -> any View) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func containerRelativeFrame(_ axes: Axis.Set, alignment: Alignment = .center) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func containerRelativeFrame(_ axes: Axis.Set, count: Int, span: Int = 1, spacing: CGFloat, alignment: Alignment = .center) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func containerRelativeFrame(_ axes: Axis.Set, alignment: Alignment = .center, _ length: @escaping (CGFloat, Axis) -> CGFloat) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func containerShape<T>(_ shape: any Shape) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func contentShape(_ shape: any Shape, eoFill: Bool = false) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func contentShape(_ kind: ContentShapeKinds, _ shape: any Shape, eoFill: Bool = false) -> some View {
+        return self
+    }
+
+    public func contextMenu(@ViewBuilder menuItems: () -> any View) -> some View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: ContextMenuModifier(menuItems: ComposeBuilder.from(menuItems)))
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func contextMenu(bridgedMenuItems: any View) -> any View {
+        return contextMenu(menuItems: { bridgedMenuItems })
+    }
+
+    public func contextMenu(@ViewBuilder menuItems: () -> any View, @ViewBuilder preview: () -> any View) -> some View {
+        #if SKIP
+        // Preview is not supported on Android; fall back to standard context menu
+        return ModifiedContent(content: self, modifier: ContextMenuModifier(menuItems: ComposeBuilder.from(menuItems)))
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func contextMenu(bridgedMenuItems: any View, bridgedPreview: any View) -> any View {
+        return contextMenu(menuItems: { bridgedMenuItems }, preview: { bridgedPreview })
+    }
+
+    @available(*, unavailable)
+    public func contextMenu<I>(forSelectionType itemType: Any.Type? = nil, @ViewBuilder menu: @escaping (Set<I>) -> any View, primaryAction: ((Set<I>) -> Void)? = nil) -> some View where I: Hashable {
+        return self
+    }
+
+    // SKIP @bridge
+    public func contrast(_ amount: Double) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatedAmount = Float(amount).asAnimatable(context: context, animTx: animTx).value
+            return context.modifier.then(ContrastModifier(amount: Double(animatedAmount)))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func controlSize(_ controlSize: ControlSize) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func coordinateSpace(_ name: NamedCoordinateSpace) -> some View {
+        return self
+    }
+
+    // No need to @bridge because we define it in terms of `clipShape`
+    // Note: cornerRadius clipping does not animate in Skip due to Compose limitations
+    public func cornerRadius(_ radius: CGFloat, antialiased: Bool = true) -> any View {
+        return clipShape(RoundedRectangle(cornerRadius: radius))
+    }
+
+    @available(*, unavailable)
+    public func defaultHoverEffect(_ effect: HoverEffect?) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func defersSystemGestures(on edges: Edge.Set) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func dialogSuppressionToggle(_ titleKey: LocalizedStringKey, isSuppressed: Binding<Bool>) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func dialogSuppressionToggle(_ titleResource: LocalizedStringResource, isSuppressed: Binding<Bool>) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func dialogSuppression(_ title: String, isSuppressed: Binding<Bool>) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func dialogSuppressionToggle(_ label: Text, isSuppressed: Binding<Bool>) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func dialogSuppressionToggle(isSuppressed: Binding<Bool>) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func disabled(_ disabled: Bool) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: DisabledModifier(disabled))
+        #else
+        return self
+        #endif
+    }
+
+    public func drawingGroup(opaque: Bool = false, colorMode: ColorRenderingMode = .nonLinear) -> any View {
+        #if SKIP
+        // Android ignores opaque and colorMode
+        // drawingGroup forces offscreen rendering - Compose equivalent is CompositingStrategy.Offscreen
+        return ModifiedContent(content: self, modifier: RenderModifier {
+            return $0.modifier.graphicsLayer(compositingStrategy: CompositingStrategy.Offscreen)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func drawingGroup() -> any View {
+        return drawingGroup(opaque: false, colorMode: .nonLinear)
+    }
+
+    // No need to @bridge
+    public func equatable() -> some View {
+        return EquatableView(content: self)
+    }
+
+    @available(*, unavailable)
+    public func fileMover(isPresented: Binding<Bool>, file: URL?, onCompletion: @escaping (_ result: Result<URL, Error>) -> Void) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func fileMover(isPresented: Binding<Bool>, files: any Collection<URL>, onCompletion: @escaping (_ result: Result<[URL], Error>) -> Void) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func fileMover(isPresented: Binding<Bool>, file: URL?, onCompletion: @escaping (Result<URL, Error>) -> Void, onCancellation: @escaping () -> Void) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func fileMover(isPresented: Binding<Bool>, files: any Collection<URL>, onCompletion: @escaping (Result<[URL], Error>) -> Void, onCancellation: @escaping () -> Void) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func fixedSize(horizontal: Bool, vertical: Bool) -> any View {
+        #if SKIP
+        guard horizontal || vertical else {
+            return self
+        }
+        // Fix an axis to the content's ideal size by measuring it unbounded on that axis, mirroring
+        // SwiftUI's fixedSize (the view is proposed its ideal size and won't be compressed/truncated).
+        // A non-fixed axis is left untouched so the flexible-width layout system still governs it.
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            var modifier = context.modifier
+            if horizontal {
+                modifier = modifier.wrapContentWidth(unbounded: true)
+            }
+            if vertical {
+                modifier = modifier.wrapContentHeight(unbounded: true)
+            }
+            return modifier
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func fixedSize() -> any View {
+        return fixedSize(horizontal: true, vertical: true)
+    }
+
+    // SKIP @bridge
+    public func flipsForRightToLeftLayoutDirection(_ enabled: Bool) -> any View {
+        #if SKIP
+        if !enabled {
+            return self
+        }
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let isRTL = LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+            if isRTL {
+                return context.modifier.scale(scaleX: Float(-1), scaleY: Float(1))
+            } else {
+                return context.modifier
+            }
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func foregroundColor(_ color: Color?) -> any View {
+        #if SKIP
+        return environment(\._foregroundStyle, color, affectsEvaluate: false)
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func foregroundStyle(_ style: any ShapeStyle) -> any View {
+        #if SKIP
+        return environment(\._foregroundStyle, style, affectsEvaluate: false)
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func foregroundStyle(_ primary:  any ShapeStyle, _ secondary:  any ShapeStyle) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func foregroundStyle(_ primary:  any ShapeStyle, _ secondary:  any ShapeStyle, _ tertiary:  any ShapeStyle) -> some View {
+        return self
+    }
+
+    public func frame(width: CGFloat? = nil, height: CGFloat? = nil, alignment: Alignment = .center) -> some View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            let animatable = (Float(width ?? 0.0), Float(height ?? 0.0)).asAnimatable(context: context, animTx: animTx)
+            FrameLayout(content: renderable, context: context, width: width == nil ? nil : Double(animatable.value.0), height: height == nil ? nil : Double(animatable.value.1), alignment: alignment)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func frame(width: CGFloat?, height: CGFloat?, horizontalAlignmentKey: String, verticalAlignmentKey: String) -> any View {
+        return frame(width: width, height: height, alignment: Alignment(horizontal: HorizontalAlignment(key: horizontalAlignmentKey), vertical: VerticalAlignment(key: verticalAlignmentKey)))
+    }
+
+    public func frame(minWidth: CGFloat? = nil, idealWidth: CGFloat? = nil, maxWidth: CGFloat? = nil, minHeight: CGFloat? = nil, idealHeight: CGFloat? = nil, maxHeight: CGFloat? = nil, alignment: Alignment = .center) -> some View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            FrameLayout(content: renderable, context: context, minWidth: minWidth, idealWidth: idealWidth, maxWidth: maxWidth, minHeight: minHeight, idealHeight: idealHeight, maxHeight: maxHeight, alignment: alignment)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func frame(minWidth: CGFloat?, idealWidth: CGFloat?, maxWidth: CGFloat?, minHeight: CGFloat?, idealHeight: CGFloat?, maxHeight: CGFloat?, horizontalAlignmentKey: String, verticalAlignmentKey: String) -> any View {
+        return frame(minWidth: minWidth, idealWidth: idealWidth, maxWidth: maxWidth, minHeight: minHeight, idealHeight: idealHeight, maxHeight: maxHeight, alignment: Alignment(horizontal: HorizontalAlignment(key: horizontalAlignmentKey), vertical: VerticalAlignment(key: verticalAlignmentKey)))
+    }
+
+    // SKIP @bridge
+    public func grayscale(_ amount: Double) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatedAmount = Float(amount).asAnimatable(context: context, animTx: animTx).value
+            return context.modifier.then(GrayscaleModifier(amount: Double(animatedAmount)))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func handlesExternalEvents(preferring: Set<String>, allowing: Set<String>) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func headerProminence(_ prominence: Prominence) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func help(_ textKey: LocalizedStringKey) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func help(_ textResource: LocalizedStringResource) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func help(_ text: Text) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func help(_ text: String) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func hidden() -> any View {
+        #if SKIP
+        return opacity(0.0)
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func hoverEffect(_ effect: HoverEffect = .automatic, isEnabled: Bool = true) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func hoverEffectDisabled(_ disabled: Bool = true) -> some View {
+        return self
+    }
+
+    public func hueRotation(_ angle: Angle) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatedDegrees = Float(angle.degrees).asAnimatable(context: context, animTx: animTx).value
+            return context.modifier.then(HueRotationModifier(degrees: Double(animatedDegrees)))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func hueRotation(bridgedAngle: Double) -> any View {
+        return hueRotation(.radians(bridgedAngle))
+    }
+
+    // SKIP @bridge
+    public func id(_ id: Any) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: TagModifier(value: id, role: .id))
+        #else
+        return self
+        #endif
+    }
+
+    public func ignoresSafeArea(_ regions: SafeAreaRegions = .all, edges: Edge.Set = .all) -> any View {
+        #if SKIP
+        guard regions.contains(.container) else {
+            return self
+        }
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            IgnoresSafeAreaLayout(content: renderable, context: context, expandInto: edges)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func ignoresSafeArea(bridgedRegions: Int, bridgedEdges: Int) -> any View {
+        return ignoresSafeArea(SafeAreaRegions(rawValue: bridgedRegions), edges: Edge.Set(rawValue: bridgedEdges))
+    }
+
+    @available(*, unavailable)
+    public func inspector(isPresented: Binding<Bool>, @ViewBuilder content: () -> any View) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func inspectorColumnWidth(min: CGFloat? = nil, ideal: CGFloat, max: CGFloat? = nil) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func inspectorColumnWidth(_ width: CGFloat) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func interactionActivityTrackingTag(_ tag: String) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func keyboardShortcut(_ key: KeyEquivalent, modifiers: EventModifiers = .command) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func keyboardShortcut(_ shortcut: KeyboardShortcut?) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func keyboardShortcut(_ key: KeyEquivalent, modifiers: EventModifiers = .command, localization: KeyboardShortcut.Localization) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func labelsHidden() -> any View {
+        #if SKIP
+        return environment(\._labelsHidden, true, affectsEvaluate: false)
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func layoutDirectionBehavior(_ behavior: LayoutDirectionBehavior) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func layoutPriority(_ value: Double) -> some View {
+        return self
+    }
+
+    /// Allow users to revert to previous layout versions.
+    // SKIP @bridge
+    public func layoutImplementationVersion(_ version: Int) -> any View {
+        #if SKIP
+        return environment(\._layoutImplementationVersion, version)
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func luminanceToAlpha() -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier {
+            return $0.modifier.then(LuminanceToAlphaModifier())
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func mask(_ mask: any View, alignment: Alignment = .center) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            MaskLayout(content: renderable, context: context, mask: mask, alignment: alignment)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func mask(alignment: Alignment = .center, @ViewBuilder _ mask: () -> any View) -> any View {
+        return self.mask(mask(), alignment: alignment)
+    }
+
+    // SKIP @bridge
+    public func mask(horizontalAlignmentKey: String, verticalAlignmentKey: String, bridgedMask: any View) -> any View {
+        return mask(bridgedMask, alignment: Alignment(horizontal: HorizontalAlignment(key: horizontalAlignmentKey), vertical: VerticalAlignment(key: verticalAlignmentKey)))
+    }
+
+    @available(*, unavailable)
+    public func matchedGeometryEffect<ID>(id: any Hashable, in namespace: Any /* Namespace.ID */, properties: MatchedGeometryProperties = .frame, anchor: UnitPoint = .center, isSource: Bool = true) -> some View {
+        return self
+    }
+
+    public func offset(_ offset: CGSize) -> any View {
+        return self.offset(x: offset.width, y: offset.height)
+    }
+
+    // SKIP @bridge
+    public func offset(x: CGFloat = 0.0, y: CGFloat = 0.0) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier {
+            let density = LocalDensity.current
+            let animatable = (Float(x), Float(y)).asAnimatable(context: $0, animTx: animTx)
+            let offsetPx = with(density) {
+                IntOffset(animatable.value.0.dp.roundToPx(), animatable.value.1.dp.roundToPx())
+            }
+            return $0.modifier.offset { offsetPx }
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func onAppear(perform action: (() -> Void)? = nil) -> any View {
+        #if SKIP
+        // TODO: would it be better to use the (new) onFirstVisible and onVisibilityChanged APIs here?
+        return ModifiedContent(content: self, modifier: SideEffectModifier { _ in
+            let hasAppeared = remember { mutableStateOf(false) }
+            if !hasAppeared.value {
+                hasAppeared.value = true
+                SideEffect { action?() }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func onChange<V>(of value: V, perform action: @escaping (_ newValue: V) -> Void) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { context in
+            let rememberedValue = rememberSaveable(stateSaver: context.stateSaver as! Saver<V, Any>) { mutableStateOf(value) }
+            if rememberedValue.value != value {
+                rememberedValue.value = value
+                SideEffect { action(value) }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // Note: Kotlin's type inference has issues when a no-label closure follows a defaulted argument and the closure is
+    // inline rather than trailing at the call site. So for these onChange variants we've separated the 'initial' argument
+    // out rather than default it
+
+    public func onChange<V>(of value: V, _ action: @escaping (_ oldValue: V, _ newValue: V) -> Void) -> any View {
+        return onChange(of: value, initial: false, action)
+    }
+
+    // SKIP @bridge
+    public func onChange<V>(of value: V, initial: Bool, _ action: @escaping (_ oldValue: V, _ newValue: V) -> Void) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { context in
+            let rememberedValue = rememberSaveable(stateSaver: context.stateSaver as! Saver<V, Any>) { mutableStateOf(value) }
+            let rememberedInitial = rememberSaveable(stateSaver: context.stateSaver as! Saver<Bool, Any>) { mutableStateOf(true) }
+
+            let isInitial = rememberedInitial.value
+            rememberedInitial.value = false
+
+            let oldValue = rememberedValue.value
+            let isUpdate = oldValue != value
+            if isUpdate {
+                rememberedValue.value = value
+            }
+
+            if (initial && isInitial) || isUpdate {
+                SideEffect { action(oldValue, value) }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func onChange<V>(of value: V?, _ action: @escaping () -> Void) -> any View {
+        return onChange(of: value, initial: false, action)
+    }
+
+    public func onChange<V>(of value: V?, initial: Bool, _ action: @escaping () -> Void) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { context in
+            let rememberedValue = rememberSaveable(stateSaver: context.stateSaver as! Saver<V?, Any>) { mutableStateOf(value) }
+            let rememberedInitial = rememberSaveable(stateSaver: context.stateSaver as! Saver<Bool, Any>) { mutableStateOf(true) }
+
+            let isInitial = rememberedInitial.value
+            rememberedInitial.value = false
+
+            let oldValue = rememberedValue.value
+            let isUpdate = oldValue != value
+            if isUpdate {
+                rememberedValue.value = value
+            }
+
+            if (initial && isInitial) || isUpdate {
+                SideEffect { action() }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func onContinuousHover(coordinateSpace: some CoordinateSpaceProtocol = .local, perform action: @escaping (HoverPhase) -> Void) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func onDisappear(perform action: (() -> Void)? = nil) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { _ in
+            let disposeAction = rememberUpdatedState(action)
+            DisposableEffect(true) {
+                onDispose {
+                    disposeAction.value?()
+                }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    #if !SKIP
+    public typealias GeometryChangeType = Equatable
+    #else
+    // needed to get the required "where T: Any" in the signature: fun <T> onGeometryChange(for_: KClass<T>, of: (GeometryProxy) -> T, action: (T) -> Unit): View where T: Any
+    public typealias GeometryChangeType = Any
+    #endif
+
+    public func onGeometryChange<T: GeometryChangeType>(for type: T.Type, of transform: @escaping (GeometryProxy) -> T, action: @escaping (T) -> Void) -> any View {
+        onGeometryChangeErased(of: transform, action: action)
+    }
+
+    public func onGeometryChange<T: GeometryChangeType>(for type: T.Type, of transform: @escaping (GeometryProxy) -> T, action: @escaping (_ oldValue: T, _ newValue: T) -> Void) -> any View {
+        onGeometryChangeErased(of: transform, action: action)
+    }
+
+    // Skip does not yet support brigding T.Type, create erased variants that will act as the bridged functions
+
+    // SKIP @bridge
+    public func onGeometryChangeErased<T>(of transform: @escaping (GeometryProxy) -> T, action: @escaping (T) -> Void) -> any View {
+        onGeometryChangeErased(of: transform) { oldValue, newValue in
+            action(newValue)
+        }
+    }
+
+    // SKIP @bridge
+    public func onGeometryChangeErased<T>(of transform: @escaping (GeometryProxy) -> T, action: @escaping (_ oldValue: T, _ newValue: T) -> Void) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            let geometry = remember { GeometryReaderState() }
+            let storage = remember { GeometryChangeValueStorage() }
+            let density = LocalDensity.current
+            let safeArea = EnvironmentValues.shared._safeArea
+
+            if geometry.isPositioned {
+                let proxy = GeometryProxy(sizePx: geometry.sizePx, globalFramePx: geometry.globalFramePx, density: density, safeArea: safeArea)
+                let newValue = transform(proxy)
+                let oldValue = storage.previousValue as? T
+                if oldValue == nil || oldValue != newValue {
+                    let effectiveOldValue = oldValue ?? newValue
+                    storage.previousValue = newValue
+                    SideEffect { action(effectiveOldValue, newValue) }
+                }
+            }
+
+            var updatedContext = context
+            updatedContext.modifier = context.modifier.onGloballyPositioned {
+                geometry.update(size: $0.size, frame: $0.boundsInRoot())
+            }
+            renderable.Render(context: updatedContext)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func androidVerticalOverscrollPullDown(
+        isEnabled: Bool,
+        onPull: @escaping (CGFloat) -> Void,
+        onEnd: @escaping () -> Void
+    ) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            let enabledState = rememberUpdatedState(isEnabled)
+            let onPullState = rememberUpdatedState(onPull)
+            let onEndState = rememberUpdatedState(onEnd)
+            let density = LocalDensity.current
+            let connection = remember {
+                AndroidVerticalOverscrollPullDownConnection(
+                    isEnabled: {
+                        enabledState.value
+                    },
+                    onPullPx: { pullPx in
+                        let pullDp = with(density) { pullPx.toDp() }
+                        onPullState.value(CGFloat(pullDp.value))
+                    },
+                    onEnd: {
+                        onEndState.value()
+                    }
+                )
+            }
+
+            var context = context
+            context.modifier = context.modifier.nestedScroll(connection)
+            // Android's stretch overscroll consumes the edge drag before the
+            // parent nested-scroll connection can use it for sheet handoff.
+            // SKIP INSERT: val providedOverscrollFactory = LocalOverscrollFactory provides null
+            CompositionLocalProvider(providedOverscrollFactory) {
+                renderable.Render(context: context)
+            }
+        })
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func onHover(perform action: @escaping (Bool) -> Void) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func opacity(_ opacity: Double) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatable = Float(opacity).asAnimatable(context: context, animTx: animTx)
+            return context.modifier.then(OpacityModifier(opacity: animatable.value))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func overlay(_ overlay: any View, alignment: Alignment = .center) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            OverlayLayout(content: renderable, context: context, overlay: overlay, alignment: alignment)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func overlay(alignment: Alignment = .center, @ViewBuilder content: () -> any View) -> any View {
+        return overlay(content(), alignment: alignment)
+    }
+
+    // SKIP @bridge
+    public func overlay(horizontalAlignmentKey: String, verticalAlignmentKey: String, bridgedContent: any View) -> any View {
+        return overlay(alignment: Alignment(horizontal: HorizontalAlignment(key: horizontalAlignmentKey), vertical: VerticalAlignment(key: verticalAlignmentKey)), content: { bridgedContent })
+    }
+
+    public func overlay(_ style: any ShapeStyle, ignoresSafeAreaEdges edges: Edge.Set = .all) -> any View {
+        return overlay(style, in: Rectangle())
+    }
+
+    // SKIP @bridge
+    public func overlay(_ style: any ShapeStyle, bridgedIgnoresSafeAreaEdges: Int) -> any View {
+        return overlay(style, ignoresSafeAreaEdges: Edge.Set(rawValue: bridgedIgnoresSafeAreaEdges))
+    }
+
+    public func overlay(_ style: any ShapeStyle, in shape: any Shape, fillStyle: FillStyle = FillStyle()) -> any View {
+        return overlay(content: { shape.fill(style) })
+    }
+
+    // SKIP @bridge
+    public func overlay(_ style: any ShapeStyle, in shape: any Shape, eoFill: Bool, antialiased: Bool) -> any View {
+        return overlay(style, in: shape, fillStyle: FillStyle(eoFill: eoFill, antialiased: antialiased))
+    }
+
+    public func padding(_ insets: EdgeInsets) -> some View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: PaddingModifier(insets: insets))
+        #else
+        return self
+        #endif
+    }
+
+    public func padding(_ edges: Edge.Set, _ length: CGFloat? = nil) -> some View {
+        #if SKIP
+        var padding = EdgeInsets()
+        if edges.contains(.top) {
+            padding.top = length ?? 16.0
+        }
+        if edges.contains(.bottom) {
+            padding.bottom = length ?? 16.0
+        }
+        if edges.contains(.leading) {
+            padding.leading = length ?? 16.0
+        }
+        if edges.contains(.trailing) {
+            padding.trailing = length ?? 16.0
+        }
+        return padding(padding)
+        #else
+        return self
+        #endif
+    }
+
+    public func padding(_ length: CGFloat? = nil) -> some View {
+        return padding(.all, length)
+    }
+
+    // SKIP @bridge
+    public func padding(top: CGFloat, leading: CGFloat, bottom: CGFloat, trailing: CGFloat) -> any View {
+        return padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
+    }
+
+    @available(*, unavailable)
+    public func persistentSystemOverlays(_ visibility: Visibility) -> some View {
+        return self
+    }
+
+    public func position(_ position: CGPoint) -> any View {
+        return self.position(x: position.x, y: position.y)
+    }
+
+    // SKIP @bridge
+    public func position(x: CGFloat = 0.0, y: CGFloat = 0.0) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            let density = LocalDensity.current
+            let animatable = (Float(x), Float(y)).asAnimatable(context: context, animTx: animTx)
+            let positionPx = with(density) {
+                IntOffset(animatable.value.0.dp.roundToPx(), animatable.value.1.dp.roundToPx())
+            }
+            PositionLayout(content: renderable, x: Double(animatable.value.0), y: Double(animatable.value.1), context: context)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func projectionEffect(_ transform: Any /* ProjectionTransform */) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func popover<Item>(item: Binding<Item?>, attachmentAnchor: Any? = nil /* PopoverAttachmentAnchor = .rect(.bounds) */, arrowEdge: Edge = .top, @ViewBuilder content: @escaping (Item) -> any View) -> some View /* where Item : Identifiable, */ {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func popover(isPresented: Binding<Bool>, attachmentAnchor: Any? = nil /* PopoverAttachmentAnchor = .rect(.bounds) */, arrowEdge: Edge = .top, @ViewBuilder content: @escaping () -> any View) -> some View {
+        return self
+    }
+
+    // No need to @bridge because we define in terms of `EnvironmentValues.refresh`
+    public func refreshable(action: @escaping () async -> Void) -> some View {
+        #if SKIP
+        return environment(\.refresh, RefreshAction(action: action))
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func renameAction(_ isFocused: Any /* FocusState<Bool>.Binding */) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func renameAction(_ action: @escaping () -> Void) -> some View {
+        return self
+    }
+
+    public func rotationEffect(_ angle: Angle) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatable = Float(angle.degrees).asAnimatable(context: context, animTx: animTx)
+            return context.modifier.rotate(animatable.value)
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func rotationEffect(_ angle: Angle, anchor: UnitPoint) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatable = Float(angle.degrees).asAnimatable(context: context, animTx: animTx)
+            return context.modifier.graphicsLayer(
+                transformOrigin: TransformOrigin(pivotFractionX: Float(anchor.x), pivotFractionY: Float(anchor.y)),
+                rotationZ: animatable.value
+            )
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func rotationEffect(bridgedAngle: Double, anchorX: CGFloat, anchorY: CGFloat) -> any View {
+        return rotationEffect(.radians(bridgedAngle), anchor: UnitPoint(x: anchorX, y: anchorY))
+    }
+
+    public func rotation3DEffect(_ angle: Angle, axis: (x: CGFloat, y: CGFloat, z: CGFloat), anchor: UnitPoint = .center, anchorZ: CGFloat = 0.0, perspective: CGFloat = 1.0) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatable = Float(angle.degrees).asAnimatable(context: context, animTx: animTx)
+            // Try to approximate SwiftUI's perspective adaptation to view size
+            let size = remember { mutableStateOf(IntSize.Zero) }
+            let dimension = max(size.value.width * axis.y, size.value.height * axis.x)
+            let distance = max(Float(0.1), Float(dimension / 65)) / Float(perspective)
+            return context.modifier
+                .onGloballyPositioned { size.value = $0.size }
+                .graphicsLayer(
+                    transformOrigin: TransformOrigin(pivotFractionX: Float(anchor.x), pivotFractionY: Float(anchor.y)),
+                    rotationX: Float(axis.x) * animatable.value,
+                    rotationY: Float(axis.y) * animatable.value,
+                    rotationZ: Float(axis.z) * animatable.value,
+                    cameraDistance: distance
+                )
+        })
+        #else
+        return self
+        #endif
+    }
+
+    public func rotation3DEffect(_ angle: Angle, axis: (x: Int, y: Int, z: Int), perspective: CGFloat = 1.0) -> any View {
+        return rotation3DEffect(angle, axis: (CGFloat(axis.x), CGFloat(axis.y), CGFloat(axis.z)), perspective: perspective)
+    }
+
+    // SKIP @bridge
+    public func rotation3DEffect(bridgedAngle: Double, axis: (x: CGFloat, y: CGFloat, z: CGFloat), anchorX: CGFloat, anchorY: CGFloat, anchorZ: CGFloat, perspective: CGFloat) -> any View {
+        return rotation3DEffect(.radians(bridgedAngle), axis: axis, anchor: UnitPoint(x: anchorX, y: anchorY), anchorZ: anchorZ, perspective: perspective)
+    }
+
+    // SKIP @bridge
+    public func saturation(_ amount: Double) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatedAmount = Float(amount).asAnimatable(context: context, animTx: animTx).value
+            return context.modifier.then(SaturationModifier(amount: Double(animatedAmount)))
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // No need to @bridge because we define in terms of `.aspectRatio`
+    public func scaledToFit() -> any View {
+        return aspectRatio(nil, contentMode: .fit)
+    }
+
+    // No need to @bridge because we define in terms of `.aspectRatio`
+    public func scaledToFill() -> any View {
+        return aspectRatio(nil, contentMode: .fill)
+    }
+
+    public func scaleEffect(_ scale: CGSize, anchor: UnitPoint = .center) -> any View {
+        return scaleEffect(x: scale.width, y: scale.height, anchor: anchor)
+    }
+
+    public func scaleEffect(_ s: CGFloat, anchor: UnitPoint = .center) -> any View {
+        return scaleEffect(x: s, y: s, anchor: anchor)
+    }
+
+    public func scaleEffect(x: CGFloat = 1.0, y: CGFloat = 1.0, anchor: UnitPoint = .center) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatable = (Float(x), Float(y)).asAnimatable(context: context, animTx: animTx)
+            return context.modifier.graphicsLayer(
+                transformOrigin: TransformOrigin(pivotFractionX: Float(anchor.x), pivotFractionY: Float(anchor.y)),
+                scaleX: animatable.value.0,
+                scaleY: animatable.value.1
+            )
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func scaleEffect(x: CGFloat = 1.0, y: CGFloat = 1.0, anchorX: CGFloat, anchorY: CGFloat) -> any View {
+        return scaleEffect(x: x, y: y, anchor: UnitPoint(x: anchorX, y: anchorY))
+    }
+
+    /// Applies scale and translation in one compositor layer without changing layout position.
+    ///
+    /// Use this for native-backed content whose pixels should move without relocating its
+    /// Compose layout node. Translation values use SwiftUI points and are converted to pixels.
+    // SKIP @bridge
+    public func compositorTransform(
+        scaleX: CGFloat,
+        scaleY: CGFloat,
+        translationX: CGFloat,
+        translationY: CGFloat,
+        anchorX: CGFloat,
+        anchorY: CGFloat
+    ) -> any View {
+        #if SKIP
+        let animTx = StateTracking.captureLastReadAndClear()
+        return ModifiedContent(content: self, modifier: RenderModifier { context in
+            let animatedScale = (Float(scaleX), Float(scaleY)).asAnimatable(
+                context: context,
+                animTx: animTx
+            )
+            let animatedTranslation = (Float(translationX), Float(translationY)).asAnimatable(
+                context: context,
+                animTx: animTx
+            )
+            let density = LocalDensity.current
+            let translationXPixels = with(density) { animatedTranslation.value.0.dp.toPx() }
+            let translationYPixels = with(density) { animatedTranslation.value.1.dp.toPx() }
+            return context.modifier.graphicsLayer(
+                transformOrigin: TransformOrigin(
+                    pivotFractionX: Float(anchorX),
+                    pivotFractionY: Float(anchorY)
+                ),
+                scaleX: animatedScale.value.0,
+                scaleY: animatedScale.value.1,
+                translationX: translationXPixels,
+                translationY: translationYPixels
+            )
+        })
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func sectionActions(@ViewBuilder content: () -> any View) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func selectionDisabled(_ isDisabled: Bool = true) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func shadow(color: Color = Color(/* .sRGBLinear, */ white: 0.0, opacity: 0.33), radius: CGFloat, x: CGFloat = 0.0, y: CGFloat = 0.0) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: RenderModifier { renderable, context in
+            // See Shadowed.kt
+            Shadowed(context: context, color: color.colorImpl(), offsetX: x.dp, offsetY: y.dp, blurRadius: radius.dp) { context in
+                renderable.Render(context: context)
+            }
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func statusBarHidden(_ hidden: Bool = true) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { _ in
+            DisposableEffect(hidden) {
+                let statusBars: Int = androidx.core.view.WindowInsetsCompat.Type.statusBars()
+                // This flag makes status bar show/hide animation smooth
+                // It also fixes the status bar state when resuming the app from background
+                let showTransientBarsBySwipe: Int = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                var effectDecorView: android.view.View? = nil
+                if let activity = UIApplication.shared.androidActivity {
+                    let decorView = activity.window.decorView
+                    effectDecorView = decorView
+                    ViewCompat.setOnApplyWindowInsetsListener(decorView) { view, windowInsets in
+                        if hidden, windowInsets.isVisible(statusBars) {
+                            let insetsController = WindowCompat.getInsetsController(activity.window, decorView)
+                            insetsController.systemBarsBehavior = showTransientBarsBySwipe
+                            insetsController.hide(statusBars)
+                        }
+                        return ViewCompat.onApplyWindowInsets(view, windowInsets)
+                    }
+                    let insetsController = WindowCompat.getInsetsController(activity.window, decorView)
+                    insetsController.systemBarsBehavior = showTransientBarsBySwipe
+                    if hidden {
+                        insetsController.hide(statusBars)
+                    } else {
+                        insetsController.show(statusBars)
+                    }
+                }
+                onDispose {
+                    if let effectDecorView {
+                        ViewCompat.setOnApplyWindowInsetsListener(effectDecorView, nil)
+                    }
+                    if hidden, let activity = UIApplication.shared.androidActivity {
+                        let insetsController = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                        insetsController.systemBarsBehavior = showTransientBarsBySwipe
+                        insetsController.show(statusBars)
+                    }
+                }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func symbolEffectsRemoved(_ isEnabled: Bool = true) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func tag(_ tag: Any?) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: TagModifier(value: tag, role: .tag))
+        #else
+        return self
+        #endif
+    }
+
+    public func task(priority: TaskPriority = .userInitiated, _ action: @escaping () async -> Void) -> any View {
+        return task(id: 0, priority: priority, action)
+    }
+
+    public func task(id value: Any, priority: TaskPriority = .userInitiated, _ action: @escaping () async -> Void) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { _ in
+            let handler = rememberUpdatedState(action)
+            DisposableEffect(value) {
+                let task = Task(priority: priority) {
+                    handler.value()
+                }
+                onDispose {
+                    task.cancel()
+                }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func task(id value: Any, bridgedAction: @escaping (CompletionHandler) -> Void) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { _ in
+            let actionState = rememberUpdatedState(bridgedAction)
+            DisposableEffect(value) {
+                let task = Task {
+                    kotlinx.coroutines.suspendCancellableCoroutine { continuation in
+                        let completionHandler = CompletionHandler({
+                            do { continuation.resume(Unit, nil) } catch {}
+                        })
+                        continuation.invokeOnCancellation { _ in
+                            completionHandler.onCancel?()
+                        }
+                        actionState.value(completionHandler)
+                    }
+                }
+                onDispose {
+                    task.cancel()
+                }
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func tint(_ color: Color?) -> any View {
+        #if SKIP
+        return environment(\._tint, color, affectsEvaluate: false)
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func tint(_ tint: (any ShapeStyle)?) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func transformEffect(_ transform: Any /* CGAffineTransform */) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func transformEnvironment<V>(_ keyPath: Any /* WritableKeyPath<EnvironmentValues, V> */, transform: @escaping (inout V) -> Void) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func typeSelectEquivalent(_ text: Text?) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func typeSelectEquivalent(_ stringKey: LocalizedStringKey) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func typeSelectEquivalent(_ stringResource: LocalizedStringResource) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func typeSelectEquivalent(_ string: String) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func zIndex(_ value: Double) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: ZIndexModifier(zIndex: value))
+        #else
+        return self
+        #endif
+    }
+}
+
+#if SKIP
+extension Modifier {
+    /// Log layout constraints for debugging purposes.
+    ///
+    /// - Parameter tag: The log tag to use (default: "LogLayout").
+    /// - Returns: A modifier that logs layout constraints and bounds.
+    ///
+    public func logLayout(tag: String = "LogLayout") -> Modifier {
+        return self.logLayoutModifier(tag: tag)
+    }
+}
+
+final class AspectRatioModifier: RenderModifier {
+    let ratio: Double?
+    let contentMode: ContentMode
+
+    init(ratio: Double?, contentMode: ContentMode) {
+        self.ratio = ratio
+        self.contentMode = contentMode
+        super.init()
+        self.action = { renderable, context in
+            let stripped = renderable.strip()
+            if stripped is Image || stripped is AsyncImage || ratio == nil {
+                // Image has its own support for aspect ratios, and we allow the loaded Image in AsyncImage
+                // to consume the modifier too
+                EnvironmentValues.shared.setValues {
+                    $0.set_aspectRatio((ratio, contentMode))
+                    return ComposeResult.ok
+                } in: {
+                    renderable.Render(context: context)
+                }
+            } else {
+                var context = context
+                context.modifier = context.modifier.aspectRatio(Float(ratio))
+                renderable.Render(context: context)
+            }
+        }
+    }
+}
+
+final class BadgeModifier: RenderModifier {
+    let badge: Text?
+    let prominence: BadgeProminence?
+
+    init(badge: Text? = nil, prominence: BadgeProminence? = nil) {
+        self.badge = badge
+        self.prominence = prominence
+        super.init()
+    }
+
+    static func combined(for renderable: Renderable) -> BadgeModifier {
+        var badge: Text? = nil
+        var prominence: BadgeProminence? = nil
+        renderable.forEachModifier {
+            if let badgeModifier = $0 as? BadgeModifier {
+                badge = badge ?? badgeModifier.badge
+                prominence = prominence ?? badgeModifier.prominence
+            }
+            return nil
+        }
+        return BadgeModifier(badge: badge, prominence: prominence)
+    }
+}
+
+final class DisabledModifier: EnvironmentModifier {
+    let disabled: Bool
+
+    init(_ disabled: Bool) {
+        self.disabled = disabled
+        super.init()
+        self.action = {
+            $0.setisEnabled(!disabled)
+            return ComposeResult.ok
+        }
+    }
+}
+
+extension View {
+    /// When `true`, SkipUI's ``Image`` / ``AsyncImage`` use Coil's ``SubcomposeAsyncImage`` (slower; avoids first-frame `Empty` state with cached images). Default is `false.
+    // SKIP @bridge
+    public func subcomposeAsyncImage(_ enabled: Bool = true) -> any View {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SubcomposeAsyncImageModifier(enabled))
+        #else
+        return self
+        #endif
+    }
+}
+
+final class SubcomposeAsyncImageModifier: EnvironmentModifier {
+    let enabled: Bool
+
+    init(_ enabled: Bool) {
+        self.enabled = enabled
+        super.init()
+        self.action = {
+            $0.set_subcomposeAsyncImage(enabled)
+            return ComposeResult.ok
+        }
+    }
+}
+
+final class PaddingModifier: RenderModifier {
+    let insets: EdgeInsets
+
+    init(insets: EdgeInsets) {
+        self.insets = insets
+        super.init(role: .spacing)
+        self.action = { renderable, context in
+            let topAnim = Float(insets.top).asAnimatable(context: context)
+            let leadingAnim = Float(insets.leading).asAnimatable(context: context)
+            let bottomAnim = Float(insets.bottom).asAnimatable(context: context)
+            let trailingAnim = Float(insets.trailing).asAnimatable(context: context)
+            let animatedInsets = EdgeInsets(
+                top: CGFloat(topAnim.value),
+                leading: CGFloat(leadingAnim.value),
+                bottom: CGFloat(bottomAnim.value),
+                trailing: CGFloat(trailingAnim.value)
+            )
+            let stripped = renderable.strip()
+            if (stripped is LazyVGrid || stripped is LazyHGrid || stripped is LazyVStack || stripped is LazyHStack)
+                && renderable.forEachModifier(perform: { $0.role == .spacing ? true : nil }) == nil {
+                // Certain views apply their padding themselves
+                EnvironmentValues.shared.setValues {
+                    $0.set_contentPadding(animatedInsets)
+                    return ComposeResult.ok
+                } in: {
+                    renderable.Render(context: context)
+                }
+            } else {
+                PaddingLayout(content: renderable, padding: animatedInsets, context: context)
+            }
+        }
+    }
+}
+
+/// Used to mark views with a tag or ID.
+final class TagModifier: RenderModifier {
+    static let defaultIdValue = "<TagModifier.defaultIdValue>"
+
+    let value: Any?
+    var stateSaver: ComposeStateSaver?
+
+    init(value: Any?, role: ModifierRole) {
+        self.value = value
+        super.init(role: role)
+    }
+
+    @Composable override func Evaluate(content: View, context: ComposeContext, options: Int) -> kotlin.collections.List<Renderable>? {
+        if let stateSaver = Self.IdStateSaver(for: context, role: role, value: value) {
+            self.stateSaver = stateSaver
+            var context = context
+            context.stateSaver = stateSaver
+            // Use key() to reset remembered values that do not use the state saver
+            return androidx.compose.runtime.key(value ?? Self.defaultIdValue) {
+                return super.Evaluate(content: content, context: context, options: options)
+            }
+        } else {
+            self.stateSaver = nil
+            return super.Evaluate(content: content, context: context, options: options)
+        }
+    }
+
+    @Composable override func Render(content: Renderable, context: ComposeContext) -> Void {
+        if let stateSaver {
+            var context = context
+            context.stateSaver = stateSaver
+            androidx.compose.runtime.key(value ?? Self.defaultIdValue) {
+                super.Render(content: content, context: context)
+            }
+        } else {
+            super.Render(content: content, context: context)
+        }
+    }
+
+    @Composable private static func IdStateSaver(for context: ComposeContext, role: ModifierRole, value: Any?) -> ComposeStateSaver? {
+        guard role == .id else {
+            return nil
+        }
+        // Reset the state saver when the id value changes
+        let idValue = value ?? Self.defaultIdValue
+        let rememberedId = rememberSaveable(stateSaver: context.stateSaver as! Saver<Any, Any>) { mutableStateOf(idValue) }
+        guard rememberedId.value != idValue else {
+            return context.stateSaver as? ComposeStateSaver
+        }
+        rememberedId.value = idValue
+        return ComposeStateSaver()
+    }
+
+    /// Extract the existing tag modifier view from the given view's modifiers.
+    static func on(content: Renderable, role: ModifierRole) -> TagModifier? {
+        return content.forEachModifier {
+            if $0.role == role {
+                return $0 as? TagModifier
+            } else {
+                return nil
+            }
+        }
+    }
+}
+
+/// Use a special modifier for `zIndex` so that the artificial parent container created by `.frame` can
+/// pull the `zIndex` value into its own modifiers.
+///
+/// Otherwise the extra frame container hides the `zIndex` value from this view's logical parent container.
+///
+/// - Seealso: `FrameLayout`
+final class ZIndexModifier: RenderModifier {
+    private let zIndex: Double
+    private var isConsumed = false
+
+    init(zIndex: Double) {
+        super.init()
+        self.zIndex = zIndex
+        self.action = { renderable, context in
+            var context = context
+            if !isConsumed {
+                context.modifier = context.modifier.zIndex(Float(zIndex))
+            }
+            renderable.Render(context: context)
+        }
+    }
+
+    /// Move the application of the `zIndex` to the given modifier, erasing it from this view.
+    static func consume(for renderable: Renderable, with modifier: Modifier) -> Modifier {
+        if let zIndex = renderable.forEachModifier(perform: {
+            if let zIndexModifier = $0 as? ZIndexModifier {
+                zIndexModifier.isConsumed = true
+                return zIndexModifier.zIndex
+            } else {
+                return nil
+            }
+        }) {
+            return modifier.zIndex(Float(zIndex))
+        } else {
+            return modifier
+        }
+    }
+}
+
+/// Animated border modifier that animates both the shape style and border width.
+final class AnimatedBorderModifier: RenderModifier {
+    let style: any ShapeStyle
+    let width: CGFloat
+
+    init(style: any ShapeStyle, width: CGFloat) {
+        self.style = style
+        self.width = width
+        super.init()
+    }
+
+    @Composable override func Render(content: Renderable, context: ComposeContext) {
+        // Animate the border width
+        let animatedWidth = Float(width).asAnimatable(context: context).value
+
+        // Apply the border with animated width
+        // ShapeStyle animation is handled by asBrush/asColor via animationContext
+        var context = context
+        if let color = style.asColor(opacity: 1.0, animationContext: context) {
+            context.modifier = context.modifier.border(width: animatedWidth.dp, color: color)
+        } else if let brush = style.asBrush(opacity: 1.0, animationContext: context) {
+            context.modifier = context.modifier.border(BorderStroke(width: animatedWidth.dp, brush: brush))
+        }
+        content.Render(context: context)
+    }
+}
+
+#if SKIP
+final class GeometryChangeValueStorage {
+    var previousValue: Any?
+}
+#endif
+
+#if SKIP
+final class AndroidVerticalOverscrollPullDownConnection: NestedScrollConnection {
+    let isEnabled: () -> Bool
+    let onPullPx: (Float) -> Void
+    let onEnd: () -> Void
+
+    var accumulatedPullPx = Float(0.0)
+
+    init(
+        isEnabled: @escaping () -> Bool,
+        onPullPx: @escaping (Float) -> Void,
+        onEnd: @escaping () -> Void
+    ) {
+        self.isEnabled = isEnabled
+        self.onPullPx = onPullPx
+        self.onEnd = onEnd
+    }
+
+    override func onPreScroll(available: Offset, source: NestedScrollSource) -> Offset {
+        guard source == NestedScrollSource.Drag, isEnabled(), accumulatedPullPx > Float(0.0) else {
+            return Offset.Zero
+        }
+
+        let previousPullPx = accumulatedPullPx
+        accumulatedPullPx = max(Float(0.0), accumulatedPullPx + available.y)
+        onPullPx(accumulatedPullPx)
+        return Offset(x: Float(0.0), y: accumulatedPullPx - previousPullPx)
+    }
+
+    override func onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) -> Offset {
+        guard source == NestedScrollSource.Drag, isEnabled(), available.y > Float(0.0) else {
+            return Offset.Zero
+        }
+
+        accumulatedPullPx += available.y
+        onPullPx(accumulatedPullPx)
+        return Offset(x: Float(0.0), y: available.y)
+    }
+
+    override func onPostFling(consumed: Velocity, available: Velocity) async -> Velocity {
+        guard accumulatedPullPx > Float(0.0) else {
+            return Velocity.Zero
+        }
+
+        accumulatedPullPx = Float(0.0)
+        onEnd()
+        return Velocity(x: Float(0.0), y: available.y)
+    }
+}
+#endif
+
+#endif
+#endif

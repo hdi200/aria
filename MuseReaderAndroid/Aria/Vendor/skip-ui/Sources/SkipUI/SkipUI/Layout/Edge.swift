@@ -1,0 +1,53 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+
+public enum Edge : Int, Hashable, CaseIterable {
+    case top = 1 // For bridging
+    case leading = 2 // For bridging
+    case bottom = 4 // For bridging
+    case trailing = 8 // For bridging
+
+    public struct Set : OptionSet, Equatable, CustomStringConvertible {
+        public let rawValue: Int
+
+        public init(rawValue: Int) {
+            self.rawValue = rawValue
+        }
+
+        public static let top: Edge.Set = Edge.Set(Edge.top)
+        public static let leading: Edge.Set = Edge.Set(Edge.leading)
+        public static let bottom: Edge.Set = Edge.Set(Edge.bottom)
+        public static let trailing: Edge.Set = Edge.Set(Edge.trailing)
+
+        public static let all: Edge.Set = Edge.Set(rawValue: 15)
+        public static let horizontal: Edge.Set = Edge.Set(rawValue: 10)
+        public static let vertical: Edge.Set = Edge.Set(rawValue: 5)
+
+        public init(_ e: Edge) {
+            self.rawValue = e.rawValue
+        }
+        
+        public var description: String {
+            var edges: [String] = []
+            if self.contains(Edge.Set.top) {
+                edges.append("top")
+            }
+            if self.contains(Edge.Set.leading) {
+                edges.append("leading")
+            }
+            if self.contains(Edge.Set.bottom) {
+                edges.append("bottom")
+            }
+            if self.contains(Edge.Set.trailing) {
+                edges.append("trailing")
+            }
+            if edges.isEmpty {
+                return "[]"
+            }
+            return "[\(edges.joined(separator: ","))]"
+        }
+    }
+}
+
+#endif
