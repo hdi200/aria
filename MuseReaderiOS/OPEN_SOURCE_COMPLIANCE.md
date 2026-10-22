@@ -6,8 +6,10 @@ Use this checklist for every public build of Aria.
 
 - Publish the full corresponding source for the shipped binary.
 - Include the exact `MuseReaderiOS` source, `sandbox/engraving`, bridge code, Xcode project, build scripts, and the MuseScore source snapshot used by the render-core build.
+- For Android, also include `MuseReaderAndroid` application/integration sources, framework shims, native bridge/audio sources, Gradle/SwiftPM build inputs, dependency pins, and modified vendored packages with their licenses. See `MuseReaderAndroid/README.md` and `SOURCE_RELEASES.md` in that directory.
 - Include build instructions with required Xcode, CMake, Ninja, Qt for iOS, and host Qt versions.
 - Tag the source release with the same version/build number used for the public build.
+- Record Android source snapshots by version code; the iOS and Android app version numbers are independent.
 - Keep the GPLv3 license text and third-party notices in the release archive.
 
 ## App Bundle Notices

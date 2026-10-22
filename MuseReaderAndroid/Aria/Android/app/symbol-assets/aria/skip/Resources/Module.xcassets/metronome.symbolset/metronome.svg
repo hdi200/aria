@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <g id="Symbols">
+    <g id="Regular-M">
+      <path d="M9.6 2.5H14.4L19.6 21.5H4.4Z M10.9 4.1L6.5 19.9H17.5L13.1 4.1Z"/>
+      <path d="M7.45 16.5H16.55L16.97 18H7.03Z"/>
+      <path d="M11.35 16.23L12.65 16.77L16.95 6.47L15.65 5.93Z"/>
+      <path d="M12.69 11.86a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,2323 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+import Foundation
+#if SKIP
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.KeyboardArrowLeft
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.BottomAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconButtonColors
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarColors
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.contentColorFor
+import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.SoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import androidx.navigation3.runtime.NavBackStack
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.scene.Scene
+import androidx.navigation3.ui.NavDisplay
+import androidx.navigation3.ui.defaultPopTransitionSpec
+import androidx.navigation3.ui.defaultPredictivePopTransitionSpec
+import androidx.navigation3.ui.defaultTransitionSpec
+import kotlin.reflect.full.superclasses
+import kotlinx.serialization.Serializable
+import androidx.compose.runtime.key
+import kotlinx.coroutines.delay
+#endif
+
+// SKIP @bridge
+public struct NavigationStack : View, Renderable {
+    let root: ComposeBuilder
+    let path: Binding<[Any]>?
+    let navigationPath: Binding<NavigationPath>?
+    let destinationKeyTransformer: ((Any) -> String)?
+
+    public init(@ViewBuilder root: () -> any View) {
+        self.root = ComposeBuilder.from(root)
+        self.path = nil
+        self.navigationPath = nil
+        self.destinationKeyTransformer = nil
+    }
+
+    public init(path: Binding<NavigationPath>, @ViewBuilder root: () -> any View) {
+        self.root = ComposeBuilder.from(root)
+        self.path = nil
+        self.navigationPath = path
+        self.destinationKeyTransformer = nil
+    }
+
+    public init(path: Any, @ViewBuilder root: () -> any View) {
+        self.root = ComposeBuilder.from(root)
+        self.path = path as! Binding<[Any]>?
+        self.navigationPath = nil
+        self.destinationKeyTransformer = nil
+    }
+
+    // SKIP @bridge
+    public init(getData: (() -> [Any])?, setData: (([Any]) -> Void)?, bridgedRoot: any View, destinationKeyTransformer: @escaping (Any) -> String) {
+        self.root = ComposeBuilder.from { bridgedRoot }
+        self.navigationPath = nil
+        if let getData, let setData {
+            self.path = Binding(get: getData, set: setData)
+        } else {
+            self.path = nil
+        }
+        self.destinationKeyTransformer = destinationKeyTransformer
+    }
+
+    #if SKIP
+    @Composable public override func Render(context: ComposeContext) {
+        // Have to use rememberSaveable for e.g. a nav stack in each tab
+        let destinations = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<NavigationDestinations>, Any>) { mutableStateOf(Preference<NavigationDestinations>(key: NavigationDestinationsPreferenceKey.self))
+        }
+        // Make this collector non-erasable so that destinations defined at e.g. the root nav stack layer don't disappear when you push
+        let destinationsCollector = PreferenceCollector<NavigationDestinations>(key: NavigationDestinationsPreferenceKey.self, state: destinations, isErasable: false)
+        let destinationLayoutHints = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<NavigationDestinationLayoutHintsMap>, Any>) { mutableStateOf(Preference<NavigationDestinationLayoutHintsMap>(key: NavigationDestinationLayoutHintsPreferenceKey.self))
+        }
+        let destinationLayoutHintsCollector = PreferenceCollector<NavigationDestinationLayoutHintsMap>(key: NavigationDestinationLayoutHintsPreferenceKey.self, state: destinationLayoutHints, isErasable: false)
+        let reducedDestinations = destinations.value.reduced
+        let reducedDestinationLayoutHints = destinationLayoutHints.value.reduced
+        let mergedDestinations = mergeNavigationDestinationsWithLayoutHints(reducedDestinations, layoutHints: reducedDestinationLayoutHints)
+        let navBackStack = rememberNavBackStack(SkipNavigationStackRootKey.root)
+        let navigator = rememberSaveable(stateSaver: context.stateSaver as! Saver<Navigator, Any>) { mutableStateOf(Navigator(navBackStack: navBackStack, destinations: mergedDestinations, destinationKeyTransformer: destinationKeyTransformer)) }
+        navigator.value.didCompose(navBackStack: navBackStack, destinations: mergedDestinations, path: path, navigationPath: navigationPath, keyboardController: LocalSoftwareKeyboardController.current)
+
+        // SKIP INSERT: val providedNavigator = LocalNavigator provides navigator.value
+        CompositionLocalProvider(providedNavigator) {
+            let safeArea = EnvironmentValues.shared._safeArea
+            // We have to ignore the safe area around the entire NavDisplay to prevent push/pop animation issues with the system bars.
+            // When we layout, only extend into safe areas that are due to system bars, not into any app chrome
+            var ignoresSafeAreaEdges: Edge.Set = [.top, .bottom]
+            ignoresSafeAreaEdges.formIntersection(safeArea?.absoluteSystemBarEdges ?? [])
+            IgnoresSafeAreaLayout(expandInto: ignoresSafeAreaEdges, checkEdges: ignoresSafeAreaEdges, logTag: "NavigationStack") { _, _ in
+                ComposeContainer(modifier: context.modifier, fillWidth: true, fillHeight: true) { modifier in
+                    let decoratorList = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>())
+                    let entryProvider = entryProvider {
+                        entry<SkipNavigationStackRootKey> { _ in
+                            guard let state = navigator.value.stateForRoot() else {
+                                return
+                            }
+                            // These preferences are per-entry, but if we put them in RenderEntry then their initial values don't show
+                            // during the navigation animation. We have to collect them here
+                            let title = rememberSaveable(stateSaver: state.stateSaver as! Saver<Preference<Text>, Any>) { mutableStateOf(Preference<Text>(key: NavigationTitlePreferenceKey.self)) }
+                            let titleCollector = PreferenceCollector<Text>(key: NavigationTitlePreferenceKey.self, state: title)
+                            let toolbarPreferences = rememberSaveable(stateSaver: state.stateSaver as! Saver<Preference<ToolbarPreferences>, Any>) { mutableStateOf(Preference<ToolbarPreferences>(key: ToolbarPreferenceKey.self)) }
+                            let toolbarPreferencesCollector = PreferenceCollector<ToolbarPreferences>(key: ToolbarPreferenceKey.self, state: toolbarPreferences)
+                            let toolbarContentPreferences = rememberSaveable(stateSaver: state.stateSaver as! Saver<Preference<ToolbarContentPreferences>, Any>) { mutableStateOf(Preference<ToolbarContentPreferences>(key: ToolbarContentPreferenceKey.self)) }
+                            let toolbarContentPreferencesCollector = PreferenceCollector<ToolbarContentPreferences>(key: ToolbarContentPreferenceKey.self, state: toolbarContentPreferences)
+                            let arguments = NavigationEntryArguments(isRoot: true, state: state, safeArea: safeArea, ignoresSafeAreaEdges: ignoresSafeAreaEdges, title: title.value.reduced, toolbarPreferences: toolbarPreferences.value.reduced)
+                            PreferenceValues.shared.collectPreferences([titleCollector, toolbarPreferencesCollector, toolbarContentPreferencesCollector, destinationsCollector, destinationLayoutHintsCollector]) {
+                                RenderEntry(navigator: navigator, toolbarContent: toolbarContentPreferences, arguments: arguments, context: context) { context in
+                                    root.Compose(context: context)
+                                }
+                            }
+                        }
+                        entry<SkipNavigationStackPushKey> { navKey in
+                            guard let state = navigator.value.state(forPushKey: navKey), let targetValue = state.targetValue else {
+                                return
+                            }
+                            // These preferences are per-entry, but if we put them in RenderEntry then their initial values don't show
+                            // during the navigation animation. We have to collect them here
+                            let title = rememberSaveable(stateSaver: state.stateSaver as! Saver<Preference<Text>, Any>) { mutableStateOf(Preference<Text>(key: NavigationTitlePreferenceKey.self)) }
+                            let titleCollector = PreferenceCollector<Text>(key: NavigationTitlePreferenceKey.self, state: title)
+                            let toolbarPreferences = rememberSaveable(stateSaver: state.stateSaver as! Saver<Preference<ToolbarPreferences>, Any>) { mutableStateOf(Preference<ToolbarPreferences>(key: ToolbarPreferenceKey.self)) }
+                            let toolbarPreferencesCollector = PreferenceCollector<ToolbarPreferences>(key: ToolbarPreferenceKey.self, state: toolbarPreferences)
+                            let toolbarContentPreferences = rememberSaveable(stateSaver: state.stateSaver as! Saver<Preference<ToolbarContentPreferences>, Any>) { mutableStateOf(Preference<ToolbarContentPreferences>(key: ToolbarContentPreferenceKey.self)) }
+                            let toolbarContentPreferencesCollector = PreferenceCollector<ToolbarContentPreferences>(key: ToolbarContentPreferenceKey.self, state: toolbarContentPreferences)
+                            EnvironmentValues.shared.setValues {
+                                $0.setdismiss(DismissAction(action: { navigator.value.navigateBack() }))
+                                return ComposeResult.ok
+                            } in: {
+                                let arguments = NavigationEntryArguments(isRoot: false, state: state, safeArea: safeArea, ignoresSafeAreaEdges: ignoresSafeAreaEdges, title: title.value.reduced, toolbarPreferences: toolbarPreferences.value.reduced)
+                                PreferenceValues.shared.collectPreferences([titleCollector, toolbarPreferencesCollector, toolbarContentPreferencesCollector, destinationsCollector, destinationLayoutHintsCollector]) {
+                                    RenderEntry(navigator: navigator, toolbarContent: toolbarContentPreferences, arguments: arguments, context: context) { context in
+                                        let destinationArguments = NavigationDestinationArguments(targetValue: targetValue)
+                                        RenderDestination(state.destination, arguments: destinationArguments, context: context)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let defaults = NavDisplayTransitionOptions.navigationStackDefaults
+                    let transitions = EnvironmentValues.shared._navigationStackTransitions?(defaults) ?? defaults
+                    NavDisplay(
+                        backStack: navBackStack,
+                        modifier: modifier,
+                        onBack: { navigator.value.navigateBack() },
+                        transitionSpec: {
+                            transitions.transitionSpec ?? defaultTransitionSpec<NavKey>()()
+                        },
+                        popTransitionSpec: {
+                            transitions.popTransitionSpec ?? defaultPopTransitionSpec<NavKey>()()
+                        },
+                        predictivePopTransitionSpec: { edge in
+                            transitions.predictivePopTransitionSpec ?? defaultPredictivePopTransitionSpec<NavKey>()(edge)
+                        },
+                        entryDecorators: decoratorList,
+                        entryProvider: entryProvider
+                    )
+                }
+            }
+        }
+    }
+
+    // SKIP INSERT: @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+    @Composable private func RenderEntry(navigator: MutableState<Navigator>, toolbarContent: MutableState<Preference<ToolbarContentPreferences>>, arguments: NavigationEntryArguments, context: ComposeContext, content: @Composable (ComposeContext) -> Void) {
+        let state = arguments.state
+        let context = context.content(stateSaver: state.stateSaver)
+
+        let entryLayoutHints = state.layoutHints ?? (arguments.isRoot ? EnvironmentValues.shared._navigationStackLayoutHints : nil)
+        let hasTitleFromPreferences = arguments.title != NavigationTitlePreferenceKey.defaultValue
+        let hasTitle: Bool
+        let title: Text
+        let titleDisplayPreference: ToolbarTitleDisplayMode?
+        if let layoutHints = entryLayoutHints {
+            let hasTitleFromHints = layoutHints.expectedTitle != NavigationTitlePreferenceKey.defaultValue
+            hasTitle = hasTitleFromPreferences || hasTitleFromHints
+            title = hasTitleFromPreferences ? arguments.title : (hasTitleFromHints ? layoutHints.expectedTitle : arguments.title)
+            titleDisplayPreference = arguments.toolbarPreferences.titleDisplayMode ?? layoutHints.expectedTitleDisplayMode
+        } else {
+            hasTitle = hasTitleFromPreferences
+            title = arguments.title
+            titleDisplayPreference = arguments.toolbarPreferences.titleDisplayMode
+        }
+
+        let topBarPreferences = arguments.toolbarPreferences.navigationBar
+        let bottomBarPreferences = arguments.toolbarPreferences.bottomBar
+        let presentationTopPx = arguments.safeArea?.presentationBoundsPx.top ?? Float(0.0)
+        let isInitialRootPreferencePass = remember { mutableStateOf(arguments.isRoot) }
+        let reservesInitialRootTopBar = isInitialRootPreferencePass.value && arguments.isRoot && !hasTitle && (topBarPreferences?.visibility ?? Visibility.automatic) == Visibility.automatic
+        let effectiveTitleDisplayMode = navigator.value.titleDisplayMode(for: state, hasTitle: hasTitle || reservesInitialRootTopBar, preference: titleDisplayPreference)
+        let isInlineTitleDisplayMode = useInlineTitleDisplayMode(for: effectiveTitleDisplayMode, safeArea: arguments.safeArea)
+
+        // We would like to only process toolbar content in our topBar/bottomBar Composables, but composing
+        // custom ToolbarContent multiple times (in order to process the placement of the items in its body
+        // content for each bar) prevents it from updating properly on recompose
+        let toolbarContentReduced = toolbarContent.value.reduced
+        let toolbarItems = ToolbarItems(content: toolbarContentReduced.content ?? [])
+        let (titleMenu, topLeadingItems, topTrailingItems, bottomItems) = toolbarItems.Evaluate(context: context)
+
+        let showTopBar: Bool
+        switch topBarPreferences?.visibility ?? Visibility.automatic {
+        case .hidden:
+            showTopBar = false
+        case .visible:
+            showTopBar = true
+        case .automatic:
+            showTopBar = !arguments.isRoot || hasTitle || topLeadingItems.size > 0 || topTrailingItems.size > 0
+        }
+        let searchFieldPadding = 16.dp
+        let density = LocalDensity.current
+        let searchFieldHeightPx = with(density) { searchFieldHeight.dp.toPx() + searchFieldPadding.toPx() }
+        let searchFieldOffsetPx = rememberSaveable(stateSaver: context.stateSaver as! Saver<Float, Any>) { mutableStateOf(Float(0.0)) }
+        let searchFieldScrollConnection = remember { SearchFieldScrollConnection(heightPx: searchFieldHeightPx, offsetPx: searchFieldOffsetPx) }
+
+        let searchableStatePreference = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<SearchableState?>, Any>) { mutableStateOf(Preference<SearchableState?>(key: SearchableStatePreferenceKey.self)) }
+        let searchableStateCollector = PreferenceCollector<SearchableState?>(key: SearchableStatePreferenceKey.self, state: searchableStatePreference)
+
+        let scrollToTop = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<ScrollToTopAction>, Any>) { mutableStateOf(Preference<ScrollToTopAction>(key: ScrollToTopPreferenceKey.self)) }
+        let scrollToTopCollector = PreferenceCollector<ScrollToTopAction>(key: ScrollToTopPreferenceKey.self, state: scrollToTop)
+
+        let initialScrollBehavior = isInlineTitleDisplayMode ? TopAppBarDefaults.pinnedScrollBehavior() : TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        // Determine the final scrollBehavior early by checking if the environment value would modify it
+        // We need to do this before we create the nestedScroll modifier so we attach the correct nestedScrollConnection
+        let scrollBehavior: TopAppBarScrollBehavior
+        let navigationIconButtonStyle: Material3TopAppBarNavigationIconButtonStyle
+        let navigationIconButtonColors: IconButtonColors?
+        if let updateOptions = EnvironmentValues.shared._material3TopAppBar {
+            let tempOptions = Material3TopAppBarOptions(title: {}, modifier: Modifier, navigationIcon: {}, colors: TopAppBarDefaults.topAppBarColors(), scrollBehavior: initialScrollBehavior)
+            let updatedOptions = updateOptions(tempOptions)
+            scrollBehavior = updatedOptions.scrollBehavior ?? initialScrollBehavior
+            navigationIconButtonStyle = updatedOptions.navigationIconButtonStyle
+            navigationIconButtonColors = updatedOptions.navigationIconButtonColors
+        } else {
+            scrollBehavior = initialScrollBehavior
+            navigationIconButtonStyle = Material3TopAppBarNavigationIconButtonStyle.iconButton
+            navigationIconButtonColors = nil
+        }
+        var modifier = Modifier.nestedScroll(searchFieldScrollConnection)
+        SideEffect {
+            if isInitialRootPreferencePass.value {
+                isInitialRootPreferencePass.value = false
+            }
+        }
+        let showsTopBar = showTopBar || reservesInitialRootTopBar
+        if showsTopBar {
+            modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+        }
+        modifier = modifier.then(context.modifier)
+
+        let shouldReserveInitialTopBarSpace = showTopBar || reservesInitialRootTopBar
+        let estimatedCollapsedTopBarHeight = 64.dp
+        let estimatedExpandedTopBarHeight = 112.dp
+        let estimatedTopBarHeight = isInlineTitleDisplayMode ? estimatedCollapsedTopBarHeight : estimatedExpandedTopBarHeight
+        let safeAreaTopPx = arguments.safeArea?.safeBoundsPx.top ?? Float(0.0)
+        let hasAbsoluteTopSystemBar = arguments.safeArea?.absoluteSystemBarEdges.contains(.top) == true
+        let estimatedTopBarBottomPx = shouldReserveInitialTopBarSpace ? with(density) { safeAreaTopPx + estimatedTopBarHeight.toPx() } : Float(0.0)
+        let estimatedTopBarBottomInPresentationPx = max(Float(0.0), estimatedTopBarBottomPx - presentationTopPx)
+        let topBarBottomPx = remember { mutableStateOf(estimatedTopBarBottomInPresentationPx) }
+        let measuredTopBarIsInline = remember { mutableStateOf(isInlineTitleDisplayMode) }
+        let measuredTopBarSafeAreaTopPx = remember { mutableStateOf<Float?>(nil) }
+        let measuredTopBarPresentationTopPx = remember { mutableStateOf<Float?>(nil) }
+        LaunchedEffect(showsTopBar, isInitialRootPreferencePass.value) {
+            if !showsTopBar && !isInitialRootPreferencePass.value {
+                topBarBottomPx.value = Float(0.0)
+                measuredTopBarSafeAreaTopPx.value = nil
+                measuredTopBarPresentationTopPx.value = nil
+            }
+        }
+        var safeAreaMatchesMeasuredTopBar = false
+        if let measuredSafeAreaTopPx = measuredTopBarSafeAreaTopPx.value, let measuredPresentationTopPx = measuredTopBarPresentationTopPx.value {
+            safeAreaMatchesMeasuredTopBar = measuredSafeAreaTopPx == safeAreaTopPx && measuredPresentationTopPx == presentationTopPx
+        }
+        let isPresentedAsSheet = presentationTopPx > Float(0.0) && arguments.safeArea?.absoluteSystemBarEdges.contains(.top) != true
+        let hasCurrentTopBarMeasurement = measuredTopBarIsInline.value == isInlineTitleDisplayMode && (isPresentedAsSheet || safeAreaMatchesMeasuredTopBar) && topBarBottomPx.value > Float(0.0)
+        let effectiveTopBarBottomPx = shouldReserveInitialTopBarSpace ? presentationTopPx + (hasCurrentTopBarMeasurement ? topBarBottomPx.value : estimatedTopBarBottomInPresentationPx) : Float(0.0)
+        let isSystemBackground = topBarPreferences?.isSystemBackground == true
+        let topBar: @Composable () -> Void = {
+            let animation: Animation = Animation.current(isAnimating: false) ?? topBarPreferences?.visibilityAnimation ?? Animation.linear(duration: 0)
+            let animationSpec: AnimationSpec<Any> = animation.asAnimationSpec()
+            let moveEdgeTop = MoveTransition(edge: .top)
+            let topBarEnter = moveEdgeTop.asEnterTransition(spec: animationSpec)
+            let topBarExit = moveEdgeTop.asExitTransition(spec: animationSpec)
+            AnimatedVisibility(visible: showsTopBar, modifier: Modifier.fillMaxWidth(), enter: topBarEnter, exit: topBarExit, label: "NavigationTopBar") {
+                DisposableEffect(true) {
+                    onDispose {
+                        topBarBottomPx.value = Float(0.0)
+                        measuredTopBarSafeAreaTopPx.value = nil
+                        measuredTopBarPresentationTopPx.value = nil
+                    }
+                }
+                let isOverlapped = scrollBehavior.state.overlappedFraction > 0
+                let materialColorScheme: androidx.compose.material3.ColorScheme
+                if isOverlapped, let customColorScheme = topBarPreferences?.colorScheme?.asMaterialTheme() {
+                    materialColorScheme = customColorScheme
+                } else {
+                    materialColorScheme = MaterialTheme.colorScheme
+                }
+                MaterialTheme(colorScheme: materialColorScheme) {
+                    let topBarBackgroundColor: androidx.compose.ui.graphics.Color
+                    let unscrolledTopBarBackgroundColor: androidx.compose.ui.graphics.Color
+                    let topBarBackgroundForBrush: ShapeStyle?
+                    // If there is a custom color scheme, we also always show any custom background even when unscrolled, because we can't
+                    // properly interpolate between the title text colors
+                    let topBarHasColorScheme = topBarPreferences?.colorScheme != nil
+                    let isSystemBackground = topBarPreferences?.isSystemBackground == true || reservesInitialRootTopBar
+                    if topBarPreferences?.backgroundVisibility == Visibility.hidden {
+                        topBarBackgroundColor = androidx.compose.ui.graphics.Color.Transparent
+                        unscrolledTopBarBackgroundColor = androidx.compose.ui.graphics.Color.Transparent
+                        topBarBackgroundForBrush = nil
+                    } else if let background = topBarPreferences?.background {
+                        if let color = background.asColor(opacity: 1.0, animationContext: nil) {
+                            topBarBackgroundColor = color
+                            unscrolledTopBarBackgroundColor = isSystemBackground ? Color.systemBarBackground.colorImpl() : color.copy(alpha: Float(0.0))
+                            topBarBackgroundForBrush = nil
+                        } else {
+                            unscrolledTopBarBackgroundColor = isSystemBackground ? Color.systemBarBackground.colorImpl() : androidx.compose.ui.graphics.Color.Transparent
+                            topBarBackgroundColor = !topBarHasColorScheme || isOverlapped ? unscrolledTopBarBackgroundColor.copy(alpha: Float(0.0)) : unscrolledTopBarBackgroundColor
+                            topBarBackgroundForBrush = background
+                        }
+                    } else {
+                        topBarBackgroundColor = Color.systemBarBackground.colorImpl()
+                        unscrolledTopBarBackgroundColor = isSystemBackground ? topBarBackgroundColor : topBarBackgroundColor.copy(alpha: Float(0.0))
+                        topBarBackgroundForBrush = nil
+                    }
+
+                    let tint = EnvironmentValues.shared._tint ?? Color(colorImpl: { MaterialTheme.colorScheme.onSurface })
+                    let placement = EnvironmentValues.shared._placement
+                    EnvironmentValues.shared.setValues {
+                        $0.set_placement(placement.union(ViewPlacement.toolbar))
+                        $0.set_tint(tint)
+                        return ComposeResult.ok
+                    } in: {
+                        let interactionSource = remember { MutableInteractionSource() }
+                        var topBarModifier = Modifier.zIndex(Float(1.1))
+                            .clickable(interactionSource: interactionSource, indication: nil, onClick: {
+                                scrollToTop.value.reduced.action()
+                            })
+                            .onGloballyPositioned { coordinates in
+                                let heightPx = Float(coordinates.size.height)
+                                if heightPx > Float(0.0) {
+                                    // Toolbar item content can measure taller in some locales. Keep the content inset
+                                    // tied to the standard app bar height so navigation transitions stay stable.
+                                    topBarBottomPx.value = min(heightPx, estimatedTopBarBottomInPresentationPx)
+                                    measuredTopBarIsInline.value = isInlineTitleDisplayMode
+                                }
+                                measuredTopBarSafeAreaTopPx.value = safeAreaTopPx
+                                measuredTopBarPresentationTopPx.value = presentationTopPx
+                            }
+                        if !topBarHasColorScheme || isOverlapped, let topBarBackgroundForBrush {
+                            let opacity = topBarHasColorScheme ? 1.0 : isInlineTitleDisplayMode ? min(1.0, Double(scrollBehavior.state.overlappedFraction * 5)) : Double(scrollBehavior.state.collapsedFraction)
+                            if let topBarBackgroundBrush = topBarBackgroundForBrush.asBrush(opacity: opacity, animationContext: nil) {
+                                topBarModifier = topBarModifier.background(topBarBackgroundBrush)
+                            }
+                        }
+                        let alwaysShowScrolledBackground = topBarPreferences?.backgroundVisibility == Visibility.visible
+                        let topBarColors = TopAppBarDefaults.topAppBarColors(
+                            containerColor: alwaysShowScrolledBackground ? topBarBackgroundColor : unscrolledTopBarBackgroundColor,
+                            scrolledContainerColor: topBarBackgroundColor,
+                            titleContentColor: MaterialTheme.colorScheme.onSurface
+                        )
+                        let topBarTitle: @Composable () -> Void = {
+                            if let titleMenu {
+                                let menuModifier = Modifier.clickable(interactionSource: interactionSource, indication: nil, onClick: {
+                                    titleMenu.toggleMenu()
+                                })
+                                let arrangement = Arrangement.spacedBy(2.dp, alignment: androidx.compose.ui.Alignment.CenterHorizontally)
+                                Row(modifier: menuModifier, horizontalArrangement: arrangement, verticalAlignment: androidx.compose.ui.Alignment.CenterVertically) {
+                                    androidx.compose.material3.Text(title.localizedTextString(), maxLines: 1, overflow: TextOverflow.Ellipsis)
+                                    Image(systemName: "chevron.down").accessibilityHidden(true).Compose(context: context)
+                                }
+                                titleMenu.Render(context: context)
+                            } else {
+                                androidx.compose.material3.Text(title.localizedTextString(), maxLines: 1, overflow: TextOverflow.Ellipsis)
+                            }
+                        }
+                        let topBarNavigationIcon: @Composable () -> Void = {
+                            let hasBackButton = !arguments.isRoot && arguments.toolbarPreferences.backButtonHidden != true
+                            if hasBackButton || topLeadingItems.size > 0 {
+                                let toolbarItemContext = context.content(modifier: Modifier.padding(start: 12.dp, end: 12.dp))
+                                Row(verticalAlignment: androidx.compose.ui.Alignment.CenterVertically) {
+                                    if hasBackButton {
+                                        let isRTL = EnvironmentValues.shared.layoutDirection == LayoutDirection.rightToLeft
+                                        let backIcon: @Composable () -> Void = {
+                                            Icon(
+                                                imageVector: (isRTL ? Icons.Filled.ArrowForward : Icons.Filled.ArrowBack),
+                                                contentDescription: "Back",
+                                                tint: tint.colorImpl()
+                                            )
+                                        }
+                                        switch navigationIconButtonStyle {
+                                        case Material3TopAppBarNavigationIconButtonStyle.filledIconButton:
+                                            FilledIconButton(
+                                                onClick: { navigator.value.navigateBack() },
+                                                colors: navigationIconButtonColors ?? IconButtonDefaults.filledIconButtonColors()
+                                            ) { backIcon() }
+                                        case Material3TopAppBarNavigationIconButtonStyle.iconButton:
+                                            IconButton(
+                                                onClick: { navigator.value.navigateBack() },
+                                                colors: navigationIconButtonColors ?? IconButtonDefaults.iconButtonColors()
+                                            ) { backIcon() }
+                                        }
+                                    }
+                                    for renderable in topLeadingItems {
+                                        renderable.Render(context: toolbarItemContext)
+                                    }
+                                }
+                            }
+                        }
+                        let topBarActions: @Composable () -> Void = {
+                            let toolbarItemContext = context.content(modifier: Modifier.padding(start: 12.dp, end: 12.dp))
+                            for renderable in topTrailingItems {
+                                renderable.Render(context: toolbarItemContext)
+                            }
+                        }
+                        var options = Material3TopAppBarOptions(title: topBarTitle, modifier: topBarModifier, navigationIcon: topBarNavigationIcon, colors: topBarColors, scrollBehavior: scrollBehavior)
+                        if let updateOptions = EnvironmentValues.shared._material3TopAppBar {
+                            options = updateOptions(options)
+                        }
+                        // Use scrollBehavior (from the early call) for the TopAppBar to ensure it matches the nestedScrollConnection
+                        options = options.copy(scrollBehavior: scrollBehavior)
+                        let topBarWindowInsets = hasAbsoluteTopSystemBar ? TopAppBarDefaults.windowInsets : WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+                        if isInlineTitleDisplayMode {
+                            if options.preferCenterAlignedStyle {
+                                CenterAlignedTopAppBar(title: options.title, modifier: options.modifier, navigationIcon: options.navigationIcon, actions: { topBarActions() }, colors: options.colors, scrollBehavior: options.scrollBehavior, windowInsets: topBarWindowInsets)
+                            } else {
+                                TopAppBar(title: options.title, modifier: options.modifier, navigationIcon: options.navigationIcon, actions: { topBarActions() }, colors: options.colors, scrollBehavior: options.scrollBehavior, windowInsets: topBarWindowInsets)
+                            }
+                        } else {
+                            // Force a larger, bold title style in the uncollapsed state by replacing the headlineSmall style the bar uses
+                            let typography = MaterialTheme.typography
+                            let appBarTitleStyle = typography.headlineLarge.copy(fontWeight: FontWeight.Bold)
+                            let appBarTypography = typography.copy(headlineSmall: appBarTitleStyle)
+                            MaterialTheme(colorScheme: MaterialTheme.colorScheme, typography: appBarTypography, shapes: MaterialTheme.shapes) {
+                                if options.preferLargeStyle {
+                                    LargeTopAppBar(title: options.title, modifier: options.modifier, navigationIcon: options.navigationIcon, actions: { topBarActions() }, colors: options.colors, scrollBehavior: options.scrollBehavior, windowInsets: topBarWindowInsets)
+                                } else {
+                                    MediumTopAppBar(title: options.title, modifier: options.modifier, navigationIcon: options.navigationIcon, actions: { topBarActions() }, colors: options.colors, scrollBehavior: options.scrollBehavior, windowInsets: topBarWindowInsets)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let bottomBarTopPx = remember { mutableStateOf(Float(0.0)) }
+        let bottomBarHeightPx = remember { mutableStateOf(Float(0.0)) }
+        let bottomBar: @Composable () -> Void = {
+            guard bottomBarPreferences?.visibility != Visibility.hidden else {
+                SideEffect {
+                    bottomBarTopPx.value = Float(0.0)
+                    bottomBarHeightPx.value = Float(0.0)
+                }
+                return
+            }
+            guard bottomItems.size > 0 || bottomBarPreferences?.visibility == Visibility.visible else {
+                SideEffect {
+                    bottomBarTopPx.value = Float(0.0)
+                    bottomBarHeightPx.value = Float(0.0)
+                }
+                return
+            }
+
+            let showScrolledBackground = bottomBarPreferences?.backgroundVisibility == Visibility.visible || bottomBarPreferences?.scrollableState.canScrollForward == true
+            let materialColorScheme: androidx.compose.material3.ColorScheme
+            if showScrolledBackground, let customColorScheme = bottomBarPreferences?.colorScheme?.asMaterialTheme() {
+                materialColorScheme = customColorScheme
+            } else {
+                materialColorScheme = MaterialTheme.colorScheme
+            }
+            MaterialTheme(colorScheme: materialColorScheme) {
+                let bottomBarBackgroundColor: androidx.compose.ui.graphics.Color
+                let unscrolledBottomBarBackgroundColor: androidx.compose.ui.graphics.Color
+                let bottomBarBackgroundForBrush: ShapeStyle?
+                let bottomBarHasColorScheme = bottomBarPreferences?.colorScheme != nil
+                if bottomBarPreferences?.backgroundVisibility == Visibility.hidden {
+                    bottomBarBackgroundColor = androidx.compose.ui.graphics.Color.Transparent
+                    unscrolledBottomBarBackgroundColor = androidx.compose.ui.graphics.Color.Transparent
+                    bottomBarBackgroundForBrush = nil
+                } else if let background = bottomBarPreferences?.background {
+                    if let color = background.asColor(opacity: 1.0, animationContext: nil) {
+                        bottomBarBackgroundColor = color
+                        unscrolledBottomBarBackgroundColor = isSystemBackground ? Color.systemBarBackground.colorImpl() : color.copy(alpha: Float(0.0))
+                        bottomBarBackgroundForBrush = nil
+                    } else {
+                        unscrolledBottomBarBackgroundColor = isSystemBackground ? Color.systemBarBackground.colorImpl() : androidx.compose.ui.graphics.Color.Transparent
+                        bottomBarBackgroundColor = unscrolledBottomBarBackgroundColor.copy(alpha: Float(0.0))
+                        bottomBarBackgroundForBrush = background
+                    }
+                } else {
+                    bottomBarBackgroundColor = Color.systemBarBackground.colorImpl()
+                    unscrolledBottomBarBackgroundColor = isSystemBackground ? bottomBarBackgroundColor : bottomBarBackgroundColor.copy(alpha: Float(0.0))
+                    bottomBarBackgroundForBrush = nil
+                }
+
+                let tint = EnvironmentValues.shared._tint ?? Color(colorImpl: { MaterialTheme.colorScheme.onSurface })
+                let placement = EnvironmentValues.shared._placement
+                EnvironmentValues.shared.setValues {
+                    $0.set_tint(tint)
+                    $0.set_placement(placement.union(ViewPlacement.toolbar))
+                    return ComposeResult.ok
+                } in: {
+                    var bottomBarModifier = Modifier.zIndex(Float(1.1))
+                        .onGloballyPositionedInWindow { bounds in
+                            bottomBarTopPx.value = bounds.top
+                            bottomBarHeightPx.value = bounds.bottom - bounds.top
+                        }
+                    if showScrolledBackground, let bottomBarBackgroundForBrush {
+                        if let bottomBarBackgroundBrush = bottomBarBackgroundForBrush.asBrush(opacity: 1.0, animationContext: nil) {
+                            bottomBarModifier = bottomBarModifier.background(bottomBarBackgroundBrush)
+                        }
+                    }
+                    // Pull the bottom bar below the keyboard
+                    let bottomPadding = with(density) { min(bottomBarHeightPx.value, Float(WindowInsets.ime.getBottom(density))).toDp() }
+                    PaddingLayout(padding: EdgeInsets(top: 0.0, leading: 0.0, bottom: Double(-bottomPadding.value), trailing: 0.0), context: context.content()) { context in
+                        let containerColor = showScrolledBackground ? bottomBarBackgroundColor : unscrolledBottomBarBackgroundColor
+                        let usesBottomSystemBarInset = EnvironmentValues.shared._isEdgeToEdge == true && arguments.safeArea?.absoluteSystemBarEdges.contains(.bottom) == true
+                        let windowInsets = usesBottomSystemBarInset ? BottomAppBarDefaults.windowInsets : WindowInsets(bottom: 0.dp)
+                        var options = Material3BottomAppBarOptions(modifier: context.modifier.then(bottomBarModifier), containerColor: containerColor, contentColor: MaterialTheme.colorScheme.contentColorFor(containerColor), contentPadding: PaddingValues.Absolute(left: 16.dp, right: 16.dp))
+                        if let updateOptions = EnvironmentValues.shared._material3BottomAppBar {
+                            options = updateOptions(options)
+                        }
+                        BottomAppBar(modifier: options.modifier, containerColor: options.containerColor, contentColor: options.contentColor, tonalElevation: options.tonalElevation, contentPadding: options.contentPadding, windowInsets: windowInsets) {
+                            // Use an HStack so that it sets up the environment for bottom toolbar Spacers
+                            HStack(spacing: 24.0) {
+                                ComposeView { context in
+                                    for renderable in bottomItems {
+                                        renderable.Render(context: context)
+                                    }
+                                }
+                            }.Compose(context)
+                        }
+                    }
+                }
+            }
+        }
+
+        // We place nav bars within each entry rather than at the navigation controller level so toolbar preferences apply per entry.
+
+        let layoutImplementationVersion = EnvironmentValues.shared._layoutImplementationVersion
+        if layoutImplementationVersion < 2 {
+            // Old Column layout (version < 2)
+            Column(modifier: modifier.background(Color.background.colorImpl())) {
+                // Calculate safe area for content
+                let contentSafeArea = arguments.safeArea?
+                    .insetting(.top, to: effectiveTopBarBottomPx)
+                    .insetting(.bottom, to: bottomBarTopPx.value)
+                // Inset manually for any edge where our container ignored the safe area, but we aren't showing a bar
+                let topPadding = effectiveTopBarBottomPx <= Float(0.0) && arguments.ignoresSafeAreaEdges.contains(.top) ? WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding() : 0.dp
+                var bottomPadding = 0.dp
+                if bottomBarTopPx.value <= Float(0.0) && arguments.ignoresSafeAreaEdges.contains(.bottom) {
+                    bottomPadding = max(0.dp, WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() - WindowInsets.ime.asPaddingValues().calculateBottomPadding())
+                }
+                let contentModifier = Modifier.fillMaxWidth().weight(Float(1.0)).padding(top: topPadding, bottom: bottomPadding)
+
+                topBar()
+                Box(modifier: contentModifier, contentAlignment: androidx.compose.ui.Alignment.Center) {
+                    var topPadding = 0.dp
+                    let searchableState: SearchableState? = arguments.isRoot ? (EnvironmentValues.shared._searchableState ?? searchableStatePreference.value.reduced) : nil
+                    if let searchableState {
+                        let searchFieldBackground = isSystemBackground ? Color.systemBarBackground.colorImpl() : androidx.compose.ui.graphics.Color.Transparent
+                        let searchFieldFadeOffset = searchFieldHeightPx / 3
+                        let searchFieldModifier = Modifier.height(searchFieldHeight.dp + searchFieldPadding)
+                            .align(androidx.compose.ui.Alignment.TopCenter)
+                            .offset({ IntOffset(0, Int(searchFieldOffsetPx.value)) })
+                            .background(searchFieldBackground)
+                            .padding(start: searchFieldPadding, bottom: searchFieldPadding, end: searchFieldPadding)
+                            // Offset is negative. Fade out quickly as it scrolls in case it is moving up under transparent nav bar
+                            .graphicsLayer { alpha = max(Float(0.0), (searchFieldFadeOffset + searchFieldOffsetPx.value) / searchFieldFadeOffset) }
+                            .fillMaxWidth()
+                        SearchField(state: searchableState, context: context.content(modifier: searchFieldModifier))
+                        let searchFieldPlaceholderPadding = searchFieldHeight.dp + searchFieldPadding + (with(LocalDensity.current) { searchFieldOffsetPx.value.toDp() })
+                        topPadding = searchFieldPlaceholderPadding
+                    }
+                    EnvironmentValues.shared.setValues {
+                        if let contentSafeArea {
+                            $0.set_safeArea(contentSafeArea)
+                        }
+                        $0.set_searchableState(searchableState)
+                        $0.set_isNavigationRoot(arguments.isRoot)
+                        $0.set_nestedScrollConnection(scrollBehavior.nestedScrollConnection)
+                        return ComposeResult.ok
+                    } in: {
+                        // Elevate the top padding modifier so that content always has the same context, allowing it to avoid recomposition
+                        Box(modifier: Modifier.padding(top: topPadding)) {
+                            PreferenceValues.shared.collectPreferences([searchableStateCollector, scrollToTopCollector]) {
+                                content(context.content())
+                            }
+                        }
+                    }
+                }
+                bottomBar()
+            }
+        } else {
+            // New Box layout (version >= 2)
+            Box(modifier: modifier.background(Color.background.colorImpl()).fillMaxSize()) {
+                // Calculate safe area for content by insetting by topBar and bottomBar heights
+                var contentSafeArea: SafeArea?
+                if let safeArea = arguments.safeArea {
+                    let clampedTopBarBottomPxValue: Float = max(effectiveTopBarBottomPx, safeArea.safeBoundsPx.top)
+                    contentSafeArea = safeArea
+                        .insetting(.top, to: clampedTopBarBottomPxValue)
+                        .insetting(.bottom, to: bottomBarTopPx.value)
+                }
+
+                // Top bar aligned to top
+                Box(modifier: Modifier.zIndex(Float(1.1)).align(androidx.compose.ui.Alignment.TopCenter)) {
+                    topBar()
+                }
+
+                // Bottom bar aligned to bottom
+                Box(modifier: Modifier.zIndex(Float(1.1)).align(androidx.compose.ui.Alignment.BottomCenter)) {
+                    bottomBar()
+                }
+
+                // Constrain the content to the area between the top bar and bottom bar. In the Box layout we use
+                // fillMaxSize(), so we must add top/bottom padding to reserve space for our nav bars. Use the
+                // measured topBarBottomPx and bottomBarHeightPx when the bars are visible. When a bar is hidden,
+                // inset by the system safe area (WindowInsets.safeDrawing) for that edge when
+                // arguments.ignoresSafeAreaEdges contains it, so content does not overlap the status bar or home
+                // indicator.
+                var contentModifier = Modifier.fillMaxSize()
+                let safeTopDp = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+                let topBarBottomDp: Dp
+                if showsTopBar {
+                    if isInlineTitleDisplayMode {
+                        let localTopBarBottomPx = max(Float(0.0), effectiveTopBarBottomPx - (arguments.safeArea?.presentationBoundsPx.top ?? Float(0.0)))
+                        topBarBottomDp = with(density) { localTopBarBottomPx.toDp() }
+                    } else {
+                        let localSafeAreaTopDp = with(density) { max(Float(0.0), safeAreaTopPx - presentationTopPx).toDp() }
+                        let topBarHeightDp = estimatedCollapsedTopBarHeight + ((estimatedExpandedTopBarHeight - estimatedCollapsedTopBarHeight) * Float(1.0 - scrollBehavior.state.collapsedFraction))
+                        topBarBottomDp = localSafeAreaTopDp + topBarHeightDp
+                    }
+                } else {
+                    topBarBottomDp = 0.dp
+                }
+
+                let topPadding = arguments.ignoresSafeAreaEdges.contains(.top) ? max(topBarBottomDp, safeTopDp) : topBarBottomDp
+                let bottomPadding: Dp
+
+                let topBarUnderlayColor: androidx.compose.ui.graphics.Color?
+                if topBarPreferences?.backgroundVisibility == Visibility.hidden {
+                    topBarUnderlayColor = nil
+                } else if topBarPreferences?.backgroundVisibility == Visibility.visible {
+                    topBarUnderlayColor = topBarPreferences?.background?.asColor(opacity: 1.0, animationContext: nil) ?? Color.systemBarBackground.colorImpl()
+                } else if topBarPreferences?.isSystemBackground == true || reservesInitialRootTopBar {
+                    topBarUnderlayColor = Color.systemBarBackground.colorImpl()
+                } else {
+                    topBarUnderlayColor = nil
+                }
+
+                if showsTopBar && topPadding.value > Float(0.0), let topBarUnderlayColor {
+                    Box(
+                        modifier: Modifier
+                            .zIndex(Float(1.0))
+                            .align(androidx.compose.ui.Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(topPadding)
+                            .background(topBarUnderlayColor)
+                    ) {}
+                }
+
+                if bottomBarHeightPx.value > Float(0.0) {
+                    bottomPadding = with(density) { bottomBarHeightPx.value.toDp() }
+                } else if arguments.ignoresSafeAreaEdges.contains(.bottom) {
+                    bottomPadding = max(0.dp, WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() - WindowInsets.ime.asPaddingValues().calculateBottomPadding())
+                } else {
+                    bottomPadding = 0.dp
+                }
+
+                let bottomBarUnderlayColor: androidx.compose.ui.graphics.Color?
+                if bottomBarPreferences?.backgroundVisibility == Visibility.hidden {
+                    bottomBarUnderlayColor = nil
+                } else if bottomBarPreferences?.backgroundVisibility == Visibility.visible {
+                    bottomBarUnderlayColor = bottomBarPreferences?.background?.asColor(opacity: 1.0, animationContext: nil) ?? Color.systemBarBackground.colorImpl()
+                } else if bottomBarPreferences?.isSystemBackground == true {
+                    bottomBarUnderlayColor = Color.systemBarBackground.colorImpl()
+                } else {
+                    bottomBarUnderlayColor = nil
+                }
+
+                if bottomPadding.value > Float(0.0), let bottomBarUnderlayColor {
+                    Box(
+                        modifier: Modifier
+                            .align(androidx.compose.ui.Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(bottomPadding)
+                            .background(bottomBarUnderlayColor)
+                    ) {}
+                }
+
+                contentModifier = contentModifier.padding(top: topPadding, bottom: bottomPadding)
+                Box(modifier: contentModifier, contentAlignment: androidx.compose.ui.Alignment.Center) {
+                    var topPadding = 0.dp
+                    let searchableState: SearchableState? = arguments.isRoot ? (EnvironmentValues.shared._searchableState ?? searchableStatePreference.value.reduced) : nil
+                    if let searchableState {
+                        let searchFieldBackground = isSystemBackground ? Color.systemBarBackground.colorImpl() : androidx.compose.ui.graphics.Color.Transparent
+                        let searchFieldFadeOffset = searchFieldHeightPx / 3
+                        let searchFieldModifier = Modifier.height(searchFieldHeight.dp + searchFieldPadding)
+                            .align(androidx.compose.ui.Alignment.TopCenter)
+                            .offset({ IntOffset(0, Int(searchFieldOffsetPx.value)) })
+                            .background(searchFieldBackground)
+                            .padding(start: searchFieldPadding, bottom: searchFieldPadding, end: searchFieldPadding)
+                            // Offset is negative. Fade out quickly as it scrolls in case it is moving up under transparent nav bar
+                            .graphicsLayer { alpha = max(Float(0.0), (searchFieldFadeOffset + searchFieldOffsetPx.value) / searchFieldFadeOffset) }
+                            .fillMaxWidth()
+                        SearchField(state: searchableState, context: context.content(modifier: searchFieldModifier))
+                        let searchFieldPlaceholderPadding = searchFieldHeight.dp + searchFieldPadding + (with(LocalDensity.current) { searchFieldOffsetPx.value.toDp() })
+                        topPadding = searchFieldPlaceholderPadding
+                    }
+                    EnvironmentValues.shared.setValues {
+                        if let contentSafeArea {
+                            $0.set_safeArea(contentSafeArea)
+                        }
+                        $0.set_searchableState(searchableState)
+                        $0.set_isNavigationRoot(arguments.isRoot)
+                        $0.set_nestedScrollConnection(scrollBehavior.nestedScrollConnection)
+                        return ComposeResult.ok
+                    } in: {
+                        // Elevate the top padding modifier so that content always has the same context, allowing it to avoid recomposition
+                        Box(modifier: Modifier.padding(top: topPadding)) {
+                            PreferenceValues.shared.collectPreferences([searchableStateCollector, scrollToTopCollector]) {
+                                content(context.content())
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable private func RenderDestination(_ destination: ((Any) -> View)?, arguments: NavigationDestinationArguments, context: ComposeContext) {
+        // Break out this function to give it stable arguments and avoid recomosition on push/pop
+        destination?(arguments.targetValue).Compose(context: context)
+    }
+
+    @Composable private func useInlineTitleDisplayMode(for titleDisplayMode: ToolbarTitleDisplayMode, safeArea: SafeArea?) -> Bool {
+        guard titleDisplayMode == .automatic else {
+            return titleDisplayMode == ToolbarTitleDisplayMode.inline
+        }
+        // Default to inline if in landscape or a sheet
+        if let safeArea, safeArea.presentationBoundsPx.width > safeArea.presentationBoundsPx.height {
+            return true
+        }
+        return EnvironmentValues.shared._sheetDepth > 0
+    }
+    #else
+    public var body: some View {
+        stubView()
+    }
+    #endif
+}
+
+#if SKIP
+
+// SKIP INSERT: @Serializable
+public enum SkipNavigationStackRootKey : NavKey, Hashable {
+    case root
+}
+
+// SKIP INSERT: @Serializable
+public struct SkipNavigationStackPushKey : NavKey, Hashable {
+    public let destinationIndex: Int
+    public let identifier: String
+}
+
+@Stable struct NavigationEntryArguments: Equatable {
+    let isRoot: Bool
+    let state: Navigator.BackStackState
+    let safeArea: SafeArea?
+    let ignoresSafeAreaEdges: Edge.Set
+    let title: Text
+    let toolbarPreferences: ToolbarPreferences
+}
+
+@Stable struct NavigationDestinationArguments: Equatable {
+    let targetValue: Any
+}
+
+typealias NavigationDestinations = Dictionary<AnyHashable, NavigationDestination>
+typealias NavigationDestinationLayoutHintsMap = Dictionary<AnyHashable, NavigationStackLayoutHints>
+
+struct NavigationDestination {
+    let destination: (Any) -> any View
+    let layoutHints: NavigationStackLayoutHints?
+
+    init(destination: @escaping (Any) -> any View, layoutHints: NavigationStackLayoutHints? = nil) {
+        self.destination = destination
+        self.layoutHints = layoutHints
+    }
+
+    // No way to compare closures. Assume equal so we don't think our destinations are constantly updating
+    public override func equals(other: Any?) -> Bool {
+        return true
+    }
+}
+
+private func mergeNavigationDestinationsWithLayoutHints(_ destinations: NavigationDestinations, layoutHints: NavigationDestinationLayoutHintsMap) -> NavigationDestinations {
+    if layoutHints.isEmpty {
+        return destinations
+    }
+    var merged = destinations
+    for (key, hint) in layoutHints {
+        if let existing = merged[key] {
+            merged[key] = NavigationDestination(destination: existing.destination, layoutHints: hint)
+        }
+    }
+    return merged
+}
+
+@Stable final class Navigator {
+    /// Route for the root of the navigation stack.
+    static let rootRoute = "navigationroot"
+
+    /// Number of possible destiation routes.
+    ///
+    /// We route to destinations by static index rather than a dynamic system based on the provided destination
+    /// keys because changing the destinations of a `NavHost` wipes out its back stack. By using a fixed set of
+    /// indexes, we can maintain the back stack even as we add destination mappings.
+    static let destinationCount = 100
+
+    /// Route for the given destination index and value string.
+    static func route(for destinationIndex: Int, valueString: String) -> String {
+        return String(describing: destinationIndex) + "/" + valueString
+    }
+
+    private var navBackStack: NavBackStack<NavKey>
+    private var keyboardController: SoftwareKeyboardController?
+    private var destinations: NavigationDestinations
+    private var destinationIndexes: [AnyHashable: Int] = [:]
+    private var destinationKeyTransformer: ((Any) -> String)?
+
+    // We reserve the last destination index for static destinations. Every time we navigate to a static destination view, we increment the
+    // destination value to give it a unique navigation path of e.g. 99/0, 99/1, 99/2, etc
+    private let viewDestinationIndex = Self.destinationCount - 1
+    private var viewDestinationValue = 0
+
+    private var path: Binding<[Any]>?
+    private var navigationPath: Binding<NavigationPath>?
+
+    private var backStackState: [String: BackStackState] = [:]
+    final class BackStackState {
+        let id: String
+        let route: String
+        let destination: ((Any) -> any View)?
+        let targetValue: Any?
+        let layoutHints: NavigationStackLayoutHints?
+        let stateSaver: ComposeStateSaver
+        var titleDisplayMode: ToolbarTitleDisplayMode?
+        var binding: Binding<Bool>?
+
+        init(id: String, route: String, destination: ((Any) -> any View)? = nil, targetValue: Any? = nil, layoutHints: NavigationStackLayoutHints? = nil, stateSaver: ComposeStateSaver = ComposeStateSaver()) {
+            self.id = id
+            self.route = route
+            self.destination = destination
+            self.targetValue = targetValue
+            self.layoutHints = layoutHints
+            self.stateSaver = stateSaver
+        }
+    }
+
+    init(navBackStack: NavBackStack<NavKey>, destinations: NavigationDestinations, destinationKeyTransformer: ((Any) -> String)?) {
+        self.navBackStack = navBackStack
+        self.destinations = destinations
+        self.destinationKeyTransformer = destinationKeyTransformer
+        updateDestinationIndexes()
+    }
+
+    /// Call with updated state on recompose.
+    @Composable func didCompose(navBackStack: NavBackStack<NavKey>, destinations: NavigationDestinations, path: Binding<[Any]>?, navigationPath: Binding<NavigationPath>?, keyboardController: SoftwareKeyboardController?) {
+        self.navBackStack = navBackStack
+        self.destinations = destinations
+        self.path = path
+        self.navigationPath = navigationPath
+        self.keyboardController = keyboardController
+        updateDestinationIndexes()
+        syncState()
+        navigateToPath()
+    }
+
+    /// Whether we're at the root of the navigation stack.
+    var isRoot: Bool {
+        return navBackStack.size <= 1
+    }
+
+    /// Navigate to a target value specified in a `NavigationLink`.
+    func navigate(to targetValue: Any) {
+        if let path {
+            path.wrappedValue.append(targetValue)
+        } else if let navigationPath {
+            navigationPath.wrappedValue.append(targetValue)
+        } else {
+            navigate(toKeyed: targetValue)
+        }
+    }
+
+    private func navigate(toKeyed targetValue: Any) {
+        let key: AnyHashable
+        if let destinationKeyTransformer {
+            key = destinationKeyTransformer(targetValue)
+        } else {
+            key = type(of: targetValue)
+        }
+        let _ = navigate(toKeyed: targetValue, key: key)
+    }
+
+    /// Navigate to a destination view.
+    ///
+    /// - Parameter binding: Optional binding to toggle to `false` when the view is popped.
+    /// - Returns: The navigation stack entry ID of the pushed view.
+    func navigateToView(_ view: any View, binding: Binding<Bool>? = nil) -> String? {
+        let targetValue = viewDestinationValue
+        viewDestinationValue += 1
+
+        let route = Self.route(for: viewDestinationIndex, valueString: String(describing: targetValue))
+        return navigate(route: route, destination: { _ in view }, layoutHints: nil, targetValue: targetValue, binding: binding)
+    }
+
+    /// Pop the back stack.
+    func navigateBack() {
+        // Check for a view destination before we pop our path bindings, because the user could push arbitrary views
+        // that are not represented in the bound path
+        if let lastKey = navBackStack.lastOrNull() as? SkipNavigationStackPushKey, lastKey.destinationIndex == viewDestinationIndex {
+            navBackStack.removeLastOrNull()
+        } else if let path, !path.wrappedValue.isEmpty {
+            path.wrappedValue.popLast()
+        } else if let navigationPath, !navigationPath.wrappedValue.isEmpty {
+            navigationPath.wrappedValue.removeLast()
+        } else if !isRoot {
+            navBackStack.removeLastOrNull()
+        }
+    }
+
+    /// Whether the given view entry ID is presented.
+    func isViewPresented(id: String, asTop: Bool = false) -> Bool {
+        guard !navBackStack.isEmpty() else {
+            return false
+        }
+        guard !asTop else {
+            return stableEntryId(forKey: navBackStack[navBackStack.size - 1]) == id
+        }
+        for key in navBackStack {
+            if stableEntryId(forKey: key) == id {
+                return true
+            }
+        }
+        return false
+    }
+
+    func stateForRoot() -> BackStackState? {
+        let rootId = stableEntryId(forKey: SkipNavigationStackRootKey.root)
+        if let state = backStackState[rootId] {
+            return state
+        }
+        // Need to establish the root state?
+        guard navBackStack.size >= 1, navBackStack.firstOrNull() is SkipNavigationStackRootKey else {
+            return nil
+        }
+        let rootState = BackStackState(id: rootId, route: Self.rootRoute)
+        backStackState[rootId] = rootState
+        return rootState
+    }
+
+    /// The entry being navigated to.
+    func state(forPushKey pushKey: SkipNavigationStackPushKey) -> BackStackState? {
+        let id = stableEntryId(forKey: pushKey)
+        return backStackState[id]
+    }
+
+    /// The effective title display mode for the given preference value.
+    func titleDisplayMode(for state: BackStackState, hasTitle: Bool, preference: ToolbarTitleDisplayMode?) -> ToolbarTitleDisplayMode {
+        if let preference {
+            state.titleDisplayMode = preference
+            return preference
+        }
+
+        // Never add large title space when `title` and `titleDisplayMode` are unset in the current stack
+        guard hasTitle else {
+            return .inline
+        }
+
+        // Base the display mode on the back stack
+        var titleDisplayMode: ToolbarTitleDisplayMode? = nil
+        for key in navBackStack {
+            let entryId = stableEntryId(forKey: key)
+            if entryId == state.id {
+                break
+            } else if let entryTitleDisplayMode = backStackState[entryId]?.titleDisplayMode {
+                titleDisplayMode = entryTitleDisplayMode
+            }
+        }
+        return titleDisplayMode ?? ToolbarTitleDisplayMode.automatic
+    }
+
+    private func stableEntryId(forKey key: NavKey) -> String {
+        if key is SkipNavigationStackRootKey {
+            return Self.rootRoute
+        } else if let pushKey = key as? SkipNavigationStackPushKey {
+            return Self.route(for: pushKey.destinationIndex, valueString: pushKey.identifier)
+        } else {
+            return String(describing: key)
+        }
+    }
+
+    /// Sync our back stack state with the navigation back stack.
+    @Composable private func syncState() {
+        let stackKeys = navBackStack.toList()
+        // re-present views that were removed from the stack
+        let entryIDs = Set(stackKeys.map { stableEntryId(forKey: $0) })
+        // Toggle any presented bindings for popped states back to false. Do this immediately so that we don't
+        // continue to present popped values while waiting for our delayed state sync below.
+        for (id, state) in backStackState {
+            if !entryIDs.contains(id) {
+                state.binding?.wrappedValue = false
+            }
+        }
+
+        // Sync the back stack with remaining states. We delay this to allow views that receive compose calls while
+        // animating away to find their state
+        let stackEffectKey = stackKeys.map { stableEntryId(forKey: $0) }.joinToString(separator: "|")
+        LaunchedEffect(stackEffectKey) {
+            delay(1000) // 1 second
+            var syncedBackStackState: [String: BackStackState] = [:]
+            for key in stackKeys {
+                let entryId = stableEntryId(forKey: key)
+                if let state = backStackState[entryId] {
+                    syncedBackStackState[entryId] = state
+                }
+            }
+            backStackState = syncedBackStackState
+        }
+    }
+
+    private func navigateToPath() {
+        guard let path = (self.path?.wrappedValue ?? navigationPath?.wrappedValue.path) else {
+            return
+        }
+        let keys = navBackStack.toList()
+        guard !keys.isEmpty() else {
+            return
+        }
+
+        // Figure out where the path and back stack first differ
+        var pathIndex = 0
+        var backStackIndex = 1 // root key at 0
+        while pathIndex < path.count {
+            if backStackIndex >= keys.size {
+                break
+            }
+            let kid = stableEntryId(forKey: keys[backStackIndex])
+            let state = backStackState[kid]
+            if state?.targetValue != path[pathIndex] {
+                break
+            }
+            pathIndex += 1
+            backStackIndex += 1
+        }
+
+        // If we exhausted the path and the back stack contains only post-path views, keep them in place. This allows
+        // users to have a path binding but then append arbitrary views as leaves
+        var hasOnlyTrailingViews = false
+        if pathIndex == path.count {
+            hasOnlyTrailingViews = true
+            let viewDestinationPrefix = Self.route(for: viewDestinationIndex, valueString: "")
+            for i in 0..<(keys.size - backStackIndex) {
+                let kid = stableEntryId(forKey: keys[backStackIndex + i])
+                if !kid.hasPrefix(viewDestinationPrefix) {
+                    hasOnlyTrailingViews = false
+                    break
+                }
+            }
+        }
+        guard !hasOnlyTrailingViews else {
+            return
+        }
+
+        // Pop back to last common value
+        for _ in 0..<(keys.size - backStackIndex) {
+            navBackStack.removeLastOrNull()
+        }
+        // Navigate to any new path values
+        for i in pathIndex..<path.count {
+            let _ = navigate(toKeyed: path[i])
+        }
+    }
+
+    private func navigate(toKeyed targetValue: Any, key: AnyHashable?) -> Bool {
+        guard let key else {
+            return false
+        }
+        guard let destination = destinations[key] else {
+            if let type = key as? Any.Type {
+                for supertype in type.superclasses {
+                    if navigate(toKeyed: targetValue, key: supertype) {
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+
+        let route = route(for: key, value: targetValue)
+        navigate(route: route, destination: destination.destination, layoutHints: destination.layoutHints, targetValue: targetValue)
+        return true
+    }
+
+    private func navigate(route: String, destination: ((Any) -> any View)?, layoutHints: NavigationStackLayoutHints?, targetValue: Any, binding: Binding<Bool>? = nil) -> String? {
+        let slash = route.indexOf("/")
+        guard slash >= 0 else {
+            return nil
+        }
+        let indexStr = route.substring(0, slash)
+        let identifier = route.substring(slash + 1)
+        guard let destIndex = Int(string: indexStr) else {
+            return nil
+        }
+        let pushKey = SkipNavigationStackPushKey(destinationIndex: destIndex, identifier: identifier)
+        return navigate(pushKey: pushKey, route: route, destination: destination, layoutHints: layoutHints, targetValue: targetValue, binding: binding)
+    }
+
+    private func navigate(pushKey: SkipNavigationStackPushKey, route: String, destination: ((Any) -> any View)?, layoutHints: NavigationStackLayoutHints?, targetValue: Any, binding: Binding<Bool>? = nil) -> String? {
+        // We see a top app bar glitch when the keyboard animates away after push, so manually dismiss it first
+        keyboardController?.hide()
+        navBackStack.add(pushKey)
+        let entryId = stableEntryId(forKey: pushKey)
+        var state = backStackState[entryId]
+        if state == nil {
+            state = BackStackState(id: entryId, route: route, destination: destination, targetValue: targetValue, layoutHints: layoutHints)
+            backStackState[entryId] = state
+        }
+        if let binding {
+            state?.binding = binding
+        }
+        return entryId
+    }
+
+    private func route(for key: AnyHashable, value: Any) -> String {
+        guard let index = destinationIndexes[key] else {
+            return String(describing: key) + "?"
+        }
+        // Escape '/' because it is meaningful in navigation routes
+        let valueString = composeBundleString(for: value).replacingOccurrences(of: "/", with: "%2F")
+        return route(for: index, valueString: valueString)
+    }
+
+    private func updateDestinationIndexes() {
+        for key in destinations.keys {
+            if destinationIndexes[key] == nil {
+                destinationIndexes[key] = destinationIndexes.count
+            }
+        }
+    }
+}
+
+struct NavigationDestinationItemWrapper<D: Hashable>: View {
+    @Environment(\.dismiss) var dismiss
+    let item: Binding<D?>
+    let isBeingDismissedByNavigator: MutableState<Bool>
+    let navigationId: MutableState<String?>
+    let destination: (D) -> any View
+    
+    var body: some View {
+        Group {
+            if let itemValue = item.wrappedValue {
+                destination(itemValue)
+            } else {
+                EmptyView()
+            }
+        }
+        .onChange(of: item.wrappedValue, initial: true) { oldValue, newValue in
+            if newValue == nil {
+                if !isBeingDismissedByNavigator.value {
+                    dismiss()
+                }
+                navigationId.value = nil
+            }
+            isBeingDismissedByNavigator.value = false
+        }
+    }
+}
+
+let LocalNavigator: ProvidableCompositionLocal<Navigator?> = compositionLocalOf { nil as Navigator? }
+#endif
+
+public struct NavigationSplitViewStyle: RawRepresentable, Equatable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static var automatic = NavigationSplitViewStyle(rawValue: 0)
+    public static var balanced = NavigationSplitViewStyle(rawValue: 1)
+    public static var prominentDetail = NavigationSplitViewStyle(rawValue: 2)
+}
+
+public struct NavigationBarItem : Hashable {
+    public enum TitleDisplayMode : Int, Equatable {
+        case automatic = 0 // For bridging
+        case inline = 1 // For bridging
+        case large = 2 // For bridging
+    }
+}
+
+extension View {
+    // SKIP @bridge
+    public func navigationBarBackButtonHidden(_ hidesBackButton: Bool = true) -> any View {
+        #if SKIP
+        return preference(key: ToolbarPreferenceKey.self, value: ToolbarPreferences(backButtonHidden: hidesBackButton))
+        #else
+        return self
+        #endif
+    }
+
+    public func navigationBarTitleDisplayMode(_ displayMode: NavigationBarItem.TitleDisplayMode) -> any View {
+        #if SKIP
+        let toolbarTitleDisplayMode: ToolbarTitleDisplayMode
+        switch displayMode {
+        case .automatic:
+            toolbarTitleDisplayMode = .automatic
+        case .inline:
+            toolbarTitleDisplayMode = .inline
+        case .large:
+            toolbarTitleDisplayMode = .large
+        }
+        return preference(key: ToolbarPreferenceKey.self, value: ToolbarPreferences(titleDisplayMode: toolbarTitleDisplayMode))
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func navigationBarTitleDisplayMode(bridgedDisplayMode: Int) -> any View {
+        return navigationBarTitleDisplayMode(NavigationBarItem.TitleDisplayMode(rawValue: bridgedDisplayMode) ?? NavigationBarItem.TitleDisplayMode.automatic)
+    }
+
+    public func navigationDestination<D>(for data: D.Type, @ViewBuilder destination: @escaping (D) -> any View) -> any View where D: Any {
+        #if SKIP
+        let destinations: NavigationDestinations = [data: NavigationDestination(destination: { destination($0 as! D) })]
+        return preference(key: NavigationDestinationsPreferenceKey.self, value: destinations)
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func navigationDestination(destinationKey: String, bridgedDestination: @escaping (Any) -> any View) -> any View {
+        #if SKIP
+        let destinations: NavigationDestinations = [destinationKey: NavigationDestination(destination: { bridgedDestination($0) })]
+        return preference(key: NavigationDestinationsPreferenceKey.self, value: destinations)
+        #else
+        return self
+        #endif
+    }
+
+    public func navigationDestination(isPresented: Binding<Bool>, @ViewBuilder destination: () -> any View) -> any View {
+        #if SKIP
+        let destinationView = ComposeBuilder.from(destination)
+        return ModifiedContent(content: self, modifier: SideEffectModifier { context in
+            let id = rememberSaveable(stateSaver: context.stateSaver as! Saver<String?, Any>) { mutableStateOf<String?>(nil) }
+            guard let navigator = LocalNavigator.current else {
+                return ComposeResult.ok
+            }
+            if isPresented.wrappedValue {
+                if id.value == nil || !navigator.isViewPresented(id: id.value!) {
+                    id.value = navigator.navigateToView(destinationView, binding: isPresented)
+                }
+            } else {
+                if let idValue = id.value, navigator.isViewPresented(id: idValue, asTop: true) {
+                    navigator.navigateBack()
+                }
+                id.value = nil
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func navigationDestination(getIsPresented: @escaping () -> Bool, setIsPresented: @escaping (Bool) -> Void, bridgedDestination: any View) -> any View {
+        return navigationDestination(isPresented: Binding(get: getIsPresented, set: setIsPresented), destination: { bridgedDestination })
+    }
+
+    public func navigationDestination<D>(item: Binding<D?>, @ViewBuilder destination: @escaping (D) -> any View) -> some View where D : Hashable {
+        #if SKIP
+        return ModifiedContent(content: self, modifier: SideEffectModifier { context in
+            let id = rememberSaveable(stateSaver: context.stateSaver as! Saver<String?, Any>) { mutableStateOf<String?>(nil) }
+            let isBeingDismissedByNavigator = remember { mutableStateOf(false) }
+            guard let navigator = LocalNavigator.current else {
+                return ComposeResult.ok
+            }
+            
+            if let itemValue = item.wrappedValue {
+                let isPresented = id.value != nil ? navigator.isViewPresented(id: id.value!) : false
+                if id.value == nil || !isPresented {
+                    var consumed = false
+                    let binding = Binding<Bool>(
+                        get: { item.wrappedValue != nil },
+                        set: {
+                            if !$0 {
+                                if !consumed {
+                                    consumed = true
+                                    isBeingDismissedByNavigator.value = true
+                                    item.wrappedValue = nil
+                                }
+                            }
+                        }
+                    )
+                    let destinationView = NavigationDestinationItemWrapper(item: item, isBeingDismissedByNavigator: isBeingDismissedByNavigator, navigationId: id, destination: destination)
+                    let newId = navigator.navigateToView(destinationView, binding: binding)
+                    id.value = newId
+                }
+            } else {
+                if let idValue = id.value, navigator.isViewPresented(id: idValue, asTop: true) {
+                    navigator.navigateBack()
+                }
+                id.value = nil
+            }
+            return ComposeResult.ok
+        })
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func navigationDestination(getItem: @escaping () -> Any?, setItem: @escaping (Any?) -> Void, bridgedDestination: @escaping (Any) -> any View) -> any View {
+        let binding: Binding<AnyHashable?> = Binding(
+            get: { getItem() as? AnyHashable },
+            set: { setItem($0) }
+        )
+        return navigationDestination(item: binding, destination: bridgedDestination)
+    }
+
+    @available(*, unavailable)
+    public func navigationDocument(_ url: URL) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func navigationSplitViewColumnWidth(_ width: CGFloat) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func navigationSplitViewColumnWidth(min: CGFloat? = nil, ideal: CGFloat, max: CGFloat? = nil) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func navigationSplitViewStyle(_ style: NavigationSplitViewStyle) -> some View {
+        return self
+    }
+
+    // SKIP @bridge
+    public func navigationTitle(_ title: Text) -> any View {
+        #if SKIP
+        return preference(key: NavigationTitlePreferenceKey.self, value: title)
+        #else
+        return self
+        #endif
+    }
+
+    public func navigationTitle(_ title: LocalizedStringKey) -> some View {
+        #if SKIP
+        return preference(key: NavigationTitlePreferenceKey.self, value: Text(title))
+        #else
+        return self
+        #endif
+    }
+
+    public func navigationTitle(_ title: LocalizedStringResource) -> some View {
+        #if SKIP
+        return preference(key: NavigationTitlePreferenceKey.self, value: Text(title))
+        #else
+        return self
+        #endif
+    }
+
+    public func navigationTitle(_ title: String) -> some View {
+        #if SKIP
+        return preference(key: NavigationTitlePreferenceKey.self, value: Text(verbatim: title))
+        #else
+        return self
+        #endif
+    }
+
+    @available(*, unavailable)
+    public func navigationTitle(_ title: Binding<String>) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func navigationSubtitle(_ subtitle: Text) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func navigationSubtitle(_ subtitle: LocalizedStringKey) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func navigationSubtitle(_ subtitle: LocalizedStringResource) -> some View {
+        return self
+    }
+
+    @available(*, unavailable)
+    public func navigationSubtitle(_ subtitle: String) -> some View {
+        return self
+    }
+
+    #if SKIP
+    public func material3TopAppBar(_ options: @Composable (Material3TopAppBarOptions) -> Material3TopAppBarOptions) -> View {
+        return environment(\._material3TopAppBar, options, affectsEvaluate: false)
+    }
+
+    public func material3BottomAppBar(_ options: @Composable (Material3BottomAppBarOptions) -> Material3BottomAppBarOptions) -> View {
+        return environment(\._material3BottomAppBar, options, affectsEvaluate: false)
+    }
+
+    // SKIP @bridge
+    public func navigationStackTransitions(_ options: @escaping (NavDisplayTransitionOptions) -> NavDisplayTransitionOptions) -> View {
+        return environment(\._navigationStackTransitions, options, affectsEvaluate: false)
+    }
+
+    public func navigationStackLayoutHints(expectedTitle: Text = NavigationTitlePreferenceKey.defaultValue, expectedTitleDisplayMode: ToolbarTitleDisplayMode? = nil) -> View {
+        return environment(
+            \._navigationStackLayoutHints,
+             NavigationStackLayoutHints(
+                expectedTitle: expectedTitle,
+                expectedTitleDisplayMode: expectedTitleDisplayMode),
+             affectsEvaluate: false
+        )
+    }
+    public func navigationDestinationLayoutHints(for data: Any.Type, expectedTitle: Text = NavigationTitlePreferenceKey.defaultValue, expectedTitleDisplayMode: ToolbarTitleDisplayMode? = nil) -> any View {
+        let hints = NavigationStackLayoutHints(
+            expectedTitle: expectedTitle,
+            expectedTitleDisplayMode: expectedTitleDisplayMode
+        )
+        return preference(key: NavigationDestinationLayoutHintsPreferenceKey.self, value: [data as! AnyHashable: hints])
+    }
+
+    public func navigationDestinationLayoutHints(destinationKey: String, expectedTitle: Text = NavigationTitlePreferenceKey.defaultValue, expectedTitleDisplayMode: ToolbarTitleDisplayMode? = nil) -> any View {
+        let hints = NavigationStackLayoutHints(
+            expectedTitle: expectedTitle,
+            expectedTitleDisplayMode: expectedTitleDisplayMode
+        )
+        return preference(key: NavigationDestinationLayoutHintsPreferenceKey.self, value: [destinationKey: hints])
+    }
+    #endif
+
+    // SKIP @bridge
+    public func navigationStackLayoutHints(expectedTitle: Text, bridgedExpectedTitleDisplayMode: Int?) -> any View {
+        #if SKIP
+        let expectedTitleDisplayMode: ToolbarTitleDisplayMode? = bridgedExpectedTitleDisplayMode.flatMap { raw in
+            switch NavigationBarItem.TitleDisplayMode(rawValue: raw) ?? .automatic {
+            case .automatic: return ToolbarTitleDisplayMode.automatic
+            case .inline: return ToolbarTitleDisplayMode.inline
+            case .large: return ToolbarTitleDisplayMode.large
+            }
+        }
+        return environment(
+            \._navigationStackLayoutHints,
+            NavigationStackLayoutHints(
+                expectedTitle: expectedTitle,
+                expectedTitleDisplayMode: expectedTitleDisplayMode),
+            affectsEvaluate: false
+        )
+        #else
+        return self
+        #endif
+    }
+
+    // SKIP @bridge
+    public func navigationDestinationLayoutHints(destinationKey: String, expectedTitle: Text, bridgedExpectedTitleDisplayMode: Int?) -> any View {
+        #if SKIP
+        let expectedTitleDisplayMode: ToolbarTitleDisplayMode? = bridgedExpectedTitleDisplayMode.flatMap { raw in
+            switch NavigationBarItem.TitleDisplayMode(rawValue: raw) ?? .automatic {
+            case .automatic: return ToolbarTitleDisplayMode.automatic
+            case .inline: return ToolbarTitleDisplayMode.inline
+            case .large: return ToolbarTitleDisplayMode.large
+            }
+        }
+        let hints = NavigationStackLayoutHints(
+            expectedTitle: expectedTitle,
+            expectedTitleDisplayMode: expectedTitleDisplayMode
+        )
+        return preference(key: NavigationDestinationLayoutHintsPreferenceKey.self, value: [destinationKey: hints])
+        #else
+        return self
+        #endif
+    }
+}
+
+#if SKIP
+public enum Material3TopAppBarNavigationIconButtonStyle {
+    case iconButton
+    case filledIconButton
+}
+
+// SKIP INSERT: @OptIn(ExperimentalMaterial3Api::class)
+public struct Material3TopAppBarOptions {
+    public var title: @Composable () -> Void
+    public var modifier: Modifier = Modifier
+    public var navigationIcon: @Composable () -> Void = {}
+    public var navigationIconButtonStyle: Material3TopAppBarNavigationIconButtonStyle = .iconButton
+    public var navigationIconButtonColors: IconButtonColors? = nil
+    public var colors: TopAppBarColors
+    public var scrollBehavior: TopAppBarScrollBehavior? = nil
+    public var preferCenterAlignedStyle = false
+    public var preferLargeStyle = false
+
+    public func copy(
+        title: @Composable () -> Void = self.title,
+        modifier: Modifier = self.modifier,
+        navigationIcon: @Composable () -> Void = self.navigationIcon,
+        navigationIconButtonStyle: Material3TopAppBarNavigationIconButtonStyle = self.navigationIconButtonStyle,
+        navigationIconButtonColors: IconButtonColors? = self.navigationIconButtonColors,
+        colors: TopAppBarColors = self.colors,
+        scrollBehavior: TopAppBarScrollBehavior? = self.scrollBehavior,
+        preferCenterAlignedStyle: Bool = self.preferCenterAlignedStyle,
+        preferLargeStyle: Bool = self.preferLargeStyle
+    ) -> Material3TopAppBarOptions {
+        return Material3TopAppBarOptions(
+            title: title,
+            modifier: modifier,
+            navigationIcon: navigationIcon,
+            navigationIconButtonStyle: navigationIconButtonStyle,
+            navigationIconButtonColors: navigationIconButtonColors,
+            colors: colors,
+            scrollBehavior: scrollBehavior,
+            preferCenterAlignedStyle: preferCenterAlignedStyle,
+            preferLargeStyle: preferLargeStyle
+        )
+    }
+}
+
+public struct Material3BottomAppBarOptions {
+    public var modifier: Modifier = Modifier
+    public var containerColor: androidx.compose.ui.graphics.Color
+    public var contentColor: androidx.compose.ui.graphics.Color
+    public var tonalElevation: Dp = BottomAppBarDefaults.ContainerElevation
+    public var contentPadding: PaddingValues = BottomAppBarDefaults.ContentPadding
+
+    public func copy(
+        modifier: Modifier = self.modifier,
+        containerColor: androidx.compose.ui.graphics.Color = self.containerColor,
+        contentColor: androidx.compose.ui.graphics.Color = self.contentColor,
+        tonalElevation: Dp = self.tonalElevation,
+        contentPadding: PaddingValues = self.contentPadding
+    ) -> Material3BottomAppBarOptions {
+        return Material3BottomAppBarOptions(modifier: modifier, containerColor: containerColor, contentColor: contentColor, tonalElevation: tonalElevation, contentPadding: contentPadding)
+    }
+}
+
+// SKIP @bridge
+public struct NavDisplayTransitionOptions {
+    // SKIP @bridgeMembers
+    public enum TransitionPreset: Sendable {
+        case `default`
+        case slideIn
+        case slideOut
+        case slideInAndFade
+        case slideOutAndFade
+        case fade
+        case none
+
+        // SKIP @nobridge
+        var contentTransform: ContentTransform? {
+            switch self {
+            case .default:
+                // This will use NavDisplay.defaultTransitionSpec, .defaultPopTransitionSpec, and .defaultPredictivePopTransitionSpec
+                return nil
+            case .slideIn:
+                return slideInHorizontally { $0 }.togetherWith(slideOutHorizontally { -$0 })
+            case .slideOut:
+                return slideInHorizontally { -$0 }.togetherWith(slideOutHorizontally { $0 })
+            case .slideInAndFade:
+                return (slideInHorizontally { $0 } + fadeIn()).togetherWith(slideOutHorizontally { -$0 } + fadeOut())
+            case .slideOutAndFade:
+                return (slideInHorizontally { -$0 } + fadeIn()).togetherWith(slideOutHorizontally { $0 } + fadeOut())
+            case .fade:
+                return fadeIn().togetherWith(fadeOut())
+            case .none:
+                return fadeIn(animationSpec: tween(0)).togetherWith(fadeOut(animationSpec: tween(0)))
+            }
+        }
+    }
+
+    public let transitionSpec: ContentTransform?
+    public let popTransitionSpec: ContentTransform?
+    public let predictivePopTransitionSpec: ContentTransform?
+
+    public init(transitionSpec: ContentTransform?, popTransitionSpec: ContentTransform?, predictivePopTransitionSpec: ContentTransform?) {
+        self.transitionSpec = transitionSpec
+        self.popTransitionSpec = popTransitionSpec
+        self.predictivePopTransitionSpec = predictivePopTransitionSpec
+    }
+
+    public init(_ transitionSpecs: ContentTransform?) {
+        self.transitionSpec = transitionSpecs
+        self.popTransitionSpec = transitionSpecs
+        self.predictivePopTransitionSpec = transitionSpecs
+    }
+
+    // SKIP @bridge
+    public init(_ transitionPreset: TransitionPreset) {
+        self.transitionSpec = transitionPreset.contentTransform
+        self.popTransitionSpec = transitionPreset.contentTransform
+        self.predictivePopTransitionSpec = transitionPreset.contentTransform
+    }
+
+    // SKIP @bridge
+    public init(transition: TransitionPreset = .default, popTransition: TransitionPreset = .default, predictivePopTransition: TransitionPreset = .default) {
+        self.transitionSpec = transition.contentTransform
+        self.popTransitionSpec = popTransition.contentTransform
+        self.predictivePopTransitionSpec = predictivePopTransition.contentTransform
+    }
+
+    // SKIP @bridge
+    public static var navigationStackDefaults: NavDisplayTransitionOptions {
+        NavDisplayTransitionOptions(
+            transition: .slideInAndFade,
+            popTransition: .slideOutAndFade,
+            predictivePopTransition: .slideOut
+        )
+    }
+
+    // SKIP @bridge
+    public static var tabViewDefaults: NavDisplayTransitionOptions {
+        NavDisplayTransitionOptions()
+    }
+
+    public func copy(
+        transitionSpec: ContentTransform? = self.transitionSpec,
+        popTransitionSpec: ContentTransform? = self.popTransitionSpec,
+        predictivePopTransitionSpec: ContentTransform? = self.predictivePopTransitionSpec
+    ) -> NavDisplayTransitionOptions {
+        NavDisplayTransitionOptions(
+            transitionSpec: transitionSpec,
+            popTransitionSpec: popTransitionSpec,
+            predictivePopTransitionSpec: predictivePopTransitionSpec
+        )
+    }
+
+    /// Preset-based updates. Pass `nil` for a slot to leave `self`’s value unchanged.
+    // SKIP @bridge
+    public func copy(
+        transition: TransitionPreset? = nil,
+        popTransition: TransitionPreset? = nil,
+        predictivePopTransition: TransitionPreset? = nil
+    ) -> NavDisplayTransitionOptions {
+        return copy(
+            transitionSpec: transition == .default ? nil : (transition?.contentTransform ?? transitionSpec),
+            popTransitionSpec: popTransition == .default ? nil : (popTransition?.contentTransform ?? popTransitionSpec),
+            predictivePopTransitionSpec: predictivePopTransition == .default ? nil : (predictivePopTransition?.contentTransform ?? predictivePopTransitionSpec)
+        )
+    }
+}
+
+struct NavigationDestinationsPreferenceKey: PreferenceKey {
+    static let defaultValue: NavigationDestinations = [:]
+
+    static func reduce(value: inout NavigationDestinations, nextValue: () -> NavigationDestinations) {
+        for (type, destination) in nextValue() {
+            value[type] = destination
+        }
+    }
+}
+
+struct NavigationTitlePreferenceKey: PreferenceKey {
+    static let defaultValue = Text("")
+
+    static func reduce(value: inout Text, nextValue: () -> Text) {
+        value = nextValue()
+    }
+}
+
+struct NavigationDestinationLayoutHintsPreferenceKey: PreferenceKey {
+    static let defaultValue: NavigationDestinationLayoutHintsMap = [:]
+
+    static func reduce(value: inout NavigationDestinationLayoutHintsMap, nextValue: () -> NavigationDestinationLayoutHintsMap) {
+        for (key, hints) in nextValue() {
+            value[key] = hints
+        }
+    }
+}
+
+/// Values supplied before `navigationTitle` / `navigationBarTitleDisplayMode` preferences propagate, so the first frames use the correct top bar eligibility, scroll behavior, and title text, preventing layout shift.
+public struct NavigationStackLayoutHints {
+    public let expectedTitle: Text
+    public let expectedTitleDisplayMode: ToolbarTitleDisplayMode?
+
+    public init(expectedTitle: Text = NavigationTitlePreferenceKey.defaultValue, expectedTitleDisplayMode: ToolbarTitleDisplayMode? = nil) {
+        self.expectedTitle = expectedTitle
+        self.expectedTitleDisplayMode = expectedTitleDisplayMode
+    }
+}
+#endif
+
+// SKIP @bridge
+public struct NavigationLink : View, Renderable {
+    let value: Any?
+    let destination: ComposeBuilder?
+    let label: ComposeBuilder
+
+    private static let minimumNavigationInterval = 0.35
+    private static var lastNavigationTime = 0.0
+
+    public init(value: Any?, @ViewBuilder label: () -> any View) {
+        self.value = value
+        self.destination = nil
+        self.label = ComposeBuilder.from(label)
+    }
+
+    public init(_ title: String, value: Any?) {
+        self.init(value: value, label: { Text(verbatim: title) })
+    }
+
+    public init(_ titleKey: LocalizedStringKey, value: Any?) {
+        self.init(value: value, label: { Text(titleKey) })
+    }
+
+    public init(_ titleResource: LocalizedStringResource, value: Any?) {
+        self.init(value: value, label: { Text(titleResource) })
+    }
+
+    public init(@ViewBuilder destination: () -> any View, @ViewBuilder label: () -> any View) {
+        self.value = nil
+        self.destination = ComposeBuilder.from(destination)
+        self.label = ComposeBuilder.from(label)
+    }
+
+    public init(destination: any View, @ViewBuilder label: () -> any View) {
+        self.init(destination: { destination }, label: label)
+    }
+
+    public init(_ titleKey: LocalizedStringKey, @ViewBuilder destination: () -> any View) {
+        self.init(destination: destination, label: { Text(titleKey) })
+    }
+
+    public init(_ titleResource: LocalizedStringResource, @ViewBuilder destination: () -> any View) {
+        self.init(destination: destination, label: { Text(titleResource) })
+    }
+
+    // SKIP @bridge
+    public init(bridgedDestination: (any View)?, value: Any?, bridgedLabel: any View) {
+        self.destination = bridgedDestination == nil ? nil : ComposeBuilder.from { bridgedDestination! }
+        self.value = value
+        self.label = ComposeBuilder.from { bridgedLabel }
+    }
+
+    #if SKIP
+    @Composable override func Render(context: ComposeContext) {
+        let isEnabled = (value != nil || destination != nil) && EnvironmentValues.shared.isEnabled
+        Button.RenderButton(label: label, context: context, isEnabled: isEnabled, action: navigationAction())
+    }
+
+    @Composable override func shouldRenderListItem(context: ComposeContext) -> (Bool, (() -> Void)?) {
+        let buttonStyle = EnvironmentValues.shared._buttonStyle
+        guard buttonStyle == nil || buttonStyle == .automatic || buttonStyle == .plain else {
+            return (false, nil)
+        }
+        let action: (() -> Void)? = value != nil || destination != nil ? navigationAction() : nil
+        return (true, action)
+    }
+
+    @Composable override func RenderListItem(context: ComposeContext, modifiers: kotlin.collections.List<ModifierProtocol>) {
+        ModifiedContent.RenderWithModifiers(modifiers, context: context) { context in
+            let renderables = label.Evaluate(context: context, options: 0)
+            Row(modifier: context.modifier, horizontalArrangement: Arrangement.spacedBy(8.dp), verticalAlignment: androidx.compose.ui.Alignment.CenterVertically) {
+                Box(modifier: Modifier.weight(Float(1.0))) {
+                    let labelContext = context.content()
+                    // Continue to specialize for list rendering within the content (e.g. Label)
+                    if renderables.size == 1, renderables[0].shouldRenderListItem(context: context).0 {
+                        renderables[0].RenderListItem(context: labelContext, modifiers: listOf())
+                    } else {
+                        for renderable in renderables {
+                            renderable.Render(context: labelContext)
+                        }
+                    }
+                }
+                Self.RenderChevron()
+            }
+        }
+    }
+
+    @Composable static func RenderChevron() {
+        let isRTL = EnvironmentValues.shared.layoutDirection == .rightToLeft
+        Icon(imageVector: isRTL ? Icons.Outlined.KeyboardArrowLeft : Icons.Outlined.KeyboardArrowRight, contentDescription: nil, tint: MaterialTheme.colorScheme.outlineVariant)
+    }
+
+    @Composable internal func navigationAction() -> () -> Void {
+        let navigator = LocalNavigator.current
+        return {
+            // Hack to prevent multiple quick taps from pushing duplicate entries
+            let now = CFAbsoluteTimeGetCurrent()
+            guard NavigationLink.lastNavigationTime + NavigationLink.minimumNavigationInterval <= now else {
+                logger.debug("navigation throttled; diff: \(now - lastNavigationTime) minimumNavigationInterval: \(NavigationLink.minimumNavigationInterval)")
+                return
+            }
+            NavigationLink.lastNavigationTime = now
+
+            if let value {
+                navigator?.navigate(to: value)
+            } else if let destination {
+                navigator?.navigateToView(destination)
+            }
+        }
+    }
+    #else
+    public var body: some View {
+        stubView()
+    }
+    #endif
+}
+
+public struct NavigationPath: Equatable {
+    var path: [Any] = []
+
+    public init() {
+    }
+
+    public init(_ elements: any Sequence) {
+        #if SKIP
+        path.append(contentsOf: elements as! Sequence<Any>)
+        #endif
+    }
+
+    @available(*, unavailable)
+    public init(_ codable: NavigationPath.CodableRepresentation) {
+    }
+
+    public var count: Int {
+        return path.count
+    }
+
+    public var isEmpty: Bool {
+        return path.isEmpty
+    }
+
+    @available(*, unavailable)
+    public var codable: NavigationPath.CodableRepresentation? {
+        fatalError()
+    }
+
+    public mutating func append(_ value: Any) {
+        path.append(value)
+    }
+
+    public mutating func removeLast(_ k: Int = 1) {
+        path.removeLast(k)
+    }
+
+    public static func ==(lhs: NavigationPath, rhs: NavigationPath) -> Bool {
+        #if SKIP
+        return lhs.path == rhs.path
+        #else
+        return false
+        #endif
+    }
+
+    public struct CodableRepresentation : Codable {
+        public init(from decoder: Decoder) throws {
+        }
+
+        public func encode(to encoder: Encoder) throws {
+        }
+    }
+}
+
+/*
+import struct CoreGraphics.CGFloat
+import struct Foundation.URL
+
+@available(iOS 13.0, *)
+@available(macOS, unavailable)
+@available(tvOS, unavailable)
+@available(watchOS, unavailable)
+extension NavigationLink {
+
+    /// Sets the navigation link to present its destination as the detail
+    /// component of the containing navigation view.
+    ///
+    /// This method sets the behavior when the navigation link is used in a
+    /// ``NavigationSplitView``, or a
+    /// multi-column navigation view, such as one using
+    /// ``ColumnNavigationViewStyle``.
+    ///
+    /// For example, in a two-column navigation split view, if `isDetailLink` is
+    /// `true`, triggering the link in the sidebar column sets the contents of
+    /// the detail column to be the link's destination view. If `isDetailLink`
+    /// is `false`, the link navigates to the destination view within the
+    /// primary column.
+    ///
+    /// If you do not set the detail link behavior with this method, the
+    /// behavior defaults to `true`.
+    ///
+    /// The `isDetailLink` modifier only affects view-destination links. Links
+    /// that present data values always search for a matching navigation
+    /// destination beginning in the column that contains the link.
+    ///
+    /// - Parameter isDetailLink: A Boolean value that specifies whether this
+    /// link presents its destination as the detail component when used in a
+    /// multi-column navigation view.
+    /// - Returns: A view that applies the specified detail link behavior.
+    @available(macOS, unavailable)
+    @available(tvOS, unavailable)
+    @available(watchOS, unavailable)
+    public func isDetailLink(_ isDetailLink: Bool) -> some View { return stubView() }
+
+}
+
+/// A view that presents views in two or three columns, where selections in
+/// leading columns control presentations in subsequent columns.
+///
+/// You create a navigation split view with two or three columns, and typically
+/// use it as the root view in a ``Scene``. People choose one or more
+/// items in a leading column to display details about those items in
+/// subsequent columns.
+///
+/// To create a two-column navigation split view, use the
+/// ``init(sidebar:detail:)`` initializer:
+///
+///     @State private var employeeIds: Set<Employee.ID> = []
+///
+///     var body: some View {
+///         NavigationSplitView {
+///             List(model.employees, selection: $employeeIds) { employee in
+///                 Text(employee.name)
+///             }
+///         } detail: {
+///             EmployeeDetails(for: employeeIds)
+///         }
+///     }
+///
+/// In the above example, the navigation split view coordinates with the
+/// ``List`` in its first column, so that when people make a selection, the
+/// detail view updates accordingly. Programmatic changes that you make to the
+/// selection property also affect both the list appearance and the presented
+/// detail view.
+///
+/// To create a three-column view, use the ``init(sidebar:content:detail:)``
+/// initializer. The selection in the first column affects the second, and the
+/// selection in the second column affects the third. For example, you can show
+/// a list of departments, the list of employees in the selected department,
+/// and the details about all of the selected employees:
+///
+///     @State private var departmentId: Department.ID? // Single selection.
+///     @State private var employeeIds: Set<Employee.ID> = [] // Multiple selection.
+///
+///     var body: some View {
+///         NavigationSplitView {
+///             List(model.departments, selection: $departmentId) { department in
+///                 Text(department.name)
+///             }
+///         } content: {
+///             if let department = model.department(id: departmentId) {
+///                 List(department.employees, selection: $employeeIds) { employee in
+///                     Text(employee.name)
+///                 }
+///             } else {
+///                 Text("Select a department")
+///             }
+///         } detail: {
+///             EmployeeDetails(for: employeeIds)
+///         }
+///     }
+///
+/// You can also embed a ``NavigationStack`` in a column. Tapping or clicking a
+/// ``NavigationLink`` that appears in an earlier column sets the view that the
+/// stack displays over its root view. Activating a link in the same column
+/// adds a view to the stack. Either way, the link must present a data type
+/// for which the stack has a corresponding
+/// ``View/navigationDestination(for:destination:)`` modifier.
+///
+/// On watchOS and tvOS, and with narrow sizes like on iPhone or on iPad in
+/// Slide Over, the navigation split view collapses all of its columns
+/// into a stack, and shows the last column that displays useful information.
+/// For example, the three-column example above shows the list of departments to
+/// start, the employees in the department after someone selects a department,
+/// and the employee details when someone selects an employee. For rows in a
+/// list that have ``NavigationLink`` instances, the list draws disclosure
+/// chevrons while in the collapsed state.
+///
+/// ### Control column visibility
+///
+/// You can programmatically control the visibility of navigation split view
+/// columns by creating a ``State`` value of type
+/// ``NavigationSplitViewVisibility``. Then pass a ``Binding`` to that state to
+/// the appropriate initializer --- such as
+/// ``init(columnVisibility:sidebar:detail:)`` for two columns, or
+/// the ``init(columnVisibility:sidebar:content:detail:)`` for three columns.
+///
+/// The following code updates the first example above to always hide the
+/// first column when the view appears:
+///
+///     @State private var employeeIds: Set<Employee.ID> = []
+///     @State private var columnVisibility =
+///         NavigationSplitViewVisibility.detailOnly
+///
+///     var body: some View {
+///         NavigationSplitView(columnVisibility: $columnVisibility) {
+///             List(model.employees, selection: $employeeIds) { employee in
+///                 Text(employee.name)
+///             }
+///         } detail: {
+///             EmployeeDetails(for: employeeIds)
+///         }
+///     }
+///
+/// The split view ignores the visibility control when it collapses its columns
+/// into a stack.
+///
+/// ### Collapsed split views
+///
+/// At narrow size classes, such as on iPhone or Apple Watch, a navigation split
+/// view collapses into a single stack. Typically SkipUI automatically chooses
+/// the view to show on top of this single stack, based on the content of the
+/// split view's columns.
+///
+/// For custom navigation experiences, you can provide more information to help
+/// SkipUI choose the right column. Create a `State` value of type
+/// ``NavigationSplitViewColumn``. Then pass a `Binding` to that state to the
+/// appropriate initializer, such as
+/// ``init(preferredCompactColumn:sidebar:detail:)`` or
+/// ``init(preferredCompactColumn:sidebar:content:detail:)``.
+///
+/// The following code shows the blue detail view when run on iPhone. When the
+/// person using the app taps the back button, they'll see the yellow view. The
+/// value of `preferredPreferredCompactColumn` will change from `.detail` to
+/// `.sidebar`:
+///
+///     @State private var preferredColumn =
+///         NavigationSplitViewColumn.detail
+///
+///     var body: some View {
+///         NavigationSplitView(preferredCompactColumn: $preferredColumn) {
+///             Color.yellow
+///         } detail: {
+///             Color.blue
+///         }
+///     }
+///
+/// ### Customize a split view
+///
+/// To specify a preferred column width in a navigation split view, use the
+/// ``View/navigationSplitViewColumnWidth(_:)`` modifier. To set minimum,
+/// maximum, and ideal sizes for a column, use
+/// ``View/navigationSplitViewColumnWidth(min:ideal:max:)``. You can specify a
+/// different modifier in each column. The navigation split view does its
+/// best to accommodate the preferences that you specify, but might make
+/// adjustments based on other constraints.
+///
+/// To specify how columns in a navigation split view interact, use the
+/// ``View/navigationSplitViewStyle(_:)`` modifier with a
+/// ``NavigationSplitViewStyle`` value. For example, you can specify
+/// whether to emphasize the detail column or to give all of the columns equal
+/// prominence.
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
+public struct NavigationSplitView<Sidebar, Content, Detail> : View where Sidebar : View, Content : View, Detail : View {
+
+    /// Creates a three-column navigation split view.
+    ///
+    /// - Parameters:
+    ///   - sidebar: The view to show in the leading column.
+    ///   - content: The view to show in the middle column.
+    ///   - detail: The view to show in the detail area.
+    public init(@ViewBuilder sidebar: () -> Sidebar, @ViewBuilder content: () -> Content, @ViewBuilder detail: () -> Detail) { fatalError() }
+
+    /// Creates a three-column navigation split view that enables programmatic
+    /// control of leading columns' visibility.
+    ///
+    /// - Parameters:
+    ///   - columnVisibility: A ``Binding`` to state that controls the
+    ///     visibility of the leading columns.
+    ///   - sidebar: The view to show in the leading column.
+    ///   - content: The view to show in the middle column.
+    ///   - detail: The view to show in the detail area.
+    public init(columnVisibility: Binding<NavigationSplitViewVisibility>, @ViewBuilder sidebar: () -> Sidebar, @ViewBuilder content: () -> Content, @ViewBuilder detail: () -> Detail) { fatalError() }
+
+    /// Creates a two-column navigation split view.
+    ///
+    /// - Parameters:
+    ///   - sidebar: The view to show in the leading column.
+    ///   - detail: The view to show in the detail area.
+    public init(@ViewBuilder sidebar: () -> Sidebar, @ViewBuilder detail: () -> Detail) where Content == EmptyView { fatalError() }
+
+    /// Creates a two-column navigation split view that enables programmatic
+    /// control of the sidebar's visibility.
+    ///
+    /// - Parameters:
+    ///   - columnVisibility: A ``Binding`` to state that controls the
+    ///     visibility of the leading column.
+    ///   - sidebar: The view to show in the leading column.
+    ///   - detail: The view to show in the detail area.
+    public init(columnVisibility: Binding<NavigationSplitViewVisibility>, @ViewBuilder sidebar: () -> Sidebar, @ViewBuilder detail: () -> Detail) where Content == EmptyView { fatalError() }
+
+    @MainActor public var body: some View { get { return stubView() } }
+
+//    public typealias Body = some View
+}
+
+@available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *)
+extension NavigationSplitView {
+
+    /// Creates a three-column navigation split view that enables programmatic
+    /// control over which column appears on top when the view collapses into a
+    /// single column in narrow sizes.
+    ///
+    /// - Parameters:
+    ///   - preferredCompactColumn: A ``Binding`` to state that controls which
+    ///     column appears on top when the view collapses.
+    ///   - sidebar: The view to show in the leading column.
+    ///   - content: The view to show in the middle column.
+    ///   - detail: The view to show in the detail area.
+    public init(preferredCompactColumn: Binding<NavigationSplitViewColumn>, @ViewBuilder sidebar: () -> Sidebar, @ViewBuilder content: () -> Content, @ViewBuilder detail: () -> Detail) { fatalError() }
+
+    /// Creates a three-column navigation split view that enables programmatic
+    /// control of leading columns' visibility in regular sizes and which column
+    /// appears on top when the view collapses into a single column in narrow
+    /// sizes.
+    ///
+    /// - Parameters:
+    ///   - columnVisibility: A ``Binding`` to state that controls the
+    ///     visibility of the leading columns.
+    ///   - preferredCompactColumn: A ``Binding`` to state that controls which
+    ///     column appears on top when the view collapses.
+    ///   - sidebar: The view to show in the leading column.
+    ///   - content: The view to show in the middle column.
+    ///   - detail: The view to show in the detail area.
+    public init(columnVisibility: Binding<NavigationSplitViewVisibility>, preferredCompactColumn: Binding<NavigationSplitViewColumn>, @ViewBuilder sidebar: () -> Sidebar, @ViewBuilder content: () -> Content, @ViewBuilder detail: () -> Detail) { fatalError() }
+
+    /// Creates a two-column navigation split view that enables programmatic
+    /// control over which column appears on top when the view collapses into a
+    /// single column in narrow sizes.
+    ///
+    /// - Parameters:
+    ///   - preferredCompactColumn: A ``Binding`` to state that controls which
+    ///     column appears on top when the view collapses.
+    ///   - sidebar: The view to show in the leading column.
+    ///   - detail: The view to show in the detail area.
+    public init(preferredCompactColumn: Binding<NavigationSplitViewColumn>, @ViewBuilder sidebar: () -> Sidebar, @ViewBuilder detail: () -> Detail) where Content == EmptyView { fatalError() }
+
+    /// Creates a two-column navigation split view that enables programmatic
+    /// control of the sidebar's visibility in regular sizes and which column
+    /// appears on top when the view collapses into a single column in narrow
+    /// sizes.
+    ///
+    /// - Parameters:
+    ///   - columnVisibility: A ``Binding`` to state that controls the
+    ///     visibility of the leading column.
+    ///   - preferredCompactColumn: A ``Binding`` to state that controls which
+    ///     column appears on top when the view collapses.
+    ///   - sidebar: The view to show in the leading column.
+    ///   - detail: The view to show in the detail area.
+    public init(columnVisibility: Binding<NavigationSplitViewVisibility>, preferredCompactColumn: Binding<NavigationSplitViewColumn>, @ViewBuilder sidebar: () -> Sidebar, @ViewBuilder detail: () -> Detail) where Content == EmptyView { fatalError() }
+}
+
+/// A view that represents a column in a navigation split view.
+///
+/// A ``NavigationSplitView`` collapses into a single stack in some contexts,
+/// like on iPhone or Apple Watch. Use this type with the
+/// `preferredCompactColumn` parameter to control which column of the navigation
+/// split view appears on top of the collapsed stack.
+@available(iOS 17.0, macOS 14.0, tvOS 17.0, watchOS 10.0, *)
+public struct NavigationSplitViewColumn : Hashable, Sendable {
+
+    public static var sidebar: NavigationSplitViewColumn { get { fatalError() } }
+
+    public static var content: NavigationSplitViewColumn { get { fatalError() } }
+
+    public static var detail: NavigationSplitViewColumn { get { fatalError() } }
+}
+
+/// The properties of a navigation split view instance.
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
+public struct NavigationSplitViewStyleConfiguration {
+}
+
+/// The visibility of the leading columns in a navigation split view.
+///
+/// Use a value of this type to control the visibility of the columns of a
+/// ``NavigationSplitView``. Create a ``State`` property with a
+/// value of this type, and pass a ``Binding`` to that state to the
+/// ``NavigationSplitView/init(columnVisibility:sidebar:detail:)`` or
+/// ``NavigationSplitView/init(columnVisibility:sidebar:content:detail:)``
+/// initializer when you create the navigation split view. You can then
+/// modify the value elsewhere in your code to:
+///
+/// * Hide all but the trailing column with ``detailOnly``.
+/// * Hide the leading column of a three-column navigation split view
+///   with ``doubleColumn``.
+/// * Show all the columns with ``all``.
+/// * Rely on the automatic behavior for the current context with ``automatic``.
+///
+/// >Note: Some platforms don't respect every option. For example, macOS always
+/// displays the content column.
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
+public struct NavigationSplitViewVisibility : Equatable, Codable, Sendable {
+
+    /// Hide the leading two columns of a three-column navigation split view, so
+    /// that just the detail area shows.
+    public static var detailOnly: NavigationSplitViewVisibility { get { fatalError() } }
+
+    /// Show the content column and detail area of a three-column navigation
+    /// split view, or the sidebar column and detail area of a two-column
+    /// navigation split view.
+    ///
+    /// For a two-column navigation split view, `doubleColumn` is equivalent
+    /// to `all`.
+    public static var doubleColumn: NavigationSplitViewVisibility { get { fatalError() } }
+
+    /// Show all the columns of a three-column navigation split view.
+    public static var all: NavigationSplitViewVisibility { get { fatalError() } }
+
+    /// Use the default leading column visibility for the current device.
+    ///
+    /// This computed property returns one of the three concrete cases:
+    /// ``detailOnly``, ``doubleColumn``, or ``all``.
+    public static var automatic: NavigationSplitViewVisibility { get { fatalError() } }
+
+    /// Encodes this value into the given encoder.
+    ///
+    /// If the value fails to encode anything, `encoder` will encode an empty
+    /// keyed container in its place.
+    ///
+    /// This function throws an error if any values are invalid for the given
+    /// encoder's format.
+    ///
+    /// - Parameter encoder: The encoder to write data to.
+    public func encode(to encoder: Encoder) throws { fatalError() }
+
+    /// Creates a new instance by decoding from the given decoder.
+    ///
+    /// This initializer throws an error if reading from the decoder fails, or
+    /// if the data read is corrupted or otherwise invalid.
+    ///
+    /// - Parameter decoder: The decoder to read data from.
+    public init(from decoder: Decoder) throws { fatalError() }
+}
+*/
+#endif

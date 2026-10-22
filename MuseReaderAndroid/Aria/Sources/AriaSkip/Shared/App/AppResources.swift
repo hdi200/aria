@@ -1,0 +1,1 @@
+../../../../../../MuseReaderiOS/MuseReaderiOS/App/AppResources.swift

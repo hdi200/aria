@@ -1,0 +1,88 @@
+name: swift-jni ci
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  pull_request:
+  schedule:
+    - cron: '45 3,15 * * *'
+jobs:
+  ci:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['macos-15-intel', 'ubuntu-latest']
+
+        # swift: ['nightly-6.3', 'nightly-main']
+        swift: ['6.3.2']
+
+        # cannot load JVM < 31
+        # android-api: ['28', '36']
+        android-api: ['31']
+
+        android-ndk: ['r27d', 'r30-beta1']
+        # android-ndk: ['r27d']
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - name: "Test Swift Package"
+        run: SWIFT_JAVA_JNI_CORE=0 swift test
+
+      - name: "Test Swift Package (SWIFT_JAVA_JNI_CORE)"
+        run: SWIFT_JAVA_JNI_CORE=1 swift test
+
+      - name: "Setup Homebrew"
+        uses: Homebrew/actions/setup-homebrew@main
+
+      - name: "Install Skip"
+        run: |
+          brew tap skiptools/skip
+          brew install skiptools/skip/skip || (brew update && brew install skiptools/skip/skip)
+
+      - name: "Install Host Toolchain prerequisites"
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get -y install libcurl4-openssl-dev || (sudo apt-get update && sudo apt-get -y install libcurl4-openssl-dev)
+
+      - name: "Install Swift SDK for Android"
+        run: |
+          # need swiftly init on Linux
+          swiftly init --assume-yes --no-modify-profile --skip-install
+          skip android sdk install --verbose --version ${{ matrix.swift }} --ndk-version ${{ matrix.android-ndk }}
+
+      - name: "Build package for Android"
+        run: skip android build --build-tests
+
+      - name: "Prepare Android Emulator"
+        run: |
+          if [ "${RUNNER_OS}" == 'Linux' ]; then
+            # set up hardware acceleration for emulator
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+
+            # need to free disk space or the emulator fails to launch sometimes
+            sudo rm -rf /opt/microsoft /opt/google /opt/az /usr/share/miniconda /usr/share/az* /usr/share/glade* /usr/local/share/chromium /usr/local/share/powershell /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/julia* /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          fi
+
+      - name: "Test Swift Package on Android"
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.android-api }}
+          arch: x86_64
+          script: |
+            adb logcat '*:E' 'org.swift.*':V &
+            SWIFT_JAVA_JNI_CORE=0 skip android test --apk --verbose
+
+      - name: "Test Swift Package on Android (SWIFT_JAVA_JNI_CORE)"
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.android-api }}
+          arch: x86_64
+          script: |
+            adb logcat '*:E' 'org.swift.*':V &
+            SWIFT_JAVA_JNI_CORE=1 skip android test --apk --verbose
+

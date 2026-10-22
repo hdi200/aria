@@ -1,0 +1,24 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+#if SKIP
+import androidx.window.core.layout.WindowHeightSizeClass
+import androidx.window.core.layout.WindowWidthSizeClass
+#endif
+
+public enum UserInterfaceSizeClass: Int, Hashable {
+    case compact = 1 // For bridging
+    case regular = 2 // For bridging
+
+    #if SKIP
+    public static func fromWindowHeightSizeClass(_ sizeClass: WindowHeightSizeClass) -> UserInterfaceSizeClass {
+        return sizeClass == WindowHeightSizeClass.COMPACT ? .compact : .regular
+    }
+
+    public static func fromWindowWidthSizeClass(_ sizeClass: WindowWidthSizeClass) -> UserInterfaceSizeClass {
+        return sizeClass == WindowWidthSizeClass.COMPACT ? .compact : .regular
+    }
+    #endif
+}
+
+#endif

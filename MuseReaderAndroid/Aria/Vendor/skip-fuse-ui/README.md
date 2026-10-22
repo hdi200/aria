@@ -1,0 +1,216 @@
+# SkipFuseUI
+
+SkipFuseUI provides the SwiftUI API surface for [Skip Fuse](https://skip.dev/docs/modes/#fuse) apps on Android. It acts as a thin Swift bridging layer that delegates rendering to [SkipUI](https://skip.dev/docs/modules/skip-ui/), which implements SwiftUI views as Jetpack Compose composables. On iOS, `import SwiftUI` resolves to Apple's framework as usual; on Android, it resolves to SkipFuseUI, giving you a single SwiftUI codebase that runs natively on both platforms.
+
+## How It Works
+
+SkipFuseUI sits between your SwiftUI code and SkipUI's Compose implementation. Your Swift views are compiled natively for Android by the Swift Android SDK, and at render time each view produces a Kotlin-side SkipUI counterpart that Compose renders on screen.
+
+```mermaid
+flowchart LR
+    A["Your SwiftUI Code"] --> B["SkipFuseUI\n(Swift on Android)"]
+    B -->|"Java_view"| C["SkipUI\n(Kotlin/Compose)"]
+    C --> D["Jetpack Compose\nUI on Screen"]
+
+    style A fill:#555555,stroke:#333,color:#fff
+    style B fill:#6b3fa0,stroke:#4a2d6e,color:#fff
+    style C fill:#2e6da4,stroke:#1a4a6e,color:#fff
+    style D fill:#2d7a2d,stroke:#1a5c1a,color:#fff
+```
+
+The key mechanism is the `SkipUIBridging` protocol. Every SkipFuseUI view type conforms to it by exposing a `Java_view` property that returns the equivalent SkipUI Kotlin object. When Compose needs to render your view hierarchy, it walks the tree of `Java_view` references — each one backed by [SkipBridge](https://skip.dev/docs/modules/skip-bridge/) JNI calls between Swift and Kotlin.
+
+### Module Relationships
+
+```mermaid
+flowchart TB
+    subgraph "Your App"
+        APP["App SwiftUI Code"]
+    end
+
+    subgraph "SkipFuseUI Package"
+        SFUI["SkipFuseUI\n(re-exports SwiftUI\non Android)"]
+        SSU["SkipSwiftUI\n(Swift view types,\nproperty wrappers,\nmodifiers)"]
+    end
+
+    subgraph "Bridging Infrastructure"
+        SB["SkipBridge\n(JNI object lifecycle,\ntype conversion)"]
+        SF["SkipFuse\n(@Observable,\nOSLog, bridging\nsupport)"]
+        SAB["SkipAndroidBridge\n(Android-specific\nJNI helpers)"]
+        SJNI["SwiftJNI\n(low-level JNI\nC/Swift wrapper)"]
+    end
+
+    subgraph "Compose Implementation"
+        SUI["SkipUI\n(SwiftUI → Jetpack\nCompose mapping)"]
+        SM["SkipModel\n(Compose state\ntracking)"]
+    end
+
+    APP --> SFUI
+    SFUI --> SSU
+    SSU --> SB
+    SSU --> SF
+    SSU --> SUI
+    SB --> SAB
+    SB --> SJNI
+    SUI --> SM
+
+    style APP fill:#555555,stroke:#333,color:#fff
+    style SFUI fill:#6b3fa0,stroke:#4a2d6e,color:#fff
+    style SSU fill:#6b3fa0,stroke:#4a2d6e,color:#fff
+    style SB fill:#b33030,stroke:#8a1a1a,color:#fff
+    style SF fill:#b33030,stroke:#8a1a1a,color:#fff
+    style SAB fill:#b33030,stroke:#8a1a1a,color:#fff
+    style SJNI fill:#b33030,stroke:#8a1a1a,color:#fff
+    style SUI fill:#2e6da4,stroke:#1a4a6e,color:#fff
+    style SM fill:#2e6da4,stroke:#1a4a6e,color:#fff
+```
+
+On iOS, `SkipFuseUI` simply re-exports Apple's `SwiftUI` — the entire SkipSwiftUI layer is compiled away.
+
+### Bridging Pattern
+
+Every SwiftUI type in SkipFuseUI follows the same pattern: a Swift struct or class holds the view's parameters, and its `Java_view` property constructs the Kotlin equivalent on demand.
+
+```mermaid
+sequenceDiagram
+    participant App as Your View (Swift)
+    participant Fuse as SkipFuseUI VStack (Swift)
+    participant Bridge as SkipBridge (JNI)
+    participant UI as SkipUI VStack (Kotlin)
+    participant Compose as Jetpack Compose
+
+    App->>Fuse: VStack { Text("Hello") }
+    Note over Fuse: Stores alignment,<br/>spacing, content
+    Compose->>Fuse: Request Java_view
+    Fuse->>Bridge: Create SkipUI.VStack<br/>with bridged content
+    Bridge->>UI: JNI call → Kotlin object
+    UI->>Compose: Emit Column composable
+```
+
+Content views are recursively bridged via `Java_viewOrEmpty`, which walks the view tree and converts each Swift view into its Kotlin counterpart.
+
+### State Bridging
+
+SwiftUI property wrappers (`@State`, `@Binding`, `@AppStorage`) are backed by bridge-aware box types that synchronize values between Swift and Compose's reactive state system:
+
+```mermaid
+flowchart LR
+    S["@State var count = 0\n(Swift)"] -->|"BridgedStateBox"| K["StateSupport\n(Kotlin/Compose)"]
+    K -->|"MutableState"| C["Compose\nRecomposition"]
+    C -->|"read triggers\naccess()"| S
+
+    style S fill:#6b3fa0,stroke:#4a2d6e,color:#fff
+    style K fill:#2e6da4,stroke:#1a4a6e,color:#fff
+    style C fill:#2d7a2d,stroke:#1a5c1a,color:#fff
+```
+
+When Swift code writes to a `@State` property, the `BridgedStateBox` notifies Compose's `MutableState`, triggering recomposition. When Compose reads the value, it calls back into Swift via the bridge. This two-way sync ensures that SwiftUI's declarative state model works identically on Android.
+
+`@Observable` types require `import SkipFuse` to enable this state tracking. See the [App Development](https://skip.dev/docs/app-development/#ui) guide for details.
+
+### Android Recomposition Controls
+
+Both modifiers can prevent unnecessary Android updates, but they provide different behavior. In SwiftUI terms, `androidEquatable` is an update gate, while `androidCompositionBoundary` gives a subtree its own retained identity and lifecycle.
+
+| Modifier | SwiftUI mental model | Use when |
+| --- | --- | --- |
+| `androidEquatable` | Similar to `EquatableView`: while the supplied value remains equal, Skip does not reevaluate the wrapped content. The subtree keeps the identity and lifecycle provided by its existing parent. | The subtree can update as a unit and reevaluating it is expensive. |
+| `androidCompositionBoundary` | Similar to placing the subtree in its own retained hosting container. Its `id` defines the container's identity and lifecycle. | The subtree needs an independently retained lifecycle, such as a WebView, map, or video surface. |
+
+Use `androidEquatable` with a value containing every external input that affects the view:
+
+```swift
+ComplexMetadataPanel(movie: movie)
+    .androidEquatable(recomposeOverride: movie)
+```
+
+If `movie` remains equal, the panel is not reevaluated. If it changes, the panel is reevaluated inside its existing parent view hierarchy. This modifier does not create a new identity or lifecycle.
+
+Use `androidCompositionBoundary` when the subtree should have its own retained identity and lifecycle:
+
+```swift
+BrowserView(url: url)
+    .androidCompositionBoundary(
+        id: "browser",
+        inputs: url.absoluteString
+    )
+```
+
+Think of `id` like SwiftUI view identity and `inputs` as the values used to update that identified view:
+
+- Same `id`, same `inputs`: reuse the existing host without reevaluating or re-bridging its content.
+- Same `id`, changed `inputs`: update the content inside the existing host, preserving its identity and lifecycle.
+- Changed `id`, or removal from the hierarchy: dispose the old host and its state, then create a new one if needed.
+
+State owned inside the boundary can update independently without changing `inputs`. On Apple platforms, `androidCompositionBoundary` returns the original view unchanged.
+
+The boundary inherits the current Compose composition locals, including bridged SwiftUI environment values. It is a composition and lifecycle boundary, not a layout boundary: modifiers and constraints outside the boundary continue to measure the same retained host and child. Resizing native-backed content therefore does not recreate or re-bridge it, but it still changes the native view's measured bounds.
+
+Avoid stacking both modifiers around the same subtree without a measured need. An unchanged composition boundary already prevents its child projection from being reevaluated and re-bridged.
+
+## What SkipFuseUI Covers
+
+SkipFuseUI mirrors the SwiftUI API surface for iOS 16+, including:
+
+- **Containers**: `VStack`, `HStack`, `ZStack`, `List`, `ScrollView`, `LazyVGrid`, `LazyHGrid`, `NavigationStack`, `TabView`, `Form`, `Section`, `Group`
+- **Controls**: `Button`, `Toggle`, `Slider`, `Stepper`, `Picker`, `DatePicker`, `TextField`, `SecureField`, `TextEditor`
+- **Components**: `Text`, `Image`, `AsyncImage`, `Label`, `Link`, `ProgressView`, `Divider`, `ShareLink`
+- **Graphics**: `Color`, `Gradient`, `Shape` (Circle, Rectangle, Capsule, etc.), `Path`, `Material`
+- **Layout**: `GeometryReader`, `Alignment`, `EdgeInsets`, `ViewThatFits`, `Grid`
+- **State**: `@State`, `@Binding`, `@Environment`, `@AppStorage`, `@FocusState`
+- **Modifiers**: `.padding`, `.frame`, `.background`, `.overlay`, `.opacity`, `.rotation`, `.shadow`, `.clipShape`, `.sheet`, `.alert`, `.onAppear`, `.task`, and many more
+- **Navigation**: `NavigationStack`, `NavigationLink`, `NavigationPath`, `.navigationTitle`, `.toolbar`
+- **Gestures**: `TapGesture`, `LongPressGesture`, `DragGesture`, plus partial `.simultaneousGesture` bridging for supported gesture observers
+- **Animation**: `withAnimation`, `.animation`, `.transition`, `Spring`
+- **UIKit compatibility**: `UIApplication`, `UIColor`, `UIImage`, `UIPasteboard`
+
+For the full list of supported SwiftUI components, see the [SkipUI documentation](https://skip.dev/docs/modules/skip-ui/#supported-swiftui).
+
+`simultaneousGesture` support follows SkipUI's current Android limitations: it can observe supported gestures on the same rendered view, including drag observation while scroll views continue scrolling, but only `.all` and `.none` have meaningful mask behavior. `.gesture` and `.subviews` masks are not distinguished.
+
+### Text Selection
+
+SkipFuseUI supports programmatic text selection for editable text controls that expose a `TextSelection` binding, such as `TextField` and `TextEditor`.
+
+Use `TextSelectionRange` and `TextSelectionIndex` when creating a `TextSelection` from `String.Index` values:
+
+```swift
+import SkipFuseUI
+
+@State private var text = "https://skip.tools"
+@State private var selection: TextSelection?
+
+var body: some View {
+    TextField("URL", text: $text, selection: $selection)
+        .onAppear {
+            selection = TextSelection(
+                range: TextSelectionRange(text.startIndex..<text.endIndex, in: text)
+            )
+        }
+}
+```
+
+For insertion points, use `TextSelectionIndex`:
+
+```swift
+selection = TextSelection(
+    insertionPoint: TextSelectionIndex(text.startIndex, in: text)
+)
+```
+
+These wrapper types keep the source shape close to SwiftUI's native `TextSelection(range:)` and `TextSelection(insertionPoint:)` initializers while allowing SkipFuseUI to validate and bridge string positions consistently on Android.
+
+## Related Documentation
+
+- [App Development](https://skip.dev/docs/app-development/) — Building dual-platform apps with Skip, including UI and view model coding
+- [Skip Modes](https://skip.dev/docs/modes/) — Fuse vs. Lite mode and when to use each
+- [Bridging Reference](https://skip.dev/docs/bridging/) — Supported Swift language features and types for bridging
+- [Cross-Platform Topics](https://skip.dev/docs/platformcustomization/) — Integrating platform-specific code with `#if SKIP` and `#if os(Android)`
+- [SkipUI Module](https://skip.dev/docs/modules/skip-ui/) — Supported SwiftUI components and Compose integration topics
+- [SkipBridge Module](https://skip.dev/docs/modules/skip-bridge/) — The JNI bridging infrastructure that SkipFuseUI depends on
+- [SkipFuse Module](https://skip.dev/docs/modules/skip-fuse/) — Observable state tracking and Android runtime support
+
+## License
+
+This software is licensed under the
+[Mozilla Public License 2.0](https://www.mozilla.org/MPL/).

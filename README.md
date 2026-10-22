@@ -21,9 +21,10 @@ Aria is not affiliated with, sponsored by, or endorsed by MuseScore, Muse Group,
 
 ## What Is Here
 
-This public checkout contains the iOS app and the shared Swift and render-core sources. Shared Swift files include Android-specific branches. The Android-specific Skip/Gradle project, platform shims, and vendored Android dependencies are maintained in a separate private repository and are not included in this checkout. The build instructions below cover iOS.
+This checkout contains the iOS and Android apps, their shared Swift code, and the MuseScore-derived render core. The sections below describe iOS; see the [Android build instructions](MuseReaderAndroid/README.md) and [Android source-release records](MuseReaderAndroid/SOURCE_RELEASES.md) for the Skip/Gradle project, platform shims, pinned dependencies, and vendored patches.
 
 - `MuseReaderiOS/`: the iOS app, Xcode project, SwiftUI views, document library, import flow, playback, editing state, legal resources, tests, and Objective-C++ bridge.
+- `MuseReaderAndroid/`: the Android app, Kotlin platform integration, Swift framework shims, native engine bridge, build scripts, and patched Skip dependencies. Shared iOS Swift and required app resources are linked from `MuseReaderiOS/`.
 - `sandbox/engraving/`: the reusable MuseScore-derived render core used by the app for page rendering, score edits, playback data, MusicXML export, and saving.
 - `src/`, `thirdparty/`, and other MuseScore Studio source folders: the upstream-derived code needed by the render core build.
 - `MuseReaderiOS/THIRD_PARTY_NOTICES.md`: third-party notices for MuseScore-derived code, bundled fonts, SoundFonts, FluidSynth, FreeType, Opus, Qt, and other dependencies.

@@ -1,0 +1,4 @@
+module AriaRenderCoreCxx {
+    header "AriaRenderCoreCxx.h"
+    export *
+}

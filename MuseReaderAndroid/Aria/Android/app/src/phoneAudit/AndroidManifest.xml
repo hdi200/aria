@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Disposable local benchmark. Separate identity, no backup or network. APK only. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <application android:label="${ariaPhoneAuditLabel}" android:allowBackup="false"
+        android:icon="@drawable/aria_test_icon"
+        tools:replace="android:label,android:allowBackup,android:icon" />
+</manifest>

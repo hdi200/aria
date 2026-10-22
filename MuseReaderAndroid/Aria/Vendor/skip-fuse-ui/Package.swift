@@ -1,0 +1,91 @@
+// swift-tools-version: 6.1
+import PackageDescription
+import Foundation
+
+let android = Context.environment["TARGET_OS_ANDROID"] ?? "0" != "0"
+// ARIA PATCH: use the exact same TEST-only copy as Aria's root manifest.
+let auditRoot = #filePath.range(of: "/MuseReaderAndroid/").map { String(#filePath[..<$0.lowerBound]) }
+let uiPath = Context.environment["ARIA_PHONE_AUDIT"] == "1"
+    ? auditRoot! + "/MuseReaderAndroid/release-local/focused-ui-vendor/skip-ui"
+    : "../skip-ui"
+
+let package = Package(
+    name: "skip-fuse-ui",
+    platforms: [.iOS(.v17), .macOS(.v14), .tvOS(.v17), .watchOS(.v10), .macCatalyst(.v17)],
+    products: [
+        .library(name: "SkipFuseUI", type: .dynamic, targets: ["SkipFuseUI"] + (android ? ["SwiftUI"] : [])),
+        // Automatic (not .dynamic): the product name matches the target name, and an explicitly
+        // dynamic product with that name blocks Swift Build from giving the target a dynamic
+        // variant, which it needs when two dynamic products both link SkipSwiftUI statically.
+        .library(name: "SkipSwiftUI", targets: ["SkipSwiftUI"]),
+        .library(name: "SkipSwiftUISamples", type: .dynamic, targets: ["SkipSwiftUISamples"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/skiptools/skip.git", from: "1.9.8"),
+        .package(url: "https://github.com/skiptools/skip-fuse.git", from: "1.0.3"),
+        .package(url: "https://github.com/skiptools/skip-bridge.git", "0.17.3"..<"2.0.0"),
+        .package(url: "https://github.com/skiptools/skip-android-bridge.git", "0.6.6"..<"2.0.0"),
+        .package(path: "../swift-jni"),
+        // ARIA PATCH: use the root-vendored UI and JNI packages without identity conflicts.
+        .package(path: uiPath),
+    ],
+    targets: [
+        .target(name: "SkipFuseUI", dependencies: ["SkipSwiftUI"]),
+        .target(name: "SkipSwiftUI", dependencies: [
+            .product(name: "SkipFuse", package: "skip-fuse"),
+            .product(name: "SkipBridge", package: "skip-bridge"),
+            .product(name: "SkipAndroidBridge", package: "skip-android-bridge"),
+            .product(name: "SwiftJNI", package: "swift-jni"),
+            .product(name: "SkipUI", package: "skip-ui")
+        ], swiftSettings: ["ARIA_PERF_DIAGNOSTICS", "ARIA_PHONE_AUDIT"]
+            .filter { Context.environment[$0] == "1" }.map { .define($0) },
+        plugins: [.plugin(name: "skipstone", package: "skip")]),
+        .testTarget(name: "SkipSwiftUITests", dependencies: [
+            "SkipSwiftUI",
+            .product(name: "SkipTest", package: "skip")
+        ], plugins: [.plugin(name: "skipstone", package: "skip")]),
+        // Native bridged sample views used by the transpiled Compose UI tests. A separate
+        // module (rather than fixtures inside SkipSwiftUI) so the test target can fold into
+        // the :SkipSwiftUISamples gradle module without creating a circular task graph.
+        .target(name: "SkipSwiftUISamples", dependencies: [
+            "SkipSwiftUI"
+        ], plugins: [.plugin(name: "skipstone", package: "skip")]),
+        .testTarget(name: "SkipSwiftUISamplesTests", dependencies: [
+            "SkipSwiftUISamples",
+            .product(name: "SkipBridge", package: "skip-bridge"),
+            .product(name: "SkipAndroidBridge", package: "skip-android-bridge"),
+            .product(name: "SkipTest", package: "skip")
+        ], plugins: [.plugin(name: "skipstone", package: "skip")]),
+        // Apple SwiftUI reference rendering for the animation-lifetime experiment.
+        // No Skip plugin: AppKit pixel sampling must never be transpiled.
+        .testTarget(name: "AnimationLifetimeReferenceTests", dependencies: ["SkipSwiftUISamples"]),
+    ]
+)
+
+if android {
+    package.targets += [.target(name: "SwiftUI", dependencies: ["SkipSwiftUI"])]
+}
+
+// SKIP_DEPENDENCY_ROOT overrides every skiptools dependency with a local
+// `.package(path: ROOT/<repo>)` checkout, letting developers iterate against unreleased
+// Skip library changes; in CI/normal builds the variable is unset and remote versions
+// resolve as usual.
+if let dependencyRoot = Context.environment["SKIP_DEPENDENCY_ROOT"] {
+    package.dependencies = package.dependencies.map { dep in
+        switch dep.kind {
+        case .sourceControl(_, let location, _):
+            guard let baseName = location.split(separator: "/").last?.split(separator: ".").first else {
+                return dep
+            }
+            guard baseName.hasPrefix("skip") else {
+                return dep
+            }
+            return Package.Dependency.package(path: dependencyRoot + "/" + baseName)
+        default:
+            return dep
+        }
+    }
+    // Root-package dependencies override transitive dependencies with the same identity,
+    // so also pin transitive skip libraries that this package doesn't depend on directly.
+    package.dependencies.append(.package(path: dependencyRoot + "/skip-model"))
+}

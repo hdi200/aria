@@ -1,0 +1,265 @@
+// Copyright 2023–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+#if !SKIP_BRIDGE
+import Foundation
+#if SKIP
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.ContentAlpha
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.outlined.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.unit.dp
+#endif
+
+// SKIP @bridge
+public struct DisclosureGroup : View, Renderable {
+    let label: ComposeBuilder
+    let content: ComposeBuilder
+    let expandedBinding: Binding<Bool>?
+    let initialExpanded: Bool
+    #if SKIP
+    private var internalExpandedState: MutableState<Bool>? = nil
+    #endif
+
+    public init(@ViewBuilder content: @escaping () -> any View, @ViewBuilder label: () -> any View) {
+        self.label = ComposeBuilder.from(label)
+        self.content = ComposeBuilder.from(content)
+        self.expandedBinding = nil
+        self.initialExpanded = false
+    }
+
+    // SKIP @bridge
+    public init(bridgedContent: any View, bridgedLabel: any View) {
+        self.label = ComposeBuilder.from { bridgedLabel }
+        self.content = ComposeBuilder.from { bridgedContent }
+        self.expandedBinding = nil
+        self.initialExpanded = false
+    }
+
+    public init(isExpanded: Binding<Bool>, @ViewBuilder content: @escaping () -> any View, @ViewBuilder label: () -> any View) {
+        self.label = ComposeBuilder.from(label)
+        self.content = ComposeBuilder.from(content)
+        self.expandedBinding = isExpanded
+        self.initialExpanded = isExpanded.wrappedValue
+    }
+
+    // SKIP @bridge
+    public init(getExpanded: @escaping () -> Bool, setExpanded: @escaping (Bool) -> Void, bridgedContent: any View, bridgedLabel: any View) {
+        self.label = ComposeBuilder.from { bridgedLabel }
+        self.content = ComposeBuilder.from { bridgedContent }
+        self.expandedBinding = Binding(get: getExpanded, set: setExpanded)
+        self.initialExpanded = getExpanded()
+    }
+
+    public init(_ titleKey: LocalizedStringKey, @ViewBuilder content: @escaping () -> any View) {
+        self.init(content: content, label: { Text(titleKey) })
+    }
+
+    public init(_ titleResource: LocalizedStringResource, @ViewBuilder content: @escaping () -> any View) {
+        self.init(content: content, label: { Text(titleResource) })
+    }
+
+    public init(_ titleKey: LocalizedStringKey, isExpanded: Binding<Bool>, @ViewBuilder content: @escaping () -> any View) {
+        self.init(isExpanded: isExpanded, content: content, label: { Text(titleKey) })
+    }
+
+    public init(_ titleResource: LocalizedStringResource, isExpanded: Binding<Bool>, @ViewBuilder content: @escaping () -> any View) {
+        self.init(isExpanded: isExpanded, content: content, label: { Text(titleResource) })
+    }
+
+    public init(_ label: String, @ViewBuilder content: @escaping () -> any View) {
+        self.init(content: content, label: { Text(verbatim: label) })
+    }
+
+    public init(_ label: String, isExpanded: Binding<Bool>, @ViewBuilder content: @escaping () -> any View) {
+        self.init(isExpanded: isExpanded, content: content, label: { Text(verbatim: label) })
+    }
+
+    #if SKIP
+    @Composable override func Evaluate(context: ComposeContext, options: Int) -> kotlin.collections.List<Renderable> {
+        guard let level = EvaluateOptions(options).lazyItemLevel else {
+            return listOf(self)
+        }
+        let expandedBinding = resolvedExpandedBinding(context: context)
+        guard expandedBinding.wrappedValue else {
+            return listOf(self)
+        }
+        let renderables = content.EvaluateLazyItems(level: level + 1, context: context)
+        return listOf(self) + renderables
+    }
+
+    @Composable override func Render(context: ComposeContext) {
+        let expandedBinding = resolvedExpandedBinding(context: context)
+        let columnArrangement = Arrangement.spacedBy(8.dp, alignment: androidx.compose.ui.Alignment.CenterVertically)
+        let contentContext = context.content()
+        ComposeContainer(axis: .vertical, modifier: context.modifier, fillWidth: true) { modifier in
+            let modifier = modifier.fillMaxWidth().animateContentSize(animationSpec: tween(durationMillis: 120))
+            Column(modifier: modifier, verticalArrangement: columnArrangement, horizontalAlignment: androidx.compose.ui.Alignment.Start) {
+                RenderLabel(context: contentContext, expandedBinding: expandedBinding)
+                if expandedBinding.wrappedValue {
+                    Column(modifier: Modifier.fillMaxWidth(), verticalArrangement: columnArrangement, horizontalAlignment: androidx.compose.ui.Alignment.CenterHorizontally) {
+                        content.Compose(context: contentContext)
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable override func shouldRenderListItem(context: ComposeContext) -> (Bool, (() -> Void)?) {
+        let expandedBinding = resolvedExpandedBinding(context: context)
+        return (true, {
+            withAnimation {
+                expandedBinding.wrappedValue = !expandedBinding.wrappedValue
+            }
+        })
+    }
+
+    @Composable public func RenderListItem(context: ComposeContext, modifiers: kotlin.collections.List<ModifierProtocol>) {
+        let expandedBinding = resolvedExpandedBinding(context: context)
+        ModifiedContent.RenderWithModifiers(modifiers, context: context) {
+            RenderLabel(context: $0, isListItem: true, expandedBinding: expandedBinding)
+        }
+    }
+
+    @Composable func RenderLabel(context: ComposeContext, isListItem: Bool = false, expandedBinding: Binding<Bool>? = nil) {
+        let expandedBinding = expandedBinding ?? resolvedExpandedBinding(context: context)
+        let contentContext = context.content()
+        let isEnabled = EnvironmentValues.shared.isEnabled
+        let (foregroundStyle, accessoryColor) = composeStyles(isEnabled: isEnabled, isListItem: isListItem)
+        let rotationAngle = Float(expandedBinding.wrappedValue ? 90 : 0).asAnimatable(context: contentContext)
+        let isRTL = EnvironmentValues.shared.layoutDirection == .rightToLeft
+        let baseModifier = context.modifier.fillMaxWidth()
+        let modifier: Modifier = isEnabled && !isListItem ? baseModifier.clickable(onClick: {
+            expandedBinding.wrappedValue = !expandedBinding.wrappedValue
+        }) : baseModifier
+        Row(modifier: modifier, verticalAlignment: androidx.compose.ui.Alignment.CenterVertically) {
+            Box(modifier: Modifier.padding(end: 8.dp).weight(Float(1.0))) {
+                EnvironmentValues.shared.setValues {
+                    if let foregroundStyle {
+                        $0.set_foregroundStyle(foregroundStyle)
+                    }
+                    return ComposeResult.ok
+                } in: {
+                    label.Compose(context: contentContext)
+                }
+            }
+            Icon(modifier = Modifier.rotate(rotationAngle.value), imageVector: isRTL ? Icons.Outlined.KeyboardArrowLeft : Icons.Outlined.KeyboardArrowRight, contentDescription: nil, tint: accessoryColor)
+        }
+    }
+
+    @Composable private func resolvedExpandedBinding(context: ComposeContext) -> Binding<Bool> {
+        if let expandedBinding {
+            return expandedBinding
+        }
+        if internalExpandedState == nil {
+            internalExpandedState = rememberSaveable(stateSaver: context.stateSaver as! Saver<Bool, Any>) { mutableStateOf(initialExpanded) }
+        }
+        return Binding(
+            get: { internalExpandedState?.value ?? initialExpanded },
+            set: { internalExpandedState?.value = $0 }
+        )
+    }
+
+    @Composable private func composeStyles(isEnabled: Bool, isListItem: Bool) -> (ShapeStyle?, androidx.compose.ui.graphics.Color) {
+        var foregroundStyle: ShapeStyle? = nil
+        if !isListItem {
+            foregroundStyle = EnvironmentValues.shared._foregroundStyle ?? EnvironmentValues.shared._tint ?? Color.accentColor
+        }
+        var accessoryColor = foregroundStyle?.asColor(opacity: 1.0, animationContext: nil) ?? EnvironmentValues.shared._tint?.colorImpl() ?? Color.accentColor.colorImpl()
+        if !isEnabled {
+            if isListItem {
+                accessoryColor = MaterialTheme.colorScheme.outlineVariant
+            } else {
+                let disabledAlpha = ContentAlpha.disabled
+                if foregroundStyle != nil {
+                    foregroundStyle = AnyShapeStyle(foregroundStyle!, opacity: Double(disabledAlpha))
+                }
+                accessoryColor = accessoryColor.copy(alpha: disabledAlpha)
+            }
+        }
+        return (foregroundStyle, accessoryColor)
+    }
+    #else
+    public var body: some View {
+        stubView()
+    }
+    #endif
+}
+
+public struct DisclosureGroupStyle: RawRepresentable, Equatable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let automatic = DisclosureGroupStyle(rawValue: 0)
+}
+
+extension View {
+    public func disclosureGroupStyle(_ style: DisclosureGroupStyle) -> some View {
+        // We only support the single .automatic style
+        return self
+    }
+}
+
+/*
+/// The properties of a disclosure group instance.
+@available(iOS 16.0, macOS 13.0, *)
+@available(tvOS, unavailable)
+@available(watchOS, unavailable)
+public struct DisclosureGroupStyleConfiguration {
+
+    /// A type-erased label of a disclosure group.
+    public struct Label : View {
+
+        /// The type of view representing the body of this view.
+        ///
+        /// When you create a custom view, Swift infers this type from your
+        /// implementation of the required ``View/body-swift.property`` property.
+        public typealias Body = NeverView
+        public var body: Body { fatalError() }
+    }
+
+    /// The label for the disclosure group.
+    public let label: DisclosureGroupStyleConfiguration.Label = { fatalError() }()
+
+    /// A type-erased content of a disclosure group.
+    public struct Content : View {
+
+        /// The type of view representing the body of this view.
+        ///
+        /// When you create a custom view, Swift infers this type from your
+        /// implementation of the required ``View/body-swift.property`` property.
+        public typealias Body = NeverView
+        public var body: Body { fatalError() }
+    }
+
+    /// The content of the disclosure group.
+    public let content: DisclosureGroupStyleConfiguration.Content = { fatalError() }()
+
+    /// A binding to a Boolean that indicates whether the disclosure
+    /// group is expanded.
+//    @Binding public var isExpanded: Bool { get { fatalError() } nonmutating set { } }
+
+//    public var $isExpanded: Binding<Bool> { get { fatalError() } }
+}
+*/
+#endif

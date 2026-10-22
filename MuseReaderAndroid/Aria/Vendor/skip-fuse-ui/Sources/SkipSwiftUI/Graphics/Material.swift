@@ -1,0 +1,90 @@
+// Copyright 2025–2026 Skip
+// SPDX-License-Identifier: MPL-2.0
+import SkipUI
+
+/// A background material type.
+///
+/// You can apply a blur effect to a view that appears behind another view by
+/// adding a material with the ``View/background(_:ignoresSafeAreaEdges:)``
+/// modifier:
+///
+///     ZStack {
+///         Color.teal
+///         Label("Flag", systemImage: "flag.fill")
+///             .padding()
+///             .background(.regularMaterial)
+///     }
+///
+/// In the example above, the ``ZStack`` layers a ``Label`` on top of the color
+/// ``ShapeStyle/teal``. The background modifier inserts the
+/// regular material below the label, blurring the part of
+/// the background that the label --- including its padding --- covers.
+///
+/// A material isn't a view, but adding a material is like inserting a
+/// translucent layer between the modified view and its background.
+///
+/// For physical materials, the degree to which the background colors pass
+/// through depends on the thickness. The effect also varies with light and
+/// dark appearance.
+public struct Material : ShapeStyle, RawRepresentable, Hashable, Sendable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    /// A material that's somewhat translucent.
+    public static let regular = Material(rawValue: 0)
+
+    /// A material that's more opaque than translucent.
+    public static let thick = Material(rawValue: 1)
+
+    /// A material that's more translucent than opaque.
+    public static let thin = Material(rawValue: 2)
+
+    /// A mostly translucent material.
+    public static let ultraThin = Material(rawValue: 3)
+
+    /// A mostly opaque material.
+    public static let ultraThick = Material(rawValue: 4)
+
+    /// A material matching the style of system toolbars.
+    public static let bar = Material(rawValue: 5)
+
+    /// Returns the scrim opacity for this material level. Thicker materials are
+    /// more opaque. Simplified replica — no Gaussian blur, just a translucent
+    /// scrim over the adaptive surface color (see `Java_view`).
+    private var materialOpacity: Double {
+        switch rawValue {
+        case Self.ultraThin.rawValue:
+            return 0.3
+        case Self.thin.rawValue:
+            return 0.45
+        case Self.regular.rawValue, Self.bar.rawValue:
+            return 0.6
+        case Self.thick.rawValue:
+            return 0.7
+        case Self.ultraThick.rawValue:
+            return 0.8
+        default:
+            return 0.6
+        }
+    }
+
+    public var Java_view: any SkipUI.View {
+        // Use the adaptive surface color (MaterialTheme surface) rather than a
+        // fixed white so materials read correctly in dark mode — a translucent
+        // dark scrim, matching iOS's dark-appearance materials — and in light
+        // mode. A fixed white overlay looked washed-out / too light on dark UIs.
+        return SkipUI.Color._background.opacity(materialOpacity)
+    }
+}
+
+extension ShapeStyle where Self == Material {
+    public static var regularMaterial: Material { .regular }
+    public static var thickMaterial: Material { .thick }
+    public static var thinMaterial: Material { .thin }
+    public static var ultraThinMaterial: Material { .ultraThin }
+    public static var ultraThickMaterial: Material { .ultraThick }
+    public static var bar: Material { .bar }
+}
