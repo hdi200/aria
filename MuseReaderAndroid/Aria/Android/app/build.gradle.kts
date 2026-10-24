@@ -103,9 +103,6 @@ android {
         minSdk = libs.versions.android.sdk.min.get().toInt()
         ndk { abiFilters += listOf("arm64-v8a") }
         targetSdk = 36
-        // Local release A/B only; R8 removes frame hashing from normal builds.
-        buildConfigField("boolean", "ARIA_VIDEO_AUDIT",
-            (providers.environmentVariable("ARIA_VIDEO_AUDIT").orNull == "1").toString())
         buildConfigField("boolean", "ARIA_PHONE_AUDIT", ariaPhoneAudit.toString())
         // skip.tools.skip-build-plugin will automatically use Skip.env properties for:
         // applicationId = ANDROID_APPLICATION_ID ?? PRODUCT_BUNDLE_IDENTIFIER

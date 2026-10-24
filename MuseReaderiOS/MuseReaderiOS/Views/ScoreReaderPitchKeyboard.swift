@@ -33,9 +33,6 @@ struct ScoreReaderWidePitchKeyboard: View {
         #if os(Android) && ARIA_PHONE_AUDIT
         let _ = AndroidPhoneAuditGeometry.evaluate("keyboard")
         #endif
-        #if os(Android) && ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("keyboard")
-        #endif
         #if os(Android)
         // On Android the keyboard's own state changes from its drag gesture didn't redraw
         // it (the keys moved only when something else redrew them); an observable counter

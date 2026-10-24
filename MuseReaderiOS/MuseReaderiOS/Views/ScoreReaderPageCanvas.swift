@@ -508,9 +508,6 @@ struct ScoreReaderPageSurface: View {
     }
 
     var body: some View {
-        #if os(Android) && ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("surface")
-        #endif
         ZStack(alignment: .topTrailing) {
             Group {
                 if let page, page.hasRenderableContent {
@@ -668,9 +665,6 @@ struct ScoreReaderPageViewportOverlays: View {
     let togglePlaybackLoopAction: () -> Void
 
     var body: some View {
-        #if os(Android) && ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("pageOverlays")
-        #endif
         ZStack(alignment: .topTrailing) {
             if let selectedElement = selectedElement, selectedElement.kind == .text || selectedElement.kind == .chordText || selectedElement.kind == .instrumentChange {
                 ScoreReaderSelectedTextActions(
@@ -1171,9 +1165,6 @@ struct ScoreReaderSelectedNoteRestActions: View {
     let accentAction: (String) -> Void
 
     var body: some View {
-        #if os(Android) && ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("anchorView")
-        #endif
         GeometryReader { geometry in
             #if os(Android)
             let anchor = commandAnchor(in: geometry)
@@ -1294,9 +1285,6 @@ struct ScoreReaderSelectionCommandOverlay: View {
     }
 
     var body: some View {
-        #if os(Android) && ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("commandOverlay")
-        #endif
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
                 if isMenuPresented {

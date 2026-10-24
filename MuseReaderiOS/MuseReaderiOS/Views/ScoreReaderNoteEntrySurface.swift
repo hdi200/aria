@@ -83,9 +83,6 @@ struct ScoreReaderNoteEntrySurface: View {
         #if os(Android) && ARIA_PHONE_AUDIT
         let _ = AndroidPhoneAuditGeometry.evaluate("panel")
         #endif
-        #if os(Android) && ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("panel")
-        #endif
         if isCompactPhoneLayout {
             if isCompactPhoneLandscapeLayout && selectedToolCategory != .chord && selectedToolCategory != .lyrics {
                 compactLandscapeBody

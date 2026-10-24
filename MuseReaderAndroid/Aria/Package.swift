@@ -19,11 +19,8 @@ let patchedSkipUI = repoRoot + (Context.environment["ARIA_PHONE_AUDIT"] == "1"
     : "/MuseReaderAndroid/Aria/Vendor/skip-ui")
 // Keep conditional settings separate: a long chain of array '+' expressions
 // exceeds SwiftPM's manifest type-check budget when another audit flag is added.
-var ariaAuditSettings: [SwiftSetting] = ["ARIA_PERF_DIAGNOSTICS", "ARIA_VIDEO_AUDIT", "ARIA_EDIT_AUDIT", "ARIA_PHONE_AUDIT"]
+let ariaAuditSettings: [SwiftSetting] = ["ARIA_PERF_DIAGNOSTICS", "ARIA_EDIT_AUDIT", "ARIA_PHONE_AUDIT"]
     .filter { Context.environment[$0] == "1" }.map { .define($0) }
-if Context.environment["ARIA_VIDEO_AUDIT"] == "1", Context.environment["ARIA_VIDEO_MAIN_BASELINE"] == "1" {
-    ariaAuditSettings.append(.define("ARIA_VIDEO_MAIN_BASELINE"))
-}
 
 let package = Package(
     name: "Aria",

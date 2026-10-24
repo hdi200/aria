@@ -65,9 +65,6 @@ actor AndroidNotePreviewWorker {
 
     private func prepare(program: UInt8) throws {
         guard loadedProgram != program || engine == nil else { return }
-        #if ARIA_EDIT_AUDIT
-        let started = Date()
-        #endif
         guard let url = AppResources.url(forResource: "MuseScore_General", withExtension: "sf2") else {
             throw NSError(domain: "AriaNotePreview", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "MuseScore_General.sf2 is unavailable."])
@@ -86,19 +83,6 @@ actor AndroidNotePreviewWorker {
         sampler = instrument
         loadedProgram = program
         print("MuseReader note preview ready: soundbank=\(url.lastPathComponent) program=\(program)")
-        #if ARIA_EDIT_AUDIT
-        if let process = try? JClass(name: "android/os/Process", systemClass: true),
-           let tidMethod = process.getStaticMethodID(name: "myTid", sig: "()I"),
-           let pidMethod = process.getStaticMethodID(name: "myPid", sig: "()I") {
-            do {
-                // Keep the generic return type non-optional: JNI returns primitive
-                // int, whereas Optional<Int32> expects a boxed java.lang.Integer.
-                let tid: Int32 = try process.callStatic(method: tidMethod, options: [], args: [])
-                let pid: Int32 = try process.callStatic(method: pidMethod, options: [], args: [])
-                print("ARIA_PREVIEW_PREPARE tid=\(tid) main=\(tid == pid) seconds=\(Date().timeIntervalSince(started)) program=\(program)")
-            } catch { print("ARIA_PREVIEW_THREAD_PROBE_UNAVAILABLE") }
-        }
-        #endif
     }
 }
 

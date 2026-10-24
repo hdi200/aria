@@ -31,8 +31,6 @@ class AriaVideoWriter {
     private var chromaU = IntArray(0)
     private var chromaV = IntArray(0)
     private val planeBytes = Array(3) { ByteArray(0) }
-    private var auditStartedNs = 0L
-    private var auditFrames = 0
     var error: String = ""
         private set
 
@@ -40,12 +38,6 @@ class AriaVideoWriter {
     fun open(path: String, width: Int, height: Int, frameRate: Int, bitRate: Int, keyFrameSeconds: Int,
              sampleRate: Int, channels: Int, audioBitRate: Int): Boolean {
         try {
-            if (BuildConfig.ARIA_VIDEO_AUDIT) {
-                auditStartedNs = android.os.SystemClock.elapsedRealtimeNanos()
-                auditFrames = 0
-                AriaVideoAudit.reset()
-                AriaVideoAudit.thread("writer.open")
-            }
             File(path).delete()
             this.width = width and 1.inv()
             this.height = height and 1.inv()
@@ -85,12 +77,6 @@ class AriaVideoWriter {
             val index = dequeueInput(codec)
             val image = codec.getInputImage(index) ?: throw IllegalStateException("No input image")
             writeYuv(bitmap, image)
-            if (BuildConfig.ARIA_VIDEO_AUDIT) {
-                if (auditFrames in intArrayOf(0, 15, 150, 450, 899)) {
-                    AriaVideoAudit.frame(auditFrames, timeUs, width, height, argb, image)
-                }
-                auditFrames += 1
-            }
             codec.queueInputBuffer(index, 0, width * height * 3 / 2, timeUs, 0)
             drain(codec, false)
             true
@@ -144,9 +130,6 @@ class AriaVideoWriter {
             }
             if (!muxerStarted) throw IllegalStateException("No media was written")
             muxer?.stop()
-            if (BuildConfig.ARIA_VIDEO_AUDIT) {
-                android.util.Log.i("AriaVideoAudit", "FINISH frames=$auditFrames seconds=${(android.os.SystemClock.elapsedRealtimeNanos() - auditStartedNs) / 1e9}")
-            }
             release()
             videoDone && audioDone
         } catch (exception: Exception) {

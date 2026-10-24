@@ -72,7 +72,7 @@ enum ScoreVideoPianoNotes {
 /// their keys while they sound. Each frame draws the notes and the keyboard
 /// with Core Graphics, then Core Image blurs the notes into a glow and
 /// composes everything over the cached background, on Metal where available.
-#if os(Android) && !ARIA_VIDEO_MAIN_BASELINE
+#if os(Android)
 @AndroidVideoRenderActor
 #endif
 final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
@@ -249,13 +249,6 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     }
 
     private func drawNotesLayer(_ context: CGContext, now: TimeInterval, visible: [VisibleNote], sounding: [Int: Int]) {
-        #if ARIA_VIDEO_AUDIT && os(Android)
-        // Audit-only control: overlapping glows must have a repeatable draw order.
-        // Production preserves the existing dictionary iteration on both platforms.
-        let entries = sounding.sorted { $0.key < $1.key }
-        #else
-        let entries = sounding
-        #endif
         context.clear(CGRect(origin: .zero, size: frameSize))
         context.saveGState()
         context.clip(to: CGRect(x: 0, y: 0, width: frameSize.width, height: keyboardTop))
@@ -263,7 +256,7 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
 
         // A little light rising from each sounding key.
         let riseHeight = (theme == .light ? 90 : 60) * scale
-        for (pitch, track) in entries {
+        for (pitch, track) in sounding {
             let width = keyboard.keyWidth(of: pitch) * (theme == .light ? 1.6 : 1.2)
             let rect = CGRect(x: keyboard.centerX(of: pitch) - width / 2, y: keyboardTop - riseHeight,
                               width: width, height: riseHeight)
@@ -405,26 +398,19 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
     }
 
     private func drawKeysLayer(_ context: CGContext, now: TimeInterval, sounding: [Int: Int]) {
-        #if ARIA_VIDEO_AUDIT && os(Android)
-        // Audit-only control: overlapping glows must have a repeatable draw order.
-        // Production preserves the existing dictionary iteration on both platforms.
-        let entries = sounding.sorted { $0.key < $1.key }
-        #else
-        let entries = sounding
-        #endif
         let size = CGSize(width: frameSize.width, height: keyboardBottom - keyboardTop + flareRoom)
         context.clear(CGRect(origin: .zero, size: size))
         if let idleKeyboard { drawImage(idleKeyboard, in: CGRect(origin: .zero, size: size), context: context) }
 
         var anyWhite = false
-        for (pitch, track) in entries where !ScoreVideoPianoKeyboard.isBlack(pitch) {
+        for (pitch, track) in sounding where !ScoreVideoPianoKeyboard.isBlack(pitch) {
             let base = color(track: track)
             fillKey(context, keyPath(whiteKeyRect(pitch), radius: 5 * scale),
                     colors: [Self.mix(.white, base, 0.45), base, Self.mix(.black, base, 0.15)], locations: [0, 0.55, 1])
             anyWhite = true
         }
         if anyWhite, let blackKeys { drawImage(blackKeys, in: CGRect(origin: .zero, size: size), context: context) }
-        for (pitch, track) in entries where ScoreVideoPianoKeyboard.isBlack(pitch) {
+        for (pitch, track) in sounding where ScoreVideoPianoKeyboard.isBlack(pitch) {
             drawBlackKey(context, pitch: pitch, color: color(track: track))
         }
 
@@ -448,14 +434,7 @@ final class ScoreVideoPianoPainter: ScoreVideoPainterBase, ScoreVideoPainter {
 
     /// Where a sounding note meets its key: a white-hot core in a coloured halo.
     private func drawFlares(_ context: CGContext, sounding: [Int: Int]) {
-        #if ARIA_VIDEO_AUDIT && os(Android)
-        // Audit-only control: overlapping glows must have a repeatable draw order.
-        // Production preserves the existing dictionary iteration on both platforms.
-        let entries = sounding.sorted { $0.key < $1.key }
-        #else
-        let entries = sounding
-        #endif
-        for (pitch, track) in entries {
+        for (pitch, track) in sounding {
             let x = keyboard.centerX(of: pitch)
             let width = keyboard.keyWidth(of: pitch)
             for (gradient, radius) in [(fades[track % fades.count], width * 1.3), (whiteFade, width * 0.55)] {

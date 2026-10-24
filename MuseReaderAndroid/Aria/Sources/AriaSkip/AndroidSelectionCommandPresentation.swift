@@ -29,9 +29,6 @@ final class AndroidSelectionCommandPresentation {
         lastPublished = next
         anchor = next
         if previousSelection != next?.selectedElement { selection = next?.selectedElement }
-        #if ARIA_EDIT_AUDIT
-        AndroidPanAudit.hit("commandPublication")
-        #endif
     }
 
     func remove(identity: String, from pageIndex: Int) {
@@ -60,9 +57,6 @@ struct AndroidSelectionCommandOverlayHost: View {
     let overlay: (ScoreReaderSelectionCommandAnchor) -> AnyView
 
     var body: some View {
-        #if ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("commandHost")
-        #endif
         if let selection = presentation.selection {
             // Actions are rebuilt only when the semantic selection changes. The
             // existing command view reads live position inside GeometryReader.

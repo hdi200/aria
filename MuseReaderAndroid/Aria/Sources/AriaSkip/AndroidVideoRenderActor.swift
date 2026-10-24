@@ -16,32 +16,11 @@ actor AndroidVideoRenderActor {
     /// Frames/chunks may share one native attachment, but never retain its locals.
     /// Callers return Swift values or owning JObject projections, not JNI locals.
     @AndroidVideoRenderActor
-    static func withJNIFrame<T>(videoFrame: Int? = nil, _ body: () throws -> T) rethrows -> T {
-        #if ARIA_VIDEO_AUDIT
-        let sample = videoFrame == 0 || videoFrame == 899
-        if sample { dumpLocals("before_frame_\(videoFrame!)") }
-        #endif
+    static func withJNIFrame<T>(_ body: () throws -> T) rethrows -> T {
         JNI.jni.withEnv { precondition($0.PushLocalFrame($1, 64) == 0) }
-        defer {
-            JNI.jni.withEnv { _ = $0.PopLocalFrame($1, nil) }
-            #if ARIA_VIDEO_AUDIT
-            if sample { dumpLocals("after_frame_\(videoFrame!)") }
-            #endif
-        }
+        defer { JNI.jni.withEnv { _ = $0.PopLocalFrame($1, nil) } }
         return try body()
     }
-
-    #if ARIA_VIDEO_AUDIT
-    private nonisolated static func dumpLocals(_ label: String) {
-        guard let debug = try? JClass(name: "android/os/Debug", systemClass: true) else { return }
-        let method = debug.getStaticMethodID(name: "dumpReferenceTables", sig: "()V")
-        if JNI.jni.exceptionCheck() != 0 { JNI.jni.exceptionClear() }
-        guard let method else { return }
-        print("ARIA_VIDEO_LOCAL_TABLE \(label)")
-        do { try debug.callStatic(method: method, options: [], args: []) as Void }
-        catch { print("ARIA_VIDEO_LOCAL_TABLE_UNAVAILABLE") }
-    }
-    #endif
 }
 
 private nonisolated final class AndroidVideoSerialExecutor: SerialExecutor, @unchecked Sendable {

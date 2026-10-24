@@ -141,9 +141,6 @@ struct ZoomableImageView: View {
         let _ = AndroidPhoneAuditGeometry.evaluate("page")
         let _ = tracePage("page_evaluate")
         #endif
-        #if os(Android) && ARIA_EDIT_AUDIT
-        let _ = AndroidPanAudit.hit("page")
-        #endif
         #if ARIA_PERF_DIAGNOSTICS && os(Android)
         let _ = AriaJNILifecycle.record("PageEvaluate", created: true)
         #endif
@@ -231,9 +228,6 @@ struct ZoomableImageView: View {
                 #endif
                 #if os(Android) && ARIA_PHONE_AUDIT
                 AndroidPhoneAuditLog.mark("bitmap_published", value: generation)
-                #endif
-                #if os(Android) && ARIA_EDIT_AUDIT
-                AndroidViewportAudit.page(image, scale: target)
                 #endif
             }
         }
@@ -579,9 +573,6 @@ struct ZoomableImageView: View {
 
     private func publishViewport() {
         guard isRasterVisible else { return }
-        #if os(Android) && ARIA_EDIT_AUDIT
-        AndroidViewportAudit.request()
-        #endif
         let viewport = ScoreReaderZoomViewport(zoomScale: scale, contentOrigin: contentOrigin,
                                                contentSize: pageSize, boundsSize: boundsSize)
         #if os(Android) && ARIA_PHONE_AUDIT
@@ -761,9 +752,6 @@ struct ZoomableImageView: View {
     }
 
     private func dragEnded(location: CGPoint, translation: CGSize) {
-        #if os(Android) && ARIA_EDIT_AUDIT
-        defer { AndroidViewportAudit.reportSoon() }
-        #endif
         let mode = dragMode
         dragMode = nil
         selectionDragOffset = .zero
@@ -901,24 +889,14 @@ struct ZoomableImageView: View {
         let point = CGPoint(x: x, y: y)
         switch event {
         case 0:
-            #if os(Android) && ARIA_EDIT_AUDIT
-            AndroidPanAudit.begin(mode: 0)
-            AndroidPanAudit.end(mode: 0, delay: 1.5)
-            #endif
             if let normalized = normalizedPoint(at: point) { onTap?(normalized, .direct) }
         case 1:
             gestureStart = point
             dragMode = beginDrag(at: point, held: a != 0)
-            #if os(Android) && ARIA_EDIT_AUDIT
-            AndroidPanAudit.begin(mode: dragModeCode)
-            #endif
             return dragModeCode
         case 2:
             #if os(Android) && ARIA_PHONE_AUDIT
             if dragModeCode == 1 { AndroidPhoneAuditGeometry.panMoves += 1 }
-            #endif
-            #if os(Android) && ARIA_EDIT_AUDIT
-            AndroidPanAudit.hit("moves")
             #endif
             dragChanged(location: point, startLocation: gestureStart,
                 translation: CGSize(width: point.x - gestureStart.x, height: point.y - gestureStart.y))
@@ -926,9 +904,6 @@ struct ZoomableImageView: View {
             let code = dragModeCode
             dragEnded(location: point,
                 translation: CGSize(width: point.x - gestureStart.x, height: point.y - gestureStart.y))
-            #if os(Android) && ARIA_EDIT_AUDIT
-            AndroidPanAudit.end(mode: code)
-            #endif
             return code
         case 4:
             cancelPageGesture()

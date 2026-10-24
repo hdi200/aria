@@ -14,9 +14,6 @@ final class AndroidViewportPublisher {
     private var generation = 0
 
     func request(_ viewport: ScoreReaderZoomViewport, binding: Binding<ScoreReaderZoomViewport>) {
-        #if os(Android) && ARIA_EDIT_AUDIT
-        AndroidPanAudit.hit("viewportRequest")
-        #endif
         latest = viewport
         self.binding = binding
         guard !scheduled else { return }
@@ -62,10 +59,6 @@ final class AndroidViewportPublisher {
         binding = nil
         if let viewport, let target, target.wrappedValue != viewport {
             target.wrappedValue = viewport
-            #if os(Android) && ARIA_EDIT_AUDIT
-            AndroidViewportAudit.published()
-            AndroidPanAudit.hit("viewportPub")
-            #endif
         }
     }
 

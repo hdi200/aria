@@ -12,10 +12,7 @@ object AriaViewportFrameClock {
     @JvmStatic
     fun post(callback: () -> Unit) {
         val schedule = {
-            Choreographer.getInstance().postFrameCallback { frameNanos ->
-                if (BuildConfig.ARIA_VIDEO_AUDIT) {
-                    android.util.Log.i("Aria", "ARIA_VIEWPORT_FRAME nanos=$frameNanos")
-                }
+            Choreographer.getInstance().postFrameCallback { _ ->
                 callback()
             }
         }

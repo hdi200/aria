@@ -210,7 +210,6 @@ object AriaGraphicsImpl {
     }
 
     fun run(contextId: Int, commands: String) {
-        if (BuildConfig.ARIA_VIDEO_AUDIT) AriaVideoAudit.thread("canvas")
         val context = synchronized(lock) { contexts[contextId] } ?: return
         try {
             context.run(commands)
@@ -321,7 +320,6 @@ object AriaGraphicsImpl {
 
     /// Renders a Core Image recipe (see CoreImage.swift) into the bitmap, replacing it.
     fun ciRender(bitmapId: Int, recipe: String) {
-        if (BuildConfig.ARIA_VIDEO_AUDIT) AriaVideoAudit.thread("ciRender")
         val bitmap = bitmap(bitmapId) ?: return
         bitmap.eraseColor(Color.TRANSPARENT)
         val canvas = Canvas(bitmap)
@@ -330,7 +328,6 @@ object AriaGraphicsImpl {
 
     /// The part of the recipe's image in the rect (Core Image coordinates, y up) as a new bitmap.
     fun ciCreate(recipe: String, x: Double, y: Double, width: Int, height: Int): Int {
-        if (BuildConfig.ARIA_VIDEO_AUDIT) AriaVideoAudit.thread("ciCreate")
         val bitmap = Bitmap.createBitmap(max(1, width), max(1, height), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         AriaImageRecipe(recipe).draw(canvas, width, height, x.toFloat(), y.toFloat())
@@ -775,7 +772,6 @@ internal class AriaImageRecipe(text: String) {
     /// The child drawn at a reduced size, blurred there and scaled back up: a glow or
     /// a background blur looks the same, at a fraction of the cost.
     private fun drawBlurred(node: Node.Blur, canvas: Canvas, matrix: Matrix, alpha: Float, width: Int, height: Int) {
-        if (BuildConfig.ARIA_VIDEO_AUDIT) AriaVideoAudit.thread("blur")
         val reduction = when {
             node.sigma >= 16 -> 4f
             node.sigma >= 6 -> 2f
