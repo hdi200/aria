@@ -3,11 +3,18 @@
 #include <map>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace msr::render {
+
+//! FluidSynth is built with MuseScore's -DNO_THREADS, so its own mutexes are no-ops and
+//! every synth in the process shares one unguarded sample cache. Hold this lock around
+//! anything that can load or unload samples: creating or deleting a synth, loading a
+//! SoundFont, program changes, and rendering (a finished voice can unload its samples).
+std::recursive_mutex& fluidSynthLock();
 
 struct RenderRequest {
     std::string scorePath;

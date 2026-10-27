@@ -1703,8 +1703,16 @@ final class PaddingModifier: RenderModifier {
             if (stripped is LazyVGrid || stripped is LazyHGrid || stripped is LazyVStack || stripped is LazyHStack)
                 && renderable.forEachModifier(perform: { $0.role == .spacing ? true : nil }) == nil {
                 // Certain views apply their padding themselves
+                // ARIA PATCH: Compose rejects negative content padding (IllegalArgumentException),
+                // and an inset animating to zero can pass just below it. SwiftUI allows it.
+                let contentInsets = EdgeInsets(
+                    top: max(animatedInsets.top, CGFloat(0)),
+                    leading: max(animatedInsets.leading, CGFloat(0)),
+                    bottom: max(animatedInsets.bottom, CGFloat(0)),
+                    trailing: max(animatedInsets.trailing, CGFloat(0))
+                )
                 EnvironmentValues.shared.setValues {
-                    $0.set_contentPadding(animatedInsets)
+                    $0.set_contentPadding(contentInsets)
                     return ComposeResult.ok
                 } in: {
                     renderable.Render(context: context)

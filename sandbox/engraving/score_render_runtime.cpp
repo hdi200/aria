@@ -6217,6 +6217,7 @@ struct FluidSynthDeleter {
     void operator()(fluid_synth_t* synth) const
     {
         if (synth) {
+            std::lock_guard<std::recursive_mutex> lock(msr::render::fluidSynthLock());
             delete_fluid_synth(synth);
         }
     }
@@ -6316,6 +6317,7 @@ public:
             return true;
         }
 
+        std::lock_guard<std::recursive_mutex> lock(msr::render::fluidSynthLock());
         m_synths.clear();
         for (int index = 0; index < m_synthCount; ++index) {
             std::unique_ptr<fluid_synth_t, FluidSynthDeleter> synth(new_fluid_synth(m_settings.get()));
@@ -6487,6 +6489,8 @@ public:
         samples.reserve(static_cast<size_t>(std::max(endFrame - startFrame, 1) * kFluidSynthChannelCount));
 
         while (m_currentFrame < endFrame) {
+            // Per block, so the live preview synth's audio callback waits at most one block.
+            std::unique_lock<std::recursive_mutex> lock(msr::render::fluidSynthLock());
             while (m_eventIndex < m_sequence.synthEvents.size() && m_sequence.synthEvents[m_eventIndex].frame <= m_currentFrame) {
                 const SynthNoteEvent& event = m_sequence.synthEvents[m_eventIndex];
                 applySynthEvent(event);
@@ -6504,6 +6508,7 @@ public:
                     return false;
                 }
             }
+            lock.unlock();
 
             const int blockStartFrame = m_currentFrame;
             const int blockEndFrame = m_currentFrame + kFluidSynthRenderBlockFrames;
@@ -6913,6 +6918,8 @@ bool renderFluidSynthCountIn(mu::engraving::Score* score,
     }
     std::sort(synthEvents.begin(), synthEvents.end());
 
+    // A count-in is a few seconds of one channel, so hold the lock for all of it.
+    std::lock_guard<std::recursive_mutex> lock(msr::render::fluidSynthLock());
     std::unique_ptr<fluid_settings_t, FluidSettingsDeleter> settings(new_fluid_settings());
     if (!settings) {
         errorMessage = "FluidSynth could not allocate settings.";

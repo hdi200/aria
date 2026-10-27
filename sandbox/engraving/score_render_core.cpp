@@ -149,6 +149,14 @@ namespace msr { namespace render {
 const std::map<std::string, std::string>& embeddedArticulationProfiles();
 }}
 
+namespace msr::render {
+std::recursive_mutex& fluidSynthLock()
+{
+    static std::recursive_mutex lock;
+    return lock;
+}
+}
+
 #include "score_render_runtime.cpp"
 #include "score_render_open_save.cpp"
 #include "score_render_corruption.cpp"

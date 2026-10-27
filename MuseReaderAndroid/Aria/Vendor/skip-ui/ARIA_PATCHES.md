@@ -93,6 +93,15 @@ marked `ARIA PATCH` in the source.
 - Native iOS gesture code is unchanged. Exact runtime results and limitations are
   recorded in the Android repository's `GESTURE_FIX_LOG.md`.
 
+## Lazy stack padding (`Sources/SkipUI/SkipUI/View/AdditionalViewModifiers.swift`)
+
+- `ARIA PATCH`: `PaddingModifier` clamps the content padding it hands a lazy stack or
+  grid to zero or more. Compose's `PaddingValues` throws "Padding must be non-negative",
+  and Skip animates padding, so an inset animating to 0 could dip just below it and
+  crash (Play Console, version 6: `EdgeInsets.asPaddingValues`, three crashes on a
+  Fairphone 5, reported as hdi200/aria#6). Padding laid out by `PaddingLayout` is
+  unchanged.
+
 ## Local TEST-only focused UI audit
 
 `ARIA_PHONE_AUDIT=1` adds coarse callbacks around the default View body/Evaluate

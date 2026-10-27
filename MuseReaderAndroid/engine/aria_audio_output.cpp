@@ -1,6 +1,7 @@
 // The audio output declared in aria_engine.h: AAudio with AVAudioPlayerNode-like players.
 
 #include "aria_engine.h"
+#include "score_render_core.h"
 
 #include <aaudio/AAudio.h>
 #include <android/log.h>
@@ -66,7 +67,9 @@ struct AudioOutput {
     std::int64_t framesWritten = 0;
     std::atomic<bool> running { false };
 
-    // The live instrument (audioSamplerLoad); its API is thread-safe.
+    // The live instrument (audioSamplerLoad). FluidSynth's own locking is compiled out
+    // (see msr::render::fluidSynthLock), so note calls take `mutex` against the audio
+    // callback, and sample loading also takes the process-wide FluidSynth lock.
     fluid_settings_t* synthSettings = nullptr;
     fluid_synth_t* synth = nullptr;
     std::string soundFontPath;
@@ -74,6 +77,7 @@ struct AudioOutput {
 
     ~AudioOutput()
     {
+        std::lock_guard<std::recursive_mutex> fluidLock(msr::render::fluidSynthLock());
         if (synth) {
             delete_fluid_synth(synth);
         }
@@ -134,7 +138,10 @@ aaudio_data_callback_result_t renderAudio(AAudioStream*, void* userData, void* a
         player.finishRendered();
     }
 
-    if (output->synth) {
+    // Never wait here: when a SoundFont load or a playback render block holds the
+    // FluidSynth lock, the live synth skips this buffer and resumes on the next.
+    std::unique_lock<std::recursive_mutex> fluidLock(msr::render::fluidSynthLock(), std::try_to_lock);
+    if (output->synth && fluidLock.owns_lock()) {
         output->synthBlock.assign(static_cast<std::size_t>(frameCount) * 2, 0.0f);
         float* block = output->synthBlock.data();
         if (fluid_synth_write_float(output->synth, frameCount, block, 0, 2, block, 1, 2) == FLUID_OK) {
@@ -402,6 +409,7 @@ aria::Int64s aria::audioPlayerTakeFinished(void* handle, int index)
 bool aria::audioSamplerLoad(void* handle, const std::string& soundFontPath, int bank, int program, std::string& errorMessage)
 {
     AudioOutput* output = outputFrom(handle);
+    std::lock_guard<std::recursive_mutex> fluidLock(msr::render::fluidSynthLock());
     if (!output->synth || output->soundFontPath != soundFontPath) {
         fluid_settings_t* settings = new_fluid_settings();
         if (!settings) {
@@ -441,6 +449,7 @@ bool aria::audioSamplerLoad(void* handle, const std::string& soundFontPath, int 
             delete_fluid_settings(oldSettings);
         }
     }
+    std::lock_guard<std::mutex> lock(output->mutex);
     fluid_synth_bank_select(output->synth, 0, bank);
     fluid_synth_program_change(output->synth, 0, program);
     return true;
@@ -448,14 +457,18 @@ bool aria::audioSamplerLoad(void* handle, const std::string& soundFontPath, int 
 
 void aria::audioSamplerNoteOn(void* handle, int key, int velocity)
 {
-    if (AudioOutput* output = outputFrom(handle); output->synth) {
+    AudioOutput* output = outputFrom(handle);
+    std::lock_guard<std::mutex> lock(output->mutex);
+    if (output->synth) {
         fluid_synth_noteon(output->synth, 0, key, velocity);
     }
 }
 
 void aria::audioSamplerNoteOff(void* handle, int key)
 {
-    if (AudioOutput* output = outputFrom(handle); output->synth) {
+    AudioOutput* output = outputFrom(handle);
+    std::lock_guard<std::mutex> lock(output->mutex);
+    if (output->synth) {
         fluid_synth_noteoff(output->synth, 0, key);
     }
 }
