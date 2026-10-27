@@ -3455,12 +3455,19 @@
                                       msr::render::ScoreEditState& output,
                                       std::string& errorMessage)
     {
-        const bool transposesCurrentListSelection = score->selection().isList();
+        bool transposesCurrentListSelection = score->selection().isList();
         mu::engraving::Measure* startMeasure = nullptr;
         mu::engraving::Measure* endMeasure = nullptr;
         if (!transposesCurrentListSelection && !selectedMeasureRange(score, &startMeasure, &endMeasure)) {
             startMeasure = currentSelectedMeasure(score);
             endMeasure = startMeasure;
+        }
+        // Notes dragged across part of a bar: transpose that range only, not the whole bars.
+        // Key signatures change only at bar lines, so "to key" changes those notes' pitches.
+        if (!transposesCurrentListSelection && score->selection().isRange() && startMeasure && endMeasure
+            && (score->selection().tickStart() != startMeasure->tick()
+                || score->selection().tickEnd() != endMeasure->endTick())) {
+            transposesCurrentListSelection = true;
         }
         if (!transposesCurrentListSelection && (!startMeasure || !endMeasure)) {
             errorMessage = "Select a note, rest, or measure before transposing.";
@@ -3749,13 +3756,25 @@
             return false;
         }
 
+        // A pitch nudge changes the note only: note input stays where it was. Selecting the
+        // note moves the input position onto it, so put the position back afterwards.
+        mu::engraving::InputState& inputState = score->inputState();
+        const bool inNoteEntry = inputState.noteEntryMode();
+        mu::engraving::Segment* inputSegment = inputState.segment();
+        mu::engraving::Segment* inputLastSegment = inputState.lastSegment();
+        const mu::engraving::track_idx_t inputTrack = inputState.track();
+
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader change pitch"));
         score->select(targetNote, mu::engraving::SelectType::SINGLE, targetNote->staffIdx());
         const bool movingUp = stepDelta > 0;
         for (int i = 0; i < std::abs(stepDelta); ++i) {
             score->upDown(movingUp, mode);
         }
-        continueNoteInputAfterChord(score, targetChord);
+        if (inNoteEntry && inputSegment) {
+            inputState.setTrack(inputTrack);
+            inputState.setSegment(inputSegment);
+            inputState.setLastSegment(inputLastSegment);
+        }
         score->endCmd();
         refreshAfterEdit();
         output = makeEditState(score);

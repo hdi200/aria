@@ -1576,6 +1576,79 @@ void testTempoBeatUnitsReachLinkedParts(const std::filesystem::path& testRoot)
 
 // Transposing bars on one staff "to key" changes the key for those bars on that staff only:
 // the other staff keeps its key, and the original key returns after the passage.
+// Each rest entered at the input position moves input to the next beat, as notes do.
+void testRestEntryAdvances(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "rest-entry-advances", scoreXml(0, { { 60, 14 } }, 2));
+    const auto rests = restsByX(scanScore(*session, { 60 }, 2));
+    expect(!rests.empty(), "The rest-entry fixture has no empty bar");
+    msr::render::ScoreEditState state = enableQuarterNoteEntry(*session, rests.front());
+    std::string error;
+    for (int press = 0; press < 3; ++press) {
+        expect(session->enterRestAtCursor(state, error), "Entering a rest failed: " + error);
+    }
+    const std::string xml = saveSnapshot(*session, root, "rest-entry-advances");
+    const size_t quarters = countOccurrences(xml, "<durationType>quarter</durationType>");
+    expect(quarters == 4, "Three rest presses left " + std::to_string(quarters)
+           + " quarter rests in the bar (4 when each press advances)");
+}
+
+// Half-step and octave buttons change the note only; note input stays where it was.
+// Runs the same edits with and without an up-then-down nudge and expects the same score.
+std::string scoreAfterKeyboardEdits(const std::filesystem::path& root, const std::string& name, const bool nudge)
+{
+    auto session = openSession(root, name, scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 } }, 1));
+    const auto items = scanScore(*session, { 60, 62, 64 }, 2);
+    msr::render::ScoreEditState state = selectAt(*session, noteWithPitch(items, 62));
+    std::string error;
+    expect(session->setSelectionMIDIPitch(65, false, state, error), "Changing the selected note failed: " + error);
+    expect(session->setNoteInputEnabled(true, state, error), "Enabling note input failed: " + error);
+    if (nudge) {
+        expect(session->shiftSelectionPitchBySemitones(1, state, error), "Half step up failed: " + error);
+        expect(session->shiftSelectionPitchBySemitones(-1, state, error), "Half step down failed: " + error);
+        expect(session->shiftSelectionPitchByOctaves(1, state, error), "Octave up failed: " + error);
+        expect(session->shiftSelectionPitchByOctaves(-1, state, error), "Octave down failed: " + error);
+    }
+    expect(session->insertMIDIPitchAtCursor(67, false, false, state, error), "Entering the next note failed: " + error);
+    return saveSnapshot(*session, root, name);
+}
+
+void testPitchNudgesKeepTheInputPosition(const std::filesystem::path& root)
+{
+    // Element ids are random per save; compare the music.
+    const auto music = [](const std::string& xml) {
+        return std::regex_replace(xml, std::regex("\\s*<eid>[^<]*</eid>"), "");
+    };
+    const std::string plain = music(scoreAfterKeyboardEdits(root, "nudge-plain", false));
+    const std::string nudged = music(scoreAfterKeyboardEdits(root, "nudge-nudged", true));
+    size_t diff = 0;
+    while (diff < plain.size() && diff < nudged.size() && plain[diff] == nudged[diff]) {
+        ++diff;
+    }
+    const size_t from = diff > 400 ? diff - 400 : 0;
+    expect(plain == nudged, "A half-step or octave nudge moved where the next note was entered.\nplain:\n"
+           + plain.substr(from, 800) + "\nnudged:\n" + nudged.substr(from, 800));
+}
+
+// Transposing notes dragged across part of a bar changes those notes only, not the whole bar.
+void testTransposingPartOfABarKeepsTheRestOfTheBar(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "transpose-part-of-bar",
+                               scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(62) && notes.count(64), "Could not locate the middle notes");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectMeasureRange(0, notes[62].x, notes[62].y, notes[64].x, notes[64].y, state, error),
+           "Dragging across the middle notes failed: " + error);
+    expect(session->transposeSelectedMeasureRange(1, 0, 1, 0, state, error), "Transposing failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "transpose-part-of-bar");
+    expect(saved.find("<pitch>60</pitch>") != std::string::npos && saved.find("<pitch>65</pitch>") != std::string::npos,
+           "Transposing two dragged notes also changed the notes outside the selection");
+    expect(saved.find("<pitch>62</pitch>") == std::string::npos && saved.find("<pitch>64</pitch>") == std::string::npos,
+           "The dragged notes were not transposed");
+}
+
 // A temporary viewing key lays out a clone of the score. MasterScore::clone gave the clone no
 // file info, so header and footer macros that read it ($f, $F, $m, $M, $D) crashed during that
 // layout (Play Console, Android version 6).
@@ -2579,6 +2652,10 @@ int main()
     passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
     passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
     passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
+    passed &= runTest("rest entry advances the input position", [&] { testRestEntryAdvances(testDirectory.path); });
+    passed &= runTest("pitch nudges keep the input position", [&] { testPitchNudgesKeepTheInputPosition(testDirectory.path); });
+    passed &= runTest("transposing part of a bar keeps the rest of the bar",
+                      [&] { testTransposingPartOfABarKeepsTheRestOfTheBar(testDirectory.path); });
     passed &= runTest("a viewing key works with file-info footer macros",
                       [&] { testViewingKeyWithFileInfoFooter(testDirectory.path); });
     passed &= runTest("dragging a fret diagram's chord moves the diagram",

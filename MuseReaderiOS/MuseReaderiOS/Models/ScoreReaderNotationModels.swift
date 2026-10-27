@@ -25,6 +25,14 @@ enum TempoBeatUnit: String, CaseIterable, Identifiable {
         case .dottedQuarter: return "\u{1D15F}\u{E1E7}"
         }
     }
+
+    /// The note without its dot, for the tempo keypad (TempoBeatUnitGlyph), which draws
+    /// metNoteQuarterUp and metAugmentationDot with their own spacing.
+    var bravuraTextNote: String {
+        self == .dottedQuarter ? "\u{ECA5}" : bravuraTextGlyph
+    }
+
+    var isDotted: Bool { self == .dottedQuarter }
 }
 
 struct TempoValue: Equatable {

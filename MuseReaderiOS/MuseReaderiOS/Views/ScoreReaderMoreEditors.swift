@@ -237,8 +237,14 @@ struct ScoreReaderTempoEditorSheet: View {
             VStack(spacing: 18) {
                 HStack(spacing: 8) {
                     ForEach(tokens) { token in
-                        Text(token.displayText)
-                            .font(tokenFont(for: token))
+                        Group {
+                            if case .noteValue(let beatUnit) = token {
+                                TempoBeatUnitGlyph(beatUnit: beatUnit, size: 30)
+                            } else {
+                                Text(token.displayText)
+                                    .font(tokenFont(for: token))
+                            }
+                        }
                             .frame(minWidth: 34, minHeight: 38)
                             .padding(.horizontal, 8)
                             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -311,7 +317,7 @@ struct TempoKeyboard: View {
         Grid(horizontalSpacing: 10, verticalSpacing: 10) {
             GridRow {
                 ForEach(TempoBeatUnit.allCases) { beatUnit in
-                    key(beatUnit.bravuraTextGlyph, usesMusicFont: true) { replaceNoteValue(beatUnit) }
+                    beatUnitKey(beatUnit) { replaceNoteValue(beatUnit) }
                 }
             }
             GridRow {
@@ -343,6 +349,16 @@ struct TempoKeyboard: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.45)
+    }
+
+    private func beatUnitKey(_ beatUnit: TempoBeatUnit, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            TempoBeatUnitGlyph(beatUnit: beatUnit, size: beatUnit.isDotted ? 25 : 28)
+                .offset(y: -2)
+                .frame(maxWidth: .infinity, minHeight: 46)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func keyFont(for title: String, usesMusicFont: Bool) -> Font {
@@ -1075,15 +1091,15 @@ struct ScoreReaderKeySignaturePreviewCard: View {
                     .frame(height: isCompactLandscape ? 60 : 76)
 
                 Text("𝄞")
-                    .font(.system(size: isCompactLandscape ? 66 : 82, weight: .regular))
-                    .offset(x: 2, y: -1)
+                    .font(.system(size: clefFontSize, weight: .regular))
+                    .offset(x: 2, y: clefYOffset)
 
                 ForEach(Array(accidentals.enumerated()), id: \.offset) { index, accidental in
                     Text(accidental.symbol)
                         .font(.system(size: isCompactLandscape ? 22 : 25, weight: .regular))
                         .offset(
-                            x: CGFloat((isCompactLandscape ? 36 : 42) + (index * (isCompactLandscape ? 12 : 14))),
-                            y: accidental.yOffset * (isCompactLandscape ? 0.82 : 1)
+                            x: CGFloat((isCompactLandscape ? accidentalStartCompact : accidentalStart) + (index * (isCompactLandscape ? 12 : 14))),
+                            y: accidental.yOffset * (isCompactLandscape ? 0.82 : 1) + accidentalYShift
                         )
                 }
             }
@@ -1104,6 +1120,23 @@ struct ScoreReaderKeySignaturePreviewCard: View {
                 .stroke(Color(.separator), lineWidth: 1)
         )
     }
+
+    #if os(Android)
+    // Android draws 𝄞 from its fallback music font at about 2.7 staff heights, so at
+    // Apple's size it overran the staff and covered the first sharp or flat.
+    private var clefFontSize: CGFloat { isCompactLandscape ? 40 : 50 }
+    private var clefYOffset: CGFloat { isCompactLandscape ? 3 : 4 }
+    private let accidentalStart = 46
+    private let accidentalStartCompact = 40
+    // Android's flat sits low: raise it half a staff space so its loop centres on the line.
+    private var accidentalYShift: CGFloat { keyValue < 0 ? (isCompactLandscape ? -5 : -6) : 0 }
+    #else
+    private var clefFontSize: CGFloat { isCompactLandscape ? 66 : 82 }
+    private let clefYOffset: CGFloat = -1
+    private let accidentalStart = 42
+    private let accidentalStartCompact = 36
+    private let accidentalYShift: CGFloat = 0
+    #endif
 
     private var accidentals: [KeySignatureAccidental] {
         guard keyValue != 0 else {
@@ -1546,5 +1579,22 @@ struct ScorePartLayoutDropDelegate: DropDelegate {
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         DropProposal(operation: .move)
+    }
+}
+
+/// A tempo beat unit in Bravura Text. A dotted quarter's dot sits 0.08 em after the note,
+/// as an entered dotted quarter looks; the font has no space that narrow.
+struct TempoBeatUnitGlyph: View {
+    let beatUnit: TempoBeatUnit
+    let size: CGFloat
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: beatUnit.isDotted ? size * 0.08 : 0) {
+            Text(beatUnit.bravuraTextNote)
+            if beatUnit.isDotted {
+                Text("\u{ECB7}")
+            }
+        }
+        .font(MusicNotationFont.font(size: size))
     }
 }
