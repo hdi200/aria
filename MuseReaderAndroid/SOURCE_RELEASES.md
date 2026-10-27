@@ -11,13 +11,15 @@ Source snapshots exclude the same local/marketing material as iOS; see README.md
 | --- | --- | --- | --- |
 | `android-1.0.0-5` | 1.0.0 (5), observed live before this publication | `b2973a5685` | `5964dec98cd5dc10c2cffb41aec1821558b3079023ab5774ae34f9473e83f04f` |
 | `android-1.0.0-6` | 1.0.0 (6), submitted for review October 22, 2026 | `b685c0eece` | `05f1a263ed1c053adca8b41c9436561d818b669328312ad6f298095984d63cdd` |
-| `android-1.0.0-7` | 1.0.0 (7), submitted for review October 27, 2026 | `7b657ade53` | `c4ac2a9e2a575038e721bf85f2c43c4946ffa4ca1194b428396b7fd49cdda445` |
+| `android-1.0.0-7` | 1.0.0 (7), released October 27, 2026 | `7b657ade53` | `c4ac2a9e2a575038e721bf85f2c43c4946ffa4ca1194b428396b7fd49cdda445` |
+| `android-1.0.0-8` | 1.0.0 (8), prepared October 27, 2026 | `ddfa29e7bc` | `ecc42128dab20dc2d4c2afb7928fc296961c2a6b71e05638dbb658628b271813` |
 
 Both use the same Android production implementation and pinned dependencies;
 version 6 adds the shared instrument-catalog and library-confirmation fixes and
 increments the Android build number. Version 7 adds crash fixes in the shared engine
 (FluidSynth locking, cloned-score file info), the vendored skip-ui padding patch and the
-Android saved-state trim. Documentation/source packaging was added
+Android saved-state trim. Version 8 adds the bridged-state restore fix (skip-ui), partial-bar
+transpose and pitch-nudge fixes, and Android key signature and scrolling fixes. Documentation/source packaging was added
 when publishing these snapshots. The old private repository's audit history and
 local notes are not imported into public Git history.
 
