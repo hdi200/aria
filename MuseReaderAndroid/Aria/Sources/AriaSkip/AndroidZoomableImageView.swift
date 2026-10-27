@@ -39,6 +39,9 @@ struct ZoomableImageView: View {
     var allowsEditingInteractions = true
     var allowsPlaybackFollow = true
     var allowsPencilInsertionFineTune = false
+    /// The shared call site passes "editing with note input on" as allowsPencilInsertionFineTune.
+    /// Android has no Pencil fine-tune, so read it as note input.
+    private var noteInputActive: Bool { allowsPencilInsertionFineTune }
     var noteEntryPreviewPitchClass: Int? = nil
     var noteEntryPreviewIsRest = false
     var noteEntryPreviewDuration: ScoreNoteDuration = .quarter
@@ -696,7 +699,9 @@ struct ZoomableImageView: View {
             return [CGRect(x: band.minX, y: band.minY, width: edgeBand + 12, height: band.height),
                     CGRect(x: band.maxX - edgeBand - 12, y: band.minY, width: edgeBand + 12, height: band.height)]
         case .note:
-            return [frame.insetBy(dx: -18, dy: -18)]
+            // In note input the selected note is the one just entered, under the finger that
+            // will scroll next: drag it only after a hold, so a quick swipe scrolls.
+            return noteInputActive ? [] : [frame.insetBy(dx: -18, dy: -18)]
         default:
             var rects: [CGRect] = []
             if selection.canDragMovableElement {
@@ -845,7 +850,7 @@ struct ZoomableImageView: View {
                 return .expressionEndpoint(isStart: isStart)
             }
             let frame = frame(for: selection.normalizedRect)
-            if selection.kind == .note, frame.insetBy(dx: -18, dy: -18).contains(pagePoint) {
+            if selection.kind == .note, held || !noteInputActive, frame.insetBy(dx: -18, dy: -18).contains(pagePoint) {
                 return .selectedNote(start: location)
             }
             if selection.canDragMovableElement, frame.insetBy(dx: -18, dy: -18).contains(pagePoint) {

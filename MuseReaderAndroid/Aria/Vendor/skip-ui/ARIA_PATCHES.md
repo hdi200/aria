@@ -93,6 +93,18 @@ marked `ARIA PATCH` in the source.
 - Native iOS gesture code is unchanged. Exact runtime results and limitations are
   recorded in the Android repository's `GESTURE_FIX_LOG.md`.
 
+## Saved state keys (`Sources/SkipUI/SkipUI/Compose/ComposeStateSaver.swift`)
+
+- `ARIA PATCH`: `ComposeStateSaver.Key` carries its saved value in memory, and
+  `restore` falls back to it when the saver's own map has no entry. An `.id()` view
+  gets a fresh `ComposeStateSaver` when its id changes, and presentations make theirs
+  with plain `remember`; a saver re-created since the save returned nil, Compose
+  wrapped it in a `MutableState`, and the bridged `@State` crashed on the null
+  `StateSupport` (`StateSupport_Bridge.swift:11`, and the SwiftJNI trap in
+  `ScoreReaderPageSurface` sync on Play). Reproduced on the emulator by editing every
+  Score Setup field except Subtitle and saving. The value is never parceled, so
+  nothing is retained beyond the key Compose already holds.
+
 ## Lazy stack padding (`Sources/SkipUI/SkipUI/View/AdditionalViewModifiers.swift`)
 
 - `ARIA PATCH`: `PaddingModifier` clamps the content padding it hands a lazy stack or

@@ -31,7 +31,10 @@ struct ComposeStateSaver: Saver<Any?, Any> {
         if value == Self.nilMarker {
             return nil
         } else if let key = value as? Key {
-            return state[key]
+            // ARIA PATCH: fall back to the value the key carries. A saver re-created since
+            // the save (an .id() view's saver, a rebuilt presentation) has no map entry and
+            // returned nil, which bridged @State then received as a null StateSupport.
+            return state[key] ?? key.savedValue
         } else {
             return value
         }
@@ -44,7 +47,8 @@ struct ComposeStateSaver: Saver<Any?, Any> {
         } else if value is Boolean || value is Number || value is String || value is Char {
             return value
         } else {
-            let key = Key.next()
+            var key = Key.next()
+            key.savedValue = value
             state[key] = value
             return key
         }
@@ -53,6 +57,9 @@ struct ComposeStateSaver: Saver<Any?, Any> {
     /// Key under which to save values that cannot be stored directly in the Bundle.
     struct Key: Parcelable {
         private let value: Int
+        /// ARIA PATCH: the saved value, in memory only (never parceled), so any saver
+        /// can restore it while Compose holds this key.
+        var savedValue: Any? = nil
 
         init(value: Int) {
             self.value = value
