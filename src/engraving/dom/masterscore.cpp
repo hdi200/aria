@@ -263,6 +263,9 @@ MasterScore* MasterScore::clone()
 
     muse::ByteArray scoreData = buffer.data();
     MasterScore* score = new MasterScore(iocContext(), style(), m_project);
+    // The clone is laid out below, and header and footer macros ($f, $F, $m, $M, $D) read
+    // its file info.
+    score->setFileInfoProvider(m_fileInfoProvider);
 
     XmlReader r(scoreData);
     MscLoader().readMasterScore(score, r, true);

@@ -1576,6 +1576,31 @@ void testTempoBeatUnitsReachLinkedParts(const std::filesystem::path& testRoot)
 
 // Transposing bars on one staff "to key" changes the key for those bars on that staff only:
 // the other staff keeps its key, and the original key returns after the passage.
+// A temporary viewing key lays out a clone of the score. MasterScore::clone gave the clone no
+// file info, so header and footer macros that read it ($f, $F, $m, $M, $D) crashed during that
+// layout (Play Console, Android version 6).
+void testViewingKeyWithFileInfoFooter(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 2);
+    const size_t scoreTag = xml.find("<Score>");
+    expect(scoreTag != std::string::npos, "Could not add the footer fixture style");
+    xml.insert(scoreTag + std::string("<Score>").size(), R"MSCX(
+    <Style>
+      <showFooter>1</showFooter>
+      <footerFirstPage>1</footerFirstPage>
+      <footerOddEven>0</footerOddEven>
+      <oddFooterL>$f $F</oddFooterL>
+      <oddFooterC>$M $m</oddFooterC>
+      <oddFooterR>$D</oddFooterR>
+    </Style>)MSCX");
+
+    auto session = openSession(root, "viewing-key-footer", xml);
+    int pageCount = 0;
+    std::string error;
+    expect(session->setViewTransposeKey(2, pageCount, error), "Setting a viewing key failed: " + error);
+    expect(pageCount > 0, "The transposed view has no pages");
+}
+
 void testTransposeToKeyStaysInsideTheSelection(const std::filesystem::path& root)
 {
     std::ostringstream xml;
@@ -2554,6 +2579,8 @@ int main()
     passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
     passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
     passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
+    passed &= runTest("a viewing key works with file-info footer macros",
+                      [&] { testViewingKeyWithFileInfoFooter(testDirectory.path); });
     passed &= runTest("dragging a fret diagram's chord moves the diagram",
                       [&] { testDraggingFretDiagramChordMovesTheDiagram(testDirectory.path); });
     passed &= runTest("added instruments match desktop", [&] { testAddedInstrumentsMatchDesktop(testDirectory.path); });

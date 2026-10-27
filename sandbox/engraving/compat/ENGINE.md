@@ -36,6 +36,10 @@ Parts and loading:
   prefix, so a score saved as a folder (not a zip) reopens with its parts in order rather than
   in directory order. Zipped files are already in that order.
 
+- `dom/masterscore.cpp`: `clone()` gives the copy the original's file-info provider before
+  laying it out. Without it, header and footer macros that read file info (`$f`, `$F`, `$m`,
+  `$M`, `$D`) crashed when Aria set a temporary viewing key (Play Console, Android).
+
 Rendering hook:
 - `rendering/paintoptions.h`, `dom/engravingitem.cpp`: `PaintOptions::overrideItemColor`
   (ported from MuseScore 5) so Aria can draw its own selection colors. Display only.
