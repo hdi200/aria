@@ -120,7 +120,26 @@ open class MainActivity: AppCompatActivity {
         super.onRestart()
     }
 
-    override fun onSaveInstanceState(outState: android.os.Bundle): Unit = super.onSaveInstanceState(outState)
+    override fun onSaveInstanceState(outState: android.os.Bundle) {
+        super.onSaveInstanceState(outState)
+        // Aria: drop the Compose state of presented screens (the reader, sheets). Skip saves
+        // most of it as keys into an in-memory map that a new process can't restore, and the
+        // system re-saves entries no new dialog claims, so the Bundle grew on each trip to
+        // the background until it passed the binder limit (TransactionTooLargeException in
+        // Play, version 6). Screens restore from their initial state, as on iOS.
+        outState.getBundle("androidx.lifecycle.BundlableSavedStateRegistry.key")?.let { registry ->
+            registry.keySet().filter { it.startsWith("SaveableStateRegistry:Dialog:") }.forEach(registry::remove)
+        }
+        if (BuildConfig.DEBUG) {
+            val parcel = android.os.Parcel.obtain()
+            try {
+                parcel.writeBundle(outState)
+                logger.info("saved state: ${parcel.dataSize()} bytes")
+            } finally {
+                parcel.recycle()
+            }
+        }
+    }
 
     override fun onRestoreInstanceState(bundle: android.os.Bundle) {
         // Usually you restore your state in onCreate(). It is possible to restore it in onRestoreInstanceState() as well, but not very common. (onRestoreInstanceState() is called after onStart(), whereas onCreate() is called before onStart().
