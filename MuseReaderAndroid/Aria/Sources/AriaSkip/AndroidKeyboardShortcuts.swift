@@ -52,6 +52,8 @@ struct ScoreReaderKeyboardShortcutView: View {
         case "right": key = .rightArrow
         case "up": key = .upArrow
         case "down": key = .downArrow
+        case "pageup": key = .pageUp
+        case "pagedown": key = .pageDown
         default: key = .character(String(parts[0]))
         }
         return ScoreReaderKeyboardShortcut.resolve(key, modifiers: ScoreReaderShortcutModifiers(rawValue: flags))

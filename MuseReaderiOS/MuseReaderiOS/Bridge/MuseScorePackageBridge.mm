@@ -76,16 +76,42 @@ NSString * _Nullable FirstCaptureGroup(NSString *pattern, NSString *source)
 
 BOOL IsMusicXMLPathExtension(NSString *pathExtension);
 
+// MuseScore lists the style, the score and each part (Excerpts/...) as root files, and the
+// style comes first. The score is the first .mscx outside Excerpts/.
+NSString * _Nullable PreferredScorePath(NSArray<NSString *> *paths)
+{
+    NSString *firstScore = nil;
+    for (NSString *path in paths) {
+        if (![[path.pathExtension lowercaseString] isEqualToString:@"mscx"]) {
+            continue;
+        }
+        if (![path hasPrefix:@"Excerpts/"]) {
+            return path;
+        }
+        firstScore = firstScore ?: path;
+    }
+    return firstScore;
+}
+
 NSString * _Nullable RootScorePathFromContainer(NSString *containerXML, BOOL includeMusicXML)
 {
-    NSString *rootFilePath = FirstCaptureGroup(@"full-path=\"([^\"]+)\"", containerXML);
-    if (!rootFilePath) {
-        return nil;
+    NSRegularExpression *expression = [NSRegularExpression regularExpressionWithPattern:@"full-path=\"([^\"]+)\"" options:0 error:nil];
+    NSMutableArray<NSString *> *rootFilePaths = [NSMutableArray array];
+    for (NSTextCheckingResult *match in [expression matchesInString:containerXML options:0 range:NSMakeRange(0, containerXML.length)]) {
+        if (match.numberOfRanges >= 2 && [match rangeAtIndex:1].location != NSNotFound) {
+            [rootFilePaths addObject:[containerXML substringWithRange:[match rangeAtIndex:1]]];
+        }
     }
 
-    NSString *pathExtension = rootFilePath.pathExtension.lowercaseString;
-    if ([pathExtension isEqualToString:@"mscx"] || (includeMusicXML && IsMusicXMLPathExtension(pathExtension))) {
-        return rootFilePath;
+    if (NSString *scorePath = PreferredScorePath(rootFilePaths)) {
+        return scorePath;
+    }
+    if (includeMusicXML) {
+        for (NSString *rootFilePath in rootFilePaths) {
+            if (IsMusicXMLPathExtension(rootFilePath.pathExtension)) {
+                return rootFilePath;
+            }
+        }
     }
 
     return nil;
@@ -105,10 +131,8 @@ BOOL IsMusicXMLDocument(NSString *xml)
 
 NSString * _Nullable RootScorePathFromEntries(NSArray<NSString *> *entries, BOOL includeMusicXML)
 {
-    for (NSString *entry in entries) {
-        if ([[entry.pathExtension lowercaseString] isEqualToString:@"mscx"]) {
-            return entry;
-        }
+    if (NSString *scorePath = PreferredScorePath(entries)) {
+        return scorePath;
     }
 
     if (includeMusicXML) {

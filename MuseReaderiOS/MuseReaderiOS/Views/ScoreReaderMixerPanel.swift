@@ -20,6 +20,19 @@ struct ScoreReaderMixerPanel: View {
         }
     }
 
+    /// The part channels, then one for chord symbol playback when the score plays any.
+    private var channelParts: [ScorePart] {
+        guard readerState.hasChordSymbolPlayback, !parts.isEmpty else {
+            return parts
+        }
+        return parts + [ScorePart(
+            id: NativePlaybackController.chordSymbolsStemID,
+            index: parts.count,
+            name: "Chords",
+            clef: .treble
+        )]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -153,7 +166,7 @@ struct ScoreReaderMixerPanel: View {
                 emptyMixer
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let visibleChannelCount = min(parts.count + 1, 6)
+                let visibleChannelCount = min(channelParts.count + 1, 6)
                 let availableWidth = max(proxy.size.width - 32, 1)
                 let channelWidth = min(176, max(138, availableWidth / CGFloat(visibleChannelCount)))
 
@@ -167,7 +180,7 @@ struct ScoreReaderMixerPanel: View {
                             .frame(height: 300)
                             .padding(.horizontal, 4)
 
-                        ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
+                        ForEach(Array(channelParts.enumerated()), id: \.element.id) { index, part in
                             mixerPartChannel(part, color: channelColor(index), width: channelWidth)
                         }
                     }
@@ -406,7 +419,7 @@ struct ScoreReaderMixerPanel: View {
                             .frame(height: 220)
                     }
 
-                    ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
+                    ForEach(Array(channelParts.enumerated()), id: \.element.id) { index, part in
                         mixerPartChannel(
                             part,
                             color: channelColor(index),

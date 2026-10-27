@@ -133,6 +133,31 @@ extension ScoreDocument {
             modificationDate: modificationDate
         )
     }
+
+    /// The same document with metadata edited since it was read from disk.
+    func replacingMetadata(_ metadata: ScoreEditableMetadata) -> ScoreDocument {
+        ScoreDocument(
+            id: id,
+            fileReference: fileReference,
+            url: url,
+            displayName: displayName,
+            format: format,
+            title: metadata.title.trimmedToNil,
+            subtitle: metadata.subtitle.trimmedToNil,
+            composer: metadata.composer.trimmedToNil,
+            lyricist: metadata.lyricist.trimmedToNil,
+            arranger: metadata.arranger.trimmedToNil,
+            rootFilePath: rootFilePath,
+            museScoreVersion: museScoreVersion,
+            partCount: partCount,
+            parts: parts,
+            packageEntries: packageEntries,
+            previewImageData: previewImageData,
+            scoreExcerpt: scoreExcerpt,
+            fileSize: fileSize,
+            modificationDate: modificationDate
+        )
+    }
 }
 
 extension String {

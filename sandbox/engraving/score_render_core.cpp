@@ -65,6 +65,7 @@
 #include "engraving/dom/fermata.h"
 #include "engraving/dom/fret.h"
 #include "engraving/dom/hairpin.h"
+#include "engraving/dom/barline.h"
 #include "engraving/dom/harmony.h"
 #include "engraving/dom/imageStore.h"
 #include "engraving/dom/input.h"

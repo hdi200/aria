@@ -1177,6 +1177,7 @@ struct ScoreReaderView: View {
             ScoreReaderSetupSheet(
                 metadata: readerState.scoreMetadata,
                 isBusy: readerState.isEditingActionInFlight,
+                loadAction: { await readerState.loadScoreMetadata() },
                 commitAction: { try await readerState.updateScoreSetupMetadata($0) }
             )
         }
@@ -2187,8 +2188,16 @@ struct ScoreReaderView: View {
         }
 
         guard readerState.isEditingMode else {
-            if case .togglePlayback = shortcut {
+            switch shortcut {
+            case .togglePlayback:
                 readerState.togglePlayback()
+            // Page-turn pedals send Page Up/Down or the arrow keys.
+            case .previousPage, .selectPrevious, .movePitch(up: true):
+                showPreviousPage()
+            case .nextPage, .selectNext, .movePitch(up: false):
+                showNextPage()
+            default:
+                break
             }
             return
         }
@@ -2239,6 +2248,9 @@ struct ScoreReaderView: View {
             readerState.shiftPitchByOctaves(octaveDelta)
         case .shiftSemitone(let semitoneDelta):
             readerState.shiftPitchBySemitones(semitoneDelta)
+        case .previousPage, .nextPage:
+            // Editing scrolls the score instead of turning pages.
+            break
         }
     }
 
@@ -3365,6 +3377,8 @@ struct ScoreReaderView: View {
             tempoAction: { isTempoEditorPresented = true },
             pickupMeasureAction: { readerState.presentPickupEditor(createNewMeasure: false) },
             accentAction: readerState.addExpression,
+            selectSimilarAction: { sameStaff in readerState.selectSimilar(sameStaff: sameStaff) },
+            barLineAction: readerState.addRepeatJump,
             dismissAction: dismissSelectionCommandMenu
         )
         .zIndex(100)

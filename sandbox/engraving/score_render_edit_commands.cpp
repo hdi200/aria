@@ -1116,6 +1116,10 @@
         }
 
         const std::string key = normalizedCommandKey(repeatJumpKind);
+        if (const std::optional<mu::engraving::BarLineType> barLineType = barLineTypeForCommandKey(key)) {
+            return setBarLineType(*barLineType, output, errorMessage);
+        }
+
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader add repeat or jump"));
         mu::engraving::EngravingItem* addedItem = nullptr;
 
@@ -1183,6 +1187,76 @@
         refreshAfterEdit();
         if (addedItem) {
             score->select(addedItem, mu::engraving::SelectType::SINGLE, addedItem->staffIdx());
+        }
+        output = makeEditState(score);
+        return true;
+    }
+
+    static std::optional<mu::engraving::BarLineType> barLineTypeForCommandKey(const std::string& key)
+    {
+        using mu::engraving::BarLineType;
+        static const std::map<std::string, BarLineType> types {
+            { "normalbarline", BarLineType::NORMAL },
+            { "singlebarline", BarLineType::NORMAL },
+            { "doublebarline", BarLineType::DOUBLE },
+            { "finalbarline", BarLineType::END },
+            { "reversefinalbarline", BarLineType::REVERSE_END },
+            { "dashedbarline", BarLineType::BROKEN },
+            { "dottedbarline", BarLineType::DOTTED },
+            { "heavybarline", BarLineType::HEAVY },
+            { "heavydoublebarline", BarLineType::DOUBLE_HEAVY },
+        };
+        const auto found = types.find(key);
+        return found == types.end() ? std::nullopt : std::optional<BarLineType>(found->second);
+    }
+
+    //! Like dropping a bar line from MuseScore's palette: changes the selected bar line, or the
+    //! bar line at the end of the selected bar (the last bar of a range), on every staff.
+    bool setBarLineType(mu::engraving::BarLineType barLineType,
+                        msr::render::ScoreEditState& output,
+                        std::string& errorMessage)
+    {
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::BarLine* barLine = nullptr;
+        mu::engraving::EngravingItem* selectedItem = currentSelectedItem(score);
+        if (selectedItem && selectedItem->isBarLine()) {
+            barLine = mu::engraving::toBarLine(selectedItem);
+        } else {
+            mu::engraving::Measure* rangeStart = nullptr;
+            mu::engraving::Measure* measure = nullptr;
+            if (!selectedMeasureRange(score, &rangeStart, &measure) || !measure) {
+                measure = activeMeasure(score);
+            }
+            if (measure && measure->isMMRest()) {
+                measure = measure->mmRestLast();
+            }
+            if (measure) {
+                barLine = const_cast<mu::engraving::BarLine*>(measure->endBarLine());
+            }
+        }
+        if (!barLine) {
+            errorMessage = "Select a bar line or a bar before changing the bar line.";
+            return false;
+        }
+
+        const bool barLineSelected = selectedItem && selectedItem->isBarLine();
+        const mu::engraving::Fraction barLineTick = barLine->tick();
+        const mu::engraving::staff_idx_t barLineStaff = barLine->staffIdx();
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader change bar line type"));
+        score->undoChangeBarLineType(barLine, barLineType, true);
+        score->endCmd();
+        refreshAfterEdit();
+
+        // The bar line may have been replaced; select the one now at the same place.
+        if (barLineSelected) {
+            if (mu::engraving::Measure* measure = score->tick2measure(barLineTick - mu::engraving::Fraction(1, 1920))) {
+                if (const mu::engraving::BarLine* endBarLine = measure->endBarLine()) {
+                    mu::engraving::Segment* segment = endBarLine->segment();
+                    if (mu::engraving::EngravingItem* item = segment ? segment->element(barLineStaff * mu::engraving::VOICES) : nullptr) {
+                        score->select(item, mu::engraving::SelectType::SINGLE, barLineStaff);
+                    }
+                }
+            }
         }
         output = makeEditState(score);
         return true;
@@ -3266,8 +3340,10 @@
             return false;
         }
 
-        m_measureClipboardMimeType = score->selection().mimeType().toStdString();
-        m_measureClipboard = score->selection().mimeData();
+        Clipboard& copied = clipboard();
+        std::lock_guard<std::mutex> lock(copied.mutex);
+        copied.mimeType = score->selection().mimeType().toStdString();
+        copied.data = score->selection().mimeData();
         output = makeEditState(score);
         return true;
     }
@@ -3294,7 +3370,15 @@
             return false;
         }
 
-        if (m_measureClipboard.empty() || m_measureClipboardMimeType.empty()) {
+        std::string copiedMimeType;
+        muse::ByteArray copiedData;
+        {
+            Clipboard& copied = clipboard();
+            std::lock_guard<std::mutex> lock(copied.mutex);
+            copiedMimeType = copied.mimeType;
+            copiedData = copied.data;
+        }
+        if (copiedData.empty() || copiedMimeType.empty()) {
             errorMessage = "Copy or cut something before pasting.";
             return false;
         }
@@ -3305,7 +3389,7 @@
             return false;
         }
 
-        RenderCoreMimeData mimeData(m_measureClipboardMimeType, m_measureClipboard);
+        RenderCoreMimeData mimeData(copiedMimeType, copiedData);
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader paste selection"));
         if (!score->cmdPaste(&mimeData, nullptr)) {
             score->endCmd(true);
@@ -3328,6 +3412,28 @@
 
         mu::engraving::Score* score = activeScore();
         score->cmdSelectAll();
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool selectSimilar(const bool sameStaff, msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::EngravingItem* item = currentSelectedItem(score);
+        if (item && item->isChord()) {
+            item = mu::engraving::toChord(item)->upNote();
+        }
+        if (!item || item->isMeasure()) {
+            errorMessage = "Select a note, rest or symbol before selecting similar elements.";
+            return false;
+        }
+
+        score->selectSimilar(item, sameStaff);
         output = makeEditState(score);
         return true;
     }

@@ -140,9 +140,16 @@ struct ScoreDetailView: View {
     }
 
     private func presentMetadataEditor() {
-        editableMetadata = ScoreEditableMetadata(document: session.document)
-        metadataSaveErrorMessage = nil
-        isEditingMetadataPresented = true
+        Task {
+            // An open score's document still has the metadata it was opened with.
+            if let liveRenderSession = session.liveRenderSession {
+                editableMetadata = await liveRenderSession.currentMetadata()
+            } else {
+                editableMetadata = ScoreEditableMetadata(document: session.document)
+            }
+            metadataSaveErrorMessage = nil
+            isEditingMetadataPresented = true
+        }
     }
 
     private func saveEditedMetadata() {

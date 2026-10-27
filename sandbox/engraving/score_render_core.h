@@ -249,7 +249,8 @@ struct PlaybackAudioData {
     double durationSeconds = 0.0;
     std::vector<float> interleavedSamples;
     // Stereo stems share the mixed buffer's sample rate, frame count and start time.
-    // Numeric master-part IDs; "metronome" is independent of part solo/mute.
+    // Numeric master-part IDs; "metronome" is independent of part solo/mute;
+    // "chordsymbols" is every part's chord symbol playback.
     std::map<std::string, std::vector<float>> partSamples;
 };
 
@@ -463,6 +464,8 @@ public:
     bool cutSelectedMeasureRange(ScoreEditState& output, std::string& errorMessage);
     bool pasteMeasureRange(ScoreEditState& output, std::string& errorMessage);
     bool selectAll(ScoreEditState& output, std::string& errorMessage);
+    //! MuseScore's Select > Similar: every element like the selected one, in the score or on its staff.
+    bool selectSimilar(bool sameStaff, ScoreEditState& output, std::string& errorMessage);
     bool clearSelection(ScoreEditState& output, std::string& errorMessage);
     bool transposeScore(int mode, int direction, int interval, int targetKey, ScoreEditState& output, std::string& errorMessage);
     bool transposeSelectedMeasureRange(int mode, int direction, int interval, int targetKey, ScoreEditState& output, std::string& errorMessage);

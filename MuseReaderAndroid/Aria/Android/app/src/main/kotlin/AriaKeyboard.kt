@@ -4,9 +4,17 @@ import android.app.Activity
 import android.content.ContextWrapper
 import android.view.KeyEvent
 import android.view.Window
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 
 /// Hardware keyboard shortcuts for the reader (iOS: UIKeyCommand in
@@ -58,6 +66,9 @@ object AriaKeyboardImpl {
         KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
         KeyEvent.KEYCODE_DPAD_UP -> "up"
         KeyEvent.KEYCODE_DPAD_DOWN -> "down"
+        // Page-turn pedals send Page Up/Down or the arrow keys.
+        KeyEvent.KEYCODE_PAGE_UP -> "pageup"
+        KeyEvent.KEYCODE_PAGE_DOWN -> "pagedown"
         else -> null
     }
 
@@ -86,6 +97,11 @@ class AriaKeyCapture : skip.ui.ContentComposer {
     @Composable
     override fun Compose(context: skip.ui.ComposeContext) {
         val view = LocalView.current
+        // Navigation keys (arrows, Page Up/Down) take the window out of touch mode before the
+        // callback below sees them, and Android then focuses the first button (the reader's
+        // Back), which Compose draws with a focus ring. Shortcut keys move focus here instead.
+        val keyFocus = remember { FocusRequester() }
+        Box(Modifier.size(1.dp).focusRequester(keyFocus).focusable())
         DisposableEffect(view) {
             val window = windowOf(view)
             val original = window?.callback
@@ -93,8 +109,11 @@ class AriaKeyCapture : skip.ui.ContentComposer {
                 onDispose {}
             } else {
                 val wrapped = object : Window.Callback by original {
-                    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-                        AriaKeyboardImpl.handle(event) || original.dispatchKeyEvent(event)
+                    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                        if (!AriaKeyboardImpl.handle(event)) return original.dispatchKeyEvent(event)
+                        view.post { runCatching { keyFocus.requestFocus() } }
+                        return true
+                    }
                 }
                 window.callback = wrapped
                 onDispose {

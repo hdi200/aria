@@ -1505,7 +1505,8 @@ final class MuseReaderAppModel {
             return
         }
 
-        let document = session.document
+        // Metadata edited in the reader is newer than what was read when the score opened.
+        let document = session.document.replacingMetadata(await liveRenderSession.currentMetadata())
 
         do {
             let startedAt = Date()

@@ -647,6 +647,11 @@ bool msr::render::ScoreRenderSession::selectAll(ScoreEditState& output, std::str
     return m_impl->selectAll(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::selectSimilar(const bool sameStaff, ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->selectSimilar(sameStaff, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::clearSelection(ScoreEditState& output, std::string& errorMessage)
 {
     return m_impl->clearSelection(output, errorMessage);

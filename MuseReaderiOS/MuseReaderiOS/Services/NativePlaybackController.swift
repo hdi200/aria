@@ -90,6 +90,7 @@ final class NativePlaybackController {
     private var needsPlayerPriming = true
     private var mixerSettings = ScoreMixerSettings()
     private var meterLevelHandler: (([String: Float]) -> Void)?
+    private var stemIDsHandler: ((Set<String>) -> Void)?
     private var meterPeaks: [String: Float] = [:]
     private var displayedMeterLevels: [String: Float] = [:]
     private var meterUpdateTask: Task<Void, Never>?
@@ -98,6 +99,8 @@ final class NativePlaybackController {
     private(set) var streamingErrorMessage: String?
 
     nonisolated static let masterMeterID = "__muse_reader_master__"
+    /// The stem and mixer channel of every part's chord symbol playback.
+    nonisolated static let chordSymbolsStemID = "chordsymbols"
 
     private var liveRenderSession: LiveScoreRenderSession?
     private var metronomeEnabled = false
@@ -135,6 +138,11 @@ final class NativePlaybackController {
 
     func setMeterLevelHandler(_ handler: (([String: Float]) -> Void)?) {
         meterLevelHandler = handler
+    }
+
+    /// Called with the rendered stems each time playback is prepared.
+    func setStemIDsHandler(_ handler: ((Set<String>) -> Void)?) {
+        stemIDsHandler = handler
     }
 
     func setMeteringEnabled(_ enabled: Bool) {
@@ -234,6 +242,7 @@ final class NativePlaybackController {
         self.playerNode = playerNode
         self.countInNode = countInNode
         self.renderedStemIDs = Set(audioData.partSamples.keys)
+        stemIDsHandler?(renderedStemIDs)
         applyMixerSettings()
         installMeterTapsIfPossible()
         self.liveRenderSession = liveRenderSession

@@ -137,8 +137,17 @@ private:
     mu::engraving::Score* m_viewTransposeActiveScore = nullptr;
     std::optional<int> m_activePartIndex;
     std::string m_scorePath;
-    muse::ByteArray m_measureClipboard;
-    std::string m_measureClipboardMimeType;
+    //! Copied music, shared by every open score so it can be pasted into another one.
+    struct Clipboard {
+        std::mutex mutex;
+        muse::ByteArray data;
+        std::string mimeType;
+    };
+    static Clipboard& clipboard()
+    {
+        static Clipboard shared;
+        return shared;
+    }
     int m_totalPageCount = 0;
     int m_maxObservedMasterHarmonyCount = 0;
     std::unordered_map<mu::engraving::Score*, mu::engraving::LayoutMode> m_persistedLayoutModes;

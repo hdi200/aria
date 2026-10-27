@@ -54,19 +54,35 @@ private func isMusicXMLDocument(_ xml: String) -> Bool {
     firstCaptureGroup("<\\s*(score-partwise|score-timewise)\\b", xml) != nil
 }
 
+// MuseScore lists the style, the score and each part (Excerpts/...) as root files, and the
+// style comes first. The score is the first .mscx outside Excerpts/.
+private func preferredScorePath(_ paths: [String]) -> String? {
+    let scores = paths.filter { pathExtension($0) == "mscx" }
+    return scores.first { !$0.hasPrefix("Excerpts/") } ?? scores.first
+}
+
 private func rootScorePathFromContainer(_ containerXML: String, includeMusicXML: Bool) -> String? {
-    guard let rootFilePath = firstCaptureGroup("full-path=\"([^\"]+)\"", containerXML) else {
+    guard let expression = try? NSRegularExpression(pattern: "full-path=\"([^\"]+)\"") else {
         return nil
     }
-    let fileExtension = pathExtension(rootFilePath)
-    if fileExtension == "mscx" || (includeMusicXML && isMusicXMLPathExtension(fileExtension)) {
-        return rootFilePath
+    let fullRange = NSRange(containerXML.startIndex..<containerXML.endIndex, in: containerXML)
+    let rootFilePaths = expression.matches(in: containerXML, options: [], range: fullRange).compactMap { match -> String? in
+        guard match.numberOfRanges >= 2, let range = Range(match.range(at: 1), in: containerXML) else {
+            return nil
+        }
+        return String(containerXML[range])
+    }
+    if let scorePath = preferredScorePath(rootFilePaths) {
+        return scorePath
+    }
+    if includeMusicXML {
+        return rootFilePaths.first { isMusicXMLPathExtension(pathExtension($0)) }
     }
     return nil
 }
 
 private func rootScorePathFromEntries(_ entries: [String], includeMusicXML: Bool) -> String? {
-    if let mscx = entries.first(where: { pathExtension($0) == "mscx" }) {
+    if let mscx = preferredScorePath(entries) {
         return mscx
     }
     if includeMusicXML {

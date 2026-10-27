@@ -1649,6 +1649,52 @@ void testTransposingPartOfABarKeepsTheRestOfTheBar(const std::filesystem::path& 
            "The dragged notes were not transposed");
 }
 
+// Bar line types from the bar line menu change the bar line after the selected bar.
+void testBarLineTypes(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "bar-line-types", scoreXml(0, { { 60, 14 } }, 2));
+    msr::render::ScoreEditState state = selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    std::string error;
+    expect(session->addRepeatJump("Double barline", state, error), "Adding a double bar line failed: " + error);
+    expect(countOccurrences(saveSnapshot(*session, root, "bar-line-double"), "<subtype>double</subtype>") == 1,
+           "The double bar line was not saved");
+    expect(session->addRepeatJump("Final barline", state, error), "Adding a final bar line failed: " + error);
+    const std::string final = saveSnapshot(*session, root, "bar-line-final");
+    expect(countOccurrences(final, "<subtype>end</subtype>") == 1 && final.find("<subtype>double</subtype>") == std::string::npos,
+           "The final bar line did not replace the double one");
+    expect(session->addRepeatJump("Normal barline", state, error), "Resetting the bar line failed: " + error);
+    expect(saveSnapshot(*session, root, "bar-line-normal").find("<subtype>end</subtype>") == std::string::npos,
+           "A normal bar line left the final bar line in place");
+}
+
+// Select Similar selects every note, so deleting then removes them all.
+void testSelectSimilarSelectsEveryNote(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "select-similar", scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 } }, 1));
+    msr::render::ScoreEditState state = selectAt(*session, noteWithPitch(scanScore(*session, { 60, 62, 64 }, 0), 62));
+    std::string error;
+    expect(session->selectSimilar(false, state, error), "Select Similar failed: " + error);
+    expect(session->deleteSelection(state, error), "Deleting the similar notes failed: " + error);
+    const std::string saved = saveSnapshot(*session, root, "select-similar");
+    expect(saved.find("<Note>") == std::string::npos, "Select Similar left some notes unselected");
+}
+
+// Music copied in one score pastes into another open score.
+void testCopyPasteBetweenScores(const std::filesystem::path& root)
+{
+    auto source = openSession(root, "copy-source", scoreXml(0, { { 67, 15 } }, 1));
+    auto target = openSession(root, "paste-target", scoreXml(0, { { 60, 14 } }, 2));
+    msr::render::ScoreEditState state = selectAt(*source, noteWithPitch(scanScore(*source, { 67 }, 0), 67));
+    std::string error;
+    expect(source->copySelectedMeasureRange(state, error), "Copying in the first score failed: " + error);
+    const auto rests = restsByX(scanScore(*target, { 60 }, 2));
+    expect(!rests.empty(), "The paste target has no empty bar");
+    state = selectAt(*target, rests.front());
+    expect(target->pasteMeasureRange(state, error), "Pasting into the second score failed: " + error);
+    expect(saveSnapshot(*target, root, "paste-target").find("<pitch>67</pitch>") != std::string::npos,
+           "The note copied from the first score was not pasted into the second");
+}
+
 // A temporary viewing key lays out a clone of the score. MasterScore::clone gave the clone no
 // file info, so header and footer macros that read it ($f, $F, $m, $M, $D) crashed during that
 // layout (Play Console, Android version 6).
@@ -2679,6 +2725,9 @@ int main()
     passed &= runTest("old Aria double-escaped part names require approval", [&] { testOldAriaPartNamesRequireApproval(testDirectory.path); });
     passed &= runTest("part-only chord symbols from desktop can be saved",
                       [&] { testPartOnlyChordSymbolsFromDesktopCanBeSaved(testDirectory.path); });
+    passed &= runTest("bar line types", [&] { testBarLineTypes(testDirectory.path); });
+    passed &= runTest("select similar selects every note", [&] { testSelectSimilarSelectsEveryNote(testDirectory.path); });
+    passed &= runTest("copy and paste between scores", [&] { testCopyPasteBetweenScores(testDirectory.path); });
     passed &= runTest("removing all chord symbols needs approval",
                       [&] { testRemovingAllChordSymbolsNeedsApproval(testDirectory.path); });
     return passed ? 0 : 1;

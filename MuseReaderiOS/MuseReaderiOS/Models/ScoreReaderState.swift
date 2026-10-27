@@ -155,6 +155,8 @@ final class ScoreReaderState {
     var playbackLoopRange: ScorePlaybackLoopRange?
     var playbackLoopIsActive = false
     var mixerSettings = ScoreMixerSettings()
+    /// Whether playback has a chord symbol channel, which the mixer then shows.
+    var hasChordSymbolPlayback = false
     var metronomeEnabled = false
     var countInEnabled = UserDefaults.standard.bool(forKey: "ScoreReader.countInEnabled")
     var isCountingIn = false
@@ -347,6 +349,12 @@ final class ScoreReaderState {
         self.playbackController?.setMixerSettings(mixerSettings)
         self.playbackController?.setMeterLevelHandler { [weak self] levels in
             self?.mixerLevelMonitor.update(levels)
+        }
+        self.playbackController?.setStemIDsHandler { [weak self] stemIDs in
+            let hasChordSymbols = stemIDs.contains(NativePlaybackController.chordSymbolsStemID)
+            if self?.hasChordSymbolPlayback != hasChordSymbols {
+                self?.hasChordSymbolPlayback = hasChordSymbols
+            }
         }
         midiInputController.noteOnHandler = { [weak self] midiPitch in
             Task { @MainActor [weak self] in

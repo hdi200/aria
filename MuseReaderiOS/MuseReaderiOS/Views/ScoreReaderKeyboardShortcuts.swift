@@ -83,7 +83,9 @@ final class KeyboardShortcutHostingView: UIView {
             command(UIKeyCommand.inputUpArrow, modifiers: .command, title: "Half Step Up"),
             command(UIKeyCommand.inputDownArrow, modifiers: .command, title: "Half Step Down"),
             command(UIKeyCommand.inputUpArrow, modifiers: .shift, title: "Half Step Up"),
-            command(UIKeyCommand.inputDownArrow, modifiers: .shift, title: "Half Step Down")
+            command(UIKeyCommand.inputDownArrow, modifiers: .shift, title: "Half Step Down"),
+            command(UIKeyCommand.inputPageUp, title: "Previous Page"),
+            command(UIKeyCommand.inputPageDown, title: "Next Page")
         ]
     }
 
@@ -152,6 +154,8 @@ final class KeyboardShortcutHostingView: UIView {
         case UIKeyCommand.inputRightArrow: key = .rightArrow
         case UIKeyCommand.inputUpArrow: key = .upArrow
         case UIKeyCommand.inputDownArrow: key = .downArrow
+        case UIKeyCommand.inputPageUp: key = .pageUp
+        case UIKeyCommand.inputPageDown: key = .pageDown
         default: key = .character(input)
         }
         return ScoreReaderKeyboardShortcut.resolve(key, modifiers: Self.modifiers(modifiers))
@@ -166,7 +170,7 @@ final class KeyboardShortcutHostingView: UIView {
         return modifiers
     }
 
-    /// Keys whose presses arrive outside key commands: Command-1...4 and the arrows.
+    /// Keys whose presses arrive outside key commands: Command-1...4, the arrows and Page Up/Down.
     private func shortcut(for press: UIPress) -> ScoreReaderKeyboardShortcut? {
         guard let key = press.key else {
             return nil
@@ -182,6 +186,8 @@ final class KeyboardShortcutHostingView: UIView {
         case .keyboardRightArrow: shortcutKey = .rightArrow
         case .keyboardUpArrow: shortcutKey = .upArrow
         case .keyboardDownArrow: shortcutKey = .downArrow
+        case .keyboardPageUp: shortcutKey = .pageUp
+        case .keyboardPageDown: shortcutKey = .pageDown
         default: return nil
         }
         let modifiers = Self.modifiers(key.modifierFlags)

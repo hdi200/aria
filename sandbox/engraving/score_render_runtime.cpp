@@ -4690,6 +4690,36 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             }
         }
     }
+    // A list selection (Select Similar) shows every selected element, not only the first.
+    if (score->selection().isList()) {
+        for (mu::engraving::EngravingItem* item : score->selection().elements()) {
+            if (!item || item == selectedItem) {
+                continue;
+            }
+            mu::engraving::Page* itemPage = pageForItem(score, item);
+            if (!itemPage || itemPage->width() <= 0.0 || itemPage->height() <= 0.0) {
+                continue;
+            }
+            if (itemPage != page) {
+                const mu::engraving::RectF rect = paddedSelectionRect(item->pageBoundingRect(), itemPage->spatium());
+                selectionState.otherPageHighlightRects.push_back({ static_cast<int>(itemPage->pageNumber()), {
+                    rect.left() / itemPage->width(),
+                    rect.top() / itemPage->height(),
+                    rect.width() / itemPage->width(),
+                    rect.height() / itemPage->height()
+                } });
+            } else if (mu::engraving::Note* listNote = item->isNote() ? mu::engraving::toNote(item) : nullptr) {
+                appendNoteHighlightRects(selectionState, page, listNote);
+                appendNoteOverlayItems(overlayItems, listNote);
+            } else if (mu::engraving::Rest* listRest = item->isRest() ? mu::engraving::toRest(item) : nullptr) {
+                appendRestHighlightRects(selectionState, page, listRest);
+                appendRestOverlayItems(overlayItems, listRest);
+            } else if (usesSymbolSelectionHighlight(item)) {
+                appendHighlightRect(selectionState, page, item->pageBoundingRect(), page->spatium());
+                overlayItems.push_back(item);
+            }
+        }
+    }
     renderSelectionOverlay(selectionState, page, overlayItems);
     return selectionState;
 }
@@ -5030,6 +5060,15 @@ struct SynthChannelProgram {
     muse::midi::Program program;
     std::string setup;
     std::string partId = "metronome";
+    //! A part's chord symbol playback, which the mixer controls as one "chordsymbols" channel.
+    bool chordSymbols = false;
+
+    //! The stem and mixer setting this channel plays through.
+    const std::string& mixerId() const
+    {
+        static const std::string chordSymbolsId = "chordsymbols";
+        return chordSymbols ? chordSymbolsId : partId;
+    }
 };
 
 struct ActiveSynthNote {
@@ -5740,7 +5779,8 @@ void appendPlaybackModelSynthEvents(mu::engraving::Score* score,
                 layerIdx,
                 baseProgram,
                 setupDataString,
-                isMetronomeTrack(trackId) ? "metronome" : std::to_string(trackId.partId.toUint64())
+                isMetronomeTrack(trackId) ? "metronome" : std::to_string(trackId.partId.toUint64()),
+                isChordSymbolsTrack
             });
             EventExtractionStats::LayerDebugStats& layerStats = stats.layerDebug[layerIdx];
             layerStats.channel = channel;
@@ -6398,7 +6438,7 @@ public:
             makeSilentPlaybackAudio(durationSeconds, output);
             if (includePartSamples) {
                 for (const auto& program : m_sequence.channelPrograms) {
-                    output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+                    output.partSamples[program.mixerId()].assign(output.interleavedSamples.size(), 0.0f);
                 }
             }
             const int requestedFrames = durationSeconds > 0.0
@@ -6421,7 +6461,7 @@ public:
             makeSilentPlaybackAudio(durationSeconds, output);
             if (includePartSamples) {
                 for (const auto& program : m_sequence.channelPrograms) {
-                    output.partSamples[program.partId].assign(output.interleavedSamples.size(), 0.0f);
+                    output.partSamples[program.mixerId()].assign(output.interleavedSamples.size(), 0.0f);
                 }
             }
             std::cout << "MuseReader event playback render: silent tail chunk"
@@ -6457,7 +6497,7 @@ public:
         if (includePartSamples) {
             for (const auto& program : m_sequence.channelPrograms) {
                 if (!copiedChannels.insert(program.channel).second) { continue; }
-                auto& stem = output.partSamples[program.partId];
+                auto& stem = output.partSamples[program.mixerId()];
                 stem.resize(sampleCount, 0.0f);
                 stemChannels.emplace_back(program.channel, &stem);
             }
@@ -6469,12 +6509,12 @@ public:
             gains.assign(channels.size() / 2, { 1.0f, 1.0f });
             bool hasSolo = false;
             for (const auto& program : m_sequence.channelPrograms) {
-                const auto setting = mix->find(program.partId);
+                const auto setting = mix->find(program.mixerId());
                 hasSolo = hasSolo || (program.partId != "metronome" && setting != mix->end() && setting->second.solo);
             }
             for (const auto& program : m_sequence.channelPrograms) {
                 if (program.partId == "metronome") { continue; }
-                const auto setting = mix->find(program.partId);
+                const auto setting = mix->find(program.mixerId());
                 const msr::render::PlaybackPartMix part = setting == mix->end()
                     ? msr::render::PlaybackPartMix {} : setting->second;
                 const float volume = part.muted || (hasSolo && !part.solo) ? 0.0f : std::clamp(part.volume, 0.0f, 1.0f);

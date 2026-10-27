@@ -1178,6 +1178,9 @@ struct ScoreReaderSetupSheet: View {
     @State var saveErrorMessage: String?
 
     let isBusy: Bool
+    /// Reads the score's current metadata when the sheet appears. On Android the sheet's
+    /// @State could keep an earlier, empty value instead of the one passed in.
+    var loadAction: (() async -> ScoreEditableMetadata)? = nil
     let commitAction: (ScoreEditableMetadata) async throws -> Void
 
     var body: some View {
@@ -1218,6 +1221,15 @@ struct ScoreReaderSetupSheet: View {
             }
         }
         .interactiveDismissDisabled(isSaving)
+        .task {
+            guard let loadAction else { return }
+            let shown = metadata
+            let current = await loadAction()
+            // Keep anything typed while it loaded.
+            if metadata == shown {
+                metadata = current
+            }
+        }
     }
 
     private func save() {

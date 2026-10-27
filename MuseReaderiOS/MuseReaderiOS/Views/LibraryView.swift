@@ -783,7 +783,12 @@ struct LibraryView: View {
                 return
             }
 
-            editableScoreInfo = ScoreEditableMetadata(document: session.document)
+            // An open score's document still has the metadata it was opened with.
+            if let liveRenderSession = session.liveRenderSession {
+                editableScoreInfo = await liveRenderSession.currentMetadata()
+            } else {
+                editableScoreInfo = ScoreEditableMetadata(document: session.document)
+            }
             scoreInfoSaveErrorMessage = nil
             scoreInfoEditorSession = session
         }

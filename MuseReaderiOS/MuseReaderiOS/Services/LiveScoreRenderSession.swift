@@ -1130,6 +1130,14 @@ actor LiveScoreRenderSession {
         return try makeEditingState(from: bridgeSession.selectAll())
     }
 
+    func selectSimilar(sameStaff: Bool) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        return try makeEditingState(from: bridgeSession.selectSimilar(sameStaff: sameStaff))
+    }
+
     func clearSelection() throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()

@@ -713,7 +713,7 @@ struct ScoreReaderPageViewportOverlays: View {
                 )
             }
 
-            if let selectedElement = selectedElement, selectedElement.kind == .note || selectedElement.kind == .rest {
+            if let selectedElement = selectedElement, selectedElement.kind == .note || selectedElement.kind == .rest || selectedElement.kind == .bar {
                 ScoreReaderSelectedNoteRestActions(
                     selectedElement: selectedElement,
                     imageSize: imageSize,
@@ -1251,6 +1251,8 @@ struct ScoreReaderSelectionCommandOverlay: View {
     let tempoAction: () -> Void
     let pickupMeasureAction: () -> Void
     let accentAction: (String) -> Void
+    let selectSimilarAction: (Bool) -> Void
+    let barLineAction: (String) -> Void
     let dismissAction: (String) -> Void
 
     // Keep observation of live geometry inside the small GeometryReader content.
@@ -1277,6 +1279,10 @@ struct ScoreReaderSelectionCommandOverlay: View {
 
     private var isInstrumentSelection: Bool {
         selectedElement.kind == .instrumentName || selectedElement.kind == .instrumentChange
+    }
+
+    private var isBarLineSelection: Bool {
+        selectedElement.kind == .bar
     }
 
     private var showsEnharmonicAction: Bool {
@@ -1317,7 +1323,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
                         .frame(width: 34, height: 34)
                         .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Circle())
                         .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
-                        .accessibilityLabel(isInstrumentSelection ? "Instrument options" : (isNoteRestSelection ? "Selection options" : "Measure options"))
+                        .accessibilityLabel(isInstrumentSelection ? "Instrument options" : (isBarLineSelection ? "Bar line options" : (isNoteRestSelection ? "Selection options" : "Measure options")))
                 }
                 .buttonStyle(.plain)
                 #if os(Android)
@@ -1350,6 +1356,10 @@ struct ScoreReaderSelectionCommandOverlay: View {
                     .stroke(Color.primary.opacity(0.08), lineWidth: 1)
             }
             .shadow(color: Color.black.opacity(0.14), radius: 16, y: 8)
+        } else if isBarLineSelection {
+            ScoreReaderBarLineCommandMenu(barLineAction: { barLineKind in
+                perform { barLineAction(barLineKind) }()
+            })
         } else if isNoteRestSelection {
             ScoreReaderNoteRestCommandMenu(
                 isNoteSelection: isNoteSelection,
@@ -1362,6 +1372,9 @@ struct ScoreReaderSelectionCommandOverlay: View {
                 showsEnharmonicAction: showsEnharmonicAction,
                 changeEnharmonicAction: perform(changeEnharmonicAction),
                 flipStemAction: perform(flipStemAction),
+                selectSimilarAction: { sameStaff in
+                    perform { selectSimilarAction(sameStaff) }()
+                },
                 accentAction: { expressionKind in
                     perform { accentAction(expressionKind) }()
                 }
@@ -1434,8 +1447,11 @@ struct ScoreReaderSelectionCommandOverlay: View {
         let menuSize: CGSize
         if isInstrumentSelection {
             menuSize = CGSize(width: 238, height: 56)
+        } else if isBarLineSelection {
+            menuSize = CGSize(width: 218, height: CGFloat(ScoreReaderBarLineCommandMenu.barLineTypes.count) * 36 + 16)
         } else if isNoteRestSelection {
-            menuSize = CGSize(width: 218, height: isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216)
+            // Select Similar adds two rows.
+            menuSize = CGSize(width: 218, height: (isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216) + 72)
         } else {
             menuSize = CGSize(width: 238, height: selectedElement.isSingleMeasure ? 508 : 362)
         }
@@ -1522,6 +1538,7 @@ struct ScoreReaderNoteRestCommandMenu: View {
     let showsEnharmonicAction: Bool
     let changeEnharmonicAction: () -> Void
     let flipStemAction: () -> Void
+    let selectSimilarAction: (Bool) -> Void
     let accentAction: (String) -> Void
 
     var body: some View {
@@ -1551,6 +1568,18 @@ struct ScoreReaderNoteRestCommandMenu: View {
                 title: "Transpose",
                 systemImage: "arrow.up.arrow.down",
                 action: transposeAction
+            )
+
+            ScoreReaderMeasureCommandRow(
+                title: "Select Similar",
+                systemImage: "lasso",
+                action: { selectSimilarAction(false) }
+            )
+
+            ScoreReaderMeasureCommandRow(
+                title: "Similar on This Staff",
+                systemImage: "line.3.horizontal",
+                action: { selectSimilarAction(true) }
             )
 
             if showsEnharmonicAction {
@@ -1594,6 +1623,51 @@ struct ScoreReaderNoteRestCommandMenu: View {
                 role: .destructive,
                 action: deleteAction
             )
+        }
+        .padding(.vertical, 8)
+        .frame(width: 218)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+        }
+        .shadow(color: Color.black.opacity(0.20), radius: 20, y: 10)
+    }
+}
+
+/// Bar line types from MuseScore's Barlines palette. The kind names are the engine's
+/// repeat-and-jump command keys.
+struct ScoreReaderBarLineCommandMenu: View {
+    struct BarLineType: Identifiable {
+        let kind: String
+        let title: String
+        let musicGlyph: String
+
+        var id: String { kind }
+    }
+
+    static let barLineTypes = [
+        BarLineType(kind: "Normal barline", title: "Single", musicGlyph: "\u{E030}"),
+        BarLineType(kind: "Double barline", title: "Double", musicGlyph: "\u{E031}"),
+        BarLineType(kind: "Final barline", title: "Final", musicGlyph: "\u{E032}"),
+        BarLineType(kind: "Reverse final barline", title: "Reverse Final", musicGlyph: "\u{E033}"),
+        BarLineType(kind: "Heavy barline", title: "Heavy", musicGlyph: "\u{E034}"),
+        BarLineType(kind: "Heavy double barline", title: "Heavy Double", musicGlyph: "\u{E035}"),
+        BarLineType(kind: "Dashed barline", title: "Dashed", musicGlyph: "\u{E036}"),
+        BarLineType(kind: "Dotted barline", title: "Dotted", musicGlyph: "\u{E037}")
+    ]
+
+    let barLineAction: (String) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Self.barLineTypes) { barLineType in
+                ScoreReaderMeasureCommandRow(
+                    title: barLineType.title,
+                    musicGlyph: barLineType.musicGlyph,
+                    action: { barLineAction(barLineType.kind) }
+                )
+            }
         }
         .padding(.vertical, 8)
         .frame(width: 218)

@@ -95,6 +95,9 @@ enum ScoreReaderKeyboardShortcut {
     case movePitch(up: Bool)
     case shiftOctave(Int)
     case shiftSemitone(Int)
+    /// Page Up and Page Down, as most page-turn pedals send.
+    case previousPage
+    case nextPage
 }
 
 /// A hardware key, as both platforms report it to the shortcut map.
@@ -107,6 +110,8 @@ enum ScoreReaderShortcutKey: Equatable {
     case rightArrow
     case upArrow
     case downArrow
+    case pageUp
+    case pageDown
 }
 
 struct ScoreReaderShortcutModifiers: OptionSet {
@@ -198,6 +203,10 @@ extension ScoreReaderKeyboardShortcut {
             return .shiftSemitone(1)
         case (.downArrow, .command), (.downArrow, .shift):
             return .shiftSemitone(-1)
+        case (.pageUp, []):
+            return .previousPage
+        case (.pageDown, []):
+            return .nextPage
         default:
             return nil
         }
@@ -1219,6 +1228,16 @@ extension ScoreReaderState {
         refreshAfterScoreMutation(with: newState)
     }
 
+    /// The score's metadata as the engine has it now, also stored in scoreMetadata.
+    func loadScoreMetadata() async -> ScoreEditableMetadata {
+        guard let liveRenderSession = session.liveRenderSession else {
+            return scoreMetadata
+        }
+        let metadata = await liveRenderSession.currentMetadata()
+        scoreMetadata = metadata
+        return metadata
+    }
+
     func refreshScoreMetadata() {
         guard let liveRenderSession = session.liveRenderSession else {
             return
@@ -1438,6 +1457,12 @@ extension ScoreReaderState {
     func selectAll() {
         performEditingAction(mutatesScore: false) { liveRenderSession in
             try await liveRenderSession.selectAll()
+        }
+    }
+
+    func selectSimilar(sameStaff: Bool) {
+        performEditingAction(mutatesScore: false) { liveRenderSession in
+            try await liveRenderSession.selectSimilar(sameStaff: sameStaff)
         }
     }
 
