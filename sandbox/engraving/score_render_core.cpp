@@ -14,6 +14,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -150,10 +151,23 @@ const std::map<std::string, std::string>& embeddedArticulationProfiles();
 }}
 
 namespace msr::render {
-std::recursive_mutex& fluidSynthLock()
+std::recursive_timed_mutex& fluidSynthLock()
 {
-    static std::recursive_mutex lock;
+    static std::recursive_timed_mutex lock;
     return lock;
+}
+
+std::atomic<int>& fluidSynthRealtimeWaiters()
+{
+    static std::atomic<int> waiters { 0 };
+    return waiters;
+}
+
+void yieldFluidSynthLockToRealtime()
+{
+    while (fluidSynthRealtimeWaiters().load(std::memory_order_acquire) > 0) {
+        std::this_thread::yield();
+    }
 }
 }
 

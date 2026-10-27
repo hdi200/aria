@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <cstdint>
 #include <memory>
@@ -13,8 +14,15 @@ namespace msr::render {
 //! FluidSynth is built with MuseScore's -DNO_THREADS, so its own mutexes are no-ops and
 //! every synth in the process shares one unguarded sample cache. Hold this lock around
 //! anything that can load or unload samples: creating or deleting a synth, loading a
-//! SoundFont, program changes, and rendering (a finished voice can unload its samples).
-std::recursive_mutex& fluidSynthLock();
+//! SoundFont, program changes, note calls and rendering (a finished voice can unload
+//! its samples).
+std::recursive_timed_mutex& fluidSynthLock();
+
+//! Real-time threads (Android's audio callback) waiting for fluidSynthLock(). Holders
+//! that take the lock repeatedly, such as one render block at a time, wait while this
+//! is above zero, so a waiting audio callback gets in within one block.
+std::atomic<int>& fluidSynthRealtimeWaiters();
+void yieldFluidSynthLockToRealtime();
 
 struct RenderRequest {
     std::string scorePath;

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <deque>
 #include <mutex>
@@ -68,8 +69,8 @@ struct AudioOutput {
     std::atomic<bool> running { false };
 
     // The live instrument (audioSamplerLoad). FluidSynth's own locking is compiled out
-    // (see msr::render::fluidSynthLock), so note calls take `mutex` against the audio
-    // callback, and sample loading also takes the process-wide FluidSynth lock.
+    // (see msr::render::fluidSynthLock): every synth call takes the process-wide
+    // FluidSynth lock, then `mutex`, in that order.
     fluid_settings_t* synthSettings = nullptr;
     fluid_synth_t* synth = nullptr;
     std::string soundFontPath;
@@ -77,7 +78,7 @@ struct AudioOutput {
 
     ~AudioOutput()
     {
-        std::lock_guard<std::recursive_mutex> fluidLock(msr::render::fluidSynthLock());
+        std::lock_guard<std::recursive_timed_mutex> fluidLock(msr::render::fluidSynthLock());
         if (synth) {
             delete_fluid_synth(synth);
         }
@@ -106,6 +107,15 @@ aaudio_data_callback_result_t renderAudio(AAudioStream*, void* userData, void* a
     auto* samples = static_cast<float*>(audioData);
     std::fill(samples, samples + frameCount * 2, 0.0f);
     const std::int64_t now = aria::hostTimeNanos();
+
+    // Wait briefly for the FluidSynth lock, before `mutex` like every other path; render
+    // blocks step aside for a waiting callback. When a SoundFont load holds it longer,
+    // the live synth skips this buffer and resumes on the next.
+    std::atomic<int>& fluidWaiters = msr::render::fluidSynthRealtimeWaiters();
+    fluidWaiters.fetch_add(1, std::memory_order_acq_rel);
+    std::unique_lock<std::recursive_timed_mutex> fluidLock(msr::render::fluidSynthLock(), std::defer_lock);
+    fluidLock.try_lock_for(std::chrono::milliseconds(4));
+    fluidWaiters.fetch_sub(1, std::memory_order_acq_rel);
 
     std::lock_guard<std::mutex> lock(output->mutex);
     for (Player& player : output->players) {
@@ -138,9 +148,6 @@ aaudio_data_callback_result_t renderAudio(AAudioStream*, void* userData, void* a
         player.finishRendered();
     }
 
-    // Never wait here: when a SoundFont load or a playback render block holds the
-    // FluidSynth lock, the live synth skips this buffer and resumes on the next.
-    std::unique_lock<std::recursive_mutex> fluidLock(msr::render::fluidSynthLock(), std::try_to_lock);
     if (output->synth && fluidLock.owns_lock()) {
         output->synthBlock.assign(static_cast<std::size_t>(frameCount) * 2, 0.0f);
         float* block = output->synthBlock.data();
@@ -409,7 +416,7 @@ aria::Int64s aria::audioPlayerTakeFinished(void* handle, int index)
 bool aria::audioSamplerLoad(void* handle, const std::string& soundFontPath, int bank, int program, std::string& errorMessage)
 {
     AudioOutput* output = outputFrom(handle);
-    std::lock_guard<std::recursive_mutex> fluidLock(msr::render::fluidSynthLock());
+    std::lock_guard<std::recursive_timed_mutex> fluidLock(msr::render::fluidSynthLock());
     if (!output->synth || output->soundFontPath != soundFontPath) {
         fluid_settings_t* settings = new_fluid_settings();
         if (!settings) {
@@ -458,6 +465,9 @@ bool aria::audioSamplerLoad(void* handle, const std::string& soundFontPath, int 
 void aria::audioSamplerNoteOn(void* handle, int key, int velocity)
 {
     AudioOutput* output = outputFrom(handle);
+    // Note calls first stop finished voices, which can unload cached samples.
+    msr::render::yieldFluidSynthLockToRealtime();
+    std::lock_guard<std::recursive_timed_mutex> fluidLock(msr::render::fluidSynthLock());
     std::lock_guard<std::mutex> lock(output->mutex);
     if (output->synth) {
         fluid_synth_noteon(output->synth, 0, key, velocity);
@@ -467,6 +477,8 @@ void aria::audioSamplerNoteOn(void* handle, int key, int velocity)
 void aria::audioSamplerNoteOff(void* handle, int key)
 {
     AudioOutput* output = outputFrom(handle);
+    msr::render::yieldFluidSynthLockToRealtime();
+    std::lock_guard<std::recursive_timed_mutex> fluidLock(msr::render::fluidSynthLock());
     std::lock_guard<std::mutex> lock(output->mutex);
     if (output->synth) {
         fluid_synth_noteoff(output->synth, 0, key);
