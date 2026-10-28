@@ -11,8 +11,8 @@ import SwiftUI
 struct UpdateNoticeStore {
     static let currentVersion = 3
 
-    // Select Similar, copy between scores and Extend Selection release on October 30,
-    // 2026 at 12:00 AM Eastern: anyone who got the app before then sees the notice once.
+    // Anyone who got the app on or before October 29, 2026 (before October 30 at
+    // 12:00 AM Eastern) sees the notice once, as soon as they have this update.
     // AppTransaction supplies Apple's signed date for when this customer first
     // acquired the app, which survives the update itself (on Android, the first install
     // time on the device).
@@ -34,9 +34,8 @@ struct UpdateNoticeStore {
 
     /// A missing or unverified App Store transaction is left unresolved so a later
     /// launch can retry, instead of deciding the customer is new while offline.
-    func shouldPresentNotice(now: Date = Date()) async -> Bool {
-        guard now >= Self.releaseDate,
-              userDefaults.integer(forKey: defaultsKey) < Self.currentVersion else {
+    func shouldPresentNotice() async -> Bool {
+        guard userDefaults.integer(forKey: defaultsKey) < Self.currentVersion else {
             return false
         }
         if userDefaults.object(forKey: audienceKey) != nil {
