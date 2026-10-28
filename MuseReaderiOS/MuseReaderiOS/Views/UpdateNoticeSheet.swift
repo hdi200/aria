@@ -124,13 +124,13 @@ struct UpdateNoticeSheet: View {
             ),
             Item(
                 systemImage: "checkmark.circle",
-                title: "Transposing",
-                detail: "Transposing several notes, or part of a bar, now works correctly."
+                title: "Selecting multiple notes",
+                detail: "Fixed issues with selecting and editing several notes at once, including transposing part of a bar."
             ),
             Item(
                 systemImage: "checkmark.circle",
-                title: "Scrolling while editing",
-                detail: "Scrolling works right after entering notes, and edit mode scrolls on to the next page."
+                title: "Following note entry",
+                detail: "Made improvements to auto-scroll during note entry, so the bar you're entering into stays in view more consistently."
             ),
         ]
         #else
@@ -142,9 +142,8 @@ struct UpdateNoticeSheet: View {
             ),
             Item(
                 systemImage: "checkmark.circle",
-                title: "Note entry and transposing",
-                detail: "Half-step and octave buttons no longer move where the next note goes, and transposing "
-                    + "part of a bar changes only the notes you selected."
+                title: "Selecting multiple notes",
+                detail: "Fixed issues with selecting and editing several notes at once, including transposing part of a bar."
             ),
             Item(
                 systemImage: "checkmark.circle",
