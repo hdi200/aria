@@ -818,6 +818,8 @@ struct ScoreReaderSelectedTextActions: View {
     @Binding var zoomViewport: ScoreReaderZoomViewport
     let editAction: () -> Void
     let deleteAction: () -> Void
+    /// Measured, so the "…" button lands just right of the Edit / Remove pill.
+    @State var pillWidth: CGFloat = 150
 
     /// Chord symbols and text also get the "…" menu, just right of Remove.
     private var showsCommandMenu: Bool {
@@ -826,6 +828,8 @@ struct ScoreReaderSelectedTextActions: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let center = actionPosition(in: geometry.size)
+            ZStack(alignment: .topLeading) {
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Button(action: editAction) {
@@ -843,24 +847,32 @@ struct ScoreReaderSelectedTextActions: View {
                 .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Capsule())
                 .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
                 .buttonStyle(.borderless)
+                .background(
+                    GeometryReader { pill in
+                        Color.clear
+                            .onAppear { pillWidth = pill.size.width }
+                            .onChange(of: pill.size.width) { _, width in pillWidth = width }
+                    }
+                )
 
                 if showsCommandMenu {
-                    // The selection overlay draws the "…" button where this slot lands.
-                    ScoreReaderCommandAnchorSlot(
-                        selectedElement: selectedElement,
-                        selectionRects: [namedRect(actionAnchorCGRect(in: geometry.size).insetBy(dx: -10, dy: -10), in: geometry)]
-                    )
-                    .frame(width: 34, height: 34)
+                    // Room for the "…" button, which the selection overlay draws.
+                    Color.clear
+                        .frame(width: 34, height: 34)
                 }
             }
-            .position(actionPosition(in: geometry.size))
+            .position(center)
+
+            if showsCommandMenu {
+                ScoreReaderCommandAnchorSlot(
+                    selectedElement: selectedElement,
+                    point: CGPoint(x: center.x + (pillWidth + 42) / 2 - 17, y: center.y),
+                    selectionRect: actionAnchorCGRect(in: geometry.size).insetBy(dx: -10, dy: -10)
+                )
+            }
+            }
         }
         .allowsHitTesting(true)
-    }
-
-    private func namedRect(_ rect: CGRect, in geometry: GeometryProxy) -> CGRect {
-        let origin = geometry.frame(in: .named(ScoreReaderSelectionCommandAnchor.coordinateSpaceName)).origin
-        return rect.offsetBy(dx: origin.x, dy: origin.y)
     }
 
     private func actionPosition(in size: CGSize) -> CGPoint {
@@ -1173,14 +1185,15 @@ struct ScoreReaderSelectionCommandAnchorPreferenceKey: PreferenceKey {
     }
 }
 
-/// An empty slot that publishes where the selection's "…" button goes: its own centre.
+/// Publishes where the selection's "…" button goes. Fills the page overlay; `point` and
+/// `selectionRect` are in its coordinates, as the note and rest actions' are.
 struct ScoreReaderCommandAnchorSlot: View {
     #if os(Android)
     @Environment(AndroidSelectionCommandPresentation.self) var commandPresentation: AndroidSelectionCommandPresentation?
     #endif
     let selectedElement: ScoreSelectedElement
-    /// In the reader's selection-command coordinate space.
-    let selectionRects: [CGRect]
+    let point: CGPoint
+    let selectionRect: CGRect
 
     var body: some View {
         GeometryReader { geometry in
@@ -1210,8 +1223,8 @@ struct ScoreReaderCommandAnchorSlot: View {
         let frame = geometry.frame(in: .named(ScoreReaderSelectionCommandAnchor.coordinateSpaceName))
         return ScoreReaderSelectionCommandAnchor(
             selectedElement: selectedElement,
-            actionPosition: CGPoint(x: frame.midX, y: frame.midY),
-            selectionRects: selectionRects
+            actionPosition: CGPoint(x: frame.minX + point.x, y: frame.minY + point.y),
+            selectionRects: [selectionRect.offsetBy(dx: frame.minX, dy: frame.minY)]
         )
     }
 }
@@ -1531,32 +1544,48 @@ struct ScoreReaderSelectionCommandOverlay: View {
 
     /// The menu hangs from the "…" button: a corner just under it (or just over it when there
     /// is no room below), opening toward the middle of the screen, and grows out of that corner.
+    /// A menu too tall for either opens beside the button instead, so it never covers it.
     private func menuLayout(in size: CGSize) -> (center: CGPoint, growsFrom: UnitPoint) {
         let menuSize = self.menuSize
         let button = positionAnchor.actionPosition
         let buttonRadius: CGFloat = 17
         let gap: CGFloat = 6
         let opensRight = button.x < size.width / 2
+
+        let bottomDeckClearance: CGFloat = 300
+        let lowestTop = max(size.height - bottomDeckClearance - menuSize.height, 8)
+        let belowTop = button.y + buttonRadius + gap
+        let aboveTop = button.y - buttonRadius - gap - menuSize.height
+        let fitsBelow = belowTop <= lowestTop
+        let fitsAbove = aboveTop >= 8
+
+        func clampedX(_ x: CGFloat) -> CGFloat {
+            min(max(x, menuSize.width / 2 + 8), max(size.width - menuSize.width / 2 - 8, menuSize.width / 2 + 8))
+        }
+
+        if !fitsBelow && !fitsAbove {
+            let x = opensRight
+                ? button.x + buttonRadius + gap + menuSize.width / 2
+                : button.x - buttonRadius - gap - menuSize.width / 2
+            let top = min(max(button.y - buttonRadius, 8), lowestTop)
+            return (
+                CGPoint(x: clampedX(x), y: top + menuSize.height / 2),
+                opensRight ? .topLeading : .topTrailing
+            )
+        }
+
         let rawX = opensRight
             ? button.x - buttonRadius + menuSize.width / 2
             : button.x + buttonRadius - menuSize.width / 2
-        let x = min(max(rawX, menuSize.width / 2 + 8), max(size.width - menuSize.width / 2 - 8, menuSize.width / 2 + 8))
-
-        let bottomDeckClearance: CGFloat = 300
-        let lowestTop = size.height - bottomDeckClearance - menuSize.height
-        let belowTop = button.y + buttonRadius + gap
-        let aboveTop = button.y - buttonRadius - gap - menuSize.height
-        let opensBelow = belowTop <= lowestTop || aboveTop < 8
-        let top = opensBelow ? min(belowTop, max(lowestTop, 8)) : aboveTop
-
+        let top = fitsBelow ? belowTop : aboveTop
         let growsFrom: UnitPoint
-        switch (opensRight, opensBelow) {
+        switch (opensRight, fitsBelow) {
         case (true, true): growsFrom = .topLeading
         case (false, true): growsFrom = .topTrailing
         case (true, false): growsFrom = .bottomLeading
         case (false, false): growsFrom = .bottomTrailing
         }
-        return (CGPoint(x: x, y: top + menuSize.height / 2), growsFrom)
+        return (CGPoint(x: clampedX(rawX), y: top + menuSize.height / 2), growsFrom)
     }
 
     private var menuSize: CGSize {
