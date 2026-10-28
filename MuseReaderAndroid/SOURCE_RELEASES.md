@@ -16,6 +16,7 @@ Source snapshots exclude the same local/marketing material as iOS; see README.md
 | `android-1.0.0-9` | 1.0.0 (9), prepared October 28, 2026 | `55218d1ab2` | `d59463a2bd616aa362bdea25de46a2c559a447bb88121c3969e25bb3750291eb` |
 | `android-1.0.0-10` | 1.0.0 (10), prepared October 28, 2026 (version code 9 was already used on Play) | `a607fd91b5` | `6a8b0e6e8586ce9f1b004e47fe1fb6cdd664cd718920e967facbb0d354085d65` |
 | `android-1.0.0-11` | 1.0.0 (11), prepared October 28, 2026 | `d4f6050515` | `dd4d1c80108d9e49e789593733de074370afc692e596fafd268f6a92701bef07` |
+| `android-1.0.0-12` | 1.0.0 (12), prepared October 28, 2026 | `a2d17e9cff` | `f5d5f92c765c05fe6d7cf397cce0b4ac70cd3cb4d2b88503e940a566654894b6` |
 
 Both use the same Android production implementation and pinned dependencies;
 version 6 adds the shared instrument-catalog and library-confirmation fixes and
