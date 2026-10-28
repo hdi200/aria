@@ -1577,7 +1577,7 @@ struct ScoreReaderNoteRestCommandMenu: View {
             )
 
             ScoreReaderMeasureCommandRow(
-                title: "Similar on This Staff",
+                title: "Similar on Staff",
                 systemImage: "line.3.horizontal",
                 action: { selectSimilarAction(true) }
             )

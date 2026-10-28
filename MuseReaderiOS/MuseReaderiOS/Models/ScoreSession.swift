@@ -477,10 +477,11 @@ struct ScoreSelectedElement: Sendable, Equatable {
     let attachmentPoint: CGPoint?
     let attachmentTargets: [CGPoint]
     var highlightRects: [ScoreNormalizedRect]
-    let overlayNormalizedRect: ScoreNormalizedRect?
-    let overlayImageData: Data?
-    let overlayPDFData: Data?
-    /// Range highlights on later pages, for ranges that cross a page break.
+    var overlayNormalizedRect: ScoreNormalizedRect?
+    var overlayImageData: Data?
+    var overlayPDFData: Data?
+    /// Range highlights on later pages, for ranges that cross a page break, and the
+    /// other pages' elements of a list selection (Select Similar).
     var otherPageHighlightRects: [Int: [ScoreNormalizedRect]] = [:]
     /// A copy of the selection shown on one of those later pages: it draws the
     /// highlight there, while the selection's actions stay on its own page.
@@ -497,6 +498,10 @@ struct ScoreSelectedElement: Sendable, Equatable {
         copy.actionRect = firstRect
         copy.highlightRects = rects
         copy.otherPageHighlightRects = [:]
+        // The blue overlay is drawn from the selection's own page.
+        copy.overlayNormalizedRect = nil
+        copy.overlayImageData = nil
+        copy.overlayPDFData = nil
         copy.isHighlightOnly = true
         return copy
     }
