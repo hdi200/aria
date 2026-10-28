@@ -2114,6 +2114,20 @@ struct ScoreReaderView: View {
     }
 
     private func revealActiveNotation(using proxy: ScrollViewProxy) {
+        #if os(Android)
+        // Skip's scrollTo reaches only the page items and ignores the anchor, so the
+        // active-notation anchor inside a page never moves the list. A zoomed page fills the
+        // viewport and pans itself to the active bar (AndroidZoomableImageView), assuming its
+        // top is at the viewport's top: line it up first, or with the list scrolled partway
+        // into the next page that pan pushes the bar off the top of the screen.
+        if zoomScale > 1.01 {
+            let pageIndex = readerState.editingState.selection?.pageIndex ?? readerState.selectedPageIndex
+            withAnimation(.easeInOut(duration: 0.22)) {
+                proxy.scrollTo(pageIndex, anchor: .top)
+            }
+            return
+        }
+        #endif
         withAnimation(.easeInOut(duration: 0.22)) {
             if activeNotationFocusIsActive, readerState.editingState.selection?.pageIndex == readerState.selectedPageIndex {
                 // The anchor is placed so the selected bar lands in the middle

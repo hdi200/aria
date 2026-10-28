@@ -9,13 +9,14 @@ import SwiftUI
 /// Versioned so a later release can show a new notice by bumping `currentVersion`
 /// and `releaseDate`.
 struct UpdateNoticeStore {
-    static let currentVersion = 2
+    static let currentVersion = 3
 
-    // Annotations and video export release on October 14, 2026 at
-    // 12:00 AM Eastern: anyone who got the app before then sees the notice once.
+    // Select Similar, copy between scores and Extend Selection release on October 30,
+    // 2026 at 12:00 AM Eastern: anyone who got the app before then sees the notice once.
     // AppTransaction supplies Apple's signed date for when this customer first
-    // acquired the app, which survives the update itself.
-    static let releaseDate = Date(timeIntervalSince1970: 1_791_950_400)
+    // acquired the app, which survives the update itself (on Android, the first install
+    // time on the device).
+    static let releaseDate = Date(timeIntervalSince1970: 1_793_332_800)
 
     private let defaultsKey = "UpdateNotice.seenVersion"
     private var audienceKey: String {
@@ -78,6 +79,13 @@ struct UpdateNoticeSheet: View {
     @Environment(\.dismiss) var dismiss
     @State var page = 0
 
+    /// iOS's system blue. Android's accent colour is the Material theme's slate.
+    #if os(Android)
+    static let accent = Color(red: 0.0, green: 0.478, blue: 1.0)
+    #else
+    static let accent = Color.accentColor
+    #endif
+
     struct Page: Identifiable {
         /// Position among the pages shown on this device.
         var id = 0
@@ -99,32 +107,65 @@ struct UpdateNoticeSheet: View {
         let detail: String
     }
 
-    // The clips are real exports: Bach's Orchestral Suite No. 2 scrolling over
-    // a photo, and the Goldberg Aria on the piano over the moonlit fjord.
+    private static let fixes: [Item] = {
+        var fixes = [
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Score titles and composers",
+                detail: "The library and Edit Info now show each score's real title and composer."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Note entry and transposing",
+                detail: "Half-step and octave buttons no longer move where the next note goes, and transposing "
+                    + "part of a bar changes only the notes you selected."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Tempo and viewing key",
+                detail: "The dotted quarter in tempo markings looks right, and a rare crash when changing the "
+                    + "viewing key is fixed."
+            ),
+        ]
+        #if os(Android)
+        fixes += [
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Scrolling while editing",
+                detail: "Edit mode scrolls on to the next page, and scrolling works right after entering notes."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Crashes and previews",
+                detail: "Fixed a crash when saving in Score Setup and crashes during playback, and key signature "
+                    + "previews show flats in the right place."
+            ),
+        ]
+        #endif
+        return fixes
+    }()
+
     private let pages: [Page] = [
         Page(
-            clip: "whats-new-scrolling",
-            systemImage: "film",
-            title: "Turn your score into a video",
-            message: "Open Share and choose Video. Your score scrolls smoothly as it plays, with playback "
-                + "using your saved mix. Keep it on paper or set it over a photo, in landscape for YouTube "
-                + "or vertical for Reels and TikTok."
-        ),
-        Page(
-            clip: "whats-new-piano",
-            systemImage: "pianokeys",
-            title: "Or watch it on a piano",
-            message: "Choose the Piano layout and the notes fall onto a keyboard, lighting each key as it plays. "
-                + "Pick dark, light, or one of the nature photos."
+            clip: nil,
+            systemImage: "lasso",
+            title: "Select Similar",
+            message: "Select a note, rest, chord symbol or text, tap its ••• button and choose Select Similar "
+                + "to select everything like it, in the whole score or on one staff."
         ),
         Page(
             clip: nil,
-            systemImage: "pencil.tip.crop.circle",
-            title: "Mark up your scores",
-            message: "In View mode, tap the annotation button to write, draw, or highlight with your Apple Pencil "
-                + "or finger. Each mark stays with its spot in the music, even when the layout changes. "
-                + "Your annotations are saved with this score, ready for your next practice or rehearsal.",
-            isPadOnly: true
+            systemImage: "doc.on.clipboard",
+            title: "Copy and paste between scores",
+            message: "Copy music in one score, open another, and paste it in. Bars, notes and chord symbols "
+                + "come along."
+        ),
+        Page(
+            clip: nil,
+            systemImage: "arrow.right",
+            title: "Select bars across pages",
+            message: "Select a bar, tap its ••• button and choose Extend Selection. Then scroll to any page "
+                + "and tap the last bar you want: every bar in between is selected."
         ),
         Page(
             clip: nil,
@@ -133,21 +174,28 @@ struct UpdateNoticeSheet: View {
             message: "",
             items: [
                 Item(
-                    systemImage: "metronome",
-                    title: "Count-in",
-                    detail: "Touch and hold the metronome button to play one bar of clicks before playback starts."
-                ),
-                Item(
                     systemImage: "book.pages",
-                    title: "Page scrubber",
-                    detail: "Drag the slider at the bottom of the score to jump to any page."
+                    title: "Page-turn pedals",
+                    detail: "Bluetooth pedals and arrow keys turn pages while you read."
                 ),
                 Item(
-                    systemImage: "music.note.list",
-                    title: "Swing and instruments",
-                    detail: "Swing markings now swing in playback, and added instruments get the right key and drum staff."
+                    systemImage: "music.note",
+                    title: "Bar line types",
+                    detail: "Tap a bar line and choose double, final, dashed, dotted and more."
+                ),
+                Item(
+                    systemImage: "slider.vertical.3",
+                    title: "Chords in the mixer",
+                    detail: "Mute or turn down chord symbol playback with the new Chords channel."
                 ),
             ]
+        ),
+        Page(
+            clip: nil,
+            systemImage: "checkmark.circle",
+            title: "Fixes",
+            message: "",
+            items: fixes
         )
     ]
     .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
@@ -172,7 +220,7 @@ struct UpdateNoticeSheet: View {
                     HStack(spacing: 8) {
                         ForEach(pages) { item in
                             Circle()
-                                .fill(item.id == page ? Color.accentColor : Color.secondary.opacity(0.3))
+                                .fill(item.id == page ? Self.accent : Color.secondary.opacity(0.3))
                                 .frame(width: 7, height: 7)
                         }
                     }
@@ -187,6 +235,7 @@ struct UpdateNoticeSheet: View {
                         Text(page < pages.count - 1 ? "Next" : "Continue").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(Self.accent)
                     .controlSize(.large)
                     .accessibilityIdentifier("updateNoticeContinue")
                 }
@@ -202,7 +251,11 @@ struct UpdateNoticeSheet: View {
                 }
             }
         }
+        #if !os(Android)
+        // Skip lays this out as a fixed 560-point width, wider than an Android phone.
         .frame(maxWidth: 560)
+        #endif
+        .tint(Self.accent)
         .presentationDetents([.large])
     }
 
@@ -225,9 +278,9 @@ struct UpdateNoticeSheet: View {
                     HStack(alignment: .top, spacing: 14) {
                         Image(systemName: item.systemImage)
                             .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Self.accent)
                             .frame(width: 44, height: 44)
-                            .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .background(Self.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(item.title).font(.body.weight(.semibold))
@@ -255,12 +308,17 @@ struct UpdateNoticeSheet: View {
                     } else {
                         Image(systemName: page.systemImage)
                             .font(.system(size: 56))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Self.accent)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(Color.accentColor.opacity(0.08))
+                            .background(Self.accent.opacity(0.08))
                     }
                 }
+                #if os(Android)
+                // Skip doesn't size this by aspect ratio; about 16:9 on a phone-width sheet.
+                .frame(height: 200)
+                #else
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                #endif
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .accessibilityHidden(true)
 
