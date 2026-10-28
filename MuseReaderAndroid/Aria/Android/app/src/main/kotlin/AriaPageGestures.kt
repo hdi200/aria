@@ -4,10 +4,15 @@ import android.util.Log
 import androidx.annotation.Keep
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,7 +36,12 @@ class AriaPageGestures(
             // Recomposition updates closures without cancelling a gesture or keeping old page values.
             val latest = rememberUpdatedState(this@AriaPageGestures)
             val density = LocalDensity.current.density
-            Modifier.pointerInput(editing, annotating) {
+            // A zoomed page pans inside itself; what a pan can't use past the page's top or
+            // bottom goes to the enclosing page list, which then scrolls (iOS's nested scroll
+            // views do this on their own).
+            val scrollDispatcher = remember { NestedScrollDispatcher() }
+            val scrollConnection = remember { object : NestedScrollConnection {} }
+            Modifier.nestedScroll(scrollConnection, scrollDispatcher).pointerInput(editing, annotating) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     val start = down.position
@@ -43,6 +53,8 @@ class AriaPageGestures(
                     var pinching = false
                     var pinchStart = Offset.Zero
                     var pinchSpan = 1f
+                    // The pan overflow already handed to the page list, in hundredths of a dp.
+                    var handedOff = 0
                     fun emit(code: Int, point: Offset, a: Double = start.x.toDouble() / density,
                              b: Double = start.y.toDouble() / density): Int {
                         val result = latest.value.event(code, point.x.toDouble() / density,
@@ -131,7 +143,14 @@ class AriaPageGestures(
                                 }
                             }
                             if (owned) {
-                                emit(if (held && !latest.value.editing) 6 else 2, last)
+                                val readingDrag = held && !latest.value.editing
+                                val overflow = emit(if (readingDrag) 6 else 2, last)
+                                if (!readingDrag && overflow != handedOff) {
+                                    val deltaPx = (overflow - handedOff) / 100f * density
+                                    scrollDispatcher.dispatchPostScroll(
+                                        Offset.Zero, Offset(0f, -deltaPx), NestedScrollSource.UserInput)
+                                    handedOff = overflow
+                                }
                                 change.consume()
                             }
                         }

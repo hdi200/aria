@@ -905,6 +905,13 @@ struct ZoomableImageView: View {
             #endif
             dragChanged(location: point, startLocation: gestureStart,
                 translation: CGSize(width: point.x - gestureStart.x, height: point.y - gestureStart.y))
+            // How far a pan has gone past the page's top or bottom, in hundredths of a point.
+            // AriaPageGestures hands it to the page list, so a zoomed page scrolls on to the
+            // next page as on iOS, where the page's scroll view passes it on.
+            if case .some(.pan(let start)) = dragMode {
+                let wantedY = start.y - (point.y - gestureStart.y)
+                return Int32(((wantedY - contentOffset.y) * 100).rounded())
+            }
         case 3:
             let code = dragModeCode
             dragEnded(location: point,
