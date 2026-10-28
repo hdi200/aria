@@ -57,6 +57,7 @@ struct MuseReaderiOSApp: App {
             ContentView()
                 .preferredColorScheme(.light)
                 .environment(\.colorScheme, .light)
+                .background(DuoHingeWatcher().ignoresSafeArea())
         }
     }
 }
