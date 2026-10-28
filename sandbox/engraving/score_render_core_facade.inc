@@ -647,6 +647,15 @@ bool msr::render::ScoreRenderSession::selectAll(ScoreEditState& output, std::str
     return m_impl->selectAll(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::extendSelectionToPoint(const int pageIndex,
+                                                              const double normalizedX,
+                                                              const double normalizedY,
+                                                              ScoreEditState& output,
+                                                              std::string& errorMessage)
+{
+    return m_impl->extendSelectionToPoint(pageIndex, normalizedX, normalizedY, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::selectSimilar(const bool sameStaff, ScoreEditState& output, std::string& errorMessage)
 {
     return m_impl->selectSimilar(sameStaff, output, errorMessage);

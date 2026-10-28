@@ -656,6 +656,10 @@ isEditableText:(BOOL)isEditableText
                                           endNormalizedX:(double)endNormalizedX
                                           endNormalizedY:(double)endNormalizedY
                                                    error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(selectMeasureRange(pageIndex:startNormalizedX:startNormalizedY:endNormalizedX:endNormalizedY:));
+- (nullable MSREditState *)extendSelectionAtPageIndex:(NSInteger)pageIndex
+                                         normalizedX:(double)normalizedX
+                                         normalizedY:(double)normalizedY
+                                               error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(extendSelection(pageIndex:normalizedX:normalizedY:));
 - (nullable MSREditState *)previewMeasureRangeAtPageIndex:(NSInteger)pageIndex
                                          startNormalizedX:(double)startNormalizedX
                                          startNormalizedY:(double)startNormalizedY

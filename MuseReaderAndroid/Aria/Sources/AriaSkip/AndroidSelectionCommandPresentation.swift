@@ -22,7 +22,17 @@ final class AndroidSelectionCommandPresentation {
             guard ownerPageIndex == pageIndex else { return }
             ownerPageIndex = nil
         }
-        if let dismissedIdentity, next?.identity == dismissedIdentity { return }
+        if let dismissedIdentity, next?.identity == dismissedIdentity {
+            // The dismissed selection is back (undo): don't leave the previous button showing.
+            if lastPublished != nil {
+                lastPublished = nil
+                anchor = nil
+                selection = nil
+            }
+            return
+        }
+        // A different selection: the earlier dismissal no longer applies.
+        if next != nil { dismissedIdentity = nil }
         guard next != lastPublished else { return }
         if let next { positioner.move(to: next.actionPosition) }
         let previousSelection = lastPublished?.selectedElement

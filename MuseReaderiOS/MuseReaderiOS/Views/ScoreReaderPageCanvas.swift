@@ -819,35 +819,59 @@ struct ScoreReaderSelectedTextActions: View {
     let editAction: () -> Void
     let deleteAction: () -> Void
 
+    /// Chord symbols and text also get the "…" menu, just right of Remove.
+    private var showsCommandMenu: Bool {
+        selectedElement.kind == .text || selectedElement.kind == .chordText
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            HStack(spacing: 6) {
-                Button(action: editAction) {
-                    Label("Edit", systemImage: "pencil")
-                }
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Button(action: editAction) {
+                        Label("Edit", systemImage: "pencil")
+                    }
 
-                Button(action: deleteAction) {
-                    Label("Remove", systemImage: "trash")
+                    Button(action: deleteAction) {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Capsule())
+                .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
+                .buttonStyle(.borderless)
+
+                if showsCommandMenu {
+                    // The selection overlay draws the "…" button where this slot lands.
+                    ScoreReaderCommandAnchorSlot(
+                        selectedElement: selectedElement,
+                        selectionRects: [namedRect(actionAnchorCGRect(in: geometry.size).insetBy(dx: -10, dy: -10), in: geometry)]
+                    )
+                    .frame(width: 34, height: 34)
                 }
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Capsule())
-            .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
-            .buttonStyle(.borderless)
             .position(actionPosition(in: geometry.size))
         }
         .allowsHitTesting(true)
     }
 
+    private func namedRect(_ rect: CGRect, in geometry: GeometryProxy) -> CGRect {
+        let origin = geometry.frame(in: .named(ScoreReaderSelectionCommandAnchor.coordinateSpaceName)).origin
+        return rect.offsetBy(dx: origin.x, dy: origin.y)
+    }
+
     private func actionPosition(in size: CGSize) -> CGPoint {
         let rect = actionAnchorCGRect(in: size)
-        let rawX = rect.maxX + 28
+        // The "…" slot widens the row by 42; keep the Edit / Remove pill where it was.
+        let extraWidth: CGFloat = showsCommandMenu ? 42 : 0
+        let rawX = rect.maxX + 28 + extraWidth / 2
         let rawY = rect.minY - 26
+        let margin = 42 + extraWidth / 2
         return CGPoint(
-            x: min(max(rawX, 42), max(size.width - 42, 42)),
+            x: min(max(rawX, margin), max(size.width - margin, margin)),
             y: min(max(rawY, 26), max(size.height - 26, 26))
         )
     }
@@ -1149,6 +1173,49 @@ struct ScoreReaderSelectionCommandAnchorPreferenceKey: PreferenceKey {
     }
 }
 
+/// An empty slot that publishes where the selection's "…" button goes: its own centre.
+struct ScoreReaderCommandAnchorSlot: View {
+    #if os(Android)
+    @Environment(AndroidSelectionCommandPresentation.self) var commandPresentation: AndroidSelectionCommandPresentation?
+    #endif
+    let selectedElement: ScoreSelectedElement
+    /// In the reader's selection-command coordinate space.
+    let selectionRects: [CGRect]
+
+    var body: some View {
+        GeometryReader { geometry in
+            #if os(Android)
+            let anchor = commandAnchor(in: geometry)
+            Color.clear
+                .onChange(of: anchor, initial: true) { _, next in
+                    commandPresentation?.publish(next, from: selectedElement.pageIndex)
+                }
+                .onDisappear {
+                    commandPresentation?.remove(identity: anchor.identity, from: selectedElement.pageIndex)
+                }
+            #else
+            Color.clear
+                .preference(
+                    key: ScoreReaderSelectionCommandAnchorPreferenceKey.self,
+                    value: commandAnchor(in: geometry)
+                )
+            #endif
+        }
+        #if !os(Android)
+        .allowsHitTesting(false)
+        #endif
+    }
+
+    private func commandAnchor(in geometry: GeometryProxy) -> ScoreReaderSelectionCommandAnchor {
+        let frame = geometry.frame(in: .named(ScoreReaderSelectionCommandAnchor.coordinateSpaceName))
+        return ScoreReaderSelectionCommandAnchor(
+            selectedElement: selectedElement,
+            actionPosition: CGPoint(x: frame.midX, y: frame.midY),
+            selectionRects: selectionRects
+        )
+    }
+}
+
 struct ScoreReaderSelectedNoteRestActions: View {
     #if os(Android)
     @Environment(AndroidSelectionCommandPresentation.self) var commandPresentation: AndroidSelectionCommandPresentation?
@@ -1230,6 +1297,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
     #endif
     @State var isMenuPresented = false
     @State var isTransposePresented = false
+    @State var isSelectSimilarExpanded = false
 
     let anchor: ScoreReaderSelectionCommandAnchor
     let copyAction: () -> Void
@@ -1253,6 +1321,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
     let accentAction: (String) -> Void
     let selectSimilarAction: (Bool) -> Void
     let barLineAction: (String) -> Void
+    let extendSelectionAction: () -> Void
     let dismissAction: (String) -> Void
 
     // Keep observation of live geometry inside the small GeometryReader content.
@@ -1285,6 +1354,10 @@ struct ScoreReaderSelectionCommandOverlay: View {
         selectedElement.kind == .bar
     }
 
+    private var isTextSelection: Bool {
+        selectedElement.kind == .text || selectedElement.kind == .chordText
+    }
+
     private var showsEnharmonicAction: Bool {
         isNoteSelection
             && (selectedElement.accidentalKind == .sharp || selectedElement.accidentalKind == .flat)
@@ -1294,9 +1367,10 @@ struct ScoreReaderSelectionCommandOverlay: View {
         GeometryReader { geometry in
             ZStack(alignment: .topLeading) {
                 if isMenuPresented {
+                    let layout = menuLayout(in: geometry.size)
                     commandMenu
-                        .position(menuPosition(in: geometry.size))
-                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)))
+                        .position(layout.center)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: layout.growsFrom)))
                         .zIndex(1)
                 }
 
@@ -1314,6 +1388,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
                 Button {
                     withAnimation(.snappy(duration: 0.16)) {
                         isTransposePresented = false
+                        isSelectSimilarExpanded = false
                         isMenuPresented.toggle()
                     }
                 } label: {
@@ -1323,7 +1398,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
                         .frame(width: 34, height: 34)
                         .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Circle())
                         .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
-                        .accessibilityLabel(isInstrumentSelection ? "Instrument options" : (isBarLineSelection ? "Bar line options" : (isNoteRestSelection ? "Selection options" : "Measure options")))
+                        .accessibilityLabel(isInstrumentSelection ? "Instrument options" : (isBarLineSelection ? "Bar line options" : (isNoteRestSelection || isTextSelection ? "Selection options" : "Measure options")))
                 }
                 .buttonStyle(.plain)
                 #if os(Android)
@@ -1360,6 +1435,15 @@ struct ScoreReaderSelectionCommandOverlay: View {
             ScoreReaderBarLineCommandMenu(barLineAction: { barLineKind in
                 perform { barLineAction(barLineKind) }()
             })
+        } else if isTextSelection {
+            ScoreReaderTextCommandMenu(
+                isSelectSimilarExpanded: $isSelectSimilarExpanded,
+                selectSimilarAction: { sameStaff in
+                    perform { selectSimilarAction(sameStaff) }()
+                },
+                copyAction: perform(copyAction),
+                deleteAction: perform(deleteSelectionAction)
+            )
         } else if isNoteRestSelection {
             ScoreReaderNoteRestCommandMenu(
                 isNoteSelection: isNoteSelection,
@@ -1372,6 +1456,7 @@ struct ScoreReaderSelectionCommandOverlay: View {
                 showsEnharmonicAction: showsEnharmonicAction,
                 changeEnharmonicAction: perform(changeEnharmonicAction),
                 flipStemAction: perform(flipStemAction),
+                isSelectSimilarExpanded: $isSelectSimilarExpanded,
                 selectSimilarAction: { sameStaff in
                     perform { selectSimilarAction(sameStaff) }()
                 },
@@ -1396,7 +1481,8 @@ struct ScoreReaderSelectionCommandOverlay: View {
                 pickupMeasureAction: perform(pickupMeasureAction),
                 changeInstrumentAction: perform(changeInstrumentAction),
                 removeAction: perform(removeSelectedMeasureAction),
-                clearAction: perform(clearSelectedMeasureAction)
+                clearAction: perform(clearSelectedMeasureAction),
+                extendSelectionAction: perform(extendSelectionAction)
             )
         }
     }
@@ -1436,31 +1522,61 @@ struct ScoreReaderSelectionCommandOverlay: View {
             withAnimation(.snappy(duration: 0.12)) {
                 isMenuPresented = false
                 isTransposePresented = false
+                isSelectSimilarExpanded = false
             }
             dismissAction(anchor.identity)
             action()
         }
     }
 
-    private func menuPosition(in size: CGSize) -> CGPoint {
+    /// The menu hangs from the "…" button: a corner just under it (or just over it when there
+    /// is no room below), opening toward the middle of the screen, and grows out of that corner.
+    private func menuLayout(in size: CGSize) -> (center: CGPoint, growsFrom: UnitPoint) {
+        let menuSize = self.menuSize
+        let button = positionAnchor.actionPosition
+        let buttonRadius: CGFloat = 17
+        let gap: CGFloat = 6
+        let opensRight = button.x < size.width / 2
+        let rawX = opensRight
+            ? button.x - buttonRadius + menuSize.width / 2
+            : button.x + buttonRadius - menuSize.width / 2
+        let x = min(max(rawX, menuSize.width / 2 + 8), max(size.width - menuSize.width / 2 - 8, menuSize.width / 2 + 8))
+
+        let bottomDeckClearance: CGFloat = 300
+        let lowestTop = size.height - bottomDeckClearance - menuSize.height
+        let belowTop = button.y + buttonRadius + gap
+        let aboveTop = button.y - buttonRadius - gap - menuSize.height
+        let opensBelow = belowTop <= lowestTop || aboveTop < 8
+        let top = opensBelow ? min(belowTop, max(lowestTop, 8)) : aboveTop
+
+        let growsFrom: UnitPoint
+        switch (opensRight, opensBelow) {
+        case (true, true): growsFrom = .topLeading
+        case (false, true): growsFrom = .topTrailing
+        case (true, false): growsFrom = .bottomLeading
+        case (false, false): growsFrom = .bottomTrailing
+        }
+        return (CGPoint(x: x, y: top + menuSize.height / 2), growsFrom)
+    }
+
+    private var menuSize: CGSize {
         // Note selections also carry the Flip Stem row, rest selections do not.
         let menuSize: CGSize
         if isInstrumentSelection {
             menuSize = CGSize(width: 238, height: 56)
         } else if isBarLineSelection {
             menuSize = CGSize(width: 218, height: CGFloat(ScoreReaderBarLineCommandMenu.barLineTypes.count) * 36 + 16)
+        } else if isTextSelection {
+            menuSize = CGSize(width: 218, height: isSelectSimilarExpanded ? 243 : 171)
         } else if isNoteRestSelection {
-            // Select Similar adds two rows.
-            menuSize = CGSize(width: 218, height: (isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216) + 72)
+            // Select Similar adds a row, and two more while its choices are shown.
+            menuSize = CGSize(width: 218, height: (isNoteSelection ? (showsEnharmonicAction ? 464 : 428) : 216)
+                + (isSelectSimilarExpanded ? 108 : 36))
         } else {
-            menuSize = CGSize(width: 238, height: selectedElement.isSingleMeasure ? 508 : 362)
+            // Extend Selection adds a row.
+            menuSize = CGSize(width: 238, height: selectedElement.isSingleMeasure ? 544 : 398)
         }
-        let rawX = positionAnchor.actionPosition.x - menuSize.width / 2 + 2
-        let rawY = positionAnchor.actionPosition.y + 16 + menuSize.height / 2
-        return CGPoint(
-            x: min(max(rawX, menuSize.width / 2 + 8), max(size.width - menuSize.width / 2 - 8, menuSize.width / 2 + 8)),
-            y: clampedPopoverY(rawY, popoverSize: menuSize, x: rawX, in: size)
-        )
+        return menuSize
     }
 
     private func transposePosition(in size: CGSize) -> CGPoint {
@@ -1538,6 +1654,7 @@ struct ScoreReaderNoteRestCommandMenu: View {
     let showsEnharmonicAction: Bool
     let changeEnharmonicAction: () -> Void
     let flipStemAction: () -> Void
+    @Binding var isSelectSimilarExpanded: Bool
     let selectSimilarAction: (Bool) -> Void
     let accentAction: (String) -> Void
 
@@ -1570,16 +1687,9 @@ struct ScoreReaderNoteRestCommandMenu: View {
                 action: transposeAction
             )
 
-            ScoreReaderMeasureCommandRow(
-                title: "Select Similar",
-                systemImage: "lasso",
-                action: { selectSimilarAction(false) }
-            )
-
-            ScoreReaderMeasureCommandRow(
-                title: "Similar on Staff",
-                systemImage: "line.3.horizontal",
-                action: { selectSimilarAction(true) }
+            ScoreReaderSelectSimilarRows(
+                isExpanded: $isSelectSimilarExpanded,
+                selectSimilarAction: selectSimilarAction
             )
 
             if showsEnharmonicAction {
@@ -1616,6 +1726,107 @@ struct ScoreReaderNoteRestCommandMenu: View {
 
                 ScoreReaderMeasureCommandDivider()
             }
+
+            ScoreReaderMeasureCommandRow(
+                title: "Delete",
+                systemImage: "trash",
+                role: .destructive,
+                action: deleteAction
+            )
+        }
+        .padding(.vertical, 8)
+        .frame(width: 218)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+        }
+        .shadow(color: Color.black.opacity(0.20), radius: 20, y: 10)
+    }
+}
+
+/// Shown while the next tap extends the selection: scroll to any page and tap the last bar.
+struct ScoreReaderExtendSelectionBanner: View {
+    let cancelAction: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Extend selection: tap the last bar")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Button("Cancel", action: cancelAction)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Capsule())
+        .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
+    }
+}
+
+/// Select Similar, which opens to choose the whole score or the selection's staff.
+struct ScoreReaderSelectSimilarRows: View {
+    @Binding var isExpanded: Bool
+    let selectSimilarAction: (Bool) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScoreReaderMeasureCommandRow(
+                title: "Select Similar",
+                systemImage: "lasso",
+                trailingSystemImage: isExpanded ? "chevron.up" : "chevron.down",
+                action: {
+                    withAnimation(.snappy(duration: 0.16)) {
+                        isExpanded.toggle()
+                    }
+                }
+            )
+
+            if isExpanded {
+                VStack(spacing: 0) {
+                    ScoreReaderMeasureCommandRow(
+                        title: "Whole Score",
+                        leadingIndent: 30,
+                        action: { selectSimilarAction(false) }
+                    )
+
+                    ScoreReaderMeasureCommandRow(
+                        title: "This Staff",
+                        leadingIndent: 30,
+                        action: { selectSimilarAction(true) }
+                    )
+                }
+                .background(Color.black.opacity(0.04))
+            }
+        }
+    }
+}
+
+/// The "…" menu of a selected chord symbol or text, beside its Edit and Remove buttons.
+struct ScoreReaderTextCommandMenu: View {
+    @Binding var isSelectSimilarExpanded: Bool
+    let selectSimilarAction: (Bool) -> Void
+    let copyAction: () -> Void
+    let deleteAction: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScoreReaderSelectSimilarRows(
+                isExpanded: $isSelectSimilarExpanded,
+                selectSimilarAction: selectSimilarAction
+            )
+
+            ScoreReaderMeasureCommandRow(
+                title: "Copy",
+                systemImage: "doc.on.doc",
+                shortcut: "⌘C",
+                action: copyAction
+            )
+
+            ScoreReaderMeasureCommandDivider()
 
             ScoreReaderMeasureCommandRow(
                 title: "Delete",
@@ -1769,6 +1980,7 @@ struct ScoreReaderMeasureCommandMenu: View {
     let changeInstrumentAction: () -> Void
     let removeAction: () -> Void
     let clearAction: () -> Void
+    let extendSelectionAction: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1791,6 +2003,12 @@ struct ScoreReaderMeasureCommandMenu: View {
                 systemImage: "doc.on.clipboard",
                 shortcut: "⌘V",
                 action: pasteAction
+            )
+
+            ScoreReaderMeasureCommandRow(
+                title: "Extend Selection...",
+                systemImage: "arrow.right",
+                action: extendSelectionAction
             )
 
             ScoreReaderMeasureCommandDivider()
@@ -1882,14 +2100,23 @@ struct ScoreReaderMeasureCommandRow: View {
     var symbolText: String? = nil
     var musicGlyph: String? = nil
     var shortcut: String?
+    /// A chevron or similar after the title, in the shortcut's place.
+    var trailingSystemImage: String? = nil
+    /// Space before the title in place of an icon, for a submenu's rows.
+    var leadingIndent: CGFloat? = nil
     var role: ButtonRole?
     let action: () -> Void
 
     var body: some View {
         Button(role: role, action: action) {
             HStack(spacing: 12) {
-                iconView
-                    .frame(width: 18, height: 18)
+                if let leadingIndent {
+                    Color.clear
+                        .frame(width: leadingIndent - 12, height: 18)
+                } else {
+                    iconView
+                        .frame(width: 18, height: 18)
+                }
 
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
@@ -1900,6 +2127,10 @@ struct ScoreReaderMeasureCommandRow: View {
                 if let shortcut {
                     Text(shortcut)
                         .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.black.opacity(0.36))
+                } else if let trailingSystemImage {
+                    Image(systemName: trailingSystemImage)
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Color.black.opacity(0.36))
                 }
             }

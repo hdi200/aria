@@ -1567,6 +1567,16 @@ bool usesSymbolSelectionHighlight(const mu::engraving::EngravingItem* item)
                     || item->type() == mu::engraving::ElementType::TREMOLO_TWOCHORD);
 }
 
+//! Chord symbols, staff/system text and score text turn blue when selected, as in MuseScore,
+//! instead of getting a box.
+bool usesTextSelectionHighlight(const mu::engraving::EngravingItem* item)
+{
+    return item && (item->isHarmony()
+                    || item->isStaffText()
+                    || item->isSystemText()
+                    || item->isText());
+}
+
 bool isEditableTextItem(const mu::engraving::EngravingItem* item)
 {
     return item && (item->isHarmony()
@@ -4680,7 +4690,7 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     } else if (mu::engraving::Rest* rest = selectedItem->isRest() ? mu::engraving::toRest(selectedItem) : nullptr) {
         appendRestHighlightRects(selectionState, page, rest);
         appendRestOverlayItems(overlayItems, rest);
-    } else if (usesSymbolSelectionHighlight(selectedItem)) {
+    } else if (usesSymbolSelectionHighlight(selectedItem) || usesTextSelectionHighlight(selectedItem)) {
         overlayItems.push_back(selectedItem);
     } else if (expressionSpanner && (expressionSpanner->isSlurTie() || expressionSpanner->isHairpin())) {
         // The curve or wedge itself turns blue: every piece of it on this page.
@@ -4691,7 +4701,11 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
         }
     }
     // A list selection (Select Similar) shows every selected element, not only the first.
-    if (score->selection().isList()) {
+    if (score->selection().isList() && score->selection().elements().size() > 1) {
+        // A single text has no highlight rects of its own; keep it first.
+        if (selectionState.highlightRects.empty() && !usesTextSelectionHighlight(selectedItem)) {
+            appendHighlightRect(selectionState, page, boundingRect, page->spatium());
+        }
         for (mu::engraving::EngravingItem* item : score->selection().elements()) {
             if (!item || item == selectedItem) {
                 continue;
@@ -4714,9 +4728,11 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             } else if (mu::engraving::Rest* listRest = item->isRest() ? mu::engraving::toRest(item) : nullptr) {
                 appendRestHighlightRects(selectionState, page, listRest);
                 appendRestOverlayItems(overlayItems, listRest);
-            } else if (usesSymbolSelectionHighlight(item)) {
-                appendHighlightRect(selectionState, page, item->pageBoundingRect(), page->spatium());
+            } else if (usesSymbolSelectionHighlight(item) || usesTextSelectionHighlight(item)) {
                 overlayItems.push_back(item);
+            } else {
+                // Text is outlined, as a single one is.
+                appendHighlightRect(selectionState, page, item->pageBoundingRect(), page->spatium());
             }
         }
     }

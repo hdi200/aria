@@ -516,6 +516,10 @@ extension ScoreReaderState {
         }
 
         updateSelection(to: pageIndex)
+        if isExtendingSelection {
+            extendSelection(pageIndex: pageIndex, normalizedPoint: normalizedPoint)
+            return
+        }
         let shouldInsert = editingState.noteInputEnabled
         let selectionHitRadiusScale = inputKind == .pencil ? 0.52 : 1.0
         let pendingAccidentalKind = self.pendingAccidentalKind
@@ -715,6 +719,29 @@ extension ScoreReaderState {
                 guard !Task.isCancelled, self?.noteEntryPreviewRevision == revision else {
                     return
                 }
+            }
+        }
+    }
+
+    /// Selects whole bars from the current selection to the bar at the point. Stays ready for
+    /// another tap if the point isn't on a bar.
+    func extendSelection(pageIndex: Int, normalizedPoint: CGPoint) {
+        guard let liveRenderSession = session.liveRenderSession, !isEditingActionInFlight else {
+            return
+        }
+
+        isEditingActionInFlight = true
+        Task { @MainActor [weak self] in
+            defer {
+                self?.isEditingActionInFlight = false
+            }
+
+            do {
+                let newState = try await liveRenderSession.extendSelection(pageIndex: pageIndex, point: normalizedPoint)
+                self?.isExtendingSelection = false
+                self?.applyEditingState(newState)
+            } catch {
+                self?.editingErrorMessage = nil
             }
         }
     }
@@ -1467,6 +1494,7 @@ extension ScoreReaderState {
     }
 
     func clearSelection() {
+        isExtendingSelection = false
         if editingState.noteInputEnabled || hasContinuousNoteInputCursor {
             setNoteInputEnabled(false)
             return

@@ -451,6 +451,9 @@ public:
     bool deleteSelection(ScoreEditState& output, std::string& errorMessage);
     bool previewMeasureRange(int pageIndex, double startNormalizedX, double startNormalizedY, double endNormalizedX, double endNormalizedY, ScoreEditState& output, std::string& errorMessage);
     bool selectMeasureRange(int pageIndex, double startNormalizedX, double startNormalizedY, double endNormalizedX, double endNormalizedY, ScoreEditState& output, std::string& errorMessage);
+    //! Like Shift-click in MuseScore: whole bars from the current selection to the bar at
+    //! the point, which may be on another page.
+    bool extendSelectionToPoint(int pageIndex, double normalizedX, double normalizedY, ScoreEditState& output, std::string& errorMessage);
     bool clearSelectedMeasure(ScoreEditState& output, std::string& errorMessage);
     bool removeSelectedMeasure(ScoreEditState& output, std::string& errorMessage);
     bool addMeasures(int count, ScoreEditState& output, std::string& errorMessage);

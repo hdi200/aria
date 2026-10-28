@@ -592,6 +592,15 @@ struct ScoreReaderView: View {
                         }
                         #endif
                     }
+                    .overlay(alignment: .top) {
+                        if readerState.isExtendingSelection && readerState.isEditingMode {
+                            ScoreReaderExtendSelectionBanner {
+                                readerState.isExtendingSelection = false
+                            }
+                            .padding(.top, isPhoneInterface ? 72 : 84)
+                            .transition(.opacity)
+                        }
+                    }
                     .overlay(alignment: .center) {
                         if isClosingScore {
                             ScoreReaderSavingHUD(label: "Saving…")
@@ -1796,7 +1805,13 @@ struct ScoreReaderView: View {
                 .environment(selectionCommandPresentation)
                 #else
                 .onPreferenceChange(ScoreReaderSelectionCommandAnchorPreferenceKey.self) { anchor in
-                    if anchor?.identity != dismissedSelectionCommandIdentity {
+                    if anchor?.identity == dismissedSelectionCommandIdentity {
+                        // The dismissed selection is back (undo): keep its button hidden, and
+                        // don't leave the previous selection's button on screen.
+                        selectionCommandAnchor = nil
+                    } else {
+                        // A different selection: the earlier dismissal no longer applies.
+                        dismissedSelectionCommandIdentity = nil
                         selectionCommandAnchor = anchor
                     }
                 }
@@ -3379,6 +3394,7 @@ struct ScoreReaderView: View {
             accentAction: readerState.addExpression,
             selectSimilarAction: { sameStaff in readerState.selectSimilar(sameStaff: sameStaff) },
             barLineAction: readerState.addRepeatJump,
+            extendSelectionAction: { readerState.isExtendingSelection = true },
             dismissAction: dismissSelectionCommandMenu
         )
         .zIndex(100)

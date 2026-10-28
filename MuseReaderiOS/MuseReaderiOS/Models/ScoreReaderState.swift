@@ -157,6 +157,8 @@ final class ScoreReaderState {
     var mixerSettings = ScoreMixerSettings()
     /// Whether playback has a chord symbol channel, which the mixer then shows.
     var hasChordSymbolPlayback = false
+    /// The next tap on a bar, on any page, extends the selection to it (MuseScore's Shift-click).
+    var isExtendingSelection = false
     var metronomeEnabled = false
     var countInEnabled = UserDefaults.standard.bool(forKey: "ScoreReader.countInEnabled")
     var isCountingIn = false

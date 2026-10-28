@@ -1679,6 +1679,22 @@ void testSelectSimilarSelectsEveryNote(const std::filesystem::path& root)
     expect(saved.find("<Note>") == std::string::npos, "Select Similar left some notes unselected");
 }
 
+// Extend Selection selects whole bars from a selected note to a tapped bar.
+void testExtendSelectionToABar(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "extend-selection", scoreXml(0, { { 60, 14 } }, 3));
+    const auto items = scanScore(*session, { 60 }, 3);
+    const auto rests = restsByX(items);
+    expect(rests.size() >= 2, "The extend fixture has too few empty bars");
+    msr::render::ScoreEditState state = selectAt(*session, noteWithPitch(items, 60));
+    std::string error;
+    const LocatedItem& lastBar = rests.back();
+    expect(session->extendSelectionToPoint(lastBar.pageIndex, lastBar.x, lastBar.y, state, error),
+           "Extending the selection failed: " + error);
+    expect(state.selection.isMeasure && !state.selection.isSingleMeasure,
+           "Extending from a note to a later bar did not select a range of bars");
+}
+
 // Music copied in one score pastes into another open score.
 void testCopyPasteBetweenScores(const std::filesystem::path& root)
 {
@@ -2727,6 +2743,7 @@ int main()
                       [&] { testPartOnlyChordSymbolsFromDesktopCanBeSaved(testDirectory.path); });
     passed &= runTest("bar line types", [&] { testBarLineTypes(testDirectory.path); });
     passed &= runTest("select similar selects every note", [&] { testSelectSimilarSelectsEveryNote(testDirectory.path); });
+    passed &= runTest("extend selection to a bar", [&] { testExtendSelectionToABar(testDirectory.path); });
     passed &= runTest("copy and paste between scores", [&] { testCopyPasteBetweenScores(testDirectory.path); });
     passed &= runTest("removing all chord symbols needs approval",
                       [&] { testRemovingAllChordSymbolsNeedsApproval(testDirectory.path); });

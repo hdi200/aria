@@ -2283,10 +2283,13 @@ final class ScorePageOverlayView: UIView {
     }
 
     private func paddedChordTextSelectionFrame(_ frame: CGRect, inside imageRect: CGRect) -> CGRect {
-        let horizontalPadding = max(frame.height * 0.28, 7)
-        let verticalPadding = max(frame.height * 0.18, 4)
-        let minimumWidth = max(frame.height * 1.6, 28)
-        let minimumHeight = max(frame.height + (verticalPadding * 2), 20)
+        // The minimums suit an iPad-sized page; shrink them with smaller pages so the box keeps
+        // the same size relative to the chord on a phone (it was about twice as big there).
+        let pageScale = min(1, imageRect.width / 800)
+        let horizontalPadding = max(frame.height * 0.28, 7 * pageScale)
+        let verticalPadding = max(frame.height * 0.18, 4 * pageScale)
+        let minimumWidth = max(frame.height * 1.6, 28 * pageScale)
+        let minimumHeight = max(frame.height + (verticalPadding * 2), 20 * pageScale)
         var padded = frame.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
         if padded.width < minimumWidth {
             padded = padded.insetBy(dx: -(minimumWidth - padded.width) / 2, dy: 0)

@@ -462,6 +462,16 @@ actor LiveScoreRenderSession {
         )
     }
 
+    func extendSelection(pageIndex: Int, point: CGPoint) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        return try makeEditingState(
+            from: bridgeSession.extendSelection(pageIndex: pageIndex, normalizedX: point.x, normalizedY: point.y)
+        )
+    }
+
     func selectMeasureRange(pageIndex: Int, startPoint: CGPoint, endPoint: CGPoint) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()

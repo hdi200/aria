@@ -96,6 +96,61 @@
         return selected;
     }
 
+    bool extendSelectionToPoint(const int pageIndex,
+                                const double normalizedX,
+                                const double normalizedY,
+                                msr::render::ScoreEditState& output,
+                                std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::Page* page = pageForIndex(score, pageIndex);
+        if (!page) {
+            errorMessage = "That page is unavailable in the open score session.";
+            return false;
+        }
+
+        const mu::engraving::PointF point = pointForNormalizedPagePosition(page, normalizedX, normalizedY);
+        const MeasureHit hit = measureAtPoint(page, point, true);
+        if (!hit.measure) {
+            errorMessage = "Tap a bar to extend the selection to it.";
+            return false;
+        }
+
+        mu::engraving::Measure* firstMeasure = nullptr;
+        mu::engraving::Measure* lastMeasure = nullptr;
+        mu::engraving::staff_idx_t staffStart = hit.staffIdx;
+        mu::engraving::staff_idx_t staffEnd = hit.staffIdx + 1;
+        if (selectedMeasureRange(score, &firstMeasure, &lastMeasure)) {
+            staffStart = std::min(staffStart, score->selection().staffStart());
+            staffEnd = std::max(staffEnd, score->selection().staffEnd());
+        } else if (mu::engraving::EngravingItem* selectedItem = currentSelectedItem(score)) {
+            firstMeasure = activeMeasure(score);
+            lastMeasure = firstMeasure;
+            staffStart = std::min(staffStart, selectedItem->staffIdx());
+            staffEnd = std::max(staffEnd, selectedItem->staffIdx() + 1);
+        }
+        if (!firstMeasure || !lastMeasure) {
+            errorMessage = "Select a bar first, then extend the selection.";
+            return false;
+        }
+
+        mu::engraving::Measure* hitMeasure = hit.measure->isMMRest() ? hit.measure->mmRestFirst() : hit.measure;
+        if (hitMeasure->tick() < firstMeasure->tick()) {
+            firstMeasure = hitMeasure;
+        }
+        if (hitMeasure->tick() > lastMeasure->tick()) {
+            lastMeasure = hit.measure->isMMRest() ? hit.measure->mmRestLast() : hitMeasure;
+        }
+        ::selectMeasureRange(score, firstMeasure, lastMeasure, staffStart, staffEnd);
+        output = makeEditState(score);
+        return true;
+    }
+
     bool selectMeasureRange(const int pageIndex,
                             const double startNormalizedX,
                             const double startNormalizedY,

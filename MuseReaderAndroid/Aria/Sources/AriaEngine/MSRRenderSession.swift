@@ -655,6 +655,12 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
         try edit("The MuseScore render core could not select the score.") { $0.pointee.selectAll(&$1, &$2) }
     }
 
+    open func extendSelection(pageIndex: Int, normalizedX: Double, normalizedY: Double) throws -> MSREditState {
+        try edit("The MuseScore render core could not extend the selection.") {
+            $0.pointee.extendSelectionToPoint(Int32(pageIndex), normalizedX, normalizedY, &$1, &$2)
+        }
+    }
+
     open func selectSimilar(sameStaff: Bool) throws -> MSREditState {
         try edit("The MuseScore render core could not select similar elements.") { $0.pointee.selectSimilar(sameStaff, &$1, &$2) }
     }
