@@ -98,6 +98,8 @@ struct UpdateNoticeSheet: View {
         var isPadOnly = false
         /// A list page of smaller changes, shown instead of the picture and message.
         var items: [Item] = []
+        /// Shown under `items`, headed "Fixes".
+        var fixes: [Item] = []
     }
 
     struct Item: Identifiable {
@@ -108,7 +110,31 @@ struct UpdateNoticeSheet: View {
     }
 
     private static let fixes: [Item] = {
-        var fixes = [
+        #if os(Android)
+        return [
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Fewer crashes",
+                detail: "Fixed crashes when saving in Score Setup, during playback, and when changing the viewing key."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Score titles and composers",
+                detail: "The library and Edit Info now show each score's real title and composer."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Transposing",
+                detail: "Transposing several notes, or part of a bar, now works correctly."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Scrolling while editing",
+                detail: "Scrolling works right after entering notes, and edit mode scrolls on to the next page."
+            ),
+        ]
+        #else
+        return [
             Item(
                 systemImage: "checkmark.circle",
                 title: "Score titles and composers",
@@ -127,56 +153,36 @@ struct UpdateNoticeSheet: View {
                     + "viewing key is fixed."
             ),
         ]
-        #if os(Android)
-        fixes += [
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Scrolling while editing",
-                detail: "Edit mode scrolls on to the next page, and scrolling works right after entering notes."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Crashes and previews",
-                detail: "Fixed a crash when saving in Score Setup and crashes during playback, and key signature "
-                    + "previews show flats in the right place."
-            ),
-        ]
         #endif
-        return fixes
     }()
 
     private let pages: [Page] = [
         Page(
             clip: nil,
-            systemImage: "lasso",
-            title: "Select Similar",
-            message: "Select a note, rest, chord symbol or text, tap its ••• button and choose Select Similar "
-                + "to select everything like it, in the whole score or on one staff."
-        ),
-        Page(
-            clip: nil,
-            systemImage: "doc.on.clipboard",
-            title: "Copy and paste between scores",
-            message: "Copy music in one score, open another, and paste it in. Bars, notes and chord symbols "
-                + "come along."
-        ),
-        Page(
-            clip: nil,
-            systemImage: "arrow.right",
-            title: "Select bars across pages",
-            message: "Select a bar, tap its ••• button and choose Extend Selection. Then scroll to any page "
-                + "and tap the last bar you want: every bar in between is selected."
-        ),
-        Page(
-            clip: nil,
             systemImage: "sparkles",
-            title: "Also in this update",
+            title: "New in this update",
             message: "",
             items: [
                 Item(
                     systemImage: "book.pages",
                     title: "Page-turn pedals",
                     detail: "Bluetooth pedals and arrow keys turn pages while you read."
+                ),
+                Item(
+                    systemImage: "lasso",
+                    title: "Select Similar",
+                    detail: "Tap a note, rest, chord symbol or text, then ••• > Select Similar to select everything "
+                        + "like it, in the whole score or on one staff."
+                ),
+                Item(
+                    systemImage: "doc.on.clipboard",
+                    title: "Copy and paste between scores",
+                    detail: "Copy music in one score, open another, and paste it in."
+                ),
+                Item(
+                    systemImage: "arrow.right",
+                    title: "Select bars across pages",
+                    detail: "Select a bar, then ••• > Extend Selection, and tap the last bar you want on any page."
                 ),
                 Item(
                     systemImage: "music.note",
@@ -188,14 +194,8 @@ struct UpdateNoticeSheet: View {
                     title: "Chords in the mixer",
                     detail: "Mute or turn down chord symbol playback with the new Chords channel."
                 ),
-            ]
-        ),
-        Page(
-            clip: nil,
-            systemImage: "checkmark.circle",
-            title: "Fixes",
-            message: "",
-            items: fixes
+            ],
+            fixes: fixes
         )
     ]
     .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
@@ -217,6 +217,7 @@ struct UpdateNoticeSheet: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 14) {
+                    if pages.count > 1 {
                     HStack(spacing: 8) {
                         ForEach(pages) { item in
                             Circle()
@@ -225,6 +226,7 @@ struct UpdateNoticeSheet: View {
                         }
                     }
                     .accessibilityHidden(true)
+                    }
                     Button {
                         if page < pages.count - 1 {
                             withAnimation { page += 1 }
@@ -291,6 +293,29 @@ struct UpdateNoticeSheet: View {
                         }
                     }
                     .accessibilityElement(children: .combine)
+                }
+                if !page.fixes.isEmpty {
+                    Text("Fixes")
+                        .font(.title3.weight(.semibold))
+                        .padding(.top, 6)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(page.fixes) { item in
+                        HStack(alignment: .top, spacing: 14) {
+                            Image(systemName: item.systemImage)
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundStyle(Self.accent)
+                                .frame(width: 44, height: 24)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.title).font(.body.weight(.semibold))
+                                Text(item.detail)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
                 }
             }
             .padding()
