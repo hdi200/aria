@@ -165,7 +165,7 @@ struct UpdateNoticeSheet: View {
                     systemImage: "lasso",
                     title: "Select Similar",
                     detail: "Tap a note, rest, chord symbol or text, then ••• > Select Similar to select everything "
-                        + "like it, in the whole score or on one staff."
+                        + "like it, in the whole score or on the same staff."
                 ),
                 Item(
                     systemImage: "doc.on.clipboard",
