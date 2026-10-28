@@ -145,12 +145,6 @@ struct UpdateNoticeSheet: View {
                 title: "Selecting multiple notes",
                 detail: "Fixed issues with selecting and editing several notes at once, including transposing part of a bar."
             ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Tempo and viewing key",
-                detail: "The dotted quarter in tempo markings looks right, and a rare crash when changing the "
-                    + "viewing key is fixed."
-            ),
         ]
         #endif
     }()
