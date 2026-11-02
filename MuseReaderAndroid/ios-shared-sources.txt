@@ -9,6 +9,7 @@ Views/ScoreReaderPitchKeyboard.swift
 App/AppResources.swift
 App/MuseReaderAppModel.swift
 # App/MusicNotationFont.swift  -- needs an Android version: CoreText font registration
+Models/AriaWindowLayout.swift
 Models/LibraryAccessPolicy.swift
 Models/LibraryMonetizationModels.swift
 Models/LibrarySetlistFolder.swift

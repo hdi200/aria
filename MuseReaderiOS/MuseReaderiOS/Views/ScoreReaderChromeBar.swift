@@ -85,7 +85,7 @@ struct ScoreReaderChromeBar: View {
         let _ = AndroidPhoneAuditGeometry.evaluate("chrome")
         #endif
         GeometryReader { proxy in
-            let isPhoneHeader = UIDevice.current.userInterfaceIdiom == .phone
+            let isPhoneHeader = AriaWindowLayout.shared.usesPhoneLayout
             let isPhoneLandscape = isPhoneHeader && proxy.size.width > proxy.size.height
             let isTightPhoneLandscape = isPhoneLandscape && proxy.size.width < 780
             let tabletLayout = ScoreReaderHeaderLayoutPolicy(availableWidth: proxy.size.width)
@@ -868,7 +868,7 @@ struct ScoreReaderPartsPanel: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     partRows
                 }
-                .frame(maxHeight: isPhone ? min(UIScreen.main.bounds.height * 0.66, 470) : min(UIScreen.main.bounds.height * 0.66, 640))
+                .frame(maxHeight: isPhone ? min(AriaWindowLayout.shared.windowSize.height * 0.66, 470) : min(AriaWindowLayout.shared.windowSize.height * 0.66, 640))
             } else {
                 partRows
             }
@@ -910,7 +910,7 @@ struct ScoreReaderPartsPanel: View {
     }
 
     private var panelMaxHeight: CGFloat {
-        isPhone ? min(UIScreen.main.bounds.height - 72, 560) : min(UIScreen.main.bounds.height - 110, 760)
+        isPhone ? min(AriaWindowLayout.shared.windowSize.height - 72, 560) : min(AriaWindowLayout.shared.windowSize.height - 110, 760)
     }
 
     private func partRow(id: String, title: String, partIndex: Int?, clefSymbol: String?, systemImage: String?, showsChevron: Bool) -> some View {
@@ -991,7 +991,7 @@ struct ScoreReaderPartsPanel: View {
     private static let selectedPartFillColor = Color(red: 0.86, green: 0.93, blue: 1.0)
 
     private var isPhone: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 }
 
@@ -1044,12 +1044,12 @@ struct ScoreReaderPartsPanelCard: ViewModifier {
     let panelMaxHeight: CGFloat
 
     private var isPhone: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     func body(content: Content) -> some View {
         content
-            .popoverPanelCard(width: min(isPhone ? 300 : 330, max(UIScreen.main.bounds.width - 24, 284)),
+            .popoverPanelCard(width: min(isPhone ? 300 : 330, max(AriaWindowLayout.shared.windowSize.width - 24, 284)),
                               maxHeight: panelMaxHeight, alignment: .top, cornerRadius: isPhone ? 18 : 22,
                               stroke: Color.black.opacity(0.08), shadowOpacity: 0.16, shadowY: 14)
     }

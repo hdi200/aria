@@ -6,8 +6,9 @@
 import SwiftUI
 import UIKit
 
-/// Feeds `DuoPoseMonitor` from the iPhone Duo's hinge. Place it once behind the
-/// app's root view; it draws nothing and takes no touches.
+/// Feeds `DuoPoseMonitor` from the iPhone Duo's hinge, and `AriaWindowLayout` the
+/// window's size. Place it once behind the app's root view; it draws nothing and
+/// takes no touches.
 struct DuoHingeWatcher: UIViewRepresentable {
     func makeUIView(context: Context) -> DuoHingeWatcherView {
         DuoHingeWatcherView()
@@ -68,6 +69,8 @@ final class DuoHingeWatcherView: UIView {
         guard let window else {
             return
         }
+
+        AriaWindowLayout.shared.updateWindowSize(window.bounds.size)
 
         let monitor = DuoPoseMonitor.shared
         if monitor.isSimulated {

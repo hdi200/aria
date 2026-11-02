@@ -37,7 +37,7 @@ struct ScoreReaderMixerPanel: View {
         VStack(spacing: 0) {
             header
 
-            if UIDevice.current.userInterfaceIdiom == .phone {
+            if AriaWindowLayout.shared.usesPhoneLayout {
                 phoneMixer
             } else {
                 tabletMixer
@@ -54,7 +54,7 @@ struct ScoreReaderMixerPanel: View {
 
     @ViewBuilder
     private var header: some View {
-        if UIDevice.current.userInterfaceIdiom == .phone {
+        if AriaWindowLayout.shared.usesPhoneLayout {
             phoneHeader
         } else {
             tabletHeader

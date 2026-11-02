@@ -67,7 +67,7 @@ struct ScoreReaderVideoExportSheet: View {
     }
 
     private var isTablet: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
+        !AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private var horizontalPadding: CGFloat {

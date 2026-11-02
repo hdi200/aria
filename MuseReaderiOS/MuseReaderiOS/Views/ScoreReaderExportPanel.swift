@@ -189,16 +189,16 @@ struct ScoreReaderExportPanel: View {
     }
 
     private var panelWidth: CGFloat {
-        let phoneWidth: CGFloat = UIScreen.main.bounds.width > UIScreen.main.bounds.height ? 360 : 332
-        return min(isPhone ? phoneWidth : 380, max(UIScreen.main.bounds.width - 24, 300))
+        let phoneWidth: CGFloat = AriaWindowLayout.shared.isLandscape ? 360 : 332
+        return min(isPhone ? phoneWidth : 380, max(AriaWindowLayout.shared.windowSize.width - 24, 300))
     }
 
     private var panelMaxHeight: CGFloat {
-        isPhone ? min(UIScreen.main.bounds.height - 72, 720) : min(UIScreen.main.bounds.height - 80, 940)
+        isPhone ? min(AriaWindowLayout.shared.windowSize.height - 72, 720) : min(AriaWindowLayout.shared.windowSize.height - 80, 940)
     }
 
     private var isPhone: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private func exportContentRow(

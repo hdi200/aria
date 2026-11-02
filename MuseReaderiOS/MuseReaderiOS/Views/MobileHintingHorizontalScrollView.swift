@@ -82,7 +82,7 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
     }
 
     private var showsOverflowHint: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
         && contentWidth > viewportWidth + 8
         && !hasInteracted
     }

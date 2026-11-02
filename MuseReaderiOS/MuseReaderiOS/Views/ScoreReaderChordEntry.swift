@@ -131,7 +131,7 @@ struct ScoreReaderChordEntryPanel: View {
     }
 
     private var isPhoneInterface: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private func commit() {
@@ -317,7 +317,7 @@ struct ScoreReaderLyricsEntryPanel: View {
     }
 
     private var isPhoneInterface: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private func commit() {

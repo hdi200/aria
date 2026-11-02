@@ -1077,7 +1077,7 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var isCompactPhoneLayout: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private var isCompactPhoneLandscapeLayout: Bool {

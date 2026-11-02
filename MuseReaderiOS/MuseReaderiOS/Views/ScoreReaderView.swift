@@ -487,7 +487,7 @@ struct ScoreReaderView: View {
                         #endif
                     }
                     .overlay(alignment: .bottom) {
-                        if isMixerPresented && UIDevice.current.userInterfaceIdiom != .phone {
+                        if isMixerPresented && !isPhoneInterface {
                             GeometryReader { proxy in
                                 VStack(spacing: 0) {
                                     Spacer(minLength: 0)
@@ -506,12 +506,12 @@ struct ScoreReaderView: View {
                     }
                     #if os(Android)
                     // The tablet mixer is an overlay, not a sheet; Back closes it.
-                    .androidBackAction(isEnabled: isMixerPresented && UIDevice.current.userInterfaceIdiom != .phone) {
+                    .androidBackAction(isEnabled: isMixerPresented && !isPhoneInterface) {
                         withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
                     }
                     #endif
                     .overlay(alignment: .top) {
-                        if isAnnotationModeActive && !isPhoneInterface {
+                        if isAnnotationModeActive && !isPhoneDevice {
                             ScoreReaderAnnotationPalette(
                                 tool: $annotationTool,
                                 color: annotationColorBinding,
@@ -827,7 +827,7 @@ struct ScoreReaderView: View {
             isEditingBusy: readerState.isEditingActionInFlight || isClosingScore || isTransitioningScore || isPreparingExport,
             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
             isExportBusy: isPreparingExport,
-            supportsAnnotations: !isPhoneInterface && readerState.interactionMode == .view && annotationController.isEditable,
+            supportsAnnotations: !isPhoneDevice && readerState.interactionMode == .view && annotationController.isEditable,
             annotationModeActive: isAnnotationModeActive,
             playbackPreparationMessage: readerState.playbackPreparationMessage,
             closeAction: closeReader,
@@ -1022,12 +1022,12 @@ struct ScoreReaderView: View {
             if mode != .view, isAnnotationModeActive {
                 exitAnnotationMode()
             }
-            if mode == .edit, isPhoneInterface {
+            if mode == .edit, isPhoneDevice {
                 // View mode intentionally returns to a full-page scale. Force the
                 // preferred phone edit scale again on every edit invocation,
                 // even when the device orientation has not changed.
                 lastPhoneLandscapeZoomMode = nil
-                applyPreferredPhoneZoomIfNeeded(for: UIScreen.main.bounds.size)
+                applyPreferredPhoneZoomIfNeeded(for: AriaWindowLayout.shared.windowSize)
             } else if mode == .view {
                 zoomScale = 1
             }
@@ -1089,7 +1089,7 @@ struct ScoreReaderView: View {
                 .onAppear { updateNoticeStore.markNoticeSeen() }
         }
         .scoreReaderSheet(isPresented: Binding(
-            get: { isMixerPresented && UIDevice.current.userInterfaceIdiom == .phone },
+            get: { isMixerPresented && isPhoneInterface },
             set: { isMixerPresented = $0 }
         )) {
             ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
@@ -1400,6 +1400,12 @@ struct ScoreReaderView: View {
     }
 
     private var isPhoneInterface: Bool {
+        AriaWindowLayout.shared.usesPhoneLayout
+    }
+
+    /// The device itself, for behaviour that isn't layout: orientation lock, edit-mode
+    /// zoom and Pencil annotations stay iPhone or iPad features in any window size.
+    private var isPhoneDevice: Bool {
         UIDevice.current.userInterfaceIdiom == .phone
     }
 
@@ -1451,7 +1457,7 @@ struct ScoreReaderView: View {
     }
 
     private func updatePhoneOrientation(for mode: ScoreReaderInteractionMode) {
-        guard isPhoneInterface else {
+        guard isPhoneDevice else {
             return
         }
 
@@ -1461,7 +1467,7 @@ struct ScoreReaderView: View {
     }
 
     private func unlockPhoneOrientation() {
-        guard isPhoneInterface else {
+        guard isPhoneDevice else {
             return
         }
 
@@ -1469,7 +1475,7 @@ struct ScoreReaderView: View {
     }
 
     private var floatingPaletteTopPadding: CGFloat {
-        let bounds = UIScreen.main.bounds
+        let bounds = AriaWindowLayout.shared.windowSize
         if floatingToolCategory == .notes && bounds.width > bounds.height {
             return 108
         }
@@ -1478,11 +1484,11 @@ struct ScoreReaderView: View {
 
     /// The space between the palette's top and the bottom panel.
     private var floatingPaletteMaxHeight: CGFloat {
-        UIScreen.main.bounds.height - floatingPaletteTopPadding - measuredNoteEntryPanelHeight - 16
+        AriaWindowLayout.shared.windowSize.height - floatingPaletteTopPadding - measuredNoteEntryPanelHeight - 16
     }
 
     private var isIPadLandscapeLayout: Bool {
-        !isPhoneInterface && UIScreen.main.bounds.width > UIScreen.main.bounds.height
+        !isPhoneInterface && AriaWindowLayout.shared.isLandscape
     }
 
     private var floatingPaletteAlignment: Alignment {
@@ -2073,7 +2079,7 @@ struct ScoreReaderView: View {
             selectedStrokeIDs: annotationController.selectedStrokeIDs,
             isActive: isAnnotationModeActive,
             isVisible: annotationsVisible && readerState.interactionMode == .view,
-            allowsInteraction: !isPhoneInterface && readerState.interactionMode == .view && annotationController.isEditable,
+            allowsInteraction: !isPhoneDevice && readerState.interactionMode == .view && annotationController.isEditable,
             tool: annotationTool,
             color: annotationColor,
             width: annotationWidth,
@@ -2393,7 +2399,7 @@ struct ScoreReaderView: View {
     }
 
     private func applyPreferredPhoneZoomIfNeeded(for size: CGSize) {
-        guard isPhoneInterface, zoomScaleBeforeTextEntry == nil, size.width > 0, size.height > 0 else {
+        guard isPhoneDevice, zoomScaleBeforeTextEntry == nil, size.width > 0, size.height > 0 else {
             return
         }
 
@@ -2652,7 +2658,7 @@ struct ScoreReaderView: View {
     }
 
     private func enterAnnotationMode() {
-        guard !isPhoneInterface, readerState.interactionMode == .view, annotationController.isEditable else { return }
+        guard !isPhoneDevice, readerState.interactionMode == .view, annotationController.isEditable else { return }
         if !isAnnotationModeActive {
             readingStyleBeforeAnnotation = readingStyle
         }
@@ -2669,7 +2675,7 @@ struct ScoreReaderView: View {
     }
 
     private func beginAnnotationFromCanvas() {
-        guard !isPhoneInterface, readerState.interactionMode == .view else { return }
+        guard !isPhoneDevice, readerState.interactionMode == .view else { return }
         if !isAnnotationModeActive {
             readingStyleBeforeAnnotation = readingStyle
         }
@@ -3524,7 +3530,7 @@ struct ScoreReaderView: View {
     }
 
     private var textEntryFocusZoomScale: CGFloat {
-        isPhoneInterface ? 2.35 : 1.7
+        isPhoneDevice ? 2.35 : 1.7
     }
 
     private func zoomIn() {

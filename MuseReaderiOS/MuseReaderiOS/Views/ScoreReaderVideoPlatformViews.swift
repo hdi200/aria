@@ -25,7 +25,7 @@ struct ScoreReaderVideoSheetSizing: ViewModifier {
     let preferredSize: CGSize?
 
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *), UIDevice.current.userInterfaceIdiom == .pad {
+        if #available(iOS 18.0, *), !AriaWindowLayout.shared.usesPhoneLayout {
             content.presentationSizing(ScoreReaderVideoPanelSizing(preferredSize: preferredSize))
         } else {
             content.presentationDetents([.large])

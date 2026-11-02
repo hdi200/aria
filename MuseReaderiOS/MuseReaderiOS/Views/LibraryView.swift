@@ -88,7 +88,7 @@ struct LibraryView: View {
     }
 
     private var isPhoneInterface: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private var isShowingSetlist: Bool {

@@ -17,7 +17,7 @@ struct CreateNewScoreView: View {
     let createAction: (NewScoreDraft) async -> Bool
 
     private var isPhoneInterface: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     var body: some View {
@@ -466,7 +466,7 @@ struct TemplateBrowserSheet: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            let isPhone = AriaWindowLayout.shared.usesPhoneLayout
             let modalWidth = min(max(geometry.size.width - 64, 720), 940)
             let modalHeight = min(max(geometry.size.height - 170, 560), 760)
 
@@ -511,7 +511,7 @@ struct TemplateBrowserSheet: View {
     }
 
     private var isPhoneInterface: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private var header: some View {
@@ -839,7 +839,7 @@ struct AddInstrumentSheet: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            let isPhone = AriaWindowLayout.shared.usesPhoneLayout
             let modalWidth = min(max(geometry.size.width - 64, 680), 940)
             let modalHeight = min(max(geometry.size.height - 170, 560), 760)
             let layout = AddInstrumentSheetLayout(width: modalWidth)
@@ -910,7 +910,7 @@ struct AddInstrumentSheet: View {
     }
 
     private var isPhoneInterface: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        AriaWindowLayout.shared.usesPhoneLayout
     }
 
     private var header: some View {
