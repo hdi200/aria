@@ -21,10 +21,33 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Aria: "Open with" from Files, Drive, mail and chat apps (AriaOpenWith.kt).
+                 Many apps label .mscz as octet-stream, so Aria also offers itself for that. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/x-musescore" />
+                <data android:mimeType="application/x-musescore+xml" />
+                <data android:mimeType="application/vnd.recordare.musicxml" />
+                <data android:mimeType="application/vnd.recordare.musicxml+xml" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <!-- Aria: "Share" a score to Aria from another app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/x-musescore" />
+                <data android:mimeType="application/x-musescore+xml" />
+                <data android:mimeType="application/vnd.recordare.musicxml" />
+                <data android:mimeType="application/vnd.recordare.musicxml+xml" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
         <!-- Aria: shares exported files with other apps (AriaShare.kt). -->

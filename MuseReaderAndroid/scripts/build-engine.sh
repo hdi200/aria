@@ -33,4 +33,7 @@ for module in Core Gui Svg Qml QmlMeta QmlModels QmlWorkerScript Network Quick O
   cp "$QT_ANDROID/lib/libQt6${module}_arm64-v8a.so" "$JNI_LIBS_DIR/"
 done
 cp "$QT_ANDROID/plugins/platforms/libplugins_platforms_qoffscreen_arm64-v8a.so" "$JNI_LIBS_DIR/"
+# JPEG pictures in scores (a header image, say) need Qt's JPEG plugin; PNG is built in.
+# iOS links the same plugin (QtStaticPluginImports.mm).
+cp "$QT_ANDROID/plugins/imageformats/libplugins_imageformats_qjpeg_arm64-v8a.so" "$JNI_LIBS_DIR/"
 echo "Native libraries ready in $JNI_LIBS_DIR"

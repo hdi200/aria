@@ -248,6 +248,10 @@ struct ScoreReaderView: View {
     #endif
     @State var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
     @State var lastPhoneLandscapeZoomMode: Bool?
+    #if os(Android)
+    /// Bumped once the page list is on screen, to scroll it to the current page.
+    @State var androidPageListScrollRevision = 0
+    #endif
     @State var selectedToolCategory: ScoreReaderToolCategory
     @State var textEditorDraft: ScoreReaderTextEditorDraft?
     @State var legacyRepairPrompt: ScoreLegacyRepairPrompt?
@@ -1234,6 +1238,8 @@ struct ScoreReaderView: View {
                     }
                 }
             )
+            // At the top of the sheet; centred, it left a large gap above the title.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .presentationDetents([.large])
         }
         .scoreReaderSheet(isPresented: $isAutoBreaksPresented) {
@@ -1819,7 +1825,19 @@ struct ScoreReaderView: View {
                 .task {
                     applyPreferredPhoneZoomIfNeeded(for: geometry.size)
                     proxy.scrollTo(readerState.selectedPageIndex, anchor: .top)
+                    #if os(Android)
+                    // Skip builds this proxy before the page list registers its scroll
+                    // action, so it never scrolls, and tapping Edit always opened at page 1.
+                    // Scroll again from onChange, whose closure gets the current proxy.
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    androidPageListScrollRevision += 1
+                    #endif
                 }
+                #if os(Android)
+                .onChangeCompatible(of: androidPageListScrollRevision) { _ in
+                    proxy.scrollTo(readerState.selectedPageIndex, anchor: .top)
+                }
+                #endif
                 .onChangeCompatible(of: geometry.size) { newSize in
                     applyPreferredPhoneZoomIfNeeded(for: newSize)
                 }

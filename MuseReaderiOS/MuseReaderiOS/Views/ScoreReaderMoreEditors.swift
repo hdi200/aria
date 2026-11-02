@@ -1193,6 +1193,8 @@ struct ScoreReaderSetupSheet: View {
                     TextField("Lyricist", text: $metadata.lyricist)
                     TextField("Arranger", text: $metadata.arranger)
                 }
+                // Plain rows, as iOS draws Form fields; Android otherwise boxes each one.
+                .textFieldStyle(.plain)
 
                 if let saveErrorMessage {
                     Section {

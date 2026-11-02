@@ -1587,7 +1587,8 @@ public struct Material3TopAppBarOptions {
     public var navigationIconButtonColors: IconButtonColors? = nil
     public var colors: TopAppBarColors
     public var scrollBehavior: TopAppBarScrollBehavior? = nil
-    public var preferCenterAlignedStyle = false
+    // ARIA PATCH: inline titles are centred, as on iOS (was false: next to Cancel).
+    public var preferCenterAlignedStyle = true
     public var preferLargeStyle = false
 
     public func copy(

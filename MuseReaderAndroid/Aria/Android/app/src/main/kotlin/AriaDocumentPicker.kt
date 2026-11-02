@@ -54,7 +54,7 @@ object AriaDocumentPickerImpl {
         }.start()
     }
 
-    private fun copy(activity: Activity, uri: Uri, folder: File): String? = try {
+    fun copy(activity: Activity, uri: Uri, folder: File): String? = try {
         val name = activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Score"

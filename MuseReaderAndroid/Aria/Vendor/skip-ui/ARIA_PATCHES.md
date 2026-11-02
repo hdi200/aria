@@ -142,3 +142,18 @@ changes, update the version above, and check the patched behaviour still applies
 The vendored skip-fuse-ui manifest points at this sibling copy. Keep that path
 dependency when rebasing so transitive URL dependencies do not introduce a second
 skip-ui identity.
+
+## Frames (`Sources/SkipUI/SkipUI/Compose/ComposeExtensions.swift`)
+
+- `.frame(maxWidth:)` / `.frame(maxHeight:)` with a finite value (and no minimum) caps the
+  size within the parent's room, as in SwiftUI, using `widthIn`/`heightIn` instead of
+  `requiredWidthIn`/`requiredHeightIn`. Skip let the frame grow past a narrower parent, so a
+  sheet column capped at 680 or 560 was laid out wider than the phone and clipped on both
+  sides (Choose Scores, What's New).
+
+## Navigation titles (`Sources/SkipUI/SkipUI/Containers/Navigation.swift`)
+
+- Inline titles (`.navigationBarTitleDisplayMode(.inline)`) are centred, as on iOS:
+  `TopAppBarOptions.preferCenterAlignedStyle` defaults to true. Skip drew them left-aligned,
+  right next to a sheet's Cancel button (Score Setup, Choose Scores).
+

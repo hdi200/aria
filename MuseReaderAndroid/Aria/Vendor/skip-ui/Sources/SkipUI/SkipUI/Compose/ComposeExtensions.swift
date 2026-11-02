@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeightIn
 import androidx.compose.foundation.layout.requiredWidthIn
+import androidx.compose.foundation.layout.heightIn // ARIA PATCH
+import androidx.compose.foundation.layout.widthIn // ARIA PATCH
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
@@ -89,7 +91,10 @@ extension Modifier {
         } else if let min, min! > Float(0) {
             return requiredWidthIn(min: min!.dp)
         } else if let max, max! >= Float(0) {
-            return requiredWidthIn(max: max!.dp)
+            // ARIA PATCH: like SwiftUI, a finite maxWidth only caps the size and never exceeds
+            // the parent's (a 680-wide sheet column on a 412-wide phone was laid out at 680 and
+            // centred, clipping both sides). requiredWidthIn ignored the parent's constraint.
+            return widthIn(max: max!.dp)
         } else {
             return self
         }
@@ -102,7 +107,10 @@ extension Modifier {
         } else if let min, min! > Float(0) {
             return requiredHeightIn(min: min!.dp)
         } else if let max, max! >= Float(0) {
-            return requiredHeightIn(max: max!.dp)
+            // ARIA PATCH: like SwiftUI, a finite maxHeight only caps the size and never exceeds
+            // the parent's (a 680-wide sheet column on a 412-wide phone was laid out at 680 and
+            // centred, clipping both sides). requiredHeightIn ignored the parent's constraint.
+            return heightIn(max: max!.dp)
         } else {
             return self
         }

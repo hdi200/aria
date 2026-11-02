@@ -39,6 +39,11 @@ open class AndroidAppMain: Application {
 
     override fun onCreate() {
         super.onCreate()
+        // Aria: Android 13 and later point TMPDIR at the app's cache folder; 12 and earlier
+        // leave it unset, and FileManager.temporaryDirectory then falls back to /tmp, which
+        // apps can't write, so every export failed (hdi200/aria#7). Set it the way 13 does,
+        // before any Swift or Qt code reads it.
+        android.system.Os.setenv("TMPDIR", cacheDir.absolutePath, false)
         // Aria: load Qt Core here so its JNI_OnLoad runs (Qt needs the Java VM). The render
         // core (libaria_engine.so) then loads with the Swift code that links it. Loaded from
         // Kotlin because System.loadLibrary must be called from an app class.
@@ -60,6 +65,8 @@ open class MainActivity: AppCompatActivity {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         logger.info("starting activity")
+        // Aria: a score opened from another app; Skip's onOpenURL reads this intent.
+        if (savedInstanceState == null) intent = AriaOpenWith.prepare(this, intent)
         UIApplication.launch(this)
         enableEdgeToEdge()
 
@@ -83,6 +90,11 @@ open class MainActivity: AppCompatActivity {
         //)
         //let requestTag = 1
         //ActivityCompat.requestPermissions(self, permissions.toTypedArray(), requestTag)
+    }
+
+    // Aria: a score opened from another app while Aria is running (launchMode singleTask).
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(AriaOpenWith.prepare(this, intent) ?: intent)
     }
 
     override fun onStart() {

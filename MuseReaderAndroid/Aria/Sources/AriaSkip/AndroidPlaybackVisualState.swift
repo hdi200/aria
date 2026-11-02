@@ -62,10 +62,10 @@ struct AndroidPlaybackHighlightOverlay: View {
         let highlight = playback == nil ? fallback.map(AndroidPlaybackVisualState.Highlight.init) : playback?.highlight
         if let highlight, highlight.pageIndex == pageIndex || playback == nil {
             AndroidPageRect(rect: highlight.rect, pageSize: pageSize) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(red: 0.98, green: 0.82, blue: 0.19).opacity(0.18))
-                    .overlay(RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(red: 0.94, green: 0.69, blue: 0.21).opacity(0.95), lineWidth: 2))
+                // A flat tint with square corners: a border covered fret numbers and notes
+                // at the edges of the bar.
+                Rectangle()
+                    .fill(Color(red: 0.98, green: 0.82, blue: 0.19).opacity(0.25))
             }
         }
     }

@@ -1763,10 +1763,9 @@ final class ScorePageOverlayView: UIView {
         isUserInteractionEnabled = true
 
         playbackContainer.isHidden = true
-        playbackContainer.layer.cornerRadius = 8
-        playbackContainer.layer.borderWidth = 2
-        playbackContainer.layer.borderColor = UIColor(red: 0.94, green: 0.69, blue: 0.21, alpha: 0.95).cgColor
-        playbackContainer.backgroundColor = UIColor(red: 0.98, green: 0.82, blue: 0.19, alpha: 0.18)
+        // A flat tint with square corners: a border covered fret numbers and notes at the
+        // edges of the bar.
+        playbackContainer.backgroundColor = UIColor(red: 0.98, green: 0.82, blue: 0.19, alpha: 0.25)
         playbackContainer.clipsToBounds = true
 
         selectionContainer.isHidden = true
