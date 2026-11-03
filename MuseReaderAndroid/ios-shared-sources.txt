@@ -3,6 +3,8 @@
 # it builds for Android; platform differences go behind #if os(Android) in the iOS file.
 
 Views/AriaGrid.swift
+Views/DuoReaderRegions.swift
+Views/ScoreReaderDuoStandPanel.swift
 Views/CompatibilityViewModifiers.swift
 Views/ScoreReaderPitchKeyboard.swift
 
@@ -10,6 +12,7 @@ App/AppResources.swift
 App/MuseReaderAppModel.swift
 # App/MusicNotationFont.swift  -- needs an Android version: CoreText font registration
 Models/AriaWindowLayout.swift
+Models/DuoPose.swift
 Models/LibraryAccessPolicy.swift
 Models/LibraryMonetizationModels.swift
 Models/LibrarySetlistFolder.swift

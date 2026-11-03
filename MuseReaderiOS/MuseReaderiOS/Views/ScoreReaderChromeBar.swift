@@ -78,6 +78,15 @@ struct ScoreReaderChromeBar: View {
     let selectPartAction: (Int?) -> Void
     let managePartsAction: () -> Void
     let allowsManagingParts: Bool
+    /// An iPhone Duo's fold, in window x coordinates, when it runs top to bottom. The
+    /// header then keeps clear of it: the back button over the left page, the rest
+    /// over the right.
+    var duoFold: ClosedRange<CGFloat>? = nil
+    /// False while an iPhone Duo shows its big playback card instead.
+    var showsHeaderPlayback = true
+    /// Extra room from the screen's edges, so the Duo's rounded corners don't clip the
+    /// outermost buttons.
+    var edgeInset: CGFloat = 0
     let exportPanelContent: () -> AnyView
 
     var body: some View {
@@ -95,7 +104,16 @@ struct ScoreReaderChromeBar: View {
             let showsPlaybackTimeOnPhone = !isPhoneLandscape || proxy.size.width >= 780
 
             Group {
-                if usesPhoneFloatingIslands {
+                if let duoFold {
+                    let originX = proxy.frame(in: .global).minX
+                    duoFoldHeader(
+                        availableWidth: proxy.size.width,
+                        foldMinX: duoFold.lowerBound - originX,
+                        foldMaxX: duoFold.upperBound - originX
+                    )
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
+                } else if usesPhoneFloatingIslands {
                     phoneFloatingIslandHeader(
                         availableWidth: proxy.size.width,
                         isPhoneLandscape: isPhoneLandscape,
@@ -117,7 +135,9 @@ struct ScoreReaderChromeBar: View {
                 }
             }
         }
-        .frame(height: 62)
+        .padding(.horizontal, edgeInset)
+        .padding(.top, edgeInset / 2)
+        .frame(height: 62 + edgeInset / 2)
         #if os(Android) && ARIA_PHONE_AUDIT
         let _ = AndroidInteractionTrace.point("evaluate_chrome_end")
         #endif
@@ -630,7 +650,7 @@ struct ScoreReaderChromeBar: View {
                 Spacer(minLength: 0)
             }
 
-            if supportsPlayback {
+            if supportsPlayback && showsHeaderPlayback {
                 floatingIsland(horizontalPadding: 10) {
                     compactPlaybackControls(showsElapsedTime: showsCenteredPlaybackTime)
                 }
@@ -660,6 +680,76 @@ struct ScoreReaderChromeBar: View {
                     .fixedSize(horizontal: true, vertical: false)
                 }
             }
+        }
+        .font(.system(size: 14, weight: .medium))
+        .foregroundStyle(Color.black.opacity(0.84))
+    }
+
+    /// An iPhone Duo with its fold running top to bottom: the back button over the left page,
+    /// playback and the other buttons over the right, nothing on the fold.
+    private func duoFoldHeader(availableWidth: CGFloat, foldMinX: CGFloat, foldMaxX: CGFloat) -> some View {
+        let leadingWidth = min(max(foldMinX, 0), availableWidth)
+        let gapWidth = min(max(foldMaxX - leadingWidth, 0), availableWidth - leadingWidth)
+        let trailingWidth = max(availableWidth - leadingWidth - gapWidth, 0)
+        let hasTrailingExtras = parts.count > 1
+
+        return HStack(spacing: 0) {
+            HStack {
+                floatingIsland(horizontalPadding: 8) {
+                    Button(action: closeAction) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text(scoreTitle)
+                                .font(.system(size: 15, weight: .semibold))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .scoreReaderChromeTapTarget(minWidth: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back")
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(width: leadingWidth)
+
+            Color.clear
+                .frame(width: gapWidth)
+                .allowsHitTesting(false)
+
+            HStack(spacing: 8) {
+                if supportsPlayback && showsHeaderPlayback {
+                    floatingIsland(horizontalPadding: 10) {
+                        compactPlaybackControls(showsElapsedTime: trailingWidth >= 400)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+
+                Spacer(minLength: 4)
+
+                if hasTrailingExtras {
+                    floatingIsland(horizontalPadding: 6) {
+                        partsIslandButton(iconOnly: true)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+
+                floatingIsland(horizontalPadding: 5) {
+                    exportIslandButton(fontSize: 18, minWidth: 40)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+
+                if supportsEditing {
+                    floatingIsland(horizontalPadding: 5) {
+                        editModeIslandButton(iconOnly: true)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(width: trailingWidth)
         }
         .font(.system(size: 14, weight: .medium))
         .foregroundStyle(Color.black.opacity(0.84))
@@ -777,6 +867,132 @@ private extension View {
         }
     }
 
+}
+
+/// Playback for an iPhone Duo held like a book while editing: big controls on the right
+/// page, just above the editing deck, in place of the header's small ones.
+struct ScoreReaderDuoPlaybackCard: View {
+    let playbackState: ScorePlaybackState
+    let supportsPlayback: Bool
+    let isPlaybackBusy: Bool
+    let isCountingIn: Bool
+    let playbackPreparationMessage: String?
+    let metronomeEnabled: Bool
+    let countInEnabled: Bool
+    let isMixerPresented: Bool
+    let togglePlaybackAction: () -> Void
+    let stopPlaybackAction: () -> Void
+    let toggleMetronomeAction: () -> Void
+    let toggleCountInAction: () -> Void
+    let toggleMixerAction: () -> Void
+
+    private static let accentColor = Color(red: 0.12, green: 0.45, blue: 0.92)
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 14) {
+                playButton
+                stopButton
+                mixerButton
+
+                Spacer(minLength: 8)
+
+                Text(playbackTimeLabel)
+                    .font(.system(size: 22, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(Color.black.opacity(0.84))
+            }
+
+            HStack(spacing: 10) {
+                toggleButton(title: "Metronome", systemImage: "metronome",
+                             isOn: metronomeEnabled, action: toggleMetronomeAction)
+                toggleButton(title: "Count-in", systemImage: "timer",
+                             isOn: countInEnabled, action: toggleCountInAction)
+            }
+        }
+        .padding(14)
+        .scoreReaderChromeIslandBackground(cornerRadius: 24)
+    }
+
+    private var playbackTimeLabel: String {
+        if isCountingIn { return "Count-in" }
+        return playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)"
+    }
+
+    private var playButton: some View {
+        Button(action: togglePlaybackAction) {
+            Group {
+                if isPlaybackBusy {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: playbackState.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(width: 64, height: 64)
+            .background(Self.accentColor, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!supportsPlayback || !playbackState.isAvailable || isPlaybackBusy)
+        .opacity(supportsPlayback && playbackState.isAvailable ? 1 : 0.45)
+        .accessibilityLabel(playbackState.isPlaying ? "Pause playback" : "Play playback")
+    }
+
+    private var stopButton: some View {
+        let canStop = playbackState.isAvailable && playbackState.status != .stopped && !isPlaybackBusy
+        return Button(action: stopPlaybackAction) {
+            Image(systemName: "stop.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.black.opacity(0.84))
+                .frame(width: 48, height: 48)
+                .background(Color.black.opacity(0.06), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canStop)
+        .opacity(canStop ? 1 : 0.4)
+        .accessibilityLabel("Stop playback")
+    }
+
+    private var mixerButton: some View {
+        Button(action: toggleMixerAction) {
+            Image(systemName: "slider.vertical.3")
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(isMixerPresented ? Self.accentColor : Color.black.opacity(0.84))
+                .frame(width: 48, height: 48)
+                .background(isMixerPresented ? Self.accentColor.opacity(0.14) : Color.black.opacity(0.06), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!supportsPlayback)
+        .accessibilityLabel("Mixer")
+        .accessibilityValue(isMixerPresented ? "Open" : "Closed")
+    }
+
+    private func toggleButton(title: String, systemImage: String, isOn: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .medium))
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(isOn ? Self.accentColor : Color.black.opacity(0.84))
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(isOn ? Self.accentColor.opacity(0.14) : Color.black.opacity(0.05),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!playbackState.isAvailable || isPlaybackBusy)
+        .opacity(playbackState.isAvailable ? 1 : 0.45)
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On" : "Off")
+    }
 }
 
 struct ScoreReaderPlaybackPreparationHUD: View {

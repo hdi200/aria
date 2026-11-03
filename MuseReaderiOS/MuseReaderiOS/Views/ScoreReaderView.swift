@@ -234,6 +234,10 @@ struct ScoreReaderView: View {
     @Environment(\.scenePhase) var scenePhase
     @AppStorage("ScoreReaderFloatingPaletteDockedLeft") var floatingPaletteDockedLeft = true
     @AppStorage("ScoreReaderTwoPageViewEnabled") var twoPageViewEnabled = false
+    /// The iPhone Duo's own two-page setting, on by default: pages either side of the fold.
+    @AppStorage("ScoreReaderDuoTwoPageViewEnabled") var duoTwoPageViewEnabled = true
+    /// The Duo upright (open flat in portrait, or standing): one page by default.
+    @AppStorage("ScoreReaderDuoUprightTwoPageViewEnabled") var duoUprightTwoPageViewEnabled = false
 
     let session: ScoreSession
     private let initialRememberedState: ScoreReaderRememberedState
@@ -246,7 +250,7 @@ struct ScoreReaderView: View {
     @OwnedState private var readerState: ScoreReaderState
     @OwnedState private var annotationController: ScoreAnnotationController
     #endif
-    @State var zoomScale: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0
+    @State var zoomScale: CGFloat = ScoreReaderView.startingEditZoomScale
     @State var lastPhoneLandscapeZoomMode: Bool?
     #if os(Android)
     /// Bumped once the page list is on screen, to scroll it to the current page.
@@ -390,7 +394,7 @@ struct ScoreReaderView: View {
         _zoomScale = State(
             initialValue: initialInteractionMode == .view
                 ? ScoreReaderZoomLimits.minimumScale
-                : (UIDevice.current.userInterfaceIdiom == .phone ? 2.2 : 1.0)
+                : Self.startingEditZoomScale
         )
         _selectedToolCategory = State(initialValue: initialToolCategory)
         _selectedPartID = State(initialValue: rememberedState.selectedPartID)
@@ -451,6 +455,7 @@ struct ScoreReaderView: View {
             } else {
                 isolatedReaderCanvas
                     .animation(.easeInOut(duration: 0.22), value: readerState.interactionMode)
+                    .duoRegion(duoCanvasRegion, of: duoLayout)
                     .overlay(alignment: .center) {
                         if readerState.isCountingIn, let beat = readerState.countInBeatNumber {
                             Text("\(beat)")
@@ -469,7 +474,7 @@ struct ScoreReaderView: View {
                         #if os(Android)
                         AndroidReaderObservationScope { noteEntryOverlay }
                         #else
-                        noteEntryOverlay
+                        duoAwareNoteEntryOverlay
                         #endif
                     }
                     .overlay(alignment: floatingPaletteAlignment) {
@@ -478,6 +483,12 @@ struct ScoreReaderView: View {
                         #else
                         floatingPaletteOverlay
                         #endif
+                    }
+                    .overlay {
+                        if showsDuoStandPanel {
+                            duoStandPanel
+                                .duoRegion(.trailing, of: duoLayout)
+                        }
                     }
                     .overlay(alignment: .top) {
                         #if os(Android)
@@ -616,9 +627,10 @@ struct ScoreReaderView: View {
                         if readerState.interactionMode == .view,
                            isChromeVisible,
                            !isMixerPresented,
-                           !isAnnotationModeActive
+                           !isAnnotationModeActive,
+                           !showsDuoStandPanel
                         {
-                            viewModeBottomBar
+                            duoAwareViewModeBottomBar
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
@@ -772,6 +784,43 @@ struct ScoreReaderView: View {
         }
     }
 
+    /// The editing deck, moved to its own side of the fold on an unfolded Duo.
+    @ViewBuilder
+    private var duoAwareNoteEntryOverlay: some View {
+        if duoMovesModeBarToDeck {
+            // Book pose: the right page is a stack of cards, as in the Duo mock-up.
+            VStack(spacing: 12) {
+                if showsDuoPlaybackCard {
+                    duoPlaybackCard
+                }
+                if showsDuoMeasureScrubber {
+                    duoMeasureScrubber
+                }
+                noteEntryOverlay
+                    .duoCard()
+                if readerState.isEditingMode, isPhoneInterface, !plainTextEditorIsActive {
+                    compactPhoneModeBar
+                        .duoCard()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .duoRegion(.trailing, of: duoLayout, alignment: .bottom)
+        } else if let duoDeckRegion {
+            // Stand pose: playback and the measure selector in a card above the deck.
+            VStack(spacing: 12) {
+                if readerState.isEditingMode, session.capabilities.supportsPlayback {
+                    duoPlaybackStrip
+                        .padding(.horizontal, 12)
+                }
+                noteEntryOverlay
+            }
+            .duoRegion(duoDeckRegion, of: duoLayout, alignment: .bottom)
+        } else {
+            noteEntryOverlay
+        }
+    }
+
     @ViewBuilder
     private var floatingPaletteOverlay: some View {
         if let floatingToolCategory, readerState.isEditingMode, !isPhoneInterface {
@@ -801,6 +850,7 @@ struct ScoreReaderView: View {
                 toggleDockSideAction: { floatingPaletteDockedLeft.toggle() }
             )
             .scrollsVerticallyOnAndroid(maxHeight: floatingPaletteMaxHeight)
+            .scrollsVerticallyOnDuo(duoLayout != nil, maxHeight: floatingPaletteMaxHeight)
             .padding(.top, floatingPaletteTopPadding)
             .padding(floatingPaletteDockedLeft ? .leading : .trailing, 16)
         }
@@ -837,12 +887,7 @@ struct ScoreReaderView: View {
             stopPlaybackAction: readerState.stopPlayback,
             toggleMetronomeAction: readerState.toggleMetronome,
             toggleCountInAction: readerState.toggleCountIn,
-            toggleMixerAction: {
-                isPartsPanelPresented = false
-                isExportPanelPresented = false
-                withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented.toggle() }
-                isChromeVisible = true
-            },
+            toggleMixerAction: toggleMixerFromControls,
             isMixerPresented: isMixerPresented,
             exportAction: {
                 isPartsPanelPresented = false
@@ -879,6 +924,9 @@ struct ScoreReaderView: View {
                 isAddInstrumentPresented = true
             },
             allowsManagingParts: readerState.isEditingMode,
+            duoFold: duoLayout?.hasVerticalFold == true ? duoLayout?.gap.map { $0.minX...$0.maxX } : nil,
+            showsHeaderPlayback: !showsDuoPlaybackCard && !showsDuoStandPanel,
+            edgeInset: duoLayout != nil ? 10 : 0,
             exportPanelContent: {
                 AnyView(
                     ScoreReaderExportPanel(
@@ -938,11 +986,12 @@ struct ScoreReaderView: View {
     private var readerLifecycleBody: some View {
         readerContent
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if readerState.isEditingMode && isPhoneInterface && !plainTextEditorIsActive {
+            if readerState.isEditingMode && isPhoneInterface && !plainTextEditorIsActive && !duoMovesModeBarToDeck {
                 isolatedPhoneModeBar
             }
         }
         .onAppear { handleReaderAppear() }
+        .onChangeCompatible(of: DuoPoseMonitor.shared.pose) { _ in handleDuoPoseChange() }
         .task {
             readerState.playbackFollowEnabled = initialRememberedState.playbackFollowEnabled
             let rememberedPartIndex = rememberedPartIndexForInitialLoad()
@@ -1022,7 +1071,7 @@ struct ScoreReaderView: View {
             if mode != .view, isAnnotationModeActive {
                 exitAnnotationMode()
             }
-            if mode == .edit, isPhoneDevice {
+            if mode == .edit, usesPhoneEditHabits {
                 // View mode intentionally returns to a full-page scale. Force the
                 // preferred phone edit scale again on every edit invocation,
                 // even when the device orientation has not changed.
@@ -1409,6 +1458,186 @@ struct ScoreReaderView: View {
         UIDevice.current.userInterfaceIdiom == .phone
     }
 
+    /// An iPhone used as a phone: editing stays upright and zooms in. An unfolded iPhone
+    /// Duo is held like a small tablet instead.
+    private var usesPhoneEditHabits: Bool {
+        isPhoneDevice && !DuoPoseMonitor.shared.pose.isUnfolded
+    }
+
+    static var startingEditZoomScale: CGFloat {
+        UIDevice.current.userInterfaceIdiom == .phone && !DuoPoseMonitor.shared.pose.isUnfolded ? 2.2 : 1.0
+    }
+
+    /// Where the reader's pieces go on an unfolded iPhone Duo; nil on every other device.
+    private var duoLayout: DuoReaderLayout? {
+        AriaWindowLayout.shared.duoReaderLayout
+    }
+
+    /// An unfolded Duo keeps its own two-page settings: two pages either side of a fold that
+    /// runs top to bottom, one page when it's upright.
+    private var showsTwoPages: Bool {
+        guard let duoLayout else {
+            return twoPageViewEnabled
+        }
+        return duoLayout.hasVerticalFold ? duoTwoPageViewEnabled : duoUprightTwoPageViewEnabled
+    }
+
+    /// The score keeps to the left page while editing in book pose, and to the upright
+    /// half in stand pose.
+    private var duoCanvasRegion: DuoReaderRegion? {
+        switch duoLayout?.kind {
+        case .book:
+            return readerState.isEditingMode ? .leading : nil
+        case .stand:
+            return .leading
+        default:
+            return nil
+        }
+    }
+
+    /// The editing deck goes on the right page in book pose and the flat half in stand pose.
+    private var duoDeckRegion: DuoReaderRegion? {
+        switch duoLayout?.kind {
+        case .book, .stand:
+            return .trailing
+        default:
+            return nil
+        }
+    }
+
+    /// In book pose the mode bar moves onto the right page with the deck.
+    private var duoMovesModeBarToDeck: Bool {
+        duoLayout?.kind == .book
+    }
+
+    /// Editing in book pose, playback gets big controls on the right page above the deck.
+    private var showsDuoPlaybackCard: Bool {
+        duoLayout?.kind == .book && readerState.isEditingMode && session.capabilities.supportsPlayback
+    }
+
+    /// Reading in stand pose, the page stands up and a panel of playback and page controls
+    /// lies on the flat half.
+    private var showsDuoStandPanel: Bool {
+        duoLayout?.kind == .stand && readerState.interactionMode == .view && !isAnnotationModeActive
+    }
+
+    private var duoStandPanel: some View {
+        ScoreReaderDuoStandPanel(
+            title: readerState.scoreTitle,
+            composer: session.document.composer,
+            playbackState: readerState.playbackState,
+            supportsPlayback: session.capabilities.supportsPlayback,
+            isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
+            isCountingIn: readerState.isCountingIn,
+            playbackPreparationMessage: readerState.playbackPreparationMessage,
+            metronomeEnabled: readerState.metronomeEnabled,
+            countInEnabled: readerState.countInEnabled,
+            isMixerPresented: isMixerPresented,
+            pageCount: readerState.pageCount,
+            currentPageIndex: readerState.selectedPageIndex,
+            usesTwoPageSpread: usesTwoPageSpread,
+            twoPageEnabled: showsTwoPages,
+            measureRegions: readerState.playbackMeasureRegions,
+            activeMeasureRegion: readerState.activePlaybackMeasureRegion(for: readerState.playbackState),
+            keyControl: readerState.viewTransposeKey.map { AnyView(viewKeyControl($0)) },
+            togglePlaybackAction: readerState.togglePlayback,
+            stopPlaybackAction: readerState.stopPlayback,
+            toggleMetronomeAction: readerState.toggleMetronome,
+            toggleCountInAction: readerState.toggleCountIn,
+            toggleMixerAction: toggleMixerFromControls,
+            toggleTwoPageAction: toggleTwoPageView,
+            previousPageAction: showPreviousPage,
+            nextPageAction: showNextPage,
+            showPageAction: showPageFromScrubber,
+            seekAction: readerState.seekPlayback
+        )
+    }
+
+    private func toggleMixerFromControls() {
+        isPartsPanelPresented = false
+        isExportPanelPresented = false
+        withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented.toggle() }
+        isChromeVisible = true
+    }
+
+    /// Editing in book pose, a measure selector sits under the playback card once the
+    /// score's measures are known for playback.
+    private var showsDuoMeasureScrubber: Bool {
+        showsDuoPlaybackCard && !readerState.playbackMeasureRegions.isEmpty
+    }
+
+    /// The measure under the playback position, playing or not.
+    private var duoPlaybackMeasureIndex: Int {
+        let regions = readerState.playbackMeasureRegions
+        if let active = readerState.activePlaybackMeasureRegion(for: readerState.playbackState),
+           let index = regions.firstIndex(of: active)
+        {
+            return index
+        }
+        let position = readerState.playbackState.positionSeconds
+        return regions.lastIndex { $0.startTimeSeconds <= position } ?? 0
+    }
+
+    private var duoMeasureScrubber: some View {
+        let regions = readerState.playbackMeasureRegions
+        let total = (regions.map(\.measureIndex).max() ?? 0) + 1
+        return ScoreReaderStandScrubber(
+            count: regions.count,
+            currentIndex: duoPlaybackMeasureIndex,
+            showsTicks: true,
+            accentColor: Color(red: 0.12, green: 0.45, blue: 0.92),
+            accessibilityName: "Measure",
+            markLabel: { "\(regions[$0].measureIndex + 1)" },
+            bubbleLabel: { "m. \(regions[$0].measureIndex + 1)" },
+            positionLabel: { "\(regions[$0].measureIndex + 1) / \(total)" },
+            commitAction: seekToPlaybackMeasure
+        )
+    }
+
+    private func seekToPlaybackMeasure(at index: Int) {
+        let regions = readerState.playbackMeasureRegions
+        let duration = max(readerState.playbackState.durationSeconds, regions.map(\.endTimeSeconds).max() ?? 0)
+        guard regions.indices.contains(index), duration > 0 else {
+            return
+        }
+        readerState.seekPlayback(to: regions[index].startTimeSeconds / duration)
+    }
+
+    private var duoPlaybackStrip: some View {
+        ScoreReaderDuoPlaybackStrip(
+            playbackState: readerState.playbackState,
+            supportsPlayback: session.capabilities.supportsPlayback,
+            isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
+            isCountingIn: readerState.isCountingIn,
+            playbackPreparationMessage: readerState.playbackPreparationMessage,
+            isMixerPresented: isMixerPresented,
+            measureRegions: readerState.playbackMeasureRegions,
+            currentMeasureIndex: duoPlaybackMeasureIndex,
+            togglePlaybackAction: readerState.togglePlayback,
+            stopPlaybackAction: readerState.stopPlayback,
+            toggleMixerAction: toggleMixerFromControls,
+            seekToMeasureAction: seekToPlaybackMeasure
+        )
+    }
+
+    private var duoPlaybackCard: some View {
+        ScoreReaderDuoPlaybackCard(
+            playbackState: readerState.playbackState,
+            supportsPlayback: session.capabilities.supportsPlayback,
+            isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
+            isCountingIn: readerState.isCountingIn,
+            playbackPreparationMessage: readerState.playbackPreparationMessage,
+            metronomeEnabled: readerState.metronomeEnabled,
+            countInEnabled: readerState.countInEnabled,
+            isMixerPresented: isMixerPresented,
+            togglePlaybackAction: readerState.togglePlayback,
+            stopPlaybackAction: readerState.stopPlayback,
+            toggleMetronomeAction: readerState.toggleMetronome,
+            toggleCountInAction: readerState.toggleCountIn,
+            toggleMixerAction: toggleMixerFromControls
+        )
+    }
+
     private var compactPhoneModeBar: some View {
         ScoreReaderModeToolbar(
             isBusy: readerState.isEditingActionInFlight,
@@ -1462,8 +1691,22 @@ struct ScoreReaderView: View {
         }
 
         MuseReaderAppDelegate.updateSupportedInterfaceOrientations(
-            mode == .edit ? .portrait : .all
+            mode == .edit && usesPhoneEditHabits ? .portrait : .all
         )
+    }
+
+    /// Folding or unfolding a Duo while editing swaps between phone and tablet habits.
+    private func handleDuoPoseChange() {
+        guard readerState.isEditingMode else {
+            return
+        }
+        updatePhoneOrientation(for: readerState.interactionMode)
+        if usesPhoneEditHabits {
+            lastPhoneLandscapeZoomMode = nil
+            applyPreferredPhoneZoomIfNeeded(for: AriaWindowLayout.shared.windowSize)
+        } else if zoomScaleBeforeTextEntry == nil {
+            zoomScale = 1
+        }
     }
 
     private func unlockPhoneOrientation() {
@@ -1511,7 +1754,7 @@ struct ScoreReaderView: View {
     private var usesTwoPageSpread: Bool {
         readerState.interactionMode == .view
         && readingStyle == .pageTurn
-        && twoPageViewEnabled
+        && showsTwoPages
         && readerState.pageCount > 1
     }
 
@@ -1566,12 +1809,7 @@ struct ScoreReaderView: View {
             #endif
 
             if showsViewModePageControls {
-                ScoreReaderPageScrubber(
-                    pageCount: readerState.pageCount,
-                    currentPageIndex: readerState.selectedPageIndex,
-                    usesTwoPageSpread: usesTwoPageSpread,
-                    commitAction: showPageFromScrubber
-                )
+                pageScrubber
                 #if os(Android)
                 .frame(width: viewModeBottomBarWidths.scrubber)
                 #else
@@ -1582,13 +1820,8 @@ struct ScoreReaderView: View {
 
             Group {
                 if let viewKey = readerState.viewTransposeKey {
-                    ScoreReaderViewKeyControl(
-                        currentKey: viewKey,
-                        originalKey: readerState.viewTransposeSourceKey ?? viewKey,
-                        isBusy: readerState.isViewTransposeActionInFlight,
-                        selectKey: readerState.setTemporaryViewKey
-                    )
-                    .padding(.bottom, 10)
+                    viewKeyControl(viewKey)
+                        .padding(.bottom, 10)
                 }
                 #if os(Android)
                 if readerState.viewTransposeKey == nil {
@@ -1607,6 +1840,57 @@ struct ScoreReaderView: View {
         .padding(.horizontal, 14)
     }
 
+    private var pageScrubber: some View {
+        ScoreReaderPageScrubber(
+            pageCount: readerState.pageCount,
+            currentPageIndex: readerState.selectedPageIndex,
+            usesTwoPageSpread: usesTwoPageSpread,
+            commitAction: showPageFromScrubber
+        )
+    }
+
+    private func viewKeyControl(_ viewKey: ScoreTransposeTargetKey) -> some View {
+        ScoreReaderViewKeyControl(
+            currentKey: viewKey,
+            originalKey: readerState.viewTransposeSourceKey ?? viewKey,
+            isBusy: readerState.isViewTransposeActionInFlight,
+            selectKey: readerState.setTemporaryViewKey
+        )
+    }
+
+    /// With a Duo's fold running top to bottom, the bottom row splits at the fold: the
+    /// two-page switch under the left page, the page slider and key under the right.
+    @ViewBuilder
+    private var duoAwareViewModeBottomBar: some View {
+        if let duoLayout, duoLayout.hasVerticalFold {
+            ZStack {
+                Group {
+                    if showsViewModePageControls {
+                        twoPageViewButton
+                    }
+                }
+                .padding(.horizontal, 14)
+                .duoRegion(.leading, of: duoLayout, alignment: .bottomLeading)
+
+                HStack(alignment: .bottom, spacing: 12) {
+                    if showsViewModePageControls {
+                        pageScrubber
+                            .frame(minWidth: 120, maxWidth: 520)
+                            .padding(.bottom, 10)
+                    }
+                    if let viewKey = readerState.viewTransposeKey {
+                        viewKeyControl(viewKey)
+                            .padding(.bottom, 10)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .duoRegion(.trailing, of: duoLayout, alignment: .bottom)
+            }
+        } else {
+            viewModeBottomBar
+        }
+    }
+
     #if os(Android)
     /// Skip's HStack doesn't share width between flexible children (the slider took the
     /// whole row), so the iOS layout's widths are worked out here: the slider gets a
@@ -1621,7 +1905,7 @@ struct ScoreReaderView: View {
     private var twoPageViewButton: some View {
         Button(action: toggleTwoPageView) {
             VStack(spacing: 4) {
-                ScoreReaderTwoPageViewIcon(isActive: twoPageViewEnabled)
+                ScoreReaderTwoPageViewIcon(isActive: showsTwoPages)
                     .frame(width: 38, height: 34)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .shadow(color: Color.black.opacity(0.10), radius: 10, y: 4)
@@ -1635,18 +1919,26 @@ struct ScoreReaderView: View {
         }
         .buttonStyle(.plain)
         .padding(.bottom, 10)
-        .accessibilityLabel(twoPageViewEnabled ? "Use single-page view" : "Use two-page view")
-        .accessibilityValue(twoPageViewEnabled ? "Two pages" : "One page")
+        .accessibilityLabel(showsTwoPages ? "Use single-page view" : "Use two-page view")
+        .accessibilityValue(showsTwoPages ? "Two pages" : "One page")
     }
 
     private func toggleTwoPageView() {
         let spreadStartIndex = twoPageSpreadStartIndex
         withAnimation(.easeInOut(duration: 0.22)) {
-            twoPageViewEnabled.toggle()
+            if let duoLayout {
+                if duoLayout.hasVerticalFold {
+                    duoTwoPageViewEnabled.toggle()
+                } else {
+                    duoUprightTwoPageViewEnabled.toggle()
+                }
+            } else {
+                twoPageViewEnabled.toggle()
+            }
             zoomScale = 1
         }
 
-        if twoPageViewEnabled {
+        if showsTwoPages {
             readerState.updatePageTurnSelection(to: spreadStartIndex)
             for pageIndex in twoPageSpreadIndices {
                 readerState.prefetchPage(pageIndex)
@@ -1654,12 +1946,24 @@ struct ScoreReaderView: View {
         }
     }
 
+    /// On a Duo, the spread's two pages sit either side of the fold, clear of it.
+    private func duoSpreadSeam(in geometry: GeometryProxy) -> (spacing: CGFloat, width: CGFloat, offset: CGFloat)? {
+        guard let duoLayout, duoLayout.hasVerticalFold, let gap = duoLayout.gap else {
+            return nil
+        }
+        let seamMidX = gap.midX - geometry.frame(in: .global).minX
+        let spacing = gap.width + 16
+        let halfWidth = max(min(seamMidX, geometry.size.width - seamMidX) - 12, spacing / 2 + 1)
+        return (spacing, halfWidth * 2, seamMidX - geometry.size.width / 2)
+    }
+
     private var pageTurnReaderCanvas: some View {
         GeometryReader { geometry in
             Group {
                 if usesTwoPageSpread {
-                    let spreadSpacing: CGFloat = 8
-                    let spreadWidth = max(geometry.size.width - 24, 1)
+                    let duoSeam = duoSpreadSeam(in: geometry)
+                    let spreadSpacing: CGFloat = duoSeam?.spacing ?? 8
+                    let spreadWidth = duoSeam?.width ?? max(geometry.size.width - 24, 1)
                     let pageViewportWidth = max((spreadWidth - spreadSpacing) / 2, 1)
                     let pageViewportSize = CGSize(
                         width: pageViewportWidth,
@@ -1682,6 +1986,7 @@ struct ScoreReaderView: View {
                         }
                     }
                     .frame(width: spreadWidth, height: pageViewportSize.height)
+                    .offset(x: duoSeam?.offset ?? 0)
                     .overlay {
                         if geometry.size.width > geometry.size.height {
                             Color.clear
@@ -2399,7 +2704,7 @@ struct ScoreReaderView: View {
     }
 
     private func applyPreferredPhoneZoomIfNeeded(for size: CGSize) {
-        guard isPhoneDevice, zoomScaleBeforeTextEntry == nil, size.width > 0, size.height > 0 else {
+        guard usesPhoneEditHabits, zoomScaleBeforeTextEntry == nil, size.width > 0, size.height > 0 else {
             return
         }
 
@@ -3530,7 +3835,7 @@ struct ScoreReaderView: View {
     }
 
     private var textEntryFocusZoomScale: CGFloat {
-        isPhoneDevice ? 2.35 : 1.7
+        usesPhoneEditHabits ? 2.35 : 1.7
     }
 
     private func zoomIn() {

@@ -8,7 +8,9 @@ import Observation
 // Skip's Observation bridge, so Android's UI redraws when these properties change.
 import SkipFuse
 #endif
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 
 /// How an iPhone Duo is being held. Every other device reports `.notDuo`, so
@@ -26,6 +28,12 @@ enum DuoPose: String, CaseIterable {
 
     var isDuo: Bool {
         self != .notDuo
+    }
+
+    /// Aria is on the inner display. Phone habits that suit the outer display
+    /// (portrait-only editing, the phone's edit zoom) don't apply.
+    var isUnfolded: Bool {
+        self == .open || self == .book || self == .stand
     }
 
     var title: String {
@@ -112,6 +120,90 @@ enum DuoPosePolicy {
         case .book:
             return .stand
         }
+    }
+}
+
+/// Where the reader's pieces go on an unfolded iPhone Duo, in window
+/// coordinates. The arrangements follow the prototype in promo/duo-mockup:
+/// two pages either side of the fold when it runs top to bottom, the page on
+/// the upright half and the controls on the flat half in stand pose.
+struct DuoReaderLayout: Equatable {
+    enum Kind: Equatable {
+        /// Open flat, upright: one page, as on an iPad.
+        case openSingle
+        /// Open flat, sideways: two pages either side of the seam.
+        case openSpread
+        case book
+        case stand
+    }
+
+    /// The seam between the pages when the Duo lies open flat.
+    static let openSeamWidth: CGFloat = 12
+
+    let kind: Kind
+    let windowSize: CGSize
+    /// The fold, or the seam when open flat. Nil when open upright.
+    let gap: CGRect?
+
+    /// Nil unless Aria is on an unfolded Duo's inner display.
+    init?(pose: DuoPose, windowSize: CGSize, foldFrame: CGRect?) {
+        guard windowSize.width > 0, windowSize.height > 0 else {
+            return nil
+        }
+        self.windowSize = windowSize
+        let thickness = DuoPosePolicy.simulatedFoldThickness
+        let fold = foldFrame.flatMap { $0.isEmpty ? nil : $0 }
+
+        switch pose {
+        case .notDuo, .closed:
+            return nil
+        case .open:
+            if windowSize.width > windowSize.height {
+                kind = .openSpread
+                gap = CGRect(x: windowSize.width / 2 - Self.openSeamWidth / 2, y: 0,
+                             width: Self.openSeamWidth, height: windowSize.height)
+            } else {
+                kind = .openSingle
+                gap = nil
+            }
+        case .book:
+            kind = .book
+            gap = fold ?? CGRect(x: windowSize.width / 2 - thickness / 2, y: 0,
+                                 width: thickness, height: windowSize.height)
+        case .stand:
+            kind = .stand
+            gap = fold ?? CGRect(x: 0, y: windowSize.height / 2 - thickness / 2,
+                                 width: windowSize.width, height: thickness)
+        }
+    }
+
+    /// The fold runs top to bottom, so pages and controls keep to either side.
+    var hasVerticalFold: Bool {
+        kind == .openSpread || kind == .book
+    }
+
+    /// The left page, or the upright half in stand pose.
+    var leadingRect: CGRect {
+        guard let gap else {
+            return CGRect(origin: .zero, size: windowSize)
+        }
+        if hasVerticalFold {
+            return CGRect(x: 0, y: 0, width: max(gap.minX, 0), height: windowSize.height)
+        }
+        return CGRect(x: 0, y: 0, width: windowSize.width, height: max(gap.minY, 0))
+    }
+
+    /// The right page, or the flat half in stand pose.
+    var trailingRect: CGRect {
+        guard let gap else {
+            return CGRect(origin: .zero, size: windowSize)
+        }
+        if hasVerticalFold {
+            let minX = min(gap.maxX, windowSize.width)
+            return CGRect(x: minX, y: 0, width: windowSize.width - minX, height: windowSize.height)
+        }
+        let minY = min(gap.maxY, windowSize.height)
+        return CGRect(x: 0, y: minY, width: windowSize.width, height: windowSize.height - minY)
     }
 }
 

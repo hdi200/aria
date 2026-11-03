@@ -46,8 +46,15 @@ final class AriaWindowLayout {
     /// is laid out as before.
     private(set) var windowSize = UIScreen.main.bounds.size
 
+    /// On an iPhone Duo the pose decides instead: the inner display lying open flat sideways
+    /// gets the iPad layout, as in the prototype (promo/duo-mockup). Upright it is narrower
+    /// than an iPad mini, so it stays a phone, like every other pose.
     var usesPhoneLayout: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        let duoPose = DuoPoseMonitor.shared.pose
+        if duoPose.isDuo {
+            return duoPose != .open || windowSize.width < Self.minimumTabletSide
+        }
+        return UIDevice.current.userInterfaceIdiom == .phone
             || min(windowSize.width, windowSize.height) < Self.minimumTabletSide
     }
 
@@ -61,5 +68,11 @@ final class AriaWindowLayout {
 
     var isLandscape: Bool {
         windowSize.width > windowSize.height
+    }
+
+    /// Where the reader's pieces go on an unfolded iPhone Duo; nil everywhere else.
+    var duoReaderLayout: DuoReaderLayout? {
+        let monitor = DuoPoseMonitor.shared
+        return DuoReaderLayout(pose: monitor.pose, windowSize: windowSize, foldFrame: monitor.state.foldFrame)
     }
 }
