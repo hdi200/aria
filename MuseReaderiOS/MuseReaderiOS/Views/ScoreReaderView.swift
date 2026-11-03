@@ -60,6 +60,8 @@ struct ScoreReaderViewKeyControl: View {
             }
             Text(currentKey.compactTitle)
                 .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+                .fixedSize()
             Image(systemName: "chevron.up.chevron.down")
                 .font(.system(size: 9, weight: .bold))
         }
@@ -490,6 +492,18 @@ struct ScoreReaderView: View {
                                 .duoRegion(.trailing, of: duoLayout)
                         }
                     }
+                    .overlay {
+                        if showsDuoSideTransport {
+                            GeometryReader { proxy in
+                                let strip = proxy.safeAreaInsets.trailing
+                                duoSideTransport
+                                    // In the system strip when there is one, else at the edge.
+                                    .position(x: strip > 40 ? proxy.size.width + strip / 2 : proxy.size.width - 36,
+                                              y: proxy.size.height / 2)
+                            }
+                            .transition(.opacity)
+                        }
+                    }
                     .overlay(alignment: .top) {
                         #if os(Android)
                         AndroidReaderObservationScope { readerChromeOverlay }
@@ -789,12 +803,12 @@ struct ScoreReaderView: View {
     private var duoAwareNoteEntryOverlay: some View {
         if duoMovesModeBarToDeck {
             // Book pose: the right page is a stack of cards, as in the Duo mock-up.
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 if showsDuoPlaybackCard {
                     duoPlaybackCard
                 }
                 if showsDuoMeasureScrubber {
-                    duoMeasureScrubber
+                    duoMeasureCard
                 }
                 noteEntryOverlay
                     .duoCard()
@@ -803,13 +817,15 @@ struct ScoreReaderView: View {
                         .duoCard()
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 10)
+            // Below the header's buttons, which sit over the right page too.
+            .padding(.top, max(measuredTopChromeHeight, 62) + 10)
             .duoRegion(.trailing, of: duoLayout, alignment: .bottom)
         } else if let duoDeckRegion {
             // Stand pose: playback and the measure selector in a card above the deck.
             VStack(spacing: 12) {
-                if readerState.isEditingMode, session.capabilities.supportsPlayback {
+                if showsDuoPlaybackStrip {
                     duoPlaybackStrip
                         .padding(.horizontal, 12)
                 }
@@ -924,8 +940,10 @@ struct ScoreReaderView: View {
                 isAddInstrumentPresented = true
             },
             allowsManagingParts: readerState.isEditingMode,
-            duoFold: duoLayout?.hasVerticalFold == true ? duoLayout?.gap.map { $0.minX...$0.maxX } : nil,
-            showsHeaderPlayback: !showsDuoPlaybackCard && !showsDuoStandPanel,
+            // Half folded like a book, the header keeps off the fold; open flat it's the iPad's.
+            duoFold: duoLayout?.kind == .book ? duoLayout?.gap.map { $0.minX...$0.maxX } : nil,
+            showsHeaderPlayback: !showsDuoPlaybackCard && !showsDuoStandPanel && !showsDuoPlaybackStrip
+                && !showsDuoSideTransport,
             edgeInset: duoLayout != nil ? 10 : 0,
             exportPanelContent: {
                 AnyView(
@@ -1515,6 +1533,29 @@ struct ScoreReaderView: View {
         duoLayout?.kind == .book && readerState.isEditingMode && session.capabilities.supportsPlayback
     }
 
+    /// Reading on a folded Duo, playback moves into the system strip down the screen's side,
+    /// as in the prototype, and the header keeps back, share and Edit.
+    private var showsDuoSideTransport: Bool {
+        DuoPoseMonitor.shared.pose == .closed && readerState.interactionMode == .view
+            && isChromeVisible && !isAnnotationModeActive && session.capabilities.supportsPlayback
+    }
+
+    private var duoSideTransport: some View {
+        ScoreReaderDuoSideTransport(
+            playbackState: readerState.playbackState,
+            supportsPlayback: session.capabilities.supportsPlayback,
+            isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
+            metronomeEnabled: readerState.metronomeEnabled,
+            countInEnabled: readerState.countInEnabled,
+            isMixerPresented: isMixerPresented,
+            togglePlaybackAction: readerState.togglePlayback,
+            stopPlaybackAction: readerState.stopPlayback,
+            toggleMetronomeAction: readerState.toggleMetronome,
+            toggleCountInAction: readerState.toggleCountIn,
+            toggleMixerAction: toggleMixerFromControls
+        )
+    }
+
     /// Reading in stand pose, the page stands up and a panel of playback and page controls
     /// lies on the flat half.
     private var showsDuoStandPanel: Bool {
@@ -1578,20 +1619,31 @@ struct ScoreReaderView: View {
         return regions.lastIndex { $0.startTimeSeconds <= position } ?? 0
     }
 
-    private var duoMeasureScrubber: some View {
+    /// The score's measure under the playback position, counting from 0.
+    private var duoCurrentMeasure: Int {
         let regions = readerState.playbackMeasureRegions
-        let total = (regions.map(\.measureIndex).max() ?? 0) + 1
-        return ScoreReaderStandScrubber(
-            count: regions.count,
-            currentIndex: duoPlaybackMeasureIndex,
-            showsTicks: true,
-            accentColor: Color(red: 0.12, green: 0.45, blue: 0.92),
-            accessibilityName: "Measure",
-            markLabel: { "\(regions[$0].measureIndex + 1)" },
-            bubbleLabel: { "m. \(regions[$0].measureIndex + 1)" },
-            positionLabel: { "\(regions[$0].measureIndex + 1) / \(total)" },
-            commitAction: seekToPlaybackMeasure
+        let index = duoPlaybackMeasureIndex
+        return regions.indices.contains(index) ? regions[index].measureIndex : 0
+    }
+
+    private var duoMeasureCard: some View {
+        ScoreReaderDuoMeasureCard(
+            measureCount: DuoMeasureAxis(regions: readerState.playbackMeasureRegions).measureCount,
+            currentMeasure: duoCurrentMeasure,
+            commitAction: seekToMeasureNumber
         )
+    }
+
+    /// Editing in stand pose, playback and the measure selector sit in a card above the deck.
+    private var showsDuoPlaybackStrip: Bool {
+        duoLayout?.kind == .stand && readerState.isEditingMode && session.capabilities.supportsPlayback
+    }
+
+    private func seekToMeasureNumber(_ measure: Int) {
+        let axis = DuoMeasureAxis(regions: readerState.playbackMeasureRegions)
+        if let index = axis.regionIndex(forMeasure: measure, from: duoPlaybackMeasureIndex) {
+            seekToPlaybackMeasure(at: index)
+        }
     }
 
     private func seekToPlaybackMeasure(at index: Int) {
@@ -1610,13 +1662,15 @@ struct ScoreReaderView: View {
             isPlaybackBusy: readerState.isPlaybackActionInFlight || readerState.playbackPreparationMessage != nil,
             isCountingIn: readerState.isCountingIn,
             playbackPreparationMessage: readerState.playbackPreparationMessage,
+            metronomeEnabled: readerState.metronomeEnabled,
             isMixerPresented: isMixerPresented,
-            measureRegions: readerState.playbackMeasureRegions,
-            currentMeasureIndex: duoPlaybackMeasureIndex,
+            measureCount: DuoMeasureAxis(regions: readerState.playbackMeasureRegions).measureCount,
+            currentMeasure: duoCurrentMeasure,
             togglePlaybackAction: readerState.togglePlayback,
             stopPlaybackAction: readerState.stopPlayback,
+            toggleMetronomeAction: readerState.toggleMetronome,
             toggleMixerAction: toggleMixerFromControls,
-            seekToMeasureAction: seekToPlaybackMeasure
+            seekToMeasureAction: seekToMeasureNumber
         )
     }
 
@@ -1858,11 +1912,11 @@ struct ScoreReaderView: View {
         )
     }
 
-    /// With a Duo's fold running top to bottom, the bottom row splits at the fold: the
-    /// two-page switch under the left page, the page slider and key under the right.
+    /// Half folded like a book, the bottom row splits at the fold: the two-page switch under
+    /// the left page, the page slider and key under the right. Open flat it's the iPad's.
     @ViewBuilder
     private var duoAwareViewModeBottomBar: some View {
-        if let duoLayout, duoLayout.hasVerticalFold {
+        if let duoLayout, duoLayout.kind == .book {
             ZStack {
                 Group {
                     if showsViewModePageControls {

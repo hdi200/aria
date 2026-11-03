@@ -898,7 +898,7 @@ struct ScoreReaderDuoPlaybackCard: View {
                 Spacer(minLength: 8)
 
                 Text(playbackTimeLabel)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -912,7 +912,7 @@ struct ScoreReaderDuoPlaybackCard: View {
                              isOn: countInEnabled, action: toggleCountInAction)
             }
         }
-        .padding(14)
+        .padding(12)
         .scoreReaderChromeIslandBackground(cornerRadius: 24)
     }
 
@@ -929,11 +929,11 @@ struct ScoreReaderDuoPlaybackCard: View {
                         .tint(.white)
                 } else {
                     Image(systemName: playbackState.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(.white)
                 }
             }
-            .frame(width: 64, height: 64)
+            .frame(width: 54, height: 54)
             .background(Self.accentColor, in: Circle())
         }
         .buttonStyle(.plain)
@@ -946,9 +946,9 @@ struct ScoreReaderDuoPlaybackCard: View {
         let canStop = playbackState.isAvailable && playbackState.status != .stopped && !isPlaybackBusy
         return Button(action: stopPlaybackAction) {
             Image(systemName: "stop.fill")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.black.opacity(0.84))
-                .frame(width: 48, height: 48)
+                .frame(width: 44, height: 44)
                 .background(Color.black.opacity(0.06), in: Circle())
         }
         .buttonStyle(.plain)
@@ -960,9 +960,9 @@ struct ScoreReaderDuoPlaybackCard: View {
     private var mixerButton: some View {
         Button(action: toggleMixerAction) {
             Image(systemName: "slider.vertical.3")
-                .font(.system(size: 19, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(isMixerPresented ? Self.accentColor : Color.black.opacity(0.84))
-                .frame(width: 48, height: 48)
+                .frame(width: 44, height: 44)
                 .background(isMixerPresented ? Self.accentColor.opacity(0.14) : Color.black.opacity(0.06), in: Circle())
         }
         .buttonStyle(.plain)
@@ -983,7 +983,7 @@ struct ScoreReaderDuoPlaybackCard: View {
                     .minimumScaleFactor(0.8)
             }
             .foregroundStyle(isOn ? Self.accentColor : Color.black.opacity(0.84))
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .frame(maxWidth: .infinity, minHeight: 42)
             .background(isOn ? Self.accentColor.opacity(0.14) : Color.black.opacity(0.05),
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
@@ -991,6 +991,80 @@ struct ScoreReaderDuoPlaybackCard: View {
         .disabled(!playbackState.isAvailable || isPlaybackBusy)
         .opacity(playbackState.isAvailable ? 1 : 0.45)
         .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On" : "Off")
+    }
+}
+
+/// Playback on a folded Duo: a column of buttons in the system strip down the screen's side.
+struct ScoreReaderDuoSideTransport: View {
+    let playbackState: ScorePlaybackState
+    let supportsPlayback: Bool
+    let isPlaybackBusy: Bool
+    let metronomeEnabled: Bool
+    let countInEnabled: Bool
+    let isMixerPresented: Bool
+    let togglePlaybackAction: () -> Void
+    let stopPlaybackAction: () -> Void
+    let toggleMetronomeAction: () -> Void
+    let toggleCountInAction: () -> Void
+    let toggleMixerAction: () -> Void
+
+    private static let accentColor = Color(red: 0.12, green: 0.45, blue: 0.92)
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Button(action: togglePlaybackAction) {
+                Group {
+                    if isPlaybackBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: playbackState.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 19, weight: .bold))
+                    }
+                }
+                .frame(width: 44, height: 44)
+            }
+            .disabled(!supportsPlayback || !playbackState.isAvailable || isPlaybackBusy)
+            .accessibilityLabel(playbackState.isPlaying ? "Pause playback" : "Play playback")
+
+            sideButton(systemImage: "stop.fill", isOn: false,
+                       isEnabled: playbackState.isAvailable && playbackState.status != .stopped && !isPlaybackBusy,
+                       label: "Stop playback", action: stopPlaybackAction)
+
+            Rectangle()
+                .fill(Color.black.opacity(0.10))
+                .frame(width: 26, height: 1)
+                .padding(.vertical, 4)
+
+            sideButton(systemImage: "metronome", isOn: metronomeEnabled,
+                       isEnabled: playbackState.isAvailable && !isPlaybackBusy,
+                       label: "Metronome", action: toggleMetronomeAction)
+            sideButton(systemImage: "timer", isOn: countInEnabled,
+                       isEnabled: playbackState.isAvailable && !isPlaybackBusy,
+                       label: "Count-in", action: toggleCountInAction)
+            sideButton(systemImage: "slider.vertical.3", isOn: isMixerPresented,
+                       isEnabled: supportsPlayback,
+                       label: "Mixer", action: toggleMixerAction)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.black.opacity(0.84))
+        .padding(.vertical, 8)
+        .frame(width: 56)
+        .scoreReaderChromeIslandBackground(cornerRadius: 28)
+    }
+
+    private func sideButton(systemImage: String, isOn: Bool, isEnabled: Bool, label: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isOn ? Self.accentColor : Color.black.opacity(0.84))
+                .frame(width: 44, height: 40)
+        }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityLabel(label)
         .accessibilityValue(isOn ? "On" : "Off")
     }
 }

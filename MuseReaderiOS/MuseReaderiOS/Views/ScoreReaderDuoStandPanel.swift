@@ -126,17 +126,22 @@ struct ScoreReaderDuoStandPanel: View {
     @ViewBuilder
     private var positionRow: some View {
         if showsMeasureSelector {
-            let total = (measureRegions.map(\.measureIndex).max() ?? 0) + 1
+            let axis = DuoMeasureAxis(regions: measureRegions)
             ScoreReaderStandScrubber(
-                count: measureRegions.count,
-                currentIndex: activeMeasureRegion.flatMap { measureRegions.firstIndex(of: $0) } ?? 0,
+                count: axis.measureCount,
+                currentIndex: activeMeasureRegion?.measureIndex ?? 0,
                 showsTicks: true,
                 accentColor: Self.accentColor,
                 accessibilityName: "Measure",
-                markLabel: { "\(measureRegions[$0].measureIndex + 1)" },
-                bubbleLabel: { "m. \(measureRegions[$0].measureIndex + 1)" },
-                positionLabel: { "\(measureRegions[$0].measureIndex + 1) / \(total)" },
-                commitAction: { seekToRegion(measureRegions[$0]) }
+                markLabel: { "\($0 + 1)" },
+                bubbleLabel: { "m. \($0 + 1)" },
+                positionLabel: { "\($0 + 1) / \(axis.measureCount)" },
+                commitAction: { measure in
+                    let current = activeMeasureRegion.flatMap { measureRegions.firstIndex(of: $0) } ?? 0
+                    if let index = axis.regionIndex(forMeasure: measure, from: current) {
+                        seekToRegion(measureRegions[index])
+                    }
+                }
             )
         } else if pageCount > 1 {
             ScoreReaderStandScrubber(
@@ -320,6 +325,149 @@ struct ScoreReaderDuoStandPanel: View {
     }
 }
 
+/// Measures by number for the Duo's measure selectors. A score with repeats plays some
+/// measures more than once; the selectors count the score's measures in order.
+struct DuoMeasureAxis {
+    let regions: [ScorePlaybackMeasureRegion]
+
+    var measureCount: Int {
+        (regions.map(\.measureIndex).max() ?? -1) + 1
+    }
+
+    /// Where to play a measure from: its next time through from the current region, or else
+    /// its first.
+    func regionIndex(forMeasure measure: Int, from currentRegionIndex: Int) -> Int? {
+        if let next = regions.indices.first(where: { $0 >= currentRegionIndex && regions[$0].measureIndex == measure }) {
+            return next
+        }
+        return regions.firstIndex { $0.measureIndex == measure }
+    }
+}
+
+/// Editing on a Duo held like a book: the measure selector card under the playback card.
+/// The current measure and the count head the card; the track runs the card's width.
+struct ScoreReaderDuoMeasureCard: View {
+    let measureCount: Int
+    let currentMeasure: Int
+    let commitAction: (Int) -> Void
+
+    @State var scrubMeasure: Int?
+
+    private static let accentColor = Color(red: 0.12, green: 0.45, blue: 0.92)
+    private let knobSize: CGFloat = 22
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Measure \(shownMeasure + 1)")
+                    .font(.system(size: 15, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Self.accentColor, in: Capsule())
+                Spacer()
+                Text("\(shownMeasure + 1) / \(measureCount)")
+                    .font(.system(size: 17, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(Color.black.opacity(0.84))
+            }
+            track
+                .frame(height: 40)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: Color.black.opacity(0.08), radius: 10, y: 3)
+        .accessibilityElement()
+        .accessibilityLabel("Measure")
+        .accessibilityValue("\(shownMeasure + 1) of \(measureCount)")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                commitAction(min(currentMeasure + 1, measureCount - 1))
+            case .decrement:
+                commitAction(max(currentMeasure - 1, 0))
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private var shownMeasure: Int {
+        min(max(scrubMeasure ?? currentMeasure, 0), max(measureCount - 1, 0))
+    }
+
+    /// Numbered every four measures from 1, and the last.
+    private var numberedMeasures: [Int] {
+        let numbered = Array(stride(from: 0, to: measureCount, by: 4))
+        guard let last = numbered.last, last != measureCount - 1 else {
+            return numbered
+        }
+        return measureCount - 1 - last < 2 ? Array(numbered.dropLast()) + [measureCount - 1] : numbered + [measureCount - 1]
+    }
+
+    private var track: some View {
+        GeometryReader { proxy in
+            let usableWidth = max(proxy.size.width - knobSize, 1)
+            let lastIndex = max(measureCount - 1, 1)
+            let x = { (measure: Int) in knobSize / 2 + usableWidth * CGFloat(measure) / CGFloat(lastIndex) }
+            let trackY: CGFloat = 12
+            let numbered = Set(numberedMeasures)
+
+            ZStack(alignment: .topLeading) {
+                Capsule()
+                    .fill(Color.black.opacity(0.12))
+                    .frame(width: usableWidth, height: 4)
+                    .offset(x: knobSize / 2, y: trackY - 2)
+                Capsule()
+                    .fill(Self.accentColor)
+                    .frame(width: max(x(shownMeasure) - knobSize / 2, 0), height: 4)
+                    .offset(x: knobSize / 2, y: trackY - 2)
+
+                if measureCount <= 120 {
+                    ForEach(0..<measureCount, id: \.self) { measure in
+                        Rectangle()
+                            .fill(Color.black.opacity(numbered.contains(measure) ? 0.30 : 0.16))
+                            .frame(width: 1, height: numbered.contains(measure) ? 12 : 8)
+                            .offset(x: x(measure), y: trackY - (numbered.contains(measure) ? 6 : 4))
+                    }
+                }
+
+                ForEach(numberedMeasures, id: \.self) { measure in
+                    Text("\(measure + 1)")
+                        .font(.system(size: 13, weight: .medium).monospacedDigit())
+                        .foregroundStyle(Color.black.opacity(0.52))
+                        .fixedSize()
+                        .frame(width: 30)
+                        .offset(x: x(measure) - 15, y: trackY + 12)
+                }
+
+                Circle()
+                    .fill(Color.white)
+                    .overlay(Circle().stroke(Self.accentColor, lineWidth: 2))
+                    .shadow(color: Color.black.opacity(0.18), radius: 3, y: 1)
+                    .frame(width: knobSize, height: knobSize)
+                    .scaleEffect(scrubMeasure != nil ? 1.2 : 1)
+                    .offset(x: x(shownMeasure) - knobSize / 2, y: trackY - knobSize / 2)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let fraction = (value.location.x - knobSize / 2) / usableWidth
+                        scrubMeasure = min(max(Int((fraction * CGFloat(lastIndex)).rounded()), 0), max(measureCount - 1, 0))
+                    }
+                    .onEnded { _ in
+                        if let scrubMeasure {
+                            commitAction(scrubMeasure)
+                        }
+                        scrubMeasure = nil
+                    }
+            )
+        }
+    }
+}
+
 /// Editing on a Duo standing half open: playback and a measure selector in one card on the
 /// flat half, above the editing deck.
 struct ScoreReaderDuoPlaybackStrip: View {
@@ -328,11 +476,14 @@ struct ScoreReaderDuoPlaybackStrip: View {
     let isPlaybackBusy: Bool
     let isCountingIn: Bool
     let playbackPreparationMessage: String?
+    let metronomeEnabled: Bool
     let isMixerPresented: Bool
-    let measureRegions: [ScorePlaybackMeasureRegion]
-    let currentMeasureIndex: Int
+    /// Measures by number from 0; nothing to pick until playback knows the measures.
+    let measureCount: Int
+    let currentMeasure: Int
     let togglePlaybackAction: () -> Void
     let stopPlaybackAction: () -> Void
+    let toggleMetronomeAction: () -> Void
     let toggleMixerAction: () -> Void
     let seekToMeasureAction: (Int) -> Void
 
@@ -349,6 +500,11 @@ struct ScoreReaderDuoPlaybackStrip: View {
                 circleButton(systemImage: "stop.fill", size: 40, isProminent: false, isActive: false,
                              isEnabled: playbackState.isAvailable && playbackState.status != .stopped && !isPlaybackBusy,
                              label: "Stop playback", action: stopPlaybackAction)
+                circleButton(systemImage: "metronome", size: 40, isProminent: false,
+                             isActive: metronomeEnabled,
+                             isEnabled: playbackState.isAvailable && !isPlaybackBusy,
+                             label: "Metronome", action: toggleMetronomeAction)
+                    .accessibilityValue(metronomeEnabled ? "On" : "Off")
                 circleButton(systemImage: "slider.vertical.3", size: 40, isProminent: false,
                              isActive: isMixerPresented, isEnabled: supportsPlayback,
                              label: "Mixer", action: toggleMixerAction)
@@ -359,22 +515,21 @@ struct ScoreReaderDuoPlaybackStrip: View {
 
                 Spacer(minLength: 6)
 
-                if !measureRegions.isEmpty {
+                if measureCount > 0 {
                     measureStepper
                 }
             }
 
-            if !measureRegions.isEmpty {
-                let total = (measureRegions.map(\.measureIndex).max() ?? 0) + 1
+            if measureCount > 0 {
                 ScoreReaderStandScrubber(
-                    count: measureRegions.count,
-                    currentIndex: currentMeasureIndex,
+                    count: measureCount,
+                    currentIndex: currentMeasure,
                     showsTicks: true,
                     accentColor: Self.accentColor,
                     accessibilityName: "Measure",
-                    markLabel: { "\(measureRegions[$0].measureIndex + 1)" },
-                    bubbleLabel: { "m. \(measureRegions[$0].measureIndex + 1)" },
-                    positionLabel: { "\(measureRegions[$0].measureIndex + 1) / \(total)" },
+                    markLabel: { "\($0 + 1)" },
+                    bubbleLabel: { "m. \($0 + 1)" },
+                    positionLabel: { "\($0 + 1) / \(measureCount)" },
                     commitAction: seekToMeasureAction,
                     showsPositionChip: false
                 )
@@ -407,11 +562,9 @@ struct ScoreReaderDuoPlaybackStrip: View {
     }
 
     private var measureStepper: some View {
-        let number = measureRegions.indices.contains(currentMeasureIndex)
-            ? measureRegions[currentMeasureIndex].measureIndex + 1 : 1
-        return HStack(spacing: 4) {
+        HStack(spacing: 4) {
             Button {
-                seekToMeasureAction(max(currentMeasureIndex - 1, 0))
+                seekToMeasureAction(max(currentMeasure - 1, 0))
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
@@ -419,12 +572,12 @@ struct ScoreReaderDuoPlaybackStrip: View {
             }
             .accessibilityLabel("Previous measure")
 
-            Text("m. \(number)")
+            Text("m. \(currentMeasure + 1)")
                 .font(.system(size: 16, weight: .semibold).monospacedDigit())
                 .frame(minWidth: 50)
 
             Button {
-                seekToMeasureAction(min(currentMeasureIndex + 1, measureRegions.count - 1))
+                seekToMeasureAction(min(currentMeasure + 1, measureCount - 1))
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 16, weight: .semibold))
