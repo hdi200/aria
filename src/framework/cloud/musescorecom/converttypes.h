@@ -22,8 +22,9 @@
 
 #pragma once
 
+#include <memory>
+#include <optional>
 #include <string>
-#include <variant>
 #include <vector>
 
 #include <QDateTime>
@@ -31,13 +32,18 @@
 #include <QStringList>
 #include <QUrl>
 
+#include "global/types/bytearray.h"
+#include "global/types/flags.h"
+#include "global/io/path.h"
 #include "global/logstream.h"
-#include "io/path.h"
 
 namespace muse::cloud {
 enum class ConvertType {
-    Omr,
-    Audio2Score
+    Unknown = -1,
+    Omr = 0,
+    Audio2Score,
+
+    Last = Audio2Score
 };
 
 enum class ConvertStatus {
@@ -51,6 +57,7 @@ enum class ConvertStatus {
 inline const char* convertTypeToString(ConvertType type)
 {
     switch (type) {
+    case ConvertType::Unknown: return "Unknown";
     case ConvertType::Omr: return "Omr";
     case ConvertType::Audio2Score: return "Audio2Score";
     }
@@ -75,114 +82,103 @@ enum class ConvertErrorCode {
     UnsupportedFormat,
     FileTooLarge,
     TooManyFiles,
+    FileOrLinkRequired,
+    InvalidLink,
     RateLimited,
     MsczNotReady,
-    MetaLocked,
     NoNeedReview,
-    SearchRequired,
-    InvalidInput,
-    InvalidFileType,
-    InvalidFormat,
-    FileProcessingError,
-    ModelExecutionError,
-    ConversionError,
-    ResourceNotFound,
-    InternalServerError,
+    ReviewRequired,
+    CommentRequired,
+    VariousFileIssues,
+    TooComplex,
+    DontRecognizeNotes,
+    GeneralFailure,
+    BadParams,
 };
 
 //! NOTE: key for ConvertErrorCode stored in Ret::data
 static const std::string CONVERT_ERROR_CODE_KEY("errorCode");
 
-static const qint64 MAX_CONVERT_FILE_SIZE_BYTES = 1024LL * 1024 * 1024; // 1 GB
+enum class LinkSource {
+    NoSources = 0x0,
+    YouTube = 0x1,
+    AudioCom = 0x2
+};
+DECLARE_FLAGS(LinkSources, LinkSource)
+DECLARE_OPERATORS_FOR_FLAGS(LinkSources)
 
-struct OmrConfig {
+struct OmrPdfConfig {
     qint64 maxFileSizeBytes = 0;
+    int maxFiles = 0;
     int maxPages = 0;
-    int maxImages = 0;
-    QStringList allowedExtensions;
 };
 
-struct Audio2ScoreConfig {
+struct OmrImagesConfig {
     qint64 maxFileSizeBytes = 0;
     int maxFiles = 0;
     QStringList allowedExtensions;
-    int maxLinkLength = 0;
-    QStringList allowedLinkSources;
+};
+
+struct OmrConfig {
+    OmrPdfConfig pdf;
+    OmrImagesConfig images;
+};
+
+struct Audio2ScoreFileConfig {
+    qint64 maxFileSizeBytes = 0;
+    int maxFiles = 0;
+    QStringList allowedExtensions;
+};
+
+struct Audio2ScoreLinkConfig {
+    int maxLength = 0;
+    LinkSources allowedSources;
+};
+
+struct Audio2ScoreConfig {
+    Audio2ScoreFileConfig file;
+    Audio2ScoreLinkConfig link;
 };
 
 struct ConvertConfig {
+    int version = 0;
     OmrConfig omr;
     Audio2ScoreConfig audio2score;
 };
 
-struct OmrConvertInput {
-    muse::io::paths_t paths;
+struct ConvertFileData {
+    muse::ByteArray data;
+    muse::io::path_t fileName; // basename, with extension
 };
+using ConvertFileDataList = std::vector<ConvertFileData>;
 
-struct Audio2ScoreConvertInput {
-    std::variant<muse::io::paths_t, QString> data; // paths or link
+struct ConvertUploadData {
+    ConvertType type = ConvertType::Omr;
+    ConvertFileDataList files;
+    QUrl link; // Audio2Score only
+    QString filename; // desired name for the converted score, no extension
 };
-
-using ConvertInput = std::variant<OmrConvertInput, Audio2ScoreConvertInput>;
-
-inline ConvertType convertTypeOf(const ConvertInput& input)
-{
-    return std::holds_alternative<OmrConvertInput>(input) ? ConvertType::Omr : ConvertType::Audio2Score;
-}
-
-inline muse::io::paths_t convertPathsOf(const ConvertInput& input)
-{
-    if (const OmrConvertInput* omr = std::get_if<OmrConvertInput>(&input)) {
-        return omr->paths;
-    }
-
-    const muse::io::paths_t* paths = std::get_if<muse::io::paths_t>(&std::get<Audio2ScoreConvertInput>(input).data);
-    return paths ? *paths : muse::io::paths_t();
-}
-
-inline QString convertLinkOf(const ConvertInput& input)
-{
-    const Audio2ScoreConvertInput* a2s = std::get_if<Audio2ScoreConvertInput>(&input);
-    if (!a2s) {
-        return QString();
-    }
-
-    const QString* link = std::get_if<QString>(&a2s->data);
-    return link ? *link : QString();
-}
+using ConvertUploadDataPtr = std::shared_ptr<const ConvertUploadData>;
 
 struct ConvertResult {
     int id = 0;
     ConvertType type = ConvertType::Omr;
-    ConvertStatus status = ConvertStatus::Processing;
-
-    bool isValid() const { return id > 0; }
+    ConvertStatus status = ConvertStatus::Unknown;
 };
 
 struct ConvertQueueItem {
     int id = 0;
     ConvertType type = ConvertType::Omr;
-    ConvertStatus status = ConvertStatus::Processing;
+    ConvertStatus status = ConvertStatus::Unknown;
     QString filename;
     QString link; //! audio2score only
-    int scoreId = 0;
-    QDateTime createdAt;
-    QDateTime updatedAt;
+    std::optional<int> scoreId; //! set once the score is ready (AwaitingReview/Done)
+    QDateTime dataCreated;
+    QDateTime dataUpdated;
     ConvertErrorCode errorCode = ConvertErrorCode::Unknown;
-
-    bool isValid() const { return id > 0; }
 };
 
 using ConvertQueueList = std::vector<ConvertQueueItem>;
-
-struct SignedMsczUrl {
-    int id = 0;
-    ConvertType type = ConvertType::Omr;
-    QUrl url;
-    int expiresInSeconds = 0;
-
-    bool isValid() const { return id > 0 && url.isValid(); }
-};
 
 //! NOTE: must be in sync with the musescore.com API
 enum class ReviewRating {
@@ -193,13 +189,17 @@ enum class ReviewRating {
 
 inline muse::logger::Stream& operator<<(muse::logger::Stream& s, const muse::cloud::ConvertQueueItem& item)
 {
+    auto dateTimeToString = [](const QDateTime& dateTime) {
+        return dateTime.toSecsSinceEpoch() > 0 ? dateTime.toString(Qt::ISODate) : QString("unknown");
+    };
+
     s << "id: " << item.id
       << ", filename: \"" << item.filename << "\""
       << ", link: \"" << item.link << "\""
       << ", type: " << muse::cloud::convertTypeToString(item.type)
       << ", status: " << muse::cloud::convertStatusToString(item.status)
-      << ", scoreId: " << item.scoreId
-      << ", createdAt: " << item.createdAt.toString(Qt::ISODate)
-      << ", updatedAt: " << item.updatedAt.toString(Qt::ISODate);
+      << ", scoreId: " << (item.scoreId ? QString::number(*item.scoreId) : QString("none"))
+      << ", dataCreated: " << dateTimeToString(item.dataCreated)
+      << ", dataUpdated: " << dateTimeToString(item.dataUpdated);
     return s;
 }

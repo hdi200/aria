@@ -29,10 +29,10 @@ const RecentFilesList& RecentFilesControllerStub::recentFilesList() const
     return l;
 }
 
-muse::async::Notification RecentFilesControllerStub::recentFilesListChanged() const
+muse::async::Channel<RecentFilesChange> RecentFilesControllerStub::recentFilesListChanged() const
 {
-    static muse::async::Notification n;
-    return n;
+    static muse::async::Channel<RecentFilesChange> ch;
+    return ch;
 }
 
 void RecentFilesControllerStub::prependRecentFile(const RecentFile&)
@@ -40,6 +40,10 @@ void RecentFilesControllerStub::prependRecentFile(const RecentFile&)
 }
 
 void RecentFilesControllerStub::moveRecentFile(const muse::io::path_t&, const RecentFile&)
+{
+}
+
+void RecentFilesControllerStub::removeRecentFile(const muse::io::path_t&)
 {
 }
 

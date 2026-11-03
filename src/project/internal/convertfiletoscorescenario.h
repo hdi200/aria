@@ -25,6 +25,8 @@
 #include "modularity/ioc.h"
 #include "global/iinteractive.h"
 #include "actions/iactionsdispatcher.h"
+#include "toast/itoastservice.h"
+#include "multiwindows/imultiwindowsprovider.h"
 
 #include "cloud/musescorecom/imusescorecomservice.h"
 
@@ -32,43 +34,90 @@
 #include "project/iconvertfiletoscorescenario.h"
 #include "project/iconvertfiletoscoreservice.h"
 
+namespace muse {
+class Val;
+}
+
 namespace mu::project {
 class ConvertFileToScoreScenario : public IConvertFileToScoreScenario, public muse::async::Asyncable, public muse::Contextable
 {
+public:
     muse::ContextInject<muse::cloud::IMuseScoreComService> museScoreComService = { this };
     muse::ContextInject<muse::IInteractive> interactive = { this };
+    muse::GlobalInject<muse::toast::IToastService> toastService;
     muse::ContextInject<muse::actions::IActionsDispatcher> dispatcher = { this };
     muse::GlobalInject<IProjectConfiguration> configuration;
+    muse::GlobalInject<muse::mi::IMultiWindowsProvider> multiwindowsProvider;
     muse::ContextInject<IConvertFileToScoreService> service = { this };
 
 public:
-    explicit ConvertFileToScoreScenario(const muse::modularity::ContextPtr& iocCtx)
-        : muse::Contextable(iocCtx) {}
+    explicit ConvertFileToScoreScenario(const muse::modularity::ContextPtr& iocCtx);
 
     void init();
 
-    const ConvertConfig& convertConfig() const override;
+    const ConvertConfig& config() const override;
 
-    muse::async::Promise<ConvertSelection> selectFilesToConvert() override;
-    muse::async::Promise<muse::RetVal<ConvertType> > validate(const muse::io::paths_t& paths) override;
-    muse::Ret convert(const ConvertInput& input, const QString& convertedFileName) override;
+    bool isFileSupported(const muse::io::path_t& path) const override;
+    muse::RetVal<ConvertFilesValidation> validateFiles(const muse::io::paths_t& paths) override;
+    muse::Ret validateLink(const QUrl& link) override;
 
-    muse::async::Channel<muse::Ret, muse::io::path_t> convertFinished() const override;
+    void convertFiles(const muse::io::paths_t& paths = {}) override;
+    muse::async::Channel<muse::Ret, WatchedScore> convertFinished() const override;
+
+    muse::ValNt<UploadingScoreList> uploadingScores() const override;
+    muse::ValNt<WatchedScoreList> watchedScores() const override;
+
+    bool isAwaitingReview(int scoreId) const override;
+
+    void cancelUpload(int uploadId) override;
+    void cancelConversion(ConvertType type, int convertId) override;
+
+    muse::async::Channel<PollingStatus> pollingStatusChanged() const override;
+
+    void retryPolling() override;
 
 private:
-    muse::Ret ensureAuthorization();
+    struct ConvertSelection {
+        ConvertInput input;
+        muse::String convertedScoreName;
+    };
 
-    bool validateAgainstConfig(ConvertType type, const muse::io::paths_t& paths, const ConvertConfig& config);
+    muse::async::Promise<muse::Ret> checkConvertIsAllowed();
+    muse::async::Promise<muse::Ret> ensureAuthorization();
+
+    muse::async::Promise<ConvertSelection> selectFilesToConvert(const muse::io::paths_t& paths = {}, ConvertType type = ConvertType::Omr);
+    ConvertSelection toConvertSelection(const muse::Val& val) const;
+
+    void confirmConvert(const muse::io::paths_t& paths, ConvertType type);
+    void confirmCancel(const std::function<void()>& onCancel);
+
+    void startConvert(const ConvertInput& input, const muse::String& convertedScoreName);
+
+    void showValidationError(const muse::Ret& ret);
+    void showUploadError(const muse::Ret& ret, const ConvertInput& input, const muse::String& convertedScoreName);
+
+    void showCloudIsNotAvailableError();
+    void showUnknownError();
+    void showFileReadError(size_t fileCount);
     void showFileTooLargeError(qint64 maxFileSizeBytes);
-    void showUnsupportedFormatError(const QStringList& allowedExtensions);
-    void showFileValidationError(const std::string& title, const std::string& text);
+    void showCombinedImageSizeTooLargeError(qint64 maxFileSizeBytes);
+    void showUnsupportedFormatError();
+    void showUnsupportedLinkError();
+    void showMixedFileTypesError();
+    void showMultiplePdfFilesError();
+    void showTooManyAudioFilesError(int maxFiles);
+    void showTooManyImagesError(int maxImages);
 
-    muse::Ret startUpload(const ConvertInput& input, const QString& convertedFileName);
     void showFileProcessingDialog();
-    void showScoreReadyNotification(const muse::io::path_t& path);
+    void showScoreReadyNotification(const WatchedScore& watched);
+    void showConvertFailedNotification(const WatchedScore& watched);
+    void showUploadFailedNotification(const ConvertInput& input, const muse::String& convertedScoreName);
+    void showPollingFailureNotification();
+    void showPollingGaveUpNotification();
 
-    void askReviewRating(int queueId);
+    muse::async::Channel<muse::Ret, WatchedScore> m_convertFinished;
 
-    muse::async::Channel<muse::Ret, muse::io::path_t> m_convertFinished;
+    bool m_retryToastShown = false;
+    bool m_convertFlowInProgress = false;
 };
 }

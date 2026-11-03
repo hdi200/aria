@@ -1,17 +1,21 @@
 # Aria's MuseScore engine
 
 `src/`, `share/`, `buildscripts/`, `thirdparty/`, `fonts/` and the root CMake files are
-MuseScore Studio **4.7.5** (tag `v4.7.5`, commit `3654226`) plus a small set of Aria
-patches listed below. Aria saves genuine 4.70 files that 4.7.5 opens without warnings.
+MuseScore Studio **4.7.6** (tag `v4.7.6`, commit `96480d5`) plus a small set of Aria
+patches listed below. Aria saves genuine 4.70 files that 4.7.5 and 4.7.6 open without warnings
+(4.7.6 kept file format 4.70).
+
+November 2026: moved from 4.7.5 to 4.7.6 by applying the `v4.7.5`..`v4.7.6` difference of
+the engine folders to this tree. It applied with no conflicts, so every patch below carried
+over unchanged. 4.7.6 itself contains none of them.
 
 Before September 2026 the engine was an April 2026 snapshot of upstream `main`
 (commit `e280c3b6`, format 5.00) that relabeled its saves as 4.70. That relabel is gone.
 
-## Aria patches on top of 4.7.5
+## Aria patches on top of 4.7.6
 
-They were produced on a branch `aria-475` (based on `v4.7.5`) in a separate MuseScore
-clone. If that clone is gone, recreate the patch by diffing these folders against a
-checkout of `v4.7.5`.
+They were first made on a branch `aria-475` (based on `v4.7.5`) in a separate MuseScore
+clone. To see the current patch set, diff these folders against a checkout of `v4.7.6`.
 
 Crash guards for measures that are not laid out on a system (`measure->system()` null):
 - `dom/measure.cpp`, `dom/score.cpp`, `rendering/score/horizontalspacing.cpp`,
@@ -68,7 +72,7 @@ Compiler fixes: `global/api/interactiveapi.cpp` (Qt 6.11 needs `<QMetaEnum>`),
 `fluidsynth_priv.h`, `playback/renderers/bendsrenderer.cpp`.
 
 Bridge-side adaptations (in `sandbox/engraving/`, not the engine):
-- `score_render_application_stub.h` reports version 4.7.5 / revision 3654226, which the
+- `score_render_application_stub.h` reports version 4.7.6 / revision 96480d5, which the
   engine writes into `<programVersion>`/`<programRevision>`.
 - Files newer than 4.70 (MuseScore 5) are opened anyway, like desktop's "Open anyway",
   and saved back as 4.70 (`loadScoreForRenderCore`).
@@ -78,15 +82,21 @@ Bridge-side adaptations (in `sandbox/engraving/`, not the engine):
   (mostly 2.x/3.x) were spaced differently from desktop.
 - Opened scores start from the default style, as desktop does, so files that store no
   page size get Letter or A4 from the device region (`score_render_open_save.cpp`).
-- The bundled templates in `ScoreTemplates.bundle` are MuseScore 4.7.5's own templates.
+- The bundled templates in `ScoreTemplates.bundle` are MuseScore 4.7.5's own templates
+  (4.7.6 did not change them).
 
 ## Updating to a newer MuseScore release
 
-1. In a MuseScore clone that has the patch branch (`aria-475`, based on `v4.7.5`),
-   fetch the new tag and rebase: `git rebase --onto v4.7.6 v4.7.5 aria-475`.
-   Drop any patch the new release already contains.
-2. Copy `src share buildscripts thirdparty fonts` and the root CMake files into this repo.
+How the move to 4.7.6 was done (no patch branch needed):
+
+1. Download the new release's source (`codeload.github.com/musescore/MuseScore/tar.gz/refs/tags/<tag>`)
+   and extract the current tag from git (`git archive v4.7.6`).
+2. Diff the engine folders (`src share buildscripts thirdparty fonts` and the root CMake files)
+   between the two and apply that patch here with `patch -p1`; resolve any conflict with an
+   Aria patch by hand and copy changed binary files. The GitHub source archive leaves out
+   `buildscripts/ci/crashdumps`, so restore that folder from git afterwards.
 3. Update the version and revision in `sandbox/engraving/score_render_application_stub.h`.
 4. Build the Mac host (`build-aria-475-host`, see README.md) and run: the native tests
-   (`ctest`), `roundtrip_475.py` (default and `--direct`), `playback_sweep.py`, `layout_compare.py`, and
-   `musicxml_export_sweep.py`. Then build the iOS app.
+   (`ctest`), `roundtrip_475.py` (default and `--direct`) against the matching desktop release,
+   `playback_sweep.py`, `layout_compare.py`, and `musicxml_export_sweep.py`. Then rebuild the
+   iOS and Android engines.

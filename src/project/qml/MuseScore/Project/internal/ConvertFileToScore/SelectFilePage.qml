@@ -28,10 +28,9 @@ import Muse.UiComponents
 Item {
     id: root
 
-    property alias guidelinesLinkText: guidelinesLabel.text
-    property string linkPasteText: ""
-    property int maxLinkLength: 0
-
+    property string guidelinesUrl: ""
+    property alias linkHintText: convertFromLinkPanel.hintText
+    property alias audioComUrl: convertFromLinkPanel.audioComUrl
     property var fileRequirements: []
 
     property NavigationSection navigationSection: null
@@ -40,19 +39,11 @@ Item {
 
     signal selectFilesRequested()
     signal filesDropped(var urls)
-    signal linkSubmitted(string link)
+    signal convertFromLinkRequested()
     signal cancelRequested()
 
-    function focusOnSelect() {
+    function focusOnDefault() {
         selectFileButton.navigation.requestActive()
-    }
-
-    NavigationPanel {
-        id: navPanel
-        name: "SelectFilePage"
-        section: root.navigationSection
-        order: 1
-        enabled: root.enabled && root.visible
     }
 
     ColumnLayout {
@@ -90,7 +81,7 @@ Item {
                     var ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
 
-                    ctx.fillStyle = ui.theme.backgroundPrimaryColor
+                    ctx.fillStyle = ui.theme.backgroundSecondaryColor
                     tracePath(ctx, 0)
                     ctx.fill()
 
@@ -110,17 +101,18 @@ Item {
                 anchors.centerIn: parent
 
                 width: parent.width - 2 * root.contentPadding
-                spacing: 12
+                spacing: 6
 
                 StyledIconLabel {
                     Layout.alignment: Qt.AlignHCenter
 
                     iconCode: IconCode.SHARE_FILE
-                    font.pixelSize: 32
+                    font.pixelSize: 36
                 }
 
                 StyledTextLabel {
                     Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 2
 
                     text: qsTrc("project/convert", "Drag your file here")
                     font: ui.theme.tabBoldFont
@@ -128,8 +120,9 @@ Item {
 
                 StyledTextLabel {
                     Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 12
 
-                    text: qsTrc("project/convert", "Use a PDF, images, or MP3 (beta)")
+                    text: qsTrc("project/convert", "Use a PDF, images, or an audio file (beta)")
                     font: ui.theme.bodyFont
                 }
 
@@ -138,21 +131,29 @@ Item {
 
                     fileRequirements: root.fileRequirements
 
-                    navigation.panel: navPanel
-                    navigation.order: 0
+                    navigation.panel: NavigationPanel {
+                        id: navPanel
+                        name: "SelectFilePage"
+                        section: root.navigationSection
+                        order: 1
+                        enabled: root.enabled && root.visible
+                    }
+                    navigation.row: 0
+                    navigation.column: 0
                 }
 
                 FlatButton {
                     id: selectFileButton
 
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.topMargin: 8
+                    Layout.topMargin: 18
 
                     text: qsTrc("global", "Select")
                     accentButton: true
 
                     navigation.panel: navPanel
-                    navigation.order: 1
+                    navigation.row: 1
+                    navigation.column: 0
 
                     onClicked: {
                         root.selectFilesRequested()
@@ -172,71 +173,22 @@ Item {
             }
         }
 
-        Rectangle {
-            visible: Boolean(root.linkPasteText)
+        ConvertFromLinkPanel {
+            id: convertFromLinkPanel
 
             Layout.fillWidth: true
-            Layout.preferredHeight: linkPasteColumn.implicitHeight + 2 * root.contentPadding
+            Layout.topMargin: 2
 
-            color: ui.theme.backgroundPrimaryColor
-            border.width: 1
-            border.color: ui.theme.strokeColor
-            radius: 3
+            navigationPanel: NavigationPanel {
+                name: "SelectFilePageLink"
+                section: root.navigationSection
+                order: 2
+                enabled: root.enabled && root.visible
+            }
+            navigationOrder: 0
 
-            Column {
-                id: linkPasteColumn
-
-                anchors.fill: parent
-                anchors.margins: root.contentPadding
-
-                spacing: 12
-
-                StyledTextLabel {
-                    width: parent.width
-
-                    text: root.linkPasteText
-                    font: ui.theme.bodyFont
-                    horizontalAlignment: Text.AlignLeft
-                }
-
-                RowLayout {
-                    width: parent.width
-                    spacing: 12
-
-                    TextInputField {
-                        id: linkInputField
-
-                        Layout.fillWidth: true
-                        implicitWidth: 0
-
-                        hint: "https://"
-                        maximumLength: root.maxLinkLength > 0 ? root.maxLinkLength : 32767
-
-                        navigation.panel: navPanel
-                        navigation.order: 2
-
-                        onTextChanged: function(newTextValue) {
-                            linkInputField.currentText = newTextValue
-                        }
-                    }
-
-                    FlatButton {
-                        Layout.preferredWidth: 90
-                        Layout.preferredHeight: 30
-
-                        text: qsTrc("global", "Next")
-
-                        accentButton: true
-                        enabled: Boolean(linkInputField.currentText)
-
-                        navigation.panel: navPanel
-                        navigation.order: 3
-
-                        onClicked: {
-                            root.linkSubmitted(linkInputField.currentText)
-                        }
-                    }
-                }
+            onConvertFromLinkRequested: {
+                root.convertFromLinkRequested()
             }
         }
 
@@ -244,20 +196,69 @@ Item {
             Layout.fillWidth: true
             spacing: 12
 
-            StyledTextLabel {
-                id: guidelinesLabel
+            Item {
+                id: guidelinesItem
 
                 Layout.fillWidth: true
+                implicitHeight: guidelinesRow.implicitHeight
 
-                font: ui.theme.bodyFont
-                horizontalAlignment: Text.AlignLeft
+                NavigationControl {
+                    id: guidelinesNavCtrl
+
+                    name: "UploadingGuidelines"
+                    panel: NavigationPanel {
+                        id: bottomPanel
+                        name: "SelectFilePageBottom"
+                        section: root.navigationSection
+                        order: 3
+                        enabled: root.enabled && root.visible
+                    }
+                    order: 1
+                    enabled: root.enabled && root.visible
+
+                    accessible.role: MUAccessible.Button
+                    accessible.name: qsTrc("project/convert", "Uploading guidelines")
+                    accessible.visualItem: guidelinesItem
+
+                    onTriggered: {
+                        Qt.openUrlExternally(root.guidelinesUrl)
+                    }
+                }
+
+                NavigationFocusBorder {
+                    navigationCtrl: guidelinesNavCtrl
+                }
+
+                Row {
+                    id: guidelinesRow
+
+                    spacing: 4
+
+                    StyledTextLabel {
+                        id: guidelinesLabel
+
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text: "<a href=\"" + root.guidelinesUrl + "\">" + qsTrc("project/convert", "Uploading guidelines") + "</a>"
+                        font: ui.theme.bodyFont
+                        horizontalAlignment: Text.AlignLeft
+                    }
+
+                    StyledIconLabel {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: 1
+
+                        iconCode: IconCode.OPEN_LINK
+                        font.pixelSize: guidelinesLabel.font.pixelSize + 2
+                        color: ui.theme.linkColor
+                    }
+                }
             }
 
             ButtonBox {
                 buttons: [ButtonBoxModel.Cancel]
 
-                navigationPanel.section: root.navigationSection
-                navigationPanel.order: 4
+                navigationPanel: bottomPanel
 
                 onStandardButtonClicked: function(buttonId) {
                     if (buttonId === ButtonBoxModel.Cancel) {

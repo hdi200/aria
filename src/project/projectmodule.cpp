@@ -36,6 +36,7 @@
 #include "internal/projectautosaver.h"
 #include "internal/convertfiletoscorescenario.h"
 #include "internal/convertfiletoscoreservice.h"
+#include "internal/deletecloudscorescenario.h"
 
 #include "internal/notationreadersregister.h"
 #include "internal/notationwritersregister.h"
@@ -94,6 +95,7 @@ void ProjectModule::registerExports()
     ioc()->registerExport<mu::engraving::IEngravingPluginAPIHelper>(moduleName(), m_engravingPluginAPIHelper);
     ioc()->registerExport<IConvertFileToScoreService>(moduleName(), m_convertFileToScoreService);
     ioc()->registerExport<IConvertFileToScoreScenario>(moduleName(), m_convertFileToScoreScenario);
+    ioc()->registerExport<IDeleteCloudScoreScenario>(moduleName(), new DeleteCloudScoreScenario(iocContext()));
 
     //! TODO Should be replace INotationReaders/WritersRegister with IProjectRWRegister
     ioc()->registerExport<INotationReadersRegister>(moduleName(), new NotationReadersRegister());
@@ -118,9 +120,11 @@ void ProjectModule::resolveImports()
         ir->registerQmlUri(Uri("musescore://project/migration"), "MuseScore.Project", "MigrationDialog");
         ir->registerQmlUri(Uri("musescore://project/properties"), "MuseScore.Project", "ProjectPropertiesDialog");
         ir->registerQmlUri(Uri("musescore://project/convert/selectfiles"), "MuseScore.Project", "ConvertFileToScoreDialog");
+        ir->registerQmlUri(Uri("musescore://project/convert/processing"), "MuseScore.Project", "ConvertFileProcessingDialog");
         ir->registerQmlUri(Uri("musescore://project/upload/progress"), "MuseScore.Project", "UploadProgressDialog");
         ir->registerQmlUri(Uri("musescore://project/upload/success"), "MuseScore.Project", "ProjectUploadedDialog");
         ir->registerQmlUri(Uri("musescore://project/audiogenerationsettings"), "MuseScore.Project", "AudioGenerationSettingsDialog");
+        ir->registerQmlUri(Uri("musescore://project/deletecloudscore"), "MuseScore.Project", "DeleteCloudScoreDialog");
     }
 
     auto er = ioc()->resolve<muse::extensions::IExtensionsExecPointsRegister>(moduleName());
@@ -155,5 +159,5 @@ void ProjectModule::onDelayedInit()
 {
     //! NOTE: resuming polling can show dialogs (errors, review prompts), so it must wait
     //! until the main window is up rather than running during onInit()
-    // m_convertFileToScoreService->resumeConvert();
+    m_convertFileToScoreService->resumeConvert();
 }

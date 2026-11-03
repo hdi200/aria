@@ -26,6 +26,7 @@ import QtQuick.Controls
 import Muse.Ui
 import Muse.Shortcuts
 import Muse.Tours
+import Muse.Toast
 
 import MuseScore.AppShell
 
@@ -80,6 +81,12 @@ ApplicationWindow {
     Item {
         id: windowContentItem
         anchors.fill: parent
+    }
+
+    ToastProvider {
+        id: toastProvider
+
+        navigationOrder: 100000
     }
 
     function showMinimizedWithSavePreviousState() {

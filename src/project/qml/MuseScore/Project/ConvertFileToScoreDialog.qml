@@ -34,57 +34,84 @@ StyledDialogView {
 
     title: qsTrc("project/convert", "Convert file to score")
 
-    contentHeight: 502
+    contentHeight: 560
     contentWidth: 616
     margins: 0
 
     modal: true
     resizable: false
 
-    background.color: ui.theme.popupBackgroundColor
+    background.color: ui.theme.backgroundPrimaryColor
 
-    property int convertType: -1
+    //! NOTE: paths pre-selected outside the dialog, e.g. via drag-and-drop onto the app window
+    property var initialPaths: []
+    property int initialConvertType: 0
+
     property int currentPageIndex: 0
-    property var selectedPaths: []
-    property string selectedLink: ""
+    property bool skipCloseConfirmation: false
+
+    readonly property string pageTitle: {
+        if (root.currentPageIndex === 2) {
+            return qsTrc("project/convert", "Convert audio to score (beta)")
+        }
+
+        switch (convertModel.fileListModel.fileCategory) {
+        case FileListModel.Audio:
+            return qsTrc("project/convert", "Convert audio to score (beta)")
+        case FileListModel.Pdf:
+            return qsTrc("project/convert", "Convert PDF to score")
+        case FileListModel.Image:
+            return qsTrc("project/convert", "Convert images to score")
+        case FileListModel.Unknown:
+            break
+        }
+
+        return qsTrc("project/convert", "Convert a file to score")
+    }
 
     ConvertFileToScoreModel {
         id: convertModel
 
-        onValidationFinished: function(type, paths) {
-            root.convertType = type
-            root.selectedPaths = paths
-            root.selectedLink = ""
-
-            if (root.currentPageIndex === 0) {
-                root.currentPageIndex = 1
-            }
+        onCancelConfirmed: {
+            root.skipCloseConfirmation = true
+            root.reject()
         }
 
         onGoingBackConfirmed: {
             root.currentPageIndex = 0
-            root.selectedLink = ""
+            convertModel.clearSelection()
         }
     }
 
-    function finish(type, paths, link, convertedFileName) {
-        root.ret = { errcode: 0, value: { type: type, paths: paths, link: link, convertedFileName: convertedFileName } }
+    Component.onCompleted: {
+        convertModel.load(root.initialPaths, root.initialConvertType)
+
+        if (root.initialPaths.length > 0) {
+            root.currentPageIndex = 1
+        }
+    }
+
+    function finish(type, paths, link, convertedScoreName) {
+        root.skipCloseConfirmation = true
+        root.ret = { errcode: 0, value: { type: type, paths: paths, link: link, convertedScoreName: convertedScoreName } }
         root.hide()
     }
 
-    function selectAndValidateFiles(existingPaths) {
-        var files = convertModel.selectFiles(existingPaths)
-        if (files.length > 0) {
-            convertModel.validateFiles(existingPaths.concat(files))
+    function focusOnPageDefault() {
+        if (pageLoader.item && pageLoader.item.focusOnDefault) {
+            pageLoader.item.focusOnDefault()
         }
     }
 
-    onNavigationActivateRequested: {
-        if (root.currentPageIndex === 0) {
-            pageLoader.item.focusOnSelect()
-        } else {
-            pageLoader.item.focusOnFileList()
+    onNavigationActivateRequested: root.focusOnPageDefault()
+
+    onAboutToClose: function(closeEvent) {
+        if (root.currentPageIndex === 0 || root.skipCloseConfirmation) {
+            return
         }
+
+        closeEvent.accepted = false
+        convertModel.confirmCancel()
     }
 
     ColumnLayout {
@@ -102,7 +129,7 @@ StyledDialogView {
             StyledTextLabel {
                 Layout.fillWidth: true
 
-                text: qsTrc("project/convert", "Convert a file to score")
+                text: root.pageTitle
                 font: ui.theme.largeBodyBoldFont
                 horizontalAlignment: Text.AlignLeft
             }
@@ -120,7 +147,21 @@ StyledDialogView {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            sourceComponent: root.currentPageIndex === 0 ? selectFilePageComponent : selectedFilesPageComponent
+            sourceComponent: {
+                if (root.currentPageIndex === 0) {
+                    return selectFilePageComponent
+                } else if (root.currentPageIndex === 1) {
+                    return selectedFilesPageComponent
+                }
+
+                return linkEntryPageComponent
+            }
+
+            onLoaded: {
+                if (root.isOpened) {
+                    root.focusOnPageDefault()
+                }
+            }
         }
     }
 
@@ -128,25 +169,28 @@ StyledDialogView {
         id: selectFilePageComponent
 
         SelectFilePage {
-            guidelinesLinkText: convertModel.guidelinesLinkText
-            linkPasteText: convertModel.linkPasteText
-            maxLinkLength: convertModel.maxLinkLength
+            guidelinesUrl: convertModel.guidelinesUrl
+            linkHintText: convertModel.linkHintText
+            audioComUrl: convertModel.audioComUrl
             fileRequirements: convertModel.fileRequirements
             navigationSection: root.navigationSection
 
             onCancelRequested: root.reject()
 
-            onSelectFilesRequested: root.selectAndValidateFiles([])
-
-            onFilesDropped: function(urls) {
-                convertModel.validateFiles(urls)
+            onSelectFilesRequested: {
+                if (convertModel.selectAndValidateFiles()) {
+                    root.currentPageIndex = 1
+                }
             }
 
-            onLinkSubmitted: function(link) {
-                root.convertType = 1 // audio2score
-                root.selectedPaths = []
-                root.selectedLink = link
-                root.currentPageIndex = 1
+            onFilesDropped: function(urls) {
+                if (convertModel.validateAndAddFiles(urls)) {
+                    root.currentPageIndex = 1
+                }
+            }
+
+            onConvertFromLinkRequested: {
+                root.currentPageIndex = 2
             }
         }
     }
@@ -155,29 +199,54 @@ StyledDialogView {
         id: selectedFilesPageComponent
 
         SelectedFilesPage {
+            id: filesPage
+
+            saveAsName: convertModel.defaultSaveAsName
+            saveAsErrorText: convertModel.validateFileName(filesPage.saveAsTrimmed)
             navigationSection: root.navigationSection
-            files: root.selectedPaths
-            link: root.selectedLink
-            canSelectMultipleFiles: convertModel.canSelectMultipleFiles(root.convertType, root.selectedPaths)
+            fileListModel: convertModel.fileListModel
+            canSelectMultipleFiles: convertModel.canSelectMultipleFiles
             fileRequirements: convertModel.fileRequirements
 
-            onCancelRequested: root.reject()
+            onCancelRequested: convertModel.confirmCancel()
+            onBackRequested: convertModel.confirmGoingBack()
 
-            onBackRequested: function(confirm) {
-                if (confirm) {
-                    convertModel.confirmGoingBack()
-                } else {
-                    root.currentPageIndex = 0
-                    root.selectedLink = ""
+            onConvertRequested: function(convertedScoreName) {
+                root.finish(convertModel.convertType, convertModel.fileListModel.paths(), "", convertedScoreName)
+            }
+
+            onSelectMoreFilesRequested: convertModel.selectAndValidateFiles()
+
+            onAddFilesRequested: function(urls) {
+                convertModel.validateAndAddFiles(urls)
+            }
+        }
+    }
+
+    Component {
+        id: linkEntryPageComponent
+
+        LinkEntryPage {
+            id: linkPage
+
+            saveAsName: convertModel.defaultSaveAsName
+            saveAsErrorText: convertModel.validateFileName(linkPage.saveAsTrimmed)
+            hintText: convertModel.linkPageHintText
+            hintPlainText: convertModel.linkPageHintPlainText
+            audioComUrl: convertModel.audioComUrl
+            maxLinkLength: convertModel.maxLinkLength
+            navigationSection: root.navigationSection
+
+            onCancelRequested: convertModel.confirmCancel()
+            onBackRequested: convertModel.confirmGoingBack()
+
+            onConvertRequested: function(link, convertedScoreName) {
+                if (!convertModel.validateLink(link)) {
+                    return
                 }
-            }
 
-            onConvertRequested: function(paths, link, convertedFileName) {
-                root.finish(root.convertType, paths, link, convertedFileName)
-            }
-
-            onSelectMoreFilesRequested: function(existingPaths) {
-                root.selectAndValidateFiles(existingPaths)
+                convertModel.selectedLink = link
+                root.finish(convertModel.convertType, [], link, convertedScoreName)
             }
         }
     }

@@ -22,17 +22,24 @@
 
 #include "filelistmodel.h"
 
-#include <QFileInfo>
+#include "project/types/filecategory.h"
 
-#include "project/types/projecttypes.h"
+#include "ui/view/iconcodes.h"
 
-#include "global/io/path.h"
+#include "global/dataformatter.h"
 #include "global/translation.h"
 
 using namespace mu::project;
 using namespace muse::ui;
 
-static const QStringList IMAGE_EXTENSIONS { "jpg", "jpeg", "png" };
+static FileCategory resolveFileCategory(const QStringList& paths)
+{
+    if (paths.isEmpty()) {
+        return FileCategory::Unknown;
+    }
+
+    return fileCategoryFromPath(muse::io::path_t(paths.first()));
+}
 
 FileListModel::FileListModel(QObject* parent)
     : QAbstractListModel(parent)
@@ -51,7 +58,9 @@ QVariant FileListModel::data(const QModelIndex& index, int role) const
     case PathRole:
         return path;
     case FileNameRole:
-        return QFileInfo(path).fileName();
+        return muse::io::filename(path).toQString();
+    case FileSizeRole:
+        return muse::DataFormatter::formatFileSize(size_t(fileSize(path))).toQString();
     }
 
     return QVariant();
@@ -70,38 +79,112 @@ QHash<int, QByteArray> FileListModel::roleNames() const
 {
     static const QHash<int, QByteArray> roles {
         { PathRole, "pathRole" },
-        { FileNameRole, "fileNameRole" }
+        { FileNameRole, "fileNameRole" },
+        { FileSizeRole, "fileSizeRole" }
     };
 
     return roles;
 }
 
-int FileListModel::fileIconCode() const
+QStringList FileListModel::paths() const
 {
-    if (m_paths.isEmpty()) {
-        return int(IconCode::Code::PAGE);
-    }
-
-    const QString suffix = QFileInfo(m_paths.first()).suffix().toLower();
-
-    if (IMAGE_EXTENSIONS.contains(suffix)) {
-        return int(IconCode::Code::IMAGE_MOUNTAINS);
-    }
-
-    if (isAudioFileSuffix(suffix.toStdString())) {
-        return int(IconCode::Code::AUDIO);
-    }
-
-    return int(IconCode::Code::PAGE);
+    return m_paths;
 }
 
-void FileListModel::setPaths(const QStringList& paths)
+void FileListModel::load(const QStringList& paths, const ConvertConfig& config)
 {
+    m_config = config;
+
+    setPaths(paths, resolveFileCategory(paths));
+}
+
+void FileListModel::setPaths(const QStringList& paths, FileCategory category)
+{
+    if (paths == m_paths) {
+        return;
+    }
+
     beginResetModel();
     m_paths = paths;
     endResetModel();
 
-    emit countChanged();
+    m_fileCategory = category;
+
+    emit pathsChanged();
+    updateTotalSizeBytes();
+    updateConvertLimits();
+    updateExceedsLimits();
+    updateUsedSizeLabel();
+}
+
+void FileListModel::clear()
+{
+    setPaths({}, FileCategory::Unknown);
+}
+
+FileCategory FileListModel::fileCategory() const
+{
+    return m_fileCategory;
+}
+
+FileListModel::FileCategoryQml FileListModel::fileCategoryQml() const
+{
+    return FileCategoryQml(m_fileCategory);
+}
+
+int FileListModel::fileIconCode() const
+{
+    switch (m_fileCategory) {
+    case FileCategory::Image:
+        return int(IconCode::Code::IMAGE_MOUNTAINS);
+    case FileCategory::Audio:
+        return int(IconCode::Code::MUSIC_NOTES);
+    case FileCategory::Unknown:
+    case FileCategory::Pdf:
+        break;
+    }
+
+    return int(IconCode::Code::NEW_FILE);
+}
+
+QString FileListModel::combinedFilesNote() const
+{
+    if (m_fileCategory != FileCategory::Image || m_paths.size() <= 1) {
+        return QString();
+    }
+
+    return muse::qtrc("project/convert", "Images will be combined into one score in the order shown here");
+}
+
+QVariantMap FileListModel::convertLimits() const
+{
+    QVariantMap limits;
+    limits["maxFileCount"] = m_maxFileCount;
+    limits["maxCombinedSizeBytes"] = m_maxCombinedSizeBytes;
+    return limits;
+}
+
+QString FileListModel::usedSizeLabel() const
+{
+    return m_usedSizeLabel;
+}
+
+bool FileListModel::exceedsLimits() const
+{
+    return m_exceedsLimits;
+}
+
+QVariantMap FileListModel::get(int index)
+{
+    QVariantMap result;
+
+    const QModelIndex idx = this->index(index, 0);
+    const QHash<int, QByteArray> roles = roleNames();
+    for (auto it = roles.cbegin(); it != roles.cend(); ++it) {
+        result[it.value()] = idx.data(it.key());
+    }
+
+    return result;
 }
 
 void FileListModel::removeAt(int index)
@@ -114,7 +197,15 @@ void FileListModel::removeAt(int index)
     m_paths.removeAt(index);
     endRemoveRows();
 
-    emit countChanged();
+    if (m_paths.isEmpty()) {
+        m_fileCategory = FileCategory::Unknown;
+    }
+
+    emit pathsChanged();
+    updateTotalSizeBytes();
+    updateConvertLimits();
+    updateExceedsLimits();
+    updateUsedSizeLabel();
 }
 
 void FileListModel::move(int from, int to)
@@ -127,40 +218,90 @@ void FileListModel::move(int from, int to)
     beginMoveRows(QModelIndex(), from, from, QModelIndex(), destination);
     m_paths.move(from, to);
     endMoveRows();
+
+    emit pathsChanged();
 }
 
-QStringList FileListModel::paths() const
+qint64 FileListModel::fileSize(const QString& path) const
 {
-    return m_paths;
+    const muse::RetVal<uint64_t> size = fileSystem()->fileSize(muse::io::path_t(path));
+    return size.ret ? qint64(size.val) : 0;
 }
 
-QString FileListModel::defaultSaveAsName() const
+void FileListModel::updateTotalSizeBytes()
 {
-    if (m_paths.isEmpty()) {
-        return QString();
+    m_totalSizeBytes = 0;
+    for (const QString& path : m_paths) {
+        m_totalSizeBytes += fileSize(path);
     }
-
-    return QFileInfo(m_paths.first()).completeBaseName();
 }
 
-QString FileListModel::fileName(int index) const
+void FileListModel::updateConvertLimits()
 {
-    if (index < 0 || index >= m_paths.size()) {
-        return QString();
+    int maxFileCount = 0;
+    qint64 maxCombinedSizeBytes = 0;
+
+    switch (m_fileCategory) {
+    case FileCategory::Audio:
+        maxFileCount = m_config.audio2score.file.maxFiles;
+        maxCombinedSizeBytes = m_config.audio2score.file.maxFileSizeBytes;
+        break;
+    case FileCategory::Pdf:
+        maxFileCount = m_config.omr.pdf.maxFiles;
+        maxCombinedSizeBytes = m_config.omr.pdf.maxFileSizeBytes;
+        break;
+    case FileCategory::Image:
+    case FileCategory::Unknown:
+        maxFileCount = m_config.omr.images.maxFiles;
+        maxCombinedSizeBytes = m_config.omr.images.maxFileSizeBytes;
+        break;
     }
 
-    return QFileInfo(m_paths.at(index)).fileName();
+    if (m_maxFileCount == maxFileCount && m_maxCombinedSizeBytes == maxCombinedSizeBytes) {
+        return;
+    }
+
+    m_maxFileCount = maxFileCount;
+    m_maxCombinedSizeBytes = maxCombinedSizeBytes;
+    emit convertLimitsChanged();
 }
 
-QString FileListModel::validateFileName(const QString& name) const
+void FileListModel::updateExceedsLimits()
 {
-    if (name.isEmpty()) {
-        return QString();
+    bool exceeds = false;
+
+    if (m_maxFileCount > 0 && m_paths.size() > m_maxFileCount) {
+        exceeds = true;
     }
 
-    if (!muse::io::isAllowedFileName(muse::io::path_t(name))) {
-        return muse::qtrc("project/convert", "“%1” cannot be used as a file name. Please choose a different name.").arg(name);
+    if (!exceeds && m_maxCombinedSizeBytes > 0 && m_totalSizeBytes > m_maxCombinedSizeBytes) {
+        exceeds = true;
     }
 
-    return QString();
+    if (m_exceedsLimits == exceeds) {
+        return;
+    }
+
+    m_exceedsLimits = exceeds;
+    emit exceedsLimitsChanged();
+}
+
+void FileListModel::updateUsedSizeLabel()
+{
+    const qint64 maxBytes = m_maxCombinedSizeBytes;
+
+    QString label;
+    if (maxBytes > 0 && m_totalSizeBytes >= maxBytes * 0.75) { // only show once 75% of the limit is used
+        const QString totalSize = muse::DataFormatter::formatFileSize(size_t(m_totalSizeBytes));
+        const QString maxSize = muse::DataFormatter::formatFileSize(size_t(maxBytes));
+        //: %1 and %2 are pre-formatted file sizes including units, e.g. "15 MB/20 MB used"
+        label = muse::qtrc("project/convert", "%1/%2 used").arg(totalSize, maxSize);
+    }
+
+    if (m_usedSizeLabel == label) {
+        return;
+    }
+
+    m_usedSizeLabel = label;
+    emit usedSizeLabelChanged();
 }

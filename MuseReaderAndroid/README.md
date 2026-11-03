@@ -19,7 +19,7 @@ versioned snapshots and [third-party notices](THIRD_PARTY_NOTICES.md) for depend
 - `Aria/Vendor/`: patched Skip UI, Skip Fuse UI and Swift JNI sources. Each includes
   its upstream license and an `ARIA_PATCHES.md` describing local modifications.
 - `engine/`: Android engine initialization and AAudio output, linked to the shared
-  MuseScore render core in `../sandbox/engraving` and MuseScore 4.7.5 in `../src`.
+  MuseScore render core in `../sandbox/engraving` and MuseScore 4.7.6 in `../src`.
 - `scripts/`: native builds, shared-source linking, asset/bridge generation, bundle
   inspection, and an interactive helper for creating your own signing configuration.
 

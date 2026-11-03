@@ -29,41 +29,25 @@ import MuseScore.Project
 Item {
     id: root
 
-    property var files: []
-    property string link: ""
-    property bool canSelectMultipleFiles: true
+    property alias saveAsName: saveAsField.currentText
+    property alias saveAsTrimmed: saveAsField.trimmedText
+    property alias saveAsErrorText: saveAsField.errorText
+
+    property FileListModel fileListModel: null
+
     property var fileRequirements: []
+    property bool canSelectMultipleFiles: true
+
     property NavigationSection navigationSection: null
 
-    readonly property string saveAsNameError: fileListModel.validateFileName(saveAsField.currentText)
-
     signal cancelRequested()
-    signal backRequested(bool confirm)
-    signal selectMoreFilesRequested(var existingPaths)
-    signal convertRequested(var paths, string link, string convertedFileName)
+    signal backRequested()
+    signal selectMoreFilesRequested()
+    signal addFilesRequested(var urls)
+    signal convertRequested(string convertedScoreName)
 
-    function focusOnFileList() {
-        if (filesPanelLoader.item) {
-            filesPanelLoader.item.focusOnFileList()
-        }
-    }
-
-    onFilesChanged: {
-        var wasEmpty = fileListModel.count === 0
-        fileListModel.setPaths(root.files)
-        if (wasEmpty && fileListModel.count > 0) {
-            saveAsField.currentText = fileListModel.defaultSaveAsName()
-        }
-    }
-
-    FileListModel {
-        id: fileListModel
-
-        onCountChanged: {
-            if (fileListModel.count === 0) {
-                root.backRequested(false /*confirm*/)
-            }
-        }
+    function focusOnDefault() {
+        saveAsField.focusOnInput()
     }
 
     NavigationPanel {
@@ -84,85 +68,36 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            sourceComponent: {
-                if (root.link) {
-                    return linkPanelComponent
-                }
-
-                return root.canSelectMultipleFiles ? multipleFilesPanelComponent : singleFilePanelComponent
-            }
+            sourceComponent: root.canSelectMultipleFiles ? multipleFilesPanelComponent : singleFilePanelComponent
         }
 
-        Column {
+        SaveAsField {
+            id: saveAsField
+
             Layout.fillWidth: true
-            spacing: 8
 
-            StyledTextLabel {
-                text: qsTrc("project/convert", "Save as")
-                horizontalAlignment: Text.AlignLeft
+            navigationPanel: NavigationPanel {
+                name: "SelectedFilesPageSaveAs"
+                section: root.navigationSection
+                order: 2
+                enabled: root.enabled && root.visible
             }
-
-            TextInputField {
-                id: saveAsField
-
-                navigation.panel: navPanel
-                navigation.order: 5
-
-                onTextChanged: function(newTextValue) {
-                    saveAsField.currentText = newTextValue
-                }
-            }
-
-            StyledTextLabel {
-                width: parent.width
-
-                visible: Boolean(text)
-                horizontalAlignment: Text.AlignLeft
-                text: root.saveAsNameError
-            }
+            navigationOrder: 0
         }
 
-        ButtonBox {
+        ConvertButtonBox {
             Layout.fillWidth: true
 
             navigationPanel.section: root.navigationSection
-            navigationPanel.order: 2
+            navigationPanel.order: 3
 
-            FlatButton {
-                text: qsTrc("global", "Cancel")
+            convertEnabled: Boolean(saveAsField.currentText) && !saveAsField.errorText && !root.fileListModel.exceedsLimits
 
-                buttonRole: ButtonBoxModel.CustomRole
-                buttonId: ButtonBoxModel.CustomButton + 1
-                isLeftSide: true
+            onCancelRequested: root.cancelRequested()
+            onBackRequested: root.backRequested()
 
-                onClicked: {
-                    root.cancelRequested()
-                }
-            }
-
-            FlatButton {
-                text: qsTrc("global", "Back")
-
-                buttonRole: ButtonBoxModel.BackRole
-                buttonId: ButtonBoxModel.CustomButton + 2
-
-                onClicked: {
-                    root.backRequested(true /*confirm*/)
-                }
-            }
-
-            FlatButton {
-                text: qsTrc("project/convert", "Convert")
-
-                buttonRole: ButtonBoxModel.ApplyRole
-                buttonId: ButtonBoxModel.CustomButton + 3
-
-                accentButton: true
-                enabled: Boolean(saveAsField.currentText) && !root.saveAsNameError
-
-                onClicked: {
-                    root.convertRequested(root.link ? [] : fileListModel.paths(), root.link, saveAsField.currentText)
-                }
+            onConvertRequested: {
+                root.convertRequested(saveAsField.trimmedText)
             }
         }
     }
@@ -172,34 +107,16 @@ Item {
 
         MultipleFilesPanel {
             navigationPanel: navPanel
-            filesModel: fileListModel
+            filesModel: root.fileListModel
             fileRequirements: root.fileRequirements
 
-            onSelectMoreFilesRequested: function(existingPaths) {
-                root.selectMoreFilesRequested(existingPaths)
+            onSelectMoreFilesRequested: root.selectMoreFilesRequested()
+
+            onFilesDropped: function(urls) {
+                root.addFilesRequested(urls)
             }
-        }
-    }
 
-    Component {
-        id: linkPanelComponent
-
-        Rectangle {
-            function focusOnFileList() {}
-
-            color: ui.theme.backgroundPrimaryColor
-            border.width: 1
-            border.color: ui.theme.strokeColor
-            radius: 3
-
-            StyledTextLabel {
-                anchors.centerIn: parent
-                anchors.margins: 16
-                width: parent.width - 32
-
-                text: root.link
-                wrapMode: Text.Wrap
-            }
+            onRemoveLastFileRequested: root.backRequested()
         }
     }
 
@@ -207,14 +124,15 @@ Item {
         id: singleFilePanelComponent
 
         SingleFilePanel {
+            property var item: root.fileListModel.get(0)
+
             navigationPanel: navPanel
-            fileName: fileListModel.fileName(0)
-            iconCode: fileListModel.fileIconCode
+            fileName: item.fileNameRole
+            fileSize: item.fileSizeRole
+            iconCode: root.fileListModel.fileIconCode
             fileRequirements: root.fileRequirements
 
-            onRemoveRequested: {
-                fileListModel.removeAt(0)
-            }
+            onRemoveRequested: root.backRequested()
         }
     }
 }

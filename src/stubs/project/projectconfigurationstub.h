@@ -54,6 +54,9 @@ public:
     muse::io::path_t defaultUserProjectsPath() const override;
     muse::io::path_t defaultOpenProjectsPath() const override;
 
+    muse::io::path_t defaultConvertFilePath() const override;
+    void setLastOpenedConvertFilePath(const muse::io::path_t& path) override;
+
     bool shouldAskSaveLocationType() const override;
     void setShouldAskSaveLocationType(bool shouldAsk) override;
 
@@ -151,10 +154,6 @@ public:
     bool showConvertFileProcessingDialog() const override;
     void setShowConvertFileProcessingDialog(bool show) override;
 
-    muse::io::path_t convertedScoresPath() const override;
-    muse::io::path_t pendingConvertsJsonPath() const override;
-
-    std::string uniqueFileNameAddition(const muse::io::path_t& filename, const muse::io::path_t& folderPath,
-                                       const std::string& suffix = std::string()) const override;
+    muse::io::path_t watchedConvertsJsonPath() const override;
 };
 }

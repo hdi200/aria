@@ -35,23 +35,35 @@
 
 #include "project/iprojectconfiguration.h"
 #include "project/iconvertfiletoscorescenario.h"
+#include "project/types/filecategory.h"
+
+#include "filelistmodel.h"
 
 namespace mu::project {
 class ConvertFileToScoreModel : public QObject, public muse::async::Asyncable, public muse::Contextable
 {
     Q_OBJECT
 
-    Q_PROPERTY(QString guidelinesLinkText READ guidelinesLinkText CONSTANT)
     Q_PROPERTY(QString accountAvatarUrl READ accountAvatarUrl CONSTANT)
+    Q_PROPERTY(QString guidelinesUrl READ guidelinesUrl CONSTANT)
+
+    Q_PROPERTY(int convertType READ convertType NOTIFY convertTypeChanged)
+    Q_PROPERTY(FileListModel * fileListModel READ fileListModel CONSTANT)
+    Q_PROPERTY(QString selectedLink READ selectedLink WRITE setSelectedLink NOTIFY selectedLinkChanged)
+    Q_PROPERTY(QString defaultSaveAsName READ defaultSaveAsName NOTIFY defaultSaveAsNameChanged)
+
+    Q_PROPERTY(QVariantList fileRequirements READ fileRequirements NOTIFY fileRequirementsChanged)
+    Q_PROPERTY(bool canSelectMultipleFiles READ canSelectMultipleFiles NOTIFY fileRequirementsChanged)
+
+    Q_PROPERTY(QString linkHintText READ linkHintText CONSTANT)
     Q_PROPERTY(QString audioComUrl READ audioComUrl CONSTANT)
-
-    Q_PROPERTY(QVariantList fileRequirements READ fileRequirements CONSTANT)
-
-    Q_PROPERTY(QString linkPasteText READ linkPasteText CONSTANT)
+    Q_PROPERTY(QString linkPageHintText READ linkPageHintText CONSTANT)
+    Q_PROPERTY(QString linkPageHintPlainText READ linkPageHintPlainText CONSTANT)
     Q_PROPERTY(int maxLinkLength READ maxLinkLength CONSTANT)
 
     QML_ELEMENT
 
+public:
     muse::ContextInject<muse::IInteractive> interactive = { this };
     muse::ContextInject<IConvertFileToScoreScenario> convertFileToScoreScenario = { this };
     muse::ContextInject<muse::cloud::IMuseScoreComService> museScoreComService = { this };
@@ -61,24 +73,55 @@ class ConvertFileToScoreModel : public QObject, public muse::async::Asyncable, p
 public:
     explicit ConvertFileToScoreModel(QObject* parent = nullptr);
 
-    QString guidelinesLinkText() const;
     QString accountAvatarUrl() const;
-    QString audioComUrl() const;
+    QString guidelinesUrl() const;
+
+    int convertType() const; // OMR = 0, Audio2Score = 1
+    FileListModel* fileListModel() const;
+
+    QString selectedLink() const;
+    void setSelectedLink(const QString& link);
+
+    QString defaultSaveAsName() const;
 
     QVariantList fileRequirements() const;
+    bool canSelectMultipleFiles() const;
 
-    QString linkPasteText() const;
+    QString linkHintText() const;
+    QString audioComUrl() const;
+    QString linkPageHintText() const;
+    QString linkPageHintPlainText() const;
     int maxLinkLength() const;
 
-    Q_INVOKABLE bool canSelectMultipleFiles(int type, const QStringList& paths) const;
+    Q_INVOKABLE void load(const QStringList& paths, int type);
 
-    Q_INVOKABLE QStringList selectFiles(const QStringList& existingPaths = {});
-    Q_INVOKABLE void validateFiles(const QStringList& pathsOrUrls);
+    Q_INVOKABLE bool validateAndAddFiles(const QStringList& pathsOrUrls);
+    Q_INVOKABLE bool selectAndValidateFiles();
 
+    Q_INVOKABLE QString validateFileName(const QString& name) const;
+    Q_INVOKABLE bool validateLink(const QString& link) const;
+
+    Q_INVOKABLE void confirmCancel();
     Q_INVOKABLE void confirmGoingBack();
+    Q_INVOKABLE void clearSelection();
 
 signals:
-    void validationFinished(int type, QVariantList paths);
+    void convertTypeChanged();
+    void defaultSaveAsNameChanged();
+    void selectedLinkChanged();
+    void fileRequirementsChanged();
+    void cancelConfirmed();
     void goingBackConfirmed();
+
+private:
+    void setConvertType(int type);
+
+    QStringList boldLinkSources() const;
+
+    QStringList selectFiles(const QStringList& existingPaths = {});
+
+    ConvertType m_convertType = ConvertType::Omr;
+    FileListModel* m_fileListModel = nullptr;
+    QString m_selectedLink;
 };
 }

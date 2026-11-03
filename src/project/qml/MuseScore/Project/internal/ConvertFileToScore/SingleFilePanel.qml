@@ -28,25 +28,24 @@ Rectangle {
     id: root
 
     property alias fileName: fileItem.fileName
+    property alias fileSize: fileItem.fileSize
     property alias iconCode: fileItem.iconCode
     property alias fileRequirements: fileRequirementsItem.fileRequirements
     property NavigationPanel navigationPanel: null
 
+    readonly property int sideMargin: 32
+
     signal removeRequested()
 
-    function focusOnFileList() {
-        fileItem.navigation.requestActive()
-    }
-
-    color: ui.theme.backgroundPrimaryColor
+    color: ui.theme.backgroundSecondaryColor
     border.width: 1
     border.color: ui.theme.strokeColor
     radius: 3
 
     Column {
         anchors.centerIn: parent
-        width: parent.width - 32
-        spacing: 12
+        width: parent.width - 2 * root.sideMargin
+        spacing: 16
 
         FileItem {
             id: fileItem
@@ -57,6 +56,9 @@ Rectangle {
             navigation.panel: root.navigationPanel
             navigation.order: 1
 
+            removeButtonNavigation.panel: root.navigationPanel
+            removeButtonNavigation.order: 2
+
             onRemoveSelectionRequested: root.removeRequested()
         }
 
@@ -66,7 +68,7 @@ Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
 
             navigation.panel: root.navigationPanel
-            navigation.order: 2
+            navigation.order: 3
         }
     }
 }

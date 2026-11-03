@@ -29,23 +29,20 @@
 
 #include "converttypes.h"
 
-class QIODevice;
-using DevicePtr = std::shared_ptr<QIODevice>;
-
 namespace muse::cloud {
 /// fetchConfig() can be called at any time (no authenticated user required) to get the
 /// upload limits (max file size, page/image counts, allowed types) for client-side validation
-/// before upload() is called.
+/// before uploadToConvert() is called.
 ///
 /// Expected call order for a conversion (OMR or Audio2Score):
-/// 1. upload() to submit the file(s) and start processing
-/// 2. Poll fetchQueue() and watch the item's status
-/// 3. As soon as the status is AwaitingReview or Done, the MSCZ is already
-///    available: call fetchMsczUrl() then downloadConvertedScore() to get the score
-/// 4. Rating the recognition quality (submitReview(), once AwaitingReview) is optional
-///    and does not gate the download above
-/// 5. Keep polling fetchQueue() until the status is Failed, or the item disappears
+/// 1. uploadToConvert() to submit the file(s) and start processing
+/// 2. Poll fetchQueue() and watch the item's status; once it's AwaitingReview or Done, its
+///    scoreId identifies the resulting score, already available via IMuseScoreComService
+/// 3. Rating the recognition quality (submitReview(), once AwaitingReview) is optional;
+///    submitReviewComment() may attach a comment afterwards, once the review has been submitted
+/// 4. Keep polling fetchQueue() until the status is Failed, or the item disappears
 ///    from the queue (which should be treated the same as Done)
+/// 5. deleteConversion() may be called at any point to remove an item from the queue
 class IMuseScoreComConvertService : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(IMuseScoreComConvertService)
@@ -55,13 +52,15 @@ public:
 
     virtual async::Promise<RetVal<ConvertConfig> > fetchConfig() = 0;
 
-    virtual ProgressPtr upload(const ConvertInput& input) = 0;
-    virtual ProgressPtr downloadConvertedScore(const SignedMsczUrl& urlInfo, DevicePtr scoreData) = 0;
+    virtual ProgressPtr uploadToConvert(const ConvertUploadDataPtr& data) = 0;
 
     virtual async::Promise<RetVal<ConvertQueueList> > fetchQueue() = 0;
-    virtual async::Promise<RetVal<SignedMsczUrl> > fetchMsczUrl(ConvertType type, int id) = 0;
 
-    virtual async::Promise<RetVal<ConvertResult> > submitReview(int id, ReviewRating review, const QString& reason = QString()) = 0;
+    virtual async::Promise<RetVal<ConvertResult> > submitReview(ConvertType type, int id, ReviewRating review,
+                                                                const QString& comment = QString()) = 0;
+    virtual async::Promise<Ret> submitReviewComment(ConvertType type, int id, const QString& comment) = 0;
+
+    virtual async::Promise<Ret> deleteConversion(ConvertType type, int id) = 0;
 };
 using IMuseScoreComConvertServicePtr = std::shared_ptr<IMuseScoreComConvertService>;
 }

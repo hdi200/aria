@@ -30,6 +30,7 @@
 #include "actions/iactionsdispatcher.h"
 #include "iinteractive.h"
 #include "cloud/musescorecom/imusescorecomservice.h"
+#include "ideletecloudscorescenario.h"
 
 class QString;
 
@@ -47,6 +48,7 @@ class ScoresPageModel : public QObject, public muse::Contextable
     muse::ContextInject<muse::actions::IActionsDispatcher> dispatcher = { this };
     muse::ContextInject<muse::IInteractive> interactive = { this };
     muse::ContextInject<muse::cloud::IMuseScoreComService> museScoreComService = { this };
+    muse::ContextInject<IDeleteCloudScoreScenario> deleteCloudScoreScenario = { this };
 public:
     explicit ScoresPageModel(QObject* parent = nullptr);
 
@@ -63,8 +65,12 @@ public:
     void setViewType(ViewType type);
 
     Q_INVOKABLE void createNewScore();
+    Q_INVOKABLE void convertFileToScore();
     Q_INVOKABLE void openOther();
     Q_INVOKABLE void openScore(const QString& scorePath, const QString& displayNameOverride);
+    Q_INVOKABLE void revealInFileBrowser(const QString& scorePath);
+    Q_INVOKABLE void viewOnline(int scoreId);
+    Q_INVOKABLE void deleteScore(int scoreId, const QString& scoreName);
     Q_INVOKABLE void openScoreManager();
 
 signals:

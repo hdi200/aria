@@ -1,0 +1,43 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-only
+ * MuseScore-CLA-applies
+ *
+ * MuseScore
+ * Music Composition & Notation
+ *
+ * Copyright (C) 2026 MuseScore Limited and others
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+#pragma once
+
+#include <gmock/gmock.h>
+
+#include "cloud/musescorecom/imusescorecomconvertservice.h"
+
+namespace muse::cloud {
+class MuseScoreComConvertServiceMock : public IMuseScoreComConvertService
+{
+public:
+    MOCK_METHOD(async::Promise<RetVal<ConvertConfig> >, fetchConfig, (), (override));
+
+    MOCK_METHOD(ProgressPtr, uploadToConvert, (const ConvertUploadDataPtr&), (override));
+
+    MOCK_METHOD(async::Promise<RetVal<ConvertQueueList> >, fetchQueue, (), (override));
+
+    MOCK_METHOD(async::Promise<RetVal<ConvertResult> >, submitReview, (ConvertType, int, ReviewRating, const QString&), (override));
+    MOCK_METHOD(async::Promise<Ret>, submitReviewComment, (ConvertType, int, const QString&), (override));
+
+    MOCK_METHOD(async::Promise<Ret>, deleteConversion, (ConvertType, int), (override));
+};
+}

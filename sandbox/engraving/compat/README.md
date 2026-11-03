@@ -1,8 +1,8 @@
-# MuseScore 4.7.5 round-trip check
+# MuseScore 4.7.x round-trip check
 
 Aria users move scores between the iPad and desktop MuseScore Studio. The current
-stable desktop release is 4.7.5, which uses file format 4.70. Aria's engine is
-MuseScore 4.7.5 plus a few Aria patches (see ENGINE.md), and every save has to come
+stable desktop release is 4.7.6, which uses file format 4.70 (as 4.7.5 does). Aria's engine is
+MuseScore 4.7.6 plus a few Aria patches (see ENGINE.md), and every save has to come
 back to 4.7.5 intact. This check proves that on a corpus of scores. Run it after any
 engine change or upstream merge.
 
@@ -35,12 +35,23 @@ python3 sandbox/engraving/compat/roundtrip_475.py            # vtest + Aria temp
 python3 sandbox/engraving/compat/roundtrip_475.py ~/some-scores --direct
 ```
 
-It needs MuseScore Studio 4.7.5 at `/Applications/MuseScore 4.app`; use `--mscore`
+It needs desktop MuseScore Studio (4.7.6 since November 2026) at `/Applications/MuseScore 4.app`; use `--mscore`
 to point elsewhere. The report goes to `build-aria-475-host/roundtrip/report.md`,
 and the exit code is non-zero if any score changed.
 
 `fixtures/` holds scores that each exercise a known 4.7-only feature, such as the
 "pitch names, no accidentals" notehead schemes added in MuseScore 4.7.
+
+## Results with the 4.7.6 engine (November 3, 2026, desktop 4.7.6)
+
+- `roundtrip_475.py`: 890 of 892 identical, default and `--direct`; only `lyrics-15`/`lyrics-16`
+  differ, as below.
+- `layout_compare.py`: 842 of 842 same page count and pixel-identical page 1.
+- `musicxml_export_sweep.py`: 891 of 892 same; `timesig-3` fails on desktop's reference path.
+- `playback_sweep.py`: 874 match. 17 `rpn-bend-risk` (bend and glissando scores, the documented
+  RPN export-option difference) and one `tempo` difference in `stacking-order.mscz` (voltas,
+  repeats, a jump and an accelerando): Aria's tempo map after the repeat differs from desktop's.
+  Same count as with the 4.7.5 engine (874 of 892), so not new in 4.7.6.
 
 ## Known differences (baseline, September 2026, 4.7.5 engine)
 

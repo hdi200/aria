@@ -13,11 +13,11 @@ public:
     muse::String name() const override { return u"MuseScore Studio"; }
     muse::String title() const override { return u"MuseScore Studio"; }
     bool unstable() const override { return false; }
-    muse::Version version() const override { return muse::Version(4, 7, 5); }
+    muse::Version version() const override { return muse::Version(4, 7, 6); }
     muse::Version fullVersion() const override { return version(); }
 
     muse::String build() const override { return u""; }
-    muse::String revision() const override { return u"3654226"; }
+    muse::String revision() const override { return u"96480d5"; }
 
     RunMode runMode() const override { return RunMode::ConsoleApp; }
     bool noGui() const override { return true; }

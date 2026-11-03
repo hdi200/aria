@@ -25,45 +25,92 @@
 #include <QAbstractListModel>
 #include <qqmlintegration.h>
 
-#include "ui/view/iconcodes.h"
+#include "modularity/ioc.h"
+#include "io/ifilesystem.h"
+
+#include "project/types/filecategory.h"
+#include "project/types/converttypes.h"
 
 namespace mu::project {
 class FileListModel : public QAbstractListModel
 {
     Q_OBJECT
 
-    Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
-    Q_PROPERTY(int fileIconCode READ fileIconCode NOTIFY countChanged)
+    Q_PROPERTY(int count READ rowCount NOTIFY pathsChanged)
+    Q_PROPERTY(FileCategoryQml fileCategory READ fileCategoryQml NOTIFY pathsChanged)
+    Q_PROPERTY(int fileIconCode READ fileIconCode NOTIFY pathsChanged)
+    Q_PROPERTY(QString combinedFilesNote READ combinedFilesNote NOTIFY pathsChanged)
+    Q_PROPERTY(QVariantMap convertLimits READ convertLimits NOTIFY convertLimitsChanged)
+    Q_PROPERTY(QString usedSizeLabel READ usedSizeLabel NOTIFY usedSizeLabelChanged)
+    Q_PROPERTY(bool exceedsLimits READ exceedsLimits NOTIFY exceedsLimitsChanged)
 
     QML_ELEMENT
 
 public:
+    muse::GlobalInject<muse::io::IFileSystem> fileSystem;
+
+public:
+    //! NOTE: must be in sync with mu::project::FileCategory
+    enum class FileCategoryQml {
+        Unknown,
+        Audio,
+        Pdf,
+        Image
+    };
+    Q_ENUM(FileCategoryQml)
+
     explicit FileListModel(QObject* parent = nullptr);
 
     QVariant data(const QModelIndex& index, int role) const override;
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    int fileIconCode() const;
+    void load(const QStringList& paths, const ConvertConfig& config);
 
-    Q_INVOKABLE void setPaths(const QStringList& paths);
+    Q_INVOKABLE QStringList paths() const;
+    void setPaths(const QStringList& paths, FileCategory category);
+    void clear();
+
+    FileCategory fileCategory() const;
+    FileCategoryQml fileCategoryQml() const;
+    int fileIconCode() const;
+    QString combinedFilesNote() const;
+    QVariantMap convertLimits() const;
+    QString usedSizeLabel() const;
+    bool exceedsLimits() const;
+
+    Q_INVOKABLE QVariantMap get(int index);
+
     Q_INVOKABLE void removeAt(int index);
     Q_INVOKABLE void move(int from, int to);
 
-    Q_INVOKABLE QStringList paths() const;
-    Q_INVOKABLE QString defaultSaveAsName() const;
-    Q_INVOKABLE QString fileName(int index) const;
-    Q_INVOKABLE QString validateFileName(const QString& name) const;
-
 signals:
-    void countChanged();
+    void pathsChanged();
+    void convertLimitsChanged();
+    void exceedsLimitsChanged();
+    void usedSizeLabelChanged();
 
 private:
     enum Roles {
         PathRole = Qt::UserRole + 1,
-        FileNameRole
+        FileNameRole,
+        FileSizeRole
     };
 
+    qint64 fileSize(const QString& path) const;
+
+    void updateTotalSizeBytes();
+    void updateConvertLimits();
+    void updateExceedsLimits();
+    void updateUsedSizeLabel();
+
     QStringList m_paths;
+    FileCategory m_fileCategory = FileCategory::Unknown;
+    ConvertConfig m_config;
+    int m_maxFileCount = 0;
+    qint64 m_maxCombinedSizeBytes = 0;
+    bool m_exceedsLimits = false;
+    qint64 m_totalSizeBytes = 0;
+    QString m_usedSizeLabel;
 };
 }

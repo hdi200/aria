@@ -73,6 +73,9 @@ public:
     muse::io::path_t defaultUserProjectsPath() const override;
     muse::io::path_t defaultOpenProjectsPath() const override;
 
+    muse::io::path_t defaultConvertFilePath() const override;
+    void setLastOpenedConvertFilePath(const muse::io::path_t& path) override;
+
     bool shouldAskSaveLocationType() const override;
     void setShouldAskSaveLocationType(bool shouldAsk) override;
 
@@ -171,22 +174,18 @@ public:
     bool showConvertFileProcessingDialog() const override;
     void setShowConvertFileProcessingDialog(bool show) override;
 
-    muse::io::path_t convertedScoresPath() const override;
-    muse::io::path_t pendingConvertsJsonPath() const override;
-
-    std::string uniqueFileNameAddition(const muse::io::path_t& filename, const muse::io::path_t& folderPath,
-                                       const std::string& suffix = std::string()) const override;
+    muse::io::path_t watchedConvertsJsonPath() const override;
 
 private:
     muse::io::path_t appTemplatesPath() const;
     muse::io::path_t legacyCloudProjectsPath() const;
     muse::io::path_t cloudProjectsPath() const;
 
+    std::string uniqueFileNameAddition(const muse::io::path_t& filename, const muse::io::path_t& folderPath,
+                                       const std::string& suffix = std::string()) const;
+
     muse::async::Channel<muse::io::path_t> m_userTemplatesPathChanged;
     muse::async::Channel<muse::io::path_t> m_userScoresPathChanged;
-
-    int m_homeScoresPageTabIndex = 0;
-    muse::async::Notification m_homeScoresPageTabIndexChanged;
 
     muse::async::Channel<bool> m_autoSaveEnabledChanged;
     muse::async::Channel<int> m_autoSaveIntervalChanged;

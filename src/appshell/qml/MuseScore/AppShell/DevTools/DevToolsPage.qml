@@ -27,6 +27,7 @@ import QtQuick
 import Muse.Ui
 import Muse.UiComponents
 import Muse.Dock
+import Muse.Toast
 import MuseScore.Project
 
 DockPage {
@@ -42,10 +43,10 @@ DockPage {
         case "interactive": root.central = interactiveComp; break
         case "crashhandler": root.central = crashhandlerComp; break
         case "corruptscore": root.central = corruptScoreComp; break
-        case "convertfiletoscore": root.central = convertFileToScoreComp; break
         case "mpe": root.central = mpeComponent; break
         case "extensions": root.central = extensionsComp; break
         case "navigation": root.central = keynavComp; break
+        case "toasts": root.central = toastsComp; break
         }
     }
 
@@ -75,10 +76,10 @@ DockPage {
                         { "name": "interactive", "title": "Interactive" },
                         { "name": "crashhandler", "title": "Crash handler" },
                         { "name": "corruptscore", "title": "Corrupt score" },
-                        { "name": "convertfiletoscore", "title": "Convert file to score" },
                         { "name": "mpe", "title": "MPE" },
                         { "name": "extensions", "title": "Extensions" },
-                        { "name": "navigation", "title": "KeyNav" }
+                        { "name": "navigation", "title": "KeyNav" },
+                        { "name": "toasts", "title": "Toasts" }
                     ]
 
                     onSelected: function(name) {
@@ -122,12 +123,6 @@ DockPage {
     }
 
     Component {
-        id: convertFileToScoreComp
-
-        ConvertFileToScoreDevTools {}
-    }
-
-    Component {
         id: mpeComponent
 
         ArticulationsProfileEditorView {}
@@ -143,5 +138,11 @@ DockPage {
         id: keynavComp
 
         KeyNavExample {}
+    }
+
+    Component {
+        id: toastsComp
+
+        ToastNotificationTests {}
     }
 }

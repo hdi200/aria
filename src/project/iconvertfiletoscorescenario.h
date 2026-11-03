@@ -30,12 +30,9 @@
 
 #include "types/converttypes.h"
 
-namespace mu::project {
-struct ConvertSelection {
-    ConvertInput input;
-    QString convertedFileName;
-};
+class QUrl;
 
+namespace mu::project {
 class IConvertFileToScoreScenario : MODULE_CONTEXT_INTERFACE
 {
     INTERFACE_ID(IConvertFileToScoreScenario)
@@ -43,13 +40,47 @@ class IConvertFileToScoreScenario : MODULE_CONTEXT_INTERFACE
 public:
     virtual ~IConvertFileToScoreScenario() = default;
 
-    virtual const ConvertConfig& convertConfig() const = 0;
+    //! Server-provided limits (file size, formats, etc) for client-side validation
+    virtual const ConvertConfig& config() const = 0;
 
-    virtual muse::async::Promise<ConvertSelection> selectFilesToConvert() = 0;
-    virtual muse::async::Promise<muse::RetVal<ConvertType> > validate(const muse::io::paths_t& paths) = 0;
-    virtual muse::Ret convert(const ConvertInput& input, const QString& convertedFileName) = 0;
+    //! Whether the given file can be converted
+    virtual bool isFileSupported(const muse::io::path_t& path) const = 0;
 
-    virtual muse::async::Channel<muse::Ret, muse::io::path_t> convertFinished() const = 0;
+    //! Checks the given files against the server's config limits and determines their convert type and category
+    virtual muse::RetVal<ConvertFilesValidation> validateFiles(const muse::io::paths_t& paths) = 0;
+
+    //! Checks that the given link is from a supported source
+    virtual muse::Ret validateLink(const QUrl& link) = 0;
+
+    //! Single entry point for converting files from the UI. With no paths, opens the file/link
+    //! picker directly; with paths (e.g. from drag-and-drop), confirms with the user first, then
+    //! opens the picker with them pre-selected
+    virtual void convertFiles(const muse::io::paths_t& paths = {}) = 0;
+
+    //! Emits the result once the server-side conversion completes; on success, the converted score
+    //! is already available in the user's MuseScore.com account, described by the WatchedScore
+    virtual muse::async::Channel<muse::Ret, WatchedScore> convertFinished() const = 0;
+
+    //! Uploads in progress, before they reach the convert queue
+    virtual muse::ValNt<UploadingScoreList> uploadingScores() const = 0;
+
+    //! All pending/reviewable conversions from the server's convert queue
+    virtual muse::ValNt<WatchedScoreList> watchedScores() const = 0;
+
+    //! Whether the cloud score with the given id is a converted score still awaiting a quality review
+    virtual bool isAwaitingReview(int scoreId) const = 0;
+
+    //! Confirms with the user, then aborts an upload in progress
+    virtual void cancelUpload(int uploadId) = 0;
+
+    //! Confirms with the user, then cancels a watched conversion
+    virtual void cancelConversion(ConvertType type, int convertId) = 0;
+
+    //! Emitted after every conversion status check, whether it succeeded or failed
+    virtual muse::async::Channel<PollingStatus> pollingStatusChanged() const = 0;
+
+    //! Retries polling after it gave up (e.g. due to a lost internet connection)
+    virtual void retryPolling() = 0;
 };
 
 using IConvertFileToScoreScenarioPtr = std::shared_ptr<IConvertFileToScoreScenario>;

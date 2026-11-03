@@ -138,6 +138,19 @@ void EditChord::undoAddParenthesesToNotes(Chord* chord, std::vector<Note*> notes
         Chord* linkedChord = toChord(linkedObject);
         Score* linkedScore = linkedChord->score();
         Staff* linkedStaff = linkedChord->staff();
+
+        std::vector<Note*> linkedNotes;
+        for (Note* note : notes) {
+            Note* linkedNote = toNote(note->findLinkedInStaff(linkedStaff));
+            if (!linkedNote) {
+                continue;
+            }
+            linkedNotes.push_back(linkedNote);
+        }
+        if (linkedNotes.empty()) {
+            continue;
+        }
+
         Parenthesis* linkedParenLeft = toParenthesis(leftParen->linkedClone());
         linkedParenLeft->setScore(linkedScore);
         linkedParenLeft->setParent(linkedChord);
@@ -146,12 +159,6 @@ void EditChord::undoAddParenthesesToNotes(Chord* chord, std::vector<Note*> notes
         linkedParenRight->setScore(linkedScore);
         linkedParenRight->setParent(linkedChord);
         linkedParenRight->setTrack(linkedChord->track());
-
-        std::vector<Note*> linkedNotes;
-        for (Note* note : notes) {
-            Note* linkedNote = toNote(note->findLinkedInStaff(linkedStaff));
-            linkedNotes.push_back(linkedNote);
-        }
 
         doAddNoteParentheses(linkedChord, linkedNotes, linkedParenLeft, linkedParenRight);
     }
@@ -176,7 +183,11 @@ void EditChord::undoRemoveParenthesesFromNote(Chord* chord, Note* note, Parenthe
         if (!linkedLeftParen) {
             continue;
         }
+
         Note* linkedNote = toNote(note->findLinkedInStaff(linkedStaff));
+        if (!linkedNote) {
+            continue;
+        }
 
         const NoteParenthesisInfo* noteParenInfo = linkedChord->findNoteParenthesisInfo(linkedNote);
         if (noteParenInfo) {
@@ -211,6 +222,9 @@ void EditChord::undoClearParenthesisGroup(Chord* chord, std::vector<Note*> notes
         std::vector<Note*> linkedNotes;
         for (Note* note : notes) {
             Note* linkedNote = toNote(note->findLinkedInStaff(linkedStaff));
+            if (!linkedNote) {
+                continue;
+            }
             linkedNotes.push_back(linkedNote);
         }
 

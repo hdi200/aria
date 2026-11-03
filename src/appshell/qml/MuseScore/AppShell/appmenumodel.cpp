@@ -99,7 +99,7 @@ bool AppMenuModel::isGlobalMenuAvailable()
 
 void AppMenuModel::setupConnections()
 {
-    recentFilesController()->recentFilesListChanged().onNotify(this, [this]() {
+    recentFilesController()->recentFilesListChanged().onReceive(this, [this](const RecentFilesChange&) {
         MenuItem& recentScoreListItem = findMenu("menu-file-open");
 
         MenuItemList recentScoresList = makeRecentScoresItems();
@@ -208,8 +208,7 @@ MenuItem* AppMenuModel::makeFileMenu()
         makeMenu(TranslatableString("appshell/menu/file", "Save o&ther"), makeSaveOtherSubItems()),
         makeMenu(TranslatableString("appshell/menu/file", "Pu&blish online"), makePublishOnlineSubItems()),
         makeSeparator(),
-        makeMenuItem("file-import-pdf"),
-        makeMenuItem("file-import-audio-to-score"),
+        makeMenuItem("file-convert-to-score"),
         makeMenuItem("file-export"),
         makeSeparator(),
         makeMenuItem("project-properties"),

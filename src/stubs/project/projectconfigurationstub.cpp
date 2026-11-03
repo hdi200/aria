@@ -106,6 +106,15 @@ muse::io::path_t ProjectConfigurationStub::defaultOpenProjectsPath() const
     return muse::io::path_t();
 }
 
+muse::io::path_t ProjectConfigurationStub::defaultConvertFilePath() const
+{
+    return muse::io::path_t();
+}
+
+void ProjectConfigurationStub::setLastOpenedConvertFilePath(const muse::io::path_t&)
+{
+}
+
 bool ProjectConfigurationStub::shouldAskSaveLocationType() const
 {
     return false;
@@ -410,17 +419,7 @@ void ProjectConfigurationStub::setShowConvertFileProcessingDialog(bool)
 {
 }
 
-muse::io::path_t ProjectConfigurationStub::convertedScoresPath() const
+muse::io::path_t ProjectConfigurationStub::watchedConvertsJsonPath() const
 {
     return muse::io::path_t();
-}
-
-muse::io::path_t ProjectConfigurationStub::pendingConvertsJsonPath() const
-{
-    return muse::io::path_t();
-}
-
-std::string ProjectConfigurationStub::uniqueFileNameAddition(const muse::io::path_t&, const muse::io::path_t&, const std::string&) const
-{
-    return std::string();
 }

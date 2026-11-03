@@ -68,6 +68,10 @@ public:
     //! NOTE: best-guess directory to start browsing from in an "open file" dialog
     virtual muse::io::path_t defaultOpenProjectsPath() const = 0;
 
+    //! NOTE: best-guess directory to start browsing from in the convert-to-score "open file" dialog
+    virtual muse::io::path_t defaultConvertFilePath() const = 0;
+    virtual void setLastOpenedConvertFilePath(const muse::io::path_t& path) = 0;
+
     virtual bool shouldAskSaveLocationType() const = 0;
     virtual void setShouldAskSaveLocationType(bool shouldAsk) = 0;
 
@@ -176,11 +180,7 @@ public:
     virtual bool showConvertFileProcessingDialog() const = 0;
     virtual void setShowConvertFileProcessingDialog(bool show) = 0;
 
-    virtual muse::io::path_t convertedScoresPath() const = 0;
-    virtual muse::io::path_t pendingConvertsJsonPath() const = 0;
-
-    virtual std::string uniqueFileNameAddition(const muse::io::path_t& filename, const muse::io::path_t& folderPath,
-                                               const std::string& suffix = std::string()) const = 0;
+    virtual muse::io::path_t watchedConvertsJsonPath() const = 0;
 };
 }
 

@@ -43,12 +43,14 @@ static const std::string module_name("project");
 static const Settings::Key COMPAT_RECENT_FILES_DATA(module_name, "project/recentList");
 static const Settings::Key USER_TEMPLATES_PATH(module_name, "application/paths/myTemplates");
 static const Settings::Key LAST_OPENED_PROJECTS_PATH(module_name, "application/paths/lastOpenedProjectsPath");
+static const Settings::Key LAST_OPENED_CONVERT_FILE_PATH(module_name, "application/paths/lastOpenedConvertFilePath");
 static const Settings::Key LAST_SAVED_PROJECTS_PATH(module_name, "application/paths/lastSavedProjectsPath");
 static const Settings::Key USER_PROJECTS_PATH(module_name, "application/paths/myScores");
 static const Settings::Key SHOULD_ASK_SAVE_LOCATION_TYPE(module_name, "project/shouldAskSaveLocationType");
 static const Settings::Key LAST_USED_SAVE_LOCATION_TYPE(module_name, "project/lastUsedSaveLocationType");
 static const Settings::Key SHOULD_WARN_BEFORE_PUBLISH(module_name, "project/shouldWarnBeforePublish");
 static const Settings::Key SHOULD_WARN_BEFORE_SAVING_PUBLICLY_TO_CLOUD(module_name, "project/shouldWarnBeforeSavingPubliclyToCloud");
+static const Settings::Key HOME_SCORES_PAGE_TAB_INDEX(module_name, "project/homeScoresPageTabIndex");
 static const Settings::Key HOME_SCORES_PAGE_VIEW_TYPE(module_name, "project/homeScoresPageViewType");
 static const Settings::Key PREFERRED_SCORE_CREATION_MODE_KEY(module_name, "project/preferredScoreCreationMode");
 static const Settings::Key MIGRATION_OPTIONS(module_name, "project/migration");
@@ -90,6 +92,8 @@ void ProjectConfiguration::init()
 
     Val preferredScoreCreationMode = Val(PreferredScoreCreationMode::FromInstruments);
     settings()->setDefaultValue(PREFERRED_SCORE_CREATION_MODE_KEY, preferredScoreCreationMode);
+
+    settings()->setDefaultValue(HOME_SCORES_PAGE_TAB_INDEX, Val(0));
 
     settings()->setDefaultValue(HOME_SCORES_PAGE_VIEW_TYPE, Val(HomeScoresPageViewType::Grid));
 
@@ -256,6 +260,21 @@ muse::io::path_t ProjectConfiguration::defaultOpenProjectsPath() const
 
     if (dir.empty()) {
         dir = defaultUserProjectsPath();
+    }
+
+    return dir;
+}
+
+void ProjectConfiguration::setLastOpenedConvertFilePath(const muse::io::path_t& path)
+{
+    settings()->setSharedValue(LAST_OPENED_CONVERT_FILE_PATH, Val(path));
+}
+
+muse::io::path_t ProjectConfiguration::defaultConvertFilePath() const
+{
+    muse::io::path_t dir = settings()->value(LAST_OPENED_CONVERT_FILE_PATH).toPath();
+    if (dir.empty()) {
+        dir = globalConfiguration()->documentsPath();
     }
 
     return dir;
@@ -431,12 +450,14 @@ void ProjectConfiguration::setShouldWarnBeforeSavingPubliclyToCloud(bool shouldW
 
 int ProjectConfiguration::homeScoresPageTabIndex() const
 {
-    return m_homeScoresPageTabIndex;
+    return settings()->value(HOME_SCORES_PAGE_TAB_INDEX).toInt();
 }
 
 void ProjectConfiguration::setHomeScoresPageTabIndex(int index)
 {
-    m_homeScoresPageTabIndex = index;
+    // Intentionally not directly synced between instances
+    // (it would be weird if you switch the tab in one instance, and the others suddenly switch too)
+    settings()->setLocalValue(HOME_SCORES_PAGE_TAB_INDEX, Val(index));
 }
 
 IProjectConfiguration::HomeScoresPageViewType ProjectConfiguration::homeScoresPageViewType() const
@@ -668,12 +689,18 @@ QUrl ProjectConfiguration::supportForumUrl() const
 QUrl ProjectConfiguration::dotComBugReportUrl() const
 {
     // The general .com bug report page
-    return QUrl("https://musescore.com/groups/bug-reports");
+    return QUrl("https://musescore.com/redirect/af?mu_target=https%3A%2F%2Fmusescore.com%2Fgroups%2Fbug-reports"
+                "%3Futm_medium%3DReferral%26utm_source%3Dmss%26utm_campaign%3DMU_WW_REF_MSS_DESKTOP_ALL_261026_crosslink"
+                "%26utm_content%3Derror_dialog"
+                "&utm_medium=Referral&utm_source=mss&utm_campaign=MU_WW_REF_MSS_DESKTOP_ALL_261026_crosslink&utm_content=error_dialog");
 }
 
 QUrl ProjectConfiguration::scoreUploadingGuidelinesUrl() const
 {
-    return QUrl("https://musescore.com/score-uploading-guidelines");
+    return QUrl("https://musescore.com/redirect/af?mu_target=https%3A%2F%2Fmusescore.com%2Fscore-uploading-guidelines"
+                "%3Futm_medium%3DReferral%26utm_source%3Dmss%26utm_campaign%3DMU_WW_REF_MSS_DESKTOP_ALL_261026_crosslink"
+                "%26utm_content%3Dconvert_to_score"
+                "&utm_medium=Referral&utm_source=mss&utm_campaign=MU_WW_REF_MSS_DESKTOP_ALL_261026_crosslink&utm_content=convert_to_score");
 }
 
 bool ProjectConfiguration::openDetailedProjectUploadedDialog() const
@@ -779,12 +806,7 @@ void ProjectConfiguration::setShowConvertFileProcessingDialog(bool show)
     settings()->setSharedValue(SHOW_CONVERT_FILE_PROCESSING_DIALOG, Val(show));
 }
 
-muse::io::path_t ProjectConfiguration::convertedScoresPath() const
+muse::io::path_t ProjectConfiguration::watchedConvertsJsonPath() const
 {
-    return globalConfiguration()->userAppDataPath() + "/converted_scores";
-}
-
-muse::io::path_t ProjectConfiguration::pendingConvertsJsonPath() const
-{
-    return globalConfiguration()->userAppDataPath().appendingComponent("pending_converts.json");
+    return globalConfiguration()->userAppDataPath().appendingComponent("watched_converts.json");
 }

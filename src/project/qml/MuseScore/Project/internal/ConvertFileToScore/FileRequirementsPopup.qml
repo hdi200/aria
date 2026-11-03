@@ -33,35 +33,40 @@ StyledPopupView {
     //! NOTE: list of { title: string, items: array<string> }; content is opaque to this popup
     property var sections: []
 
-    contentWidth: 280
+    contentWidth: 220
     contentHeight: content.implicitHeight
+    padding: 8
 
-    showArrow: false
+    //! NOTE: default-opened without activating focus, but the section is still requested
+    //! active (see onOpened below) so that Escape closes just this popup, not the dialog
+    openPolicies: PopupView.NoActivateFocus
+    focusPolicies: PopupView.NoFocus
 
-    NavigationPanel {
-        id: navPanel
+    navigationSection: NavigationSection {
+        id: infoSection
 
         name: "FileRequirementsPopup"
-        section: root.navigationSection
+        type: NavigationSection.Exclusive
+        enabled: root.isOpened
         order: 1
+
+        onNavigationEvent: function(event) {
+            if (event.type === NavigationEvent.Escape) {
+                root.close()
+                event.accepted = true
+            }
+        }
+    }
+
+    onOpened: {
+        infoSection.requestActive()
     }
 
     Column {
         id: content
 
         width: parent.width
-        spacing: 12
-
-        StyledTextLabel {
-            width: parent.width
-
-            text: qsTrc("project/convert", "File requirements")
-            font.family: ui.theme.bodyBoldFont.family
-            font.pixelSize: ui.theme.bodyBoldFont.pixelSize
-            font.bold: true
-            font.underline: true
-            horizontalAlignment: Text.AlignLeft
-        }
+        spacing: 14
 
         Repeater {
             model: root.sections
@@ -70,6 +75,8 @@ StyledPopupView {
                 id: section
 
                 required property var modelData
+
+                readonly property int itemIndent: 8
 
                 width: content.width
                 spacing: 4
@@ -89,8 +96,8 @@ StyledPopupView {
 
                         required property string modelData
 
-                        x: 12
-                        width: section.width - 12
+                        x: section.itemIndent
+                        width: section.width - section.itemIndent
                         spacing: 4
 
                         StyledTextLabel {
@@ -106,19 +113,6 @@ StyledPopupView {
                         }
                     }
                 }
-            }
-        }
-
-        FlatButton {
-            width: parent.width
-
-            text: qsTrc("global", "Close")
-
-            navigation.panel: navPanel
-            navigation.order: 1
-
-            onClicked: {
-                root.close()
             }
         }
     }

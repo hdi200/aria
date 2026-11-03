@@ -137,6 +137,7 @@ add_to_link_if_exists(muse::multiwindows)
 add_to_link_if_exists(muse::musesampler)
 add_to_link_if_exists(muse::network)
 add_to_link_if_exists(muse::shortcuts)
+add_to_link_if_exists(muse::toast)
 add_to_link_if_exists(muse::tours)
 add_to_link_if_exists(muse::ui)
 add_to_link_if_exists(muse::ui_dialogs_qml)
@@ -346,7 +347,7 @@ if (OS_IS_WIN)
     endif (WIN_PORTABLE)
 
     if (MUE_RUN_WINDEPLOYQT)
-        set(deploy_tool_options_arg "--plugindir bin --qmldir ${PROJECT_SOURCE_DIR}")
+        set(deploy_tool_options_arg "--plugindir bin --qmldir ${PROJECT_SOURCE_DIR} --no-compiler-runtime")
         qt_generate_deploy_qml_app_script(
             TARGET MuseScoreStudio
             OUTPUT_SCRIPT deploy_script

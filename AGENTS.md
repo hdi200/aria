@@ -10,8 +10,8 @@
 
 ## MuseScore file compatibility
 
-- Aria-saved scores must open unchanged in the current stable desktop MuseScore Studio (4.7.5, file format 4.70). Most users are on it, and MuseScore 5 is unreleased.
-- The engine in `src/` is MuseScore 4.7.5 (tag `v4.7.5`) plus a few Aria patches, listed in `sandbox/engraving/compat/ENGINE.md`. It writes genuine 4.70 files; there is no version relabeling.
+- Aria-saved scores must open unchanged in the current stable desktop MuseScore Studio (4.7.6, file format 4.70). Most users are on it, and MuseScore 5 is unreleased.
+- The engine in `src/` is MuseScore 4.7.6 (tag `v4.7.6`) plus a few Aria patches, listed in `sandbox/engraving/compat/ENGINE.md`. It writes genuine 4.70 files; there is no version relabeling.
 - Do not merge upstream `main` into `src/`; it is MuseScore 5 development and writes format 5.00. Move to a newer release tag only, using the steps in `ENGINE.md`.
 - Files newer than 4.70 are opened anyway (like desktop's "Open anyway") and saved back as 4.70.
 - After any engine or writer change, run the checks in `sandbox/engraving/compat/README.md` (host build in `build-aria-475-host`) and compare the reports with the previous run.
