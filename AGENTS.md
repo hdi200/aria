@@ -1,5 +1,7 @@
 # Repository Agent Notes
 
+New to the project? Read [ONBOARDING.md](ONBOARDING.md) first: how the engine, iOS app and Android app fit together, how to add a feature, how to check your work, and the owner's rules. The notes below are the hard rules that always apply.
+
 ## MuseReader iOS builds
 
 - The active Xcode project and scheme are `MuseReaderiOS/Aria.xcodeproj` and `Aria`.
