@@ -7,7 +7,7 @@ from this editing session, including shared Android behavior and verification li
 
 - Added **Text > Fingering**, with large 1–5 keys and a remove key. The panel keeps
   the score interactive and does not open a keyboard.
-- Uses real MuseScore note-attached fingerings. Adding, replacing and removing
+- Uses real MuseScore noand te-attached fingerings. Adding, replacing and removing
   fingerings supports Undo/Redo, linked parts, saving and reopening.
 - Entering a digit advances to the next note, skipping rests. Remove erases the
   current note's fingering and moves to the preceding note, skipping rests.
@@ -36,8 +36,13 @@ from this editing session, including shared Android behavior and verification li
 - Lyrics Done and dismissal also return to Text. Both the compact phone and
   full-size tablet/folded layouts use this destination, retaining lyric-session
   cleanup and keyboard dismissal.
-- Fixed clipped phone chord controls with fitted rows, two extension rows and a
-  header erase button. Tablet rows keep their roomier arrangement.
+- iOS Chord Entry fits all extensions on one row, with smaller numbers in compact
+  layouts. Unselected keys share a light gray fill. The quality row shows maj,
+  min, °, ø, + and sus. The preview stays blank until there is a chord to show.
+  Android phones keep two extension rows.
+- The iOS chord preview has an underline and a blue caret. On iPhone, larger
+  extension numbers and heavier root letters distinguish the rows, and the mode
+  toolbar sits above the chord and Fingering Entry panels.
 - On iPhone, the toolbar fade clears at the end of the scroll. Chord Text uses
   C7 again, and Fingering uses the open-hand icon on iPhone and iPad.
 - On iPhone and iPad, flat and sharp follow B, the flat glyph is larger, and
@@ -121,7 +126,7 @@ on Android, or interaction-tested on tablet/folded layouts.
 - Checks: `Checks/check_fingering_navigation.py`, chord/tempo model tests, native
   engraving tests, iOS fingering UI tests and Android editing-panel instrumentation.
 - Detailed history and test steps: [Android/shared change log](../MuseReaderAndroid/IOS_CHANGES.md),
-  entries 64–79, and [feature/bug tracker](FEATURE_REQUESTS_AND_BUGS.md).
+  entries 64–80, and [feature/bug tracker](FEATURE_REQUESTS_AND_BUGS.md).
 
 No commits, pushes, store submissions or purchases were made. Existing user scores
 were preserved; our applied UI test edits were undone.

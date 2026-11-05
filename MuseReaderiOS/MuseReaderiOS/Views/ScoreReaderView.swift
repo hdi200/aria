@@ -674,6 +674,15 @@ struct ScoreReaderView: View {
         }
     }
 
+    private var placesPhoneModeBarAboveEntry: Bool {
+        #if os(iOS)
+        isPhoneInterface && !duoMovesModeBarToDeck
+            && (selectedToolCategory == .chord || selectedToolCategory == .fingering)
+        #else
+        false
+        #endif
+    }
+
     @ViewBuilder
     private var noteEntryOverlay: some View {
         if readerState.isEditingMode && !plainTextEditorIsActive {
@@ -683,6 +692,7 @@ struct ScoreReaderView: View {
                 pendingMIDIPitch: readerState.pendingMIDIPitch,
                 stackedChordInputEnabled: readerState.stackedChordInputEnabled,
                 showsCompactModeToolbar: !isPhoneInterface,
+                placesModeToolbarAbove: placesPhoneModeBarAboveEntry,
                 isBusy: readerState.isEditingActionInFlight,
                 errorText: nil,
                 selectModeAction: selectModeFromToolbar,
@@ -990,7 +1000,8 @@ struct ScoreReaderView: View {
     private var readerLifecycleBody: some View {
         readerContent
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if readerState.isEditingMode && isPhoneInterface && !plainTextEditorIsActive && !duoMovesModeBarToDeck {
+            if readerState.isEditingMode && isPhoneInterface && !plainTextEditorIsActive
+                && !duoMovesModeBarToDeck && !placesPhoneModeBarAboveEntry {
                 isolatedPhoneModeBar
             }
         }

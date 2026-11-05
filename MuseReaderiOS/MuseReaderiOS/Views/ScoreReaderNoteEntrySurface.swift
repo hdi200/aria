@@ -15,6 +15,7 @@ struct ScoreReaderNoteEntrySurface: View {
     let pendingMIDIPitch: Int?
     let stackedChordInputEnabled: Bool
     let showsCompactModeToolbar: Bool
+    let placesModeToolbarAbove: Bool
     let isBusy: Bool
     let errorText: String?
     let selectModeAction: () -> Void
@@ -249,6 +250,12 @@ struct ScoreReaderNoteEntrySurface: View {
                     .padding(.bottom, 4)
             }
 
+            if placesModeToolbarAbove {
+                compactModeToolbar
+                    .padding(.vertical, 4)
+                compactPanelDivider
+            }
+
             compactDetailToolbar
                 .padding(.horizontal, 6)
                 .padding(.vertical, selectedToolCategory == .chord || selectedToolCategory == .lyrics ? 10 : 6)
@@ -262,13 +269,11 @@ struct ScoreReaderNoteEntrySurface: View {
                     .padding(.bottom, 8)
             }
 
-            if showsCompactModeToolbar {
+            if showsCompactModeToolbar && !placesModeToolbarAbove {
                 compactPanelDivider
 
                 compactModeToolbar
-                    .padding(.horizontal, 0)
-                    .padding(.top, 4)
-                    .padding(.bottom, 4)
+                    .padding(.vertical, 4)
             }
         }
         .frame(maxWidth: .infinity)

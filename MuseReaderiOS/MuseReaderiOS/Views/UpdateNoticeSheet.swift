@@ -104,6 +104,7 @@ struct UpdateNoticeSheet: View {
     struct Item: Identifiable {
         var id: String { title }
         let systemImage: String
+        var textSymbol: String? = nil
         let title: String
         let detail: String
         /// Split View and Stage Manager are iPad-only, so iPhone skips the item.
@@ -157,10 +158,15 @@ struct UpdateNoticeSheet: View {
     }()
 
     private static let items: [Item] = {
+        #if os(iOS)
+        let chordAdvanceTitle = "Enter"
+        #else
+        let chordAdvanceTitle = "Next"
+        #endif
         let shared = [
             Item(
-                systemImage: "hand.point.up.left",
-                title: "Fingering",
+                systemImage: ScoreReaderPaletteButton.fingeringSystemImage,
+                title: "Fingering Entry",
                 detail: "Choose Text > Fingering and tap 1 to 5. Aria moves on to the next note by itself, skipping rests."
             ),
             Item(
@@ -176,9 +182,10 @@ struct UpdateNoticeSheet: View {
             ),
             Item(
                 systemImage: "pianokeys",
+                textSymbol: "C7",
                 title: "Redesigned chord entry",
                 detail: "Build chord symbols with buttons for the root, quality, extension and bass instead of "
-                    + "typing them. Previous and Next step through the score."
+                    + "typing them. Previous and \(chordAdvanceTitle) step through the score."
             ),
             Item(
                 systemImage: "metronome",
@@ -311,7 +318,13 @@ struct UpdateNoticeSheet: View {
                     .accessibilityAddTraits(.isHeader)
                 ForEach(shown(page.items)) { item in
                     HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: item.systemImage)
+                        Group {
+                            if let textSymbol = item.textSymbol {
+                                Text(textSymbol)
+                            } else {
+                                Image(systemName: item.systemImage)
+                            }
+                        }
                             .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(Self.accent)
                             .frame(width: 44, height: 44)

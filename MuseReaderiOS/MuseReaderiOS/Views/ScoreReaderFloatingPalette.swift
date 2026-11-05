@@ -333,13 +333,16 @@ struct ScoreReaderPaletteButton: View {
     let isEnabled: Bool
     let action: () -> Void
 
-    static func fingering(isEnabled: Bool, action: @escaping () -> Void) -> Self {
+    static var fingeringSystemImage: String {
         #if os(iOS)
-        let icon = "hand.raised"
+        "hand.raised"
         #else
-        let icon = "hand.point.up.left"
+        "hand.point.up.left"
         #endif
-        return Self(systemImage: icon, title: "Fingering", isSelected: false, isEnabled: isEnabled, action: action)
+    }
+
+    static func fingering(isEnabled: Bool, action: @escaping () -> Void) -> Self {
+        Self(systemImage: fingeringSystemImage, title: "Fingering", isSelected: false, isEnabled: isEnabled, action: action)
     }
 
     var body: some View {

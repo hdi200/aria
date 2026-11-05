@@ -57,6 +57,7 @@ struct ScoreReaderChordEntryPanel: View {
         #endif
     }
     private var advanceTitle: String { usesIOSLayout ? "Enter" : "Next" }
+    private var usesCompactIOSKeys: Bool { usesIOSLayout && isCompact }
     private var hasChanges: Bool { draft.text != initialText && draft.isComplete }
     /// An existing chord erased to nothing is deleted on Done, Previous or Next.
     private var removesChord: Bool { draft.text.isEmpty && !initialText.isEmpty }
@@ -81,9 +82,12 @@ struct ScoreReaderChordEntryPanel: View {
 
     private var keys: some View {
         VStack(spacing: spacing) {
-            keyRow {
+            keyRow(verticalPadding: usesCompactIOSKeys ? 4 : 2) {
                 ForEach(ScoreReaderChordDraft.naturalNotes, id: \.self) { root in
-                    key(root, selected: draft.selectedRoot == root) { draft.chooseRoot(root) }
+                    key(root, selected: draft.selectedRoot == root,
+                        weight: usesCompactIOSKeys ? .bold : .semibold) {
+                        draft.chooseRoot(root)
+                    }
                 }
                 if usesIOSLayout {
                     Rectangle()
@@ -95,14 +99,12 @@ struct ScoreReaderChordEntryPanel: View {
                 }
                 if !isCompact && !usesIOSLayout { eraseKey }
             }
-            keyRow {
-                ForEach(["maj", "min", "dim", "ø", "aug", "sus", "°"], id: \.self) { quality in
-                    key(quality, selected: draft.hasChord && draft.selectedQuality == quality, enabled: draft.hasChord) {
-                        draft.chooseQuality(quality)
-                    }
+            keyRow(verticalPadding: usesCompactIOSKeys ? 4 : 2) {
+                ForEach(usesIOSLayout ? ["maj", "min", "°", "ø", "aug", "sus"] : ["maj", "min", "dim", "ø", "aug", "sus", "°"], id: \.self) { quality in
+                    qualityKey(quality)
                 }
             }
-            if isCompact {
+            if isCompact && !usesIOSLayout {
                 extensionRow(Array(ScoreReaderChordDraft.extensions.prefix(5)))
                 extensionRow(Array(ScoreReaderChordDraft.extensions.dropFirst(5)))
             } else {
@@ -140,6 +142,7 @@ struct ScoreReaderChordEntryPanel: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(usesIOSLayout ? "Back to Text" : "Text")
+            .frame(minWidth: usesIOSLayout ? doneButtonWidth : nil, alignment: .leading)
             Spacer(minLength: 4)
             chordPreview
             Spacer(minLength: 4)
@@ -151,7 +154,7 @@ struct ScoreReaderChordEntryPanel: View {
                 Text("Done")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.white)
-                    .frame(minWidth: isCompact ? 64 : 76, minHeight: 44)
+                    .frame(minWidth: doneButtonWidth, minHeight: 44)
                     .background(Color.blue, in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
@@ -160,13 +163,40 @@ struct ScoreReaderChordEntryPanel: View {
         }
     }
 
+    private var doneButtonWidth: CGFloat { isCompact ? 64 : 76 }
+
     private var chordPreview: some View {
-        Text(draft.text.isEmpty ? "Chord Entry" : draft.text)
+        Group {
+            if usesIOSLayout {
+                HStack(spacing: 3) {
+                    if !draft.text.isEmpty {
+                        chordPreviewText(draft.text)
+                    }
+                    Rectangle()
+                        .fill(Color.blue)
+                        .frame(width: 2, height: isCompact ? 24 : 28)
+                }
+                .frame(minWidth: isCompact ? 88 : 104, minHeight: isCompact ? 32 : 36)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.25))
+                        .frame(height: 1)
+                }
+            } else {
+                chordPreviewText(draft.text.isEmpty ? "Chord Entry" : draft.text)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Chord preview")
+        .accessibilityValue(draft.text)
+        .accessibilityHidden(usesIOSLayout && draft.text.isEmpty)
+    }
+
+    private func chordPreviewText(_ text: String) -> some View {
+        Text(text)
             .font(.system(size: isCompact ? 22 : 26, weight: .semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-            .accessibilityLabel("Chord preview")
-            .accessibilityValue(draft.text)
     }
 
     private var headerEraseKey: some View {
@@ -176,18 +206,30 @@ struct ScoreReaderChordEntryPanel: View {
             .opacity(isInsertEnabled ? 1 : 0.45)
     }
 
-    @ViewBuilder private func keyRow<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: spacing, content: content)
-            .padding(.vertical, 2)
+    private func keyRow<Content: View>(gap: CGFloat? = nil, verticalPadding: CGFloat = 2, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: gap ?? spacing, content: content)
+            .padding(.vertical, verticalPadding)
     }
 
     private func extensionRow(_ degrees: [String]) -> some View {
-        keyRow {
+        keyRow(gap: usesCompactIOSKeys ? 2 : nil, verticalPadding: usesCompactIOSKeys ? 0 : 2) {
             ForEach(degrees, id: \.self) { degree in
-                key(degree, selected: draft.selectedExtension == degree, enabled: draft.hasChord) {
+                key(degree, selected: draft.selectedExtension == degree, enabled: draft.hasChord,
+                    fontSize: usesCompactIOSKeys ? 16 : nil) {
                     draft.chooseExtension(degree)
                 }
             }
+        }
+    }
+
+    private func qualityKey(_ quality: String) -> some View {
+        // Imported dim spellings still highlight the single diminished key and can be cleared.
+        let token = usesIOSLayout && quality == "°" && draft.selectedQuality == "dim" ? "dim" : quality
+        let title = usesIOSLayout && quality == "aug" ? "+" : quality
+        let spokenName = title == "+" ? "Augmented" : title == "°" ? "Diminished" : title == "ø" ? "Half-diminished" : nil
+        return key(title, selected: draft.hasChord && draft.selectedQuality == token, enabled: draft.hasChord,
+                   accessibilityName: usesIOSLayout ? spokenName : nil) {
+            draft.chooseQuality(token)
         }
     }
 
@@ -207,7 +249,7 @@ struct ScoreReaderChordEntryPanel: View {
             Image(systemName: "delete.left")
                 .font(.system(size: isCompact ? 21 : 25, weight: .medium))
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+                .background(keyFill, in: RoundedRectangle(cornerRadius: 10))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -215,16 +257,21 @@ struct ScoreReaderChordEntryPanel: View {
         .onLongPressGesture { draft = ScoreReaderChordBuilderDraft() }
     }
 
-    private func key(_ title: String, selected: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> some View {
-        let fontSize: CGFloat = usesIOSLayout && title == "♭" ? (isCompact ? 24 : 28) : (isCompact ? 17 : 20)
+    private var keyFill: Color { Color.black.opacity(0.045) }
+
+    private func key(_ title: String, selected: Bool = false, enabled: Bool = true,
+                     fontSize: CGFloat? = nil, weight: Font.Weight? = nil,
+                     accessibilityName: String? = nil, action: @escaping () -> Void) -> some View {
+        let defaultFontSize: CGFloat = usesIOSLayout && title == "♭" ? (isCompact ? 24 : 28) : (isCompact ? 17 : 20)
+        let defaultWeight: Font.Weight = usesCompactIOSKeys ? .medium : .semibold
         return Button(action: action) {
             Text(title)
-                .font(.system(size: fontSize, weight: .semibold))
+                .font(.system(size: fontSize ?? defaultFontSize, weight: weight ?? defaultWeight))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 44)
                 .foregroundStyle(selected ? Color.white : Color.black.opacity(0.86))
-                .background(selected ? Color.blue : Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+                .background(selected ? Color.blue : keyFill, in: RoundedRectangle(cornerRadius: 10))
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.black.opacity(0.035), lineWidth: 1)
@@ -234,7 +281,7 @@ struct ScoreReaderChordEntryPanel: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.4)
-        .accessibilityLabel(title == "♭" ? "Chord flat" : title == "#" ? "Chord sharp" : title)
+        .accessibilityLabel(accessibilityName ?? (title == "♭" ? "Chord flat" : title == "#" ? "Chord sharp" : title))
         .accessibilityValue(selected ? "Selected" : "")
     }
 
