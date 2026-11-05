@@ -351,22 +351,26 @@ struct ZoomableImageView: View {
                 let rects = selection.highlightRects.isEmpty ? [selection.normalizedRect] : selection.highlightRects
                 let blue = Color(red: 0.0, green: 0.396, blue: 0.749)
                 ForEach(Array(rects.enumerated()), id: \.offset) { _, rect in
-                    AndroidPageRect(rect: rect, pageSize: size, padding: 2) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(blue.opacity(0.18))
-                            .overlay(RoundedRectangle(cornerRadius: 3).stroke(blue, lineWidth: 2))
+                    let isFingering = selection.textKind == "Fingering" && AriaWindowLayout.shared.usesPhoneLayout
+                    AndroidPageRect(rect: rect, pageSize: size,
+                                    padding: isFingering ? min(2, rect.height * size.height * 0.10) : 2) {
+                        RoundedRectangle(cornerRadius: isFingering ? 1.5 : 3)
+                            .fill(blue.opacity(isFingering ? 0.08 : 0.18))
+                            .overlay(RoundedRectangle(cornerRadius: isFingering ? 1.5 : 3)
+                                .stroke(blue, lineWidth: isFingering ? 1 : 2))
                     }
                 }
             }
         }
     }
 
-    /// While a chord symbol or fermata is dragged: a dashed line from it to the note it will
-    /// attach to (iOS: updateChordAttachmentGuide in ZoomableImageView.swift).
+    /// Chords/fermatas show the target note; fingerings always show their original note.
+    /// iOS: updateChordAttachmentGuide in ZoomableImageView.swift.
     @ViewBuilder
     private func chordAttachmentGuide(size: CGSize) -> some View {
         if case .movableElement = dragMode, let selection,
-           selection.kind == .chordText || (selection.kind == .other && !selection.attachmentTargets.isEmpty),
+           selection.kind == .chordText || selection.textKind == "Fingering"
+                || (selection.kind == .other && !selection.attachmentTargets.isEmpty),
            let guide = chordAttachmentGuidePoints(selection: selection, size: size) {
             guidePath(from: guide.from, to: guide.to)
             .stroke(Color(red: 0.0, green: 0.396, blue: 0.749).opacity(0.82),

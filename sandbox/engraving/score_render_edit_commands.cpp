@@ -77,7 +77,7 @@
 
         const mu::engraving::DurationType durationType = durationTypeForCode(durationCode);
         if (durationType == mu::engraving::DurationType::V_INVALID) {
-            errorMessage = "MuseReader only supports whole, half, quarter, eighth, and sixteenth durations right now.";
+            errorMessage = "MuseReader supports whole through 64th-note durations.";
             return false;
         }
 
@@ -218,6 +218,64 @@
             refreshAfterEdit();
         }
 
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool toggleDoubleDot(msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::InputState& inputState = score->inputState();
+        if (inputState.noteEntryMode()) {
+            inputState.setDots(inputState.duration().dots() == 2 ? 0 : 2);
+        } else if (mu::engraving::ChordRest* chordRest = selectedOrMeasureChordRest(score)) {
+            if (!selectedChordRest(score)) {
+                if (mu::engraving::EngravingItem* selectableItem = noteOrRestSelectionItem(chordRest)) {
+                    score->select(selectableItem, mu::engraving::SelectType::SINGLE, selectableItem->staffIdx());
+                }
+            }
+            score->startCmd(muse::TranslatableString::untranslatable("MuseReader toggle double augmentation dot"));
+            inputState.setDuration(chordRest->durationType());
+            score->padToggle(mu::engraving::Pad::DOT2, true);
+            score->endCmd();
+            refreshAfterEdit();
+        }
+
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool addGraceNote(const int graceKind, msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::Note* note = currentSelectedNote(score);
+        if (!note) {
+            note = editableNoteForItem(currentSelectedItem(score));
+        }
+        if (!note) {
+            errorMessage = "Select a note before adding a grace note.";
+            return false;
+        }
+
+        // Desktop's Acciaccatura and Appoggiatura buttons: an eighth-note grace before the note.
+        const mu::engraving::NoteType graceType = graceKind == 1
+            ? mu::engraving::NoteType::APPOGGIATURA
+            : mu::engraving::NoteType::ACCIACCATURA;
+        score->select(note, mu::engraving::SelectType::SINGLE, note->staffIdx());
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader add grace note"));
+        score->cmdAddGrace(graceType, mu::engraving::Constants::DIVISION / 2);
+        score->endCmd();
+        refreshAfterEdit();
         output = makeEditState(score);
         return true;
     }
@@ -402,6 +460,93 @@
         }
         if (selectedText) {
             score->select(selectedText, mu::engraving::SelectType::SINGLE, selectedText->staffIdx());
+        }
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool setFingering(const int finger,
+                      msr::render::ScoreEditState& output,
+                      std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+        if (finger < 0 || finger > 5) {
+            errorMessage = "Choose a fingering from 1 through 5.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::EngravingItem* selected = score->selection().element();
+        // A fingering belongs to one particular note, including a lower note in a chord.
+        // Never fall back to a stale input cursor or a nearby rest/range selection.
+        if (selected && selected->isFingering()) {
+            selected = selected->parentItem();
+        }
+        mu::engraving::Note* note = selected && (selected->isNote() || selected->isChord())
+            ? editableNoteForItem(selected) : nullptr;
+        if (!note) {
+            errorMessage = "Select a note before adding or removing fingering.";
+            return false;
+        }
+
+        mu::engraving::Score* commandScore = score;
+        mu::engraving::Note* commandNote = note;
+        if (m_masterScore && score != m_masterScore.get()) {
+            commandScore = m_masterScore.get();
+            auto* linkedNote = linkedItemInScore(note, commandScore);
+            if (!linkedNote || !linkedNote->isNote()) {
+                errorMessage = "That note is not linked to the saved full score.";
+                return false;
+            }
+            commandNote = mu::engraving::toNote(linkedNote);
+        }
+
+        std::vector<mu::engraving::TextBase*> fingerings;
+        for (auto* element : commandNote->el()) {
+            if (element && element->isFingering()) {
+                auto* text = mu::engraving::toTextBase(element);
+                if (text->textStyleType() == mu::engraving::TextStyleType::FINGERING) {
+                    fingerings.push_back(text);
+                }
+            }
+        }
+        const muse::String value = finger == 0 ? muse::String() : muse::String::number(finger);
+        if ((finger == 0 && fingerings.empty())
+            || (fingerings.size() == 1 && fingerings.front()->plainText() == value)) {
+            output = makeEditState(score);
+            return true;
+        }
+
+        // Keep the note selected so another digit replaces this fingering, and the
+        // score stays tappable while the fingering deck is open.
+        score->select(note, mu::engraving::SelectType::SINGLE, note->staffIdx());
+        commandScore->startCmd(muse::TranslatableString::untranslatable("Aria set fingering"));
+        if (finger == 0) {
+            for (auto* text : fingerings) {
+                commandScore->undoRemoveElement(text);
+            }
+        } else {
+            auto* text = fingerings.empty()
+                ? commandScore->addText(mu::engraving::TextStyleType::FINGERING, commandNote)
+                : fingerings.front();
+            if (!text) {
+                commandScore->endCmd(true);
+                errorMessage = "MuseScore could not add fingering to that note.";
+                return false;
+            }
+            // Use undoChangeProperty so linked part copies receive the same digit.
+            text->undoChangeProperty(mu::engraving::Pid::TEXT, value);
+            for (size_t index = 1; index < fingerings.size(); ++index) {
+                commandScore->undoRemoveElement(fingerings[index]);
+            }
+        }
+        commandScore->endCmd();
+        refreshAfterEdit();
+        if (commandScore != score) {
+            relayoutActiveScoreRange(commandNote->tick(), commandNote->tick());
         }
         output = makeEditState(score);
         return true;
@@ -994,7 +1139,7 @@
 
         mu::engraving::EngravingItem* item = currentSelectedItem(score);
         if (!isDirectlyDraggableTextItem(item)) {
-            errorMessage = "Select a movable text, dynamic, tempo, marker, fermata, or chord symbol before dragging it.";
+            errorMessage = "Select a movable text, dynamic, tempo, marker, fermata, fingering, or chord symbol before dragging it.";
             return false;
         }
 
@@ -1052,6 +1197,9 @@
         editData.moveDelta = delta;
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader drag score element"));
+        // A Fingering's native SingleElementGroup changes OFFSET/AUTOPLACE only.
+        // Its parent is a Note, so TextBase's segment-anchor movement cannot
+        // reattach it. Do not route it through the chord/fermata reanchor paths.
         dragGroup->startDrag(editData);
         dragGroup->drag(editData);
         dragGroup->endDrag(editData);
@@ -1438,6 +1586,92 @@
                 }
             }
             addedItem = score->selection().isRange() ? rangeFirstChord : item;
+        } else if (key == "trill" || key == "mordent" || key == "turn") {
+            // MuseScore Ornaments, as in desktop's Ornaments palette; tapping one again
+            // removes it, matching the articulation buttons.
+            const mu::engraving::SymId symId = key == "trill" ? mu::engraving::SymId::ornamentTrill
+                                               : key == "mordent" ? mu::engraving::SymId::ornamentMordent
+                                               : mu::engraving::SymId::ornamentTurn;
+            if (score->selection().isRange()) {
+                score->toggleOrnament(symId);
+                addedItem = rangeFirstChord;
+            } else {
+                mu::engraving::Ornament* ornament = mu::engraving::Factory::createOrnament(score->dummy()->chord());
+                ornament->setSymId(symId);
+                if (!score->toggleArticulation(item, ornament)) {
+                    delete ornament;
+                } else {
+                    addedItem = item;
+                }
+            }
+        } else if (key == "beamauto" || key == "beambreak" || key == "beamjoin" || key == "beamnone") {
+            // Desktop's Beam properties: Auto, Break beam left, Join beams, No beam, applied to
+            // every selected note or rest.
+            const mu::engraving::BeamMode mode = key == "beambreak" ? mu::engraving::BeamMode::BEGIN
+                                                 : key == "beamjoin" ? mu::engraving::BeamMode::MID
+                                                 : key == "beamnone" ? mu::engraving::BeamMode::NONE
+                                                 : mu::engraving::BeamMode::AUTO;
+            std::set<mu::engraving::ChordRest*> targets = score->getSelectedChordRests();
+            if (targets.empty() && chordRest) {
+                targets.insert(chordRest);
+            }
+            for (mu::engraving::ChordRest* target : targets) {
+                target->undoChangeProperty(mu::engraving::Pid::BEAM_MODE, mode);
+            }
+            addedItem = score->selection().isRange() ? rangeFirstChord : item;
+        } else if (key == "tremolo1" || key == "tremolo2" || key == "tremolo3") {
+            // A single-note tremolo with 1, 2 or 3 slashes; choosing the one already there
+            // removes it.
+            mu::engraving::Chord* chord = nullptr;
+            if (mu::engraving::Note* note = editableNoteForItem(item)) {
+                chord = note->chord();
+            } else if (chordRest && chordRest->isChord()) {
+                chord = mu::engraving::toChord(chordRest);
+            }
+            if (!chord || chord->tremoloTwoChord()) {
+                score->endCmd(true);
+                errorMessage = "Select a note before adding a tremolo.";
+                return false;
+            }
+            const mu::engraving::TremoloType type = key == "tremolo1" ? mu::engraving::TremoloType::R8
+                                                    : key == "tremolo2" ? mu::engraving::TremoloType::R16
+                                                    : mu::engraving::TremoloType::R32;
+            mu::engraving::TremoloSingleChord* existing = chord->tremoloSingleChord();
+            const bool removing = existing && existing->tremoloType() == type;
+            if (existing) {
+                score->undoRemoveElement(existing);
+            }
+            if (!removing) {
+                mu::engraving::TremoloSingleChord* tremolo = mu::engraving::Factory::createTremoloSingleChord(chord);
+                tremolo->setTremoloType(type);
+                tremolo->setTrack(chord->track());
+                tremolo->setParent(chord);
+                score->undoAddElement(tremolo);
+            }
+            addedItem = item;
+        } else if (key == "arpeggio") {
+            // A plain arpeggio line on the selected chord; tapping it again removes it.
+            mu::engraving::Chord* chord = nullptr;
+            if (mu::engraving::Note* note = editableNoteForItem(item)) {
+                chord = note->chord();
+            } else if (chordRest && chordRest->isChord()) {
+                chord = mu::engraving::toChord(chordRest);
+            }
+            if (!chord) {
+                score->endCmd(true);
+                errorMessage = "Select a note or chord before adding an arpeggio.";
+                return false;
+            }
+            if (chord->arpeggio()) {
+                score->undoRemoveElement(chord->arpeggio());
+            } else {
+                mu::engraving::Arpeggio* arpeggio = mu::engraving::Factory::createArpeggio(chord);
+                arpeggio->setArpeggioType(mu::engraving::ArpeggioType::NORMAL);
+                arpeggio->setTrack(chord->track());
+                arpeggio->setParent(chord);
+                score->undoAddElement(arpeggio);
+            }
+            addedItem = item;
         } else if (key == "accent" || key == "marcato" || key == "tenuto" || key == "staccato"
                    || key == "string up" || key == "stringup" || key == "up bow" || key == "upbow"
                    || key == "string down" || key == "stringdown" || key == "down bow" || key == "downbow") {
@@ -2053,7 +2287,8 @@
     bool addTempo(const std::string& beatUnit,
                   const int bpm,
                   msr::render::ScoreEditState& output,
-                  std::string& errorMessage)
+                  std::string& errorMessage,
+                  const std::string& text)
     {
         if (!supportsEditing()) {
             errorMessage = "Editing is unavailable for this score session.";
@@ -2091,6 +2326,13 @@
         } else {
             errorMessage = "MuseReader does not recognize that tempo beat unit.";
             return false;
+        }
+
+        const muse::String description = muse::String::fromUtf8(text).simplified();
+        if (!description.empty()) {
+            // Keep the native metronome symbols/equality intact so Follow Text
+            // recognizes the BPM on desktop as well as in Aria. Description is plain text.
+            tempoText = description.toXmlEscaped() + u" " + tempoText;
         }
 
         mu::engraving::TempoText* tempo = nullptr;

@@ -234,6 +234,7 @@ struct ScoreReaderTwoPageViewIcon: View {
 struct ScoreReaderView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) var scenePhase
+    @Environment(\.scoreReaderCloseRequest) var closeRequest
     @AppStorage("ScoreReaderFloatingPaletteDockedLeft") var floatingPaletteDockedLeft = true
     @AppStorage("ScoreReaderTwoPageViewEnabled") var twoPageViewEnabled = false
     /// The iPhone Duo's own two-page setting, on by default: pages either side of the fold.
@@ -263,55 +264,24 @@ struct ScoreReaderView: View {
     @State var legacyRepairPrompt: ScoreLegacyRepairPrompt?
     @State var isPartsPanelPresented = false
     @State var isMixerPresented = false
-    @State var isFeatureTourPresented = false
-    private let featureTourStore = ScoreReaderFeatureTourStore()
     @State var isUpdateNoticePresented = false
     private let updateNoticeStore = UpdateNoticeStore()
 
     @MainActor
     private func presentReaderIntroductionIfNeeded() async {
         #if os(Android) && ARIA_PHONE_AUDIT
-        return // Disposable benchmark app only: no tour interrupts its scripted input.
+        return // Disposable benchmark app only: What's New doesn't interrupt its scripted input.
         #endif
         guard readerState.pageCount > 0, !isClosingScore, !isTransitioningScore, !Task.isCancelled else { return }
-        if await updateNoticeStore.shouldPresentNotice() {
-            guard !Task.isCancelled, !isClosingScore, !isTransitioningScore, legacyRepairPrompt == nil else { return }
-            isUpdateNoticePresented = true
-        } else {
-            await presentFeatureTourIfNeeded()
-        }
+        guard await updateNoticeStore.shouldPresentNotice() else { return }
+        guard !Task.isCancelled, !isClosingScore, !isTransitioningScore, legacyRepairPrompt == nil else { return }
+        isUpdateNoticePresented = true
     }
 
     private func handleReaderAppear() {
         updatePhoneOrientation(for: readerState.interactionMode)
     }
 
-    @MainActor
-    private func presentFeatureTourIfNeeded() async {
-        guard readerState.pageCount > 0, !isClosingScore, !isTransitioningScore,
-              legacyRepairPrompt == nil, !isUpdateNoticePresented, !Task.isCancelled else { return }
-        guard await featureTourStore.shouldPresentTour() else {
-            return
-        }
-        guard !Task.isCancelled, !isClosingScore, !isTransitioningScore,
-              legacyRepairPrompt == nil, !isUpdateNoticePresented else { return }
-        isFeatureTourPresented = true
-    }
-
-    /// Waits for the first page so the tour never appears over an empty or failed
-    /// reader. Informational only: neither step asks the reader to perform the action.
-    @ViewBuilder
-    private var featureTourOverlay: some View {
-        if isFeatureTourPresented, readerState.pageCount > 0 {
-            ScoreReaderFeatureTour(steps: ScoreReaderFeatureTour.defaultSteps) {
-                featureTourStore.markTourSeen()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isFeatureTourPresented = false
-                }
-            }
-            .transition(.opacity)
-        }
-    }
     @State var isExportPanelPresented = false
     @State var exportDraft = ScoreReaderExportDraft()
     @State var sharedExportItems: ScoreReaderSharedExportItems?
@@ -429,7 +399,6 @@ struct ScoreReaderView: View {
         let _ = AndroidPhoneAuditGeometry.evaluate("reader")
         #endif
         readerBody
-            .overlay { featureTourOverlay }
             #if os(Android) && ARIA_PHONE_AUDIT
             .overlay(alignment: .top) {
                 AndroidPhoneAuditControls(reader: readerState, zoom: $zoomScale, tool: $selectedToolCategory)
@@ -511,6 +480,11 @@ struct ScoreReaderView: View {
                         readerChromeOverlay
                         #endif
                     }
+                    .overlay {
+                        if isMixerPresented && showsDuoBookMixer {
+                            duoBookMixer
+                        }
+                    }
                     .overlay(alignment: .bottom) {
                         if isMixerPresented && !isPhoneInterface {
                             GeometryReader { proxy in
@@ -531,7 +505,7 @@ struct ScoreReaderView: View {
                     }
                     #if os(Android)
                     // The tablet mixer is an overlay, not a sheet; Back closes it.
-                    .androidBackAction(isEnabled: isMixerPresented && !isPhoneInterface) {
+                    .androidBackAction(isEnabled: isMixerPresented && (!isPhoneInterface || showsDuoBookMixer)) {
                         withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
                     }
                     #endif
@@ -721,8 +695,14 @@ struct ScoreReaderView: View {
                 copySelectedMeasureRangeAction: readerState.copySelectedMeasureRange,
                 cutSelectedMeasureRangeAction: readerState.cutSelectedMeasureRange,
                 pasteMeasureRangeAction: readerState.pasteMeasureRange,
-                selectPreviousElementAction: readerState.selectPreviousElement,
-                selectNextElementAction: readerState.selectNextElement,
+                selectPreviousElementAction: {
+                    if selectedToolCategory == .chord { readerState.selectAdjacentChordText(next: false) }
+                    else { readerState.selectPreviousElement() }
+                },
+                selectNextElementAction: {
+                    if selectedToolCategory == .chord { readerState.selectAdjacentChordText(next: true) }
+                    else { readerState.selectNextElement() }
+                },
                 undoAction: readerState.undoEdit,
                 redoAction: readerState.redoEdit,
                 setCurrentVoiceAction: readerState.setCurrentVoice,
@@ -733,12 +713,17 @@ struct ScoreReaderView: View {
                 toggleRestAction: readerState.toggleRest,
                 toggleTieAction: readerState.toggleTie,
                 addTupletAction: readerState.addTuplet,
+                moreNoteToolAction: readerState.applyMoreNoteTool,
                 toggleStackedChordInputAction: readerState.toggleStackedChordInput,
                 editSelectedTextAction: presentTextEditor,
                 addTextAction: readerState.addText,
                 addChordTextAction: readerState.addChordText,
                 addChordTextAndSelectNextAction: readerState.addChordTextAndSelectNext,
+                addChordTextAndSelectPreviousAction: { readerState.addChordTextAndSelectAdjacent($0, next: false) },
+                removeChordTextAction: { readerState.removeChordText(thenSelectNext: $0) },
                 openLyricsEntryAction: openLyricsEntry,
+                openFingeringAction: openFingeringEntry,
+                setFingeringAction: readerState.setFingering,
                 addLyricsTextAction: readerState.addLyricsText,
                 addLyricsHyphenAction: readerState.addLyricsHyphen,
                 addLyricsMelismaAction: readerState.addLyricsMelisma,
@@ -857,6 +842,7 @@ struct ScoreReaderView: View {
                 addTextAction: readerState.addText,
                 openChordEntryAction: openChordEntry,
                 openLyricsEntryAction: openLyricsEntry,
+                openFingeringAction: openFingeringEntry,
                 addRepeatJumpAction: readerState.addRepeatJump,
                 addExpressionAction: readerState.addExpression,
                 setPitchClassAction: readerState.handleKeyboardPitchClass,
@@ -1045,6 +1031,9 @@ struct ScoreReaderView: View {
             readerState.stopMIDIInput()
             readerState.shutdown()
         }
+        .onChangeCompatible(of: closeRequest) { _ in
+            closeReader()
+        }
         .onChangeCompatible(of: scenePhase) { phase in
             switch phase {
             case .inactive, .background:
@@ -1149,14 +1138,12 @@ struct ScoreReaderView: View {
                 try await applyLegacyRepairs(selectedIndexes, from: prompt)
             }
         }
-        .scoreReaderSheet(isPresented: $isUpdateNoticePresented, onDismiss: {
-            Task { await presentFeatureTourIfNeeded() }
-        }) {
+        .scoreReaderSheet(isPresented: $isUpdateNoticePresented) {
             UpdateNoticeSheet()
                 .onAppear { updateNoticeStore.markNoticeSeen() }
         }
         .scoreReaderSheet(isPresented: Binding(
-            get: { isMixerPresented && isPhoneInterface },
+            get: { isMixerPresented && isPhoneInterface && !showsDuoBookMixer },
             set: { isMixerPresented = $0 }
         )) {
             ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID) {
@@ -1420,7 +1407,7 @@ struct ScoreReaderView: View {
         switch selectedToolCategory {
         case .notes, .repeats, .text, .expression:
             return selectedToolCategory
-        case .chord, .lyrics, .layout, .more:
+        case .chord, .lyrics, .fingering, .layout, .more:
             return nil
         case .select:
             break
@@ -1511,6 +1498,33 @@ struct ScoreReaderView: View {
         default:
             return nil
         }
+    }
+
+    /// Held like a book, a mixer sheet would sit on one page with its channels cut off at the
+    /// fold, so the mixer is a card filling the right page, where its button is.
+    private var showsDuoBookMixer: Bool {
+        duoLayout?.kind == .book
+    }
+
+    /// Where the book-pose page spread and mixer start: below the header's buttons, which run
+    /// across the top of both pages. The header bar ends with 8 points of padding under them.
+    private var duoBookTopReserve: CGFloat {
+        guard duoLayout?.kind == .book else {
+            return 0
+        }
+        return max(measuredTopChromeHeight, 62) - 8
+    }
+
+    private var duoBookMixer: some View {
+        ScoreReaderMixerPanel(readerState: readerState, selectedPartID: selectedPartID, fillsDuoPage: true) {
+            withAnimation(.easeInOut(duration: 0.2)) { isMixerPresented = false }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.16), radius: 18, y: -2)
+        .padding(.top, duoBookTopReserve + 6)
+        .padding([.horizontal, .bottom], 8)
+        .duoRegion(.trailing, of: duoLayout, alignment: .top)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     /// The editing deck goes on the right page in book pose and the flat half in stand pose.
@@ -2080,6 +2094,8 @@ struct ScoreReaderView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .padding(12)
         }
+        // Half folded like a book, the pages start below the header, as in the other poses.
+        .padding(.top, max(duoBookTopReserve - 12, 0))
         #if !os(Android)
         // Android's page-local pointer detector arbitrates held selection versus
         // page swipes. An ancestor simultaneous observer ignores consumed moves
@@ -2557,7 +2573,7 @@ struct ScoreReaderView: View {
     }
 
     private var textEntryFocusIsActive: Bool {
-        selectedToolCategory == .chord || selectedToolCategory == .lyrics
+        selectedToolCategory == .lyrics
     }
 
     private var plainTextEditorIsActive: Bool {
@@ -2572,6 +2588,7 @@ struct ScoreReaderView: View {
         !isClosingScore
             && !isTransitioningScore
             && !textEntryFocusIsActive
+            && selectedToolCategory != .chord
             && textEditorDraft == nil
             && !isPartsPanelPresented
             && !isMixerPresented
@@ -2674,7 +2691,7 @@ struct ScoreReaderView: View {
             return false
         }
 
-        return textEntryFocusIsActive || readerState.editingState.noteInputEnabled
+        return textEntryFocusIsActive || selectedToolCategory == .chord || selectedToolCategory == .fingering || readerState.editingState.noteInputEnabled
     }
 
     private func scrollContentBottomInset(isCompactPhoneLayout: Bool, isPhoneLandscapeLayout: Bool) -> CGFloat {
@@ -2746,10 +2763,6 @@ struct ScoreReaderView: View {
     }
 
     private func textEntryKeyboardHeight(isCompactPhoneLayout: Bool, isPhoneLandscapeLayout: Bool) -> CGFloat {
-        if selectedToolCategory == .chord {
-            return isCompactPhoneLayout ? 226 : 382
-        }
-
         if isCompactPhoneLayout {
             return isPhoneLandscapeLayout ? 220 : 336
         }
@@ -3699,6 +3712,11 @@ struct ScoreReaderView: View {
             return
         }
 
+        if selection.textKind == "Fingering" {
+            openFingeringEntry()
+            return
+        }
+
         if selection.textKind == "Lyrics" {
             openLyricsEntry()
             return
@@ -3719,10 +3737,14 @@ struct ScoreReaderView: View {
     private func openChordEntry() {
         guard selectedToolCategory != .chord else {
             readerState.prepareChordTextEntry()
-            enterTextEntryFocusIfNeeded()
             return
         }
         selectedToolCategory = .chord
+    }
+
+    private func openFingeringEntry() {
+        selectedToolCategory = .fingering
+        readerState.prepareFingeringEntry()
     }
 
     private func openLyricsEntry() {
@@ -3836,19 +3858,16 @@ struct ScoreReaderView: View {
     }
 
     private func handleToolCategoryChange(from oldValue: ScoreReaderToolCategory, to newValue: ScoreReaderToolCategory) {
-        let wasTextEntry = oldValue == .chord || oldValue == .lyrics
-        let isTextEntry = newValue == .chord || newValue == .lyrics
+        let wasTextEntry = oldValue == .lyrics
         if oldValue == .lyrics && newValue != .lyrics {
             readerState.finishLyricsEntry()
         }
 
         if newValue == .chord {
             readerState.prepareChordTextEntry()
-            enterTextEntryFocusIfNeeded()
+            if wasTextEntry { exitTextEntryFocusIfNeeded() }
         } else if newValue == .lyrics {
             readerState.prepareLyricsEntry()
-            enterTextEntryFocusIfNeeded()
-        } else if isTextEntry {
             enterTextEntryFocusIfNeeded()
         } else if wasTextEntry {
             exitTextEntryFocusIfNeeded()

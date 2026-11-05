@@ -2,6 +2,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -1574,6 +1575,46 @@ void testTempoBeatUnitsReachLinkedParts(const std::filesystem::path& testRoot)
     }
 }
 
+void testTempoTextKeepsNativePlaybackAndUndo(const std::filesystem::path& testRoot)
+{
+    const auto root = testRoot / "tempo-description";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "tempo-description", scoreXml(0, { { 60, 14 } }, 0));
+    int pages = 0;
+    std::string error;
+    msr::render::ScoreEditState state;
+    expect(session->setActivePartIndex(0, pages, error) && session->setActivePartIndex(std::nullopt, pages, error),
+           "Could not initialize a linked part: " + error);
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->addTempo("quarter", 120, state, error, "  Allegro & <brio> 2.  "), "Could not add tempo text: " + error);
+    expect(state.selection.textContent.find("Allegro & <brio> 2. ") == 0, "Tempo text did not precede the metronome mark");
+    const auto added = saveSnapshot(*session, root, "added");
+    const auto part = savedExcerptXml(root);
+    for (const auto& xml : { added, part }) {
+        expect(xml.find("Allegro &amp; &lt;brio&gt; 2. <sym>metNoteQuarterUp</sym> = 120") != std::string::npos,
+               "Description was not safely escaped and joined to native metronome symbols");
+        expect(xml.find("<tempo>2</tempo>") != std::string::npos, "Text changed the playback tempo");
+        expect(xml.find("<followText>1</followText>") != std::string::npos, "Desktop Follow Text was disabled");
+    }
+    expect(added.find("<museScore version=\"4.70\">") != std::string::npos, "Tempo changed the file format");
+    expect(session->addTempo("eighth", 120, state, error, "Adagio"), "Could not edit tempo text: " + error);
+    const auto edited = saveSnapshot(*session, root, "edited");
+    expect(countOccurrences(edited, "<Tempo>") == 1 && edited.find("<tempo>1</tempo>") != std::string::npos,
+           "Editing duplicated the tempo or lost the beat unit");
+    expect(session->undo(state, error), "Could not undo tempo edit: " + error);
+    const auto undone = saveSnapshot(*session, root, "undone");
+    expect(undone.find("Allegro &amp; &lt;brio&gt; 2.") != std::string::npos
+           && savedExcerptXml(root).find("<tempo>2</tempo>") != std::string::npos,
+           "Undo failed to restore text and speed in linked parts");
+    auto reopened = msr::render::ScoreRenderSession::open((root / "undone.mscx").string(), error);
+    expect(reopened != nullptr, "Could not reopen the native tempo marking: " + error);
+    selectAt(*reopened, noteWithPitch(scanScore(*reopened, { 60 }, 0), 60));
+    expect(reopened->addTempo("quarter", 120, state, error), "Could not clear optional tempo text: " + error);
+    const auto cleared = saveSnapshot(*reopened, root, "cleared");
+    expect(cleared.find("Allegro") == std::string::npos && cleared.find("<tempo>2</tempo>") != std::string::npos,
+           "Clearing the description removed the real tempo");
+}
+
 // Transposing bars on one staff "to key" changes the key for those bars on that staff only:
 // the other staff keeps its key, and the original key returns after the passage.
 // Each rest entered at the input position moves input to the next beat, as notes do.
@@ -2280,6 +2321,187 @@ void testNewDynamicsAndTextReachLinkedParts(const std::filesystem::path& testRoo
     expect(countOccurrences(undoneScore + undonePart, "Staff Text") == 0, "Undo left staff text behind");
 }
 
+void testFingeringEditsAndLinkedParts(const std::filesystem::path& testRoot)
+{
+    const auto root = testRoot / "fingerings";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "fingerings", scoreXml(0, { { 60, 14 }, { 64, 18 } }, 0));
+    int pages = 0;
+    std::string error;
+    msr::render::ScoreEditState state;
+    expect(session->setActivePartIndex(0, pages, error), "Could not initialize a linked part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pages, error), "Could not return to full score: " + error);
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->setFingering(3, state, error), "Could not add fingering: " + error);
+    expect(state.selection.isNote && state.selection.midiPitch == 60, "Fingering lost its selected note");
+    const auto added = saveSnapshot(*session, root, "added");
+    expect(countOccurrences(added, "<Fingering>") == 1, "Fingering was not saved as a native note attachment");
+    expect(countOccurrences(savedExcerptXml(root), "<text>3</text>") == 1, "Linked part lost the new digit");
+    expect(added.find("<museScore version=\"4.70\">") != std::string::npos, "Fingering changed the save format");
+
+    expect(session->setFingering(5, state, error), "Could not replace fingering: " + error);
+    expect(session->setFingering(5, state, error), "Could not reselect the same digit: " + error);
+    const auto replaced = saveSnapshot(*session, root, "replaced");
+    expect(countOccurrences(replaced, "<Fingering>") == 1 && replaced.find("<text>5</text>") != std::string::npos,
+           "Changing the digit stacked a second fingering");
+    expect(session->undo(state, error), "Could not undo replacement: " + error);
+    expect(saveSnapshot(*session, root, "replace-undone").find("<text>3</text>") != std::string::npos,
+           "One undo did not restore the previous digit");
+    expect(session->redo(state, error), "Could not redo replacement: " + error);
+
+    // Edit from the part: it must update the saved master and keep the part selected.
+    expect(session->setActivePartIndex(0, pages, error), "Could not open the part: " + error);
+    selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(session->setFingering(2, state, error), "Could not edit fingering in a part: " + error);
+    expect(state.selection.isNote && state.selection.midiPitch == 60, "Part edit lost the selected note");
+    expect(saveSnapshot(*session, root, "part-edited").find("<text>2</text>") != std::string::npos,
+           "The part's fingering did not reach the master");
+    expect(savedExcerptXml(root).find("<text>2</text>") != std::string::npos, "The part kept a stale digit");
+    expect(session->setFingering(0, state, error), "Could not remove fingering: " + error);
+    expect(countOccurrences(saveSnapshot(*session, root, "removed") + savedExcerptXml(root), "<Fingering>") == 0,
+           "Remove left a fingering in the full score or part");
+    expect(session->undo(state, error), "Could not undo removal: " + error);
+    expect(countOccurrences(saveSnapshot(*session, root, "remove-undone"), "<Fingering>") == 1,
+           "Undo did not restore the removed fingering");
+
+    std::vector<std::string> liveLayout, reopenedLayout;
+    expect(session->layoutFingerprint(liveLayout, error), "Could not fingerprint live layout: " + error);
+    auto reopened = msr::render::ScoreRenderSession::open((root / "remove-undone.mscx").string(), error);
+    expect(reopened != nullptr, "Could not reopen fingering save: " + error);
+    expect(reopened->setActivePartIndex(0, pages, error), "Could not reopen the part: " + error);
+    expect(reopened->layoutFingerprint(reopenedLayout, error), "Could not fingerprint saved layout: " + error);
+    expect(liveLayout == reopenedLayout, "Live fingering layout differs from the reopened score");
+}
+
+void testFingeringRejectsNonNotesAndPreservesChordPitch(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 }, { 64, 18 } }, 0);
+    const auto endNote = xml.find("</Note>") + std::string("</Note>").size();
+    xml.insert(endNote, "<Note><pitch>67</pitch><tpc>15</tpc></Note>");
+    auto session = openSession(root, "fingering-chord", xml);
+    auto items = scanScore(*session, { 60, 67 }, 1);
+    std::string error;
+    auto state = selectAt(*session, noteWithPitch(items, 60));
+    expect(session->setFingering(1, state, error), "Could not finger the lower chord note: " + error);
+    expect(state.selection.isNote && state.selection.midiPitch == 60, "Fingering moved to the upper chord note");
+    std::filesystem::create_directories(root / "fingering-chord-save");
+    const auto saved = saveSnapshot(*session, root / "fingering-chord-save", "chord");
+    const auto attachment = saved.find("<Fingering>");
+    const auto lowerPitch = saved.find("<pitch>60</pitch>");
+    // MuseScore writes a note's attached items before its pitch property.
+    expect(attachment > saved.rfind("<Note>", lowerPitch) && attachment < saved.find("</Note>", lowerPitch),
+           "Fingering was attached to the wrong chord pitch");
+    expect(!session->setFingering(6, state, error), "Invalid fingering was accepted");
+    selectAt(*session, restsByX(items).front());
+    expect(!session->setFingering(3, state, error), "Fingering was added to a rest or stale cursor");
+    expect(session->selectAll(state, error), "Could not select a range: " + error);
+    expect(!session->setFingering(2, state, error), "Fingering was added to a range");
+    expect(session->undo(state, error), "Could not undo the only valid edit: " + error);
+    std::filesystem::create_directories(root / "fingering-chord-undo");
+    expect(countOccurrences(saveSnapshot(*session, root / "fingering-chord-undo", "chord"), "<Fingering>") == 0,
+           "Rejected fingering commands polluted undo history");
+}
+
+void testFingeringDragKeepsItsNote(const std::filesystem::path& testRoot)
+{
+    const auto root = testRoot / "fingering-placement";
+    std::filesystem::create_directories(root);
+    // A lower chord note and a later note make accidental reattachment detectable.
+    std::string xml = scoreXml(0, { { 60, 14 }, { 64, 18 } }, 0);
+    const auto endNote = xml.find("</Note>") + std::string("</Note>").size();
+    xml.insert(endNote, "<Note><pitch>67</pitch><tpc>15</tpc></Note>");
+    const auto pitch = xml.find("<pitch>60</pitch>");
+    xml.insert(pitch, "<Fingering><text>3</text></Fingering>");
+    auto session = openSession(root, "placement", xml);
+    std::string error;
+    msr::render::ScoreEditState state;
+    int pages = 0;
+    expect(session->setActivePartIndex(0, pages, error), "Could not initialize fingering part: " + error);
+    expect(session->setActivePartIndex(std::nullopt, pages, error), "Could not restore full score: " + error);
+    const auto original = saveSnapshot(*session, root, "original");
+
+    auto selectFingering = [&](msr::render::ScoreRenderSession& target) {
+        for (double y = 0.02; y < 0.35; y += 0.002) {
+            for (double x = 0.02; x < 0.6; x += 0.002) {
+                expect(target.selectElement(0, x, y, 1.0, state, error), "Fingering hit test failed: " + error);
+                if (state.selection.textKind == "Fingering") return;
+            }
+        }
+        fail("Could not select the fingering itself");
+    };
+    auto withoutFingering = [](const std::string& score) {
+        return std::regex_replace(score, std::regex("\\s*<Fingering>[\\s\\S]*?</Fingering>"), "");
+    };
+    auto expectAttachedToLowerNote = [&](const std::string& score) {
+        const auto finger = score.find("<Fingering>");
+        const auto lower = score.find("<pitch>60</pitch>");
+        expect(countOccurrences(score, "<Fingering>") == 1
+               && finger > score.rfind("<Note>", lower) && finger < score.find("</Note>", lower),
+               "Dragging reattached the fingering to a different note");
+    };
+    selectFingering(*session);
+    expect(state.selection.canDragMovableElement, "Selected fingering is not draggable");
+    expect(state.selection.hasAttachmentPoint && state.selection.attachmentTargets.empty(),
+           "Fingering must expose one fixed note, with no alternative anchors");
+    const double anchorX = state.selection.attachmentNormalizedX;
+    const double anchorY = state.selection.attachmentNormalizedY;
+    const double startX = state.selection.normalizedX;
+    const double startY = state.selection.normalizedY;
+    const double centerX = startX + state.selection.normalizedWidth * 0.5;
+    const double centerY = startY + state.selection.normalizedHeight * 0.5;
+    expect(session->dragSelectedMovableElement(0, centerX + 0.006, centerY - 0.006, state, error),
+           "Could not nudge fingering: " + error);
+    expect(state.selection.textKind == "Fingering" && state.selection.canDragMovableElement,
+           "Fingering selection was lost after its drag");
+    expect(std::abs(state.selection.normalizedX - startX) > 0.001
+           && std::abs(state.selection.normalizedY - startY) > 0.001, "Nudge did not move fingering");
+    expect(state.selection.attachmentNormalizedX == anchorX && state.selection.attachmentNormalizedY == anchorY,
+           "Nudging moved the attached note or guide anchor");
+    const auto moved = saveSnapshot(*session, root, "moved");
+    expectAttachedToLowerNote(moved);
+    expect(moved.find("<offset") != std::string::npos, "Fingering has no saved placement offset");
+    expect(withoutFingering(moved) == withoutFingering(original), "Fingering drag changed other score content");
+    expect(session->undo(state, error), "Could not undo fingering nudge: " + error);
+    expect(saveSnapshot(*session, root, "undone") == original, "Undo did not restore original placement");
+    expect(session->redo(state, error), "Could not redo fingering nudge: " + error);
+    expect(saveSnapshot(*session, root, "redone") == moved, "Redo did not restore fingering placement");
+
+    std::vector<std::string> liveLayout, reopenedLayout;
+    expect(session->layoutFingerprint(liveLayout, error), "Could not inspect live fingering layout: " + error);
+    auto reopened = msr::render::ScoreRenderSession::open((root / "redone.mscx").string(), error);
+    expect(reopened && reopened->layoutFingerprint(reopenedLayout, error), "Could not reopen fingering placement: " + error);
+    expect(liveLayout == reopenedLayout, "Live fingering placement differs after reopening");
+
+    // Even a drop over a later note must remain an offset on the original note.
+    const auto laterNote = noteWithPitch(scanScore(*session, { 64 }, 0), 64);
+    selectFingering(*session);
+    expect(session->dragSelectedMovableElement(0, laterNote.x, centerY, state, error), "Long fingering drag failed: " + error);
+    expect(state.selection.attachmentNormalizedX == anchorX && state.selection.attachmentNormalizedY == anchorY,
+           "Drop near another note changed the fingering anchor");
+    expectAttachedToLowerNote(saveSnapshot(*session, root, "across-note"));
+    expect(session->undo(state, error), "Could not undo long fingering drag: " + error);
+
+    // Parts use the same offset-only command and keep their own note attachment.
+    expect(session->setActivePartIndex(0, pages, error), "Could not open fingering part: " + error);
+    selectFingering(*session);
+    const double partAnchorX = state.selection.attachmentNormalizedX;
+    const double partAnchorY = state.selection.attachmentNormalizedY;
+    expect(session->dragSelectedMovableElement(0, state.selection.normalizedX + 0.01,
+           state.selection.normalizedY - 0.004, state, error), "Could not nudge fingering in part: " + error);
+    expect(state.selection.attachmentNormalizedX == partAnchorX && state.selection.attachmentNormalizedY == partAnchorY,
+           "Part fingering drag moved its note");
+    const auto partMoved = saveSnapshot(*session, root, "part-moved");
+    expectAttachedToLowerNote(partMoved);
+    expectAttachedToLowerNote(savedExcerptXml(root));
+    expect(session->undo(state, error), "Could not undo part fingering drag: " + error);
+
+    if (const char* artifacts = std::getenv("ARIA_FINGERING_DRAG_ARTIFACTS")) {
+        std::filesystem::create_directories(artifacts);
+        writeFile(std::filesystem::path(artifacts) / "fingering-original.mscx", original);
+        writeFile(std::filesystem::path(artifacts) / "fingering-moved.mscx", moved);
+    }
+}
+
 void testJumpsAndMarkersReachLinkedParts(const std::filesystem::path& testRoot)
 {
     // Folder-style .mscx saves replace their whole directory, so use one of our own.
@@ -2661,6 +2883,11 @@ void testOldAriaPartNamesRequireApproval(const std::filesystem::path& testRoot)
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
+    if (const char* filter = std::getenv("ARIA_TEST_FILTER")) {
+        if (name.find(filter) == std::string::npos) {
+            return true;
+        }
+    }
     try {
         function();
         std::cout << "PASS " << name << '\n';
@@ -2713,6 +2940,7 @@ int main()
     passed &= runTest("typed text with ampersands saves and reopens", [&] { testTypedTextWithAmpersandsSavesAndReopens(testDirectory.path); });
     passed &= runTest("octave shift keeps spelling", [&] { testOctaveShiftKeepsSpelling(testDirectory.path); });
     passed &= runTest("tempo beat units reach linked parts", [&] { testTempoBeatUnitsReachLinkedParts(testDirectory.path); });
+    passed &= runTest("tempo text preserves native playback and undo", [&] { testTempoTextKeepsNativePlaybackAndUndo(testDirectory.path); });
     passed &= runTest("transpose to key stays inside the selection", [&] { testTransposeToKeyStaysInsideTheSelection(testDirectory.path); });
     passed &= runTest("rest entry advances the input position", [&] { testRestEntryAdvances(testDirectory.path); });
     passed &= runTest("pitch nudges keep the input position", [&] { testPitchNudgesKeepTheInputPosition(testDirectory.path); });
@@ -2732,6 +2960,9 @@ int main()
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
     passed &= runTest("part names survive save and follow instrument replacement", [&] { testPartNamesSurviveSave(testDirectory.path); });
     passed &= runTest("new dynamics and text reach linked parts", [&] { testNewDynamicsAndTextReachLinkedParts(testDirectory.path); });
+    passed &= runTest("fingering edits, undo and linked parts", [&] { testFingeringEditsAndLinkedParts(testDirectory.path); });
+    passed &= runTest("fingering targets individual chord notes and rejects non-notes", [&] { testFingeringRejectsNonNotesAndPreservesChordPitch(testDirectory.path); });
+    passed &= runTest("fingering drag preserves note attachment, undo and saved layout", [&] { testFingeringDragKeepsItsNote(testDirectory.path); });
     passed &= runTest("blank part dynamics require approval", [&] { testBlankPartDynamicsRequireApproval(testDirectory.path); });
     passed &= runTest("old part tempo requires approval", [&] { testOldPartTempoRequiresApproval(testDirectory.path); });
     passed &= runTest("jumps and markers reach linked parts", [&] { testJumpsAndMarkersReachLinkedParts(testDirectory.path); });

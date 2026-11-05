@@ -60,7 +60,7 @@ struct ScoreReaderModeToolbar: View {
     }
 
     private func categoryButton(_ category: ScoreReaderToolCategory, title: String, systemImage: String? = nil, textSymbol: String? = nil) -> some View {
-        ScoreReaderModeToolbarButton(title: title, systemImage: systemImage, textSymbol: textSymbol, isActive: selectedToolCategory == category, isEnabled: categoryEnabled(category), isTight: isTight, action: {
+        ScoreReaderModeToolbarButton(title: title, systemImage: systemImage, textSymbol: textSymbol, isActive: compactCategoryIsActive(category), isEnabled: categoryEnabled(category), isTight: isTight, action: {
             selectModeAction()
             selectedToolCategory = category
         })
@@ -98,7 +98,7 @@ struct ScoreReaderModeToolbar: View {
 
     private func compactCategoryIsActive(_ category: ScoreReaderToolCategory) -> Bool {
         if category == .text {
-            return selectedToolCategory == .text || selectedToolCategory == .chord || selectedToolCategory == .lyrics
+            return selectedToolCategory == .text || selectedToolCategory == .chord || selectedToolCategory == .lyrics || selectedToolCategory == .fingering
         }
 
         return selectedToolCategory == category

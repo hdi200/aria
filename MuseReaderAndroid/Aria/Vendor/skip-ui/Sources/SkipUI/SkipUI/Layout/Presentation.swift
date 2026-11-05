@@ -174,9 +174,13 @@ private let AlertDialogMaxWidth: Dp = 560.dp
                 case let .height(h):
                     // A fixed detent describes usable content height, excluding system bars.
                     // The bottom inset is consumed by PresentationRoot or the spacer below it.
-                    let bottomBarHeight = max(0.dp, WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - WindowInsets.ime.asPaddingValues().calculateBottomPadding())
+                    let keyboardHeight = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                    let bottomBarHeight = max(0.dp, WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - keyboardHeight)
                     let topBarHeight = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
-                    inset = max(topBarHeight + (24 * sheetDepth).dp + 44.dp, screenHeight - h.dp - bottomBarHeight)
+                    // ARIA PATCH: fixed-height cards sit above the IME. PresentationRoot
+                    // consumes the keyboard inset below; reserve that room here too,
+                    // otherwise a short card starts behind the keyboard (Tempo text).
+                    inset = max(topBarHeight + (24 * sheetDepth).dp + 44.dp, screenHeight - h.dp - bottomBarHeight - keyboardHeight)
                 case let .fraction(f):
                     inset = screenHeight * Float(1 - f)
                 default:

@@ -130,6 +130,12 @@ final class MuseReaderAppModel {
     var setlistFolders: [LibrarySetlistFolder]
     var currentSession: ScoreSession?
     var pendingImportedSession: ScoreSession?
+    /// Set by the library while a score is open. A score opened from another app meanwhile is
+    /// held: the reader closes first (saving as usual), then the library imports it, so the
+    /// import review, paywall and messages can show.
+    var isReaderPresented = false
+    private(set) var heldOpenURL: URL?
+    private(set) var readerCloseRequest = 0
     var isImportingPresented = false
     var isCreateScorePresented = false
     var isLoading = false
@@ -387,7 +393,29 @@ final class MuseReaderAppModel {
     }
 
     func handleOpenURL(_ url: URL) {
+        // Android offers Aria for zip and octet-stream files, which need not be scores.
+        guard Self.isSupportedScoreURL(url) else {
+            presentError(
+                title: "Unsupported File",
+                message: "Open a MuseScore or MusicXML score (.mscz, .mscx, .mxl, .musicxml, or .xml)."
+            )
+            return
+        }
+        if isReaderPresented {
+            heldOpenURL = url
+            readerCloseRequest += 1
+            return
+        }
         handleImport(result: .success(url))
+    }
+
+    /// Called by the library once the reader has closed for a held score.
+    func importHeldOpenURL() {
+        guard let url = heldOpenURL else {
+            return
+        }
+        heldOpenURL = nil
+        handleOpenURL(url)
     }
 
     /// Routes files dragged from Files, Finder, or another app through the same
@@ -588,6 +616,29 @@ final class MuseReaderAppModel {
             currentSession = nil
         }
         synchronizeManagedScoreCount()
+    }
+
+    /// Copies the score's file into the library unchanged, as desktop's Save a Copy does.
+    func duplicateScore(_ recent: ReaderRecentDocument) {
+        guard let libraryRelativePath = recent.libraryRelativePath else {
+            return
+        }
+        synchronizeManagedScoreCount()
+        guard reserveScoreSlots(1) else {
+            pendingLibraryAction = nil
+            libraryAccessSheet = .paywall(.createScore)
+            return
+        }
+        defer { releaseScoreSlots(1) }
+
+        do {
+            let sourceURL = try scoreLibrary.url(forRelativePath: libraryRelativePath)
+            _ = try scoreLibrary.importDocument(from: sourceURL)
+            synchronizeManagedScoreCount()
+            Task { await refreshVisibleLibrary() }
+        } catch {
+            presentError(title: "Could Not Duplicate Score", error: error)
+        }
     }
 
     func deleteScore(_ recent: ReaderRecentDocument) {

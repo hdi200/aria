@@ -1330,6 +1330,10 @@ mu::engraving::DurationType durationTypeForCode(const int durationCode)
         return DurationType::V_EIGHTH;
     case 16:
         return DurationType::V_16TH;
+    case 32:
+        return DurationType::V_32ND;
+    case 64:
+        return DurationType::V_64TH;
     default:
         return DurationType::V_INVALID;
     }
@@ -1351,6 +1355,10 @@ int durationCodeForType(const mu::engraving::DurationType durationType)
         return 8;
     case DurationType::V_16TH:
         return 16;
+    case DurationType::V_32ND:
+        return 32;
+    case DurationType::V_64TH:
+        return 64;
     default:
         return 4;
     }
@@ -1369,6 +1377,10 @@ mu::engraving::Pad padForDurationCode(const int durationCode)
         return mu::engraving::Pad::NOTE8;
     case 16:
         return mu::engraving::Pad::NOTE16;
+    case 32:
+        return mu::engraving::Pad::NOTE32;
+    case 64:
+        return mu::engraving::Pad::NOTE64;
     default:
         return mu::engraving::Pad::NOTE4;
     }
@@ -1609,6 +1621,7 @@ bool isDirectlyDraggableTextItem(const mu::engraving::EngravingItem* item)
     case mu::engraving::ElementType::JUMP:
     case mu::engraving::ElementType::REHEARSAL_MARK:
     case mu::engraving::ElementType::FERMATA:
+    case mu::engraving::ElementType::FINGERING:
         return true;
     default:
         return false;
@@ -4426,6 +4439,14 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     selectionState.isEditableText = editableTextSelection;
     selectionState.isChordText = selectedItem->isHarmony();
     selectionState.canDragMovableElement = isDirectlyDraggableTextItem(selectedItem);
+    if (selectedItem->isFingering() && selectedItem->explicitParent() && selectedItem->explicitParent()->isNote()) {
+        // Fingerings only change their visual offset. Unlike chord symbols, there
+        // are no alternative anchors: the guide always points to this exact note.
+        const mu::engraving::PointF anchor = mu::engraving::toNote(selectedItem->explicitParent())->pageBoundingRect().center();
+        selectionState.hasAttachmentPoint = true;
+        selectionState.attachmentNormalizedX = anchor.x() / pageWidth;
+        selectionState.attachmentNormalizedY = anchor.y() / pageHeight;
+    }
     if (selectedItem->isFermata()) {
         // Drag guide, as for chord symbols: the note it is attached to, and the notes it can move to.
         const mu::engraving::Fermata* fermata = mu::engraving::toFermata(selectedItem);
@@ -4533,6 +4554,8 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
                     }
                 }
             }
+        } else if (selectedItem->isFingering()) {
+            selectionState.textKind = "Fingering";
         } else if (selectedItem->isStaffText()) {
             selectionState.textKind = "Staff Text";
         } else if (selectedItem->isSystemText()) {
@@ -4553,7 +4576,8 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
     selectionState.supportsBowingArticulations = supportsBowingArticulations(staff, tick);
     if (chordRest) {
         selectionState.durationCode = durationCodeForType(chordRest->durationType().type());
-        selectionState.isDotted = chordRest->dots() > 0;
+        selectionState.isDotted = chordRest->dots() == 1;
+        selectionState.isDoubleDotted = chordRest->dots() == 2;
     }
     if (mu::engraving::Note* note = editableNoteForItem(selectedItem)) {
         selectionState.midiPitch = note->pitch();
@@ -4946,6 +4970,10 @@ std::optional<mu::engraving::AccidentalType> accidentalTypeForKind(const int acc
         return mu::engraving::AccidentalType::SHARP;
     case 2:
         return mu::engraving::AccidentalType::FLAT;
+    case 3:
+        return mu::engraving::AccidentalType::SHARP2;
+    case 4:
+        return mu::engraving::AccidentalType::FLAT2;
     default:
         return std::nullopt;
     }
@@ -5010,7 +5038,8 @@ msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score, con
     }
     editState.noteInputEnabled = inputState.noteEntryMode();
     editState.noteInputInsertsRests = inputState.rest();
-    editState.noteInputIsDotted = inputState.duration().dots() > 0;
+    editState.noteInputIsDotted = inputState.duration().dots() == 1;
+    editState.noteInputIsDoubleDotted = inputState.duration().dots() == 2;
     editState.durationCode = durationCodeForType(inputState.duration().type());
     if (!inputState.noteEntryMode()) {
         if (const mu::engraving::ChordRest* chordRest = selectedChordRest(score)) {

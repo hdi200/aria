@@ -5,12 +5,19 @@ struct ScoreReaderMixerPanel: View {
     var readerState: ScoreReaderState
     private let mixerLevelMonitor: ScoreMixerLevelMonitor
     let selectedPartID: String
+    /// A Duo held like a book shows the mixer as a card filling one page, too narrow for a
+    /// row of every channel; there the channels wrap into rows instead.
+    let fillsDuoPage: Bool
     let close: () -> Void
+    @State var pageMixerWidth: CGFloat = 0
+    @State var pageMixerContentHeight: CGFloat = 0
 
-    init(readerState: ScoreReaderState, selectedPartID: String, close: @escaping () -> Void) {
+    init(readerState: ScoreReaderState, selectedPartID: String, fillsDuoPage: Bool = false,
+         close: @escaping () -> Void) {
         self.readerState = readerState
         self.mixerLevelMonitor = readerState.mixerLevelMonitor
         self.selectedPartID = selectedPartID
+        self.fillsDuoPage = fillsDuoPage
         self.close = close
     }
 
@@ -37,7 +44,9 @@ struct ScoreReaderMixerPanel: View {
         VStack(spacing: 0) {
             header
 
-            if AriaWindowLayout.shared.usesPhoneLayout {
+            if fillsDuoPage {
+                pageMixer
+            } else if AriaWindowLayout.shared.usesPhoneLayout {
                 phoneMixer
             } else {
                 tabletMixer
@@ -54,7 +63,7 @@ struct ScoreReaderMixerPanel: View {
 
     @ViewBuilder
     private var header: some View {
-        if AriaWindowLayout.shared.usesPhoneLayout {
+        if fillsDuoPage || AriaWindowLayout.shared.usesPhoneLayout {
             phoneHeader
         } else {
             tabletHeader
@@ -441,6 +450,74 @@ struct ScoreReaderMixerPanel: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollBounceBehavior(.basedOnSize)
         }
+    }
+
+    /// One cell of the page mixer's grid: Master first, then each channel.
+    private struct PageMixerChannel: Identifiable {
+        let id: String
+        let colorIndex: Int?
+        let part: ScorePart?
+    }
+
+    private var pageMixerChannels: [PageMixerChannel] {
+        [PageMixerChannel(id: NativePlaybackController.masterMeterID, colorIndex: nil, part: nil)]
+            + channelParts.enumerated().map { index, part in
+                PageMixerChannel(id: part.id, colorIndex: index, part: part)
+            }
+    }
+
+    /// The phone's channel strips, wrapped into as many columns as fit the page, so a
+    /// quartet shows every channel at once. The card is as tall as its channels and
+    /// scrolls only when they don't fit the page.
+    private var pageMixer: some View {
+        let spacing: CGFloat = 8
+        let availableWidth = max(pageMixerWidth - 20, 1)
+        let columnCount = max(1, Int((availableWidth + spacing) / (96 + spacing)))
+        let channelWidth = max(min(140, (availableWidth - spacing * CGFloat(columnCount - 1)) / CGFloat(columnCount)), 1)
+
+        return Group {
+            if parts.isEmpty {
+                emptyMixer
+                    .frame(maxWidth: .infinity)
+            } else if pageMixerWidth > 0 {
+                ScrollView(.vertical, showsIndicators: true) {
+                    AriaGrid(
+                        columns: Array(repeating: GridItem(.fixed(channelWidth), spacing: spacing), count: columnCount),
+                        alignment: .leading,
+                        spacing: spacing,
+                        items: pageMixerChannels
+                    ) { channel in
+                        if let part = channel.part, let colorIndex = channel.colorIndex {
+                            mixerPartChannel(part, color: channelColor(colorIndex), width: channelWidth, compact: true)
+                        } else {
+                            mixerMasterChannel(width: channelWidth, compact: true)
+                        }
+                    }
+                    .padding(10)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { pageMixerContentHeight = proxy.size.height }
+                                .onChangeCompatible(of: proxy.size.height) { pageMixerContentHeight = $0 }
+                        }
+                    )
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: pageMixerContentHeight > 0 ? pageMixerContentHeight : .infinity)
+            } else {
+                // Measures the page's width before the channels are laid out.
+                Color.clear
+                    .frame(height: 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { pageMixerWidth = proxy.size.width }
+                    .onChangeCompatible(of: proxy.size.width) { pageMixerWidth = $0 }
+            }
+        )
     }
 
     private var emptyMixer: some View {

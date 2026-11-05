@@ -100,6 +100,7 @@ android {
     }
 
     defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = libs.versions.android.sdk.min.get().toInt()
         ndk { abiFilters += listOf("arm64-v8a") }
         targetSdk = 36
@@ -156,6 +157,8 @@ android {
 }
 
 dependencies {
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("junit:junit:4.13.2")
     // Aria: Qt's Java side; Qt Core's JNI_OnLoad looks up these classes.
     implementation(files("${System.getProperty("user.home")}/Qt/android/6.11.1/android_arm64_v8a/jar/Qt6Android.jar"))
     // Aria Pro purchase (AriaBilling.kt), the App Store purchase on iOS.

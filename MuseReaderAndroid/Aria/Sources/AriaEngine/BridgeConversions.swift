@@ -180,6 +180,7 @@ func makeSelectionInfo(_ selection: msr.render.ScoreSelectionState) -> MSRSelect
                                 overlayImageData: makeData(selection.overlayPngData),
                                 overlayPdfData: makeData(selection.overlayPdfData))
     info.isFirstMeasure = selection.isFirstMeasure
+    info.isDoubleDotted = selection.isDoubleDotted
     info.isPickupMeasure = selection.isPickupMeasure
     info.pickupActualNumerator = Int(selection.pickupActualNumerator)
     info.pickupActualDenominator = Int(selection.pickupActualDenominator)
@@ -208,7 +209,7 @@ func makePickupMeasureInfo(_ pickup: msr.render.PickupMeasureState) -> MSRPickup
 }
 
 func makeEditState(_ state: msr.render.ScoreEditState) -> MSREditState {
-    MSREditState(selection: makeSelectionInfo(state.selection),
+    let editState = MSREditState(selection: makeSelectionInfo(state.selection),
                  noteInputEnabled: state.noteInputEnabled,
                  noteInputInsertsRests: state.noteInputInsertsRests,
                  noteInputIsDotted: state.noteInputIsDotted,
@@ -225,5 +226,7 @@ func makeEditState(_ state: msr.render.ScoreEditState) -> MSREditState {
                  staffSizeMillimeters: state.staffSizeMillimeters,
                  staffSpacingSpatium: state.staffSpacingSpatium,
                  systemSpacingSpatium: state.systemSpacingSpatium)
+    editState.noteInputIsDoubleDotted = state.noteInputIsDoubleDotted
+    return editState
 }
 

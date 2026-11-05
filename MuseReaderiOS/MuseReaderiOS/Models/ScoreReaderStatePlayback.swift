@@ -19,6 +19,23 @@ extension ScoreReaderState {
         }
     }
 
+    /// Highlighter strokes hang from these measure rects. Fetched during Edit they
+    /// describe the edit-mode layout, and View mode kept them (only an empty list is
+    /// refetched), so strokes changed shape until the score was reopened. Fetch them
+    /// again for View mode.
+    func refreshMeasureRegionsAfterEditing() {
+        guard let liveRenderSession = session.liveRenderSession else {
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let regions = try? await liveRenderSession.playbackMeasureRegions(),
+                  let self, self.interactionMode == .view else {
+                return
+            }
+            self.playbackMeasureRegions = regions
+        }
+    }
+
     func startPlaybackMonitoring() {
         guard session.capabilities.supportsPlayback, let playbackController else {
             playbackState = .unavailable

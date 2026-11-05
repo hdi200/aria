@@ -563,6 +563,8 @@ extension ScoreNoteDuration {
         case .quarter: return "Quarter"
         case .eighth: return "Eighth"
         case .sixteenth: return "Sixteenth"
+        case .thirtySecond: return "32nd"
+        case .sixtyFourth: return "64th"
         }
     }
 
@@ -573,7 +575,7 @@ extension ScoreNoteDuration {
         case .half: return "music.note"
         case .quarter: return nil
         case .eighth: return nil
-        case .sixteenth: return nil
+        case .sixteenth, .thirtySecond, .sixtyFourth: return nil
         }
     }
 
@@ -584,7 +586,7 @@ extension ScoreNoteDuration {
         case .half: return "𝅗"
         case .quarter: return "♩"
         case .eighth: return "♪"
-        case .sixteenth: return "♬"
+        case .sixteenth, .thirtySecond, .sixtyFourth: return "♬"
         }
     }
 
@@ -595,6 +597,8 @@ extension ScoreNoteDuration {
         case .quarter: return "\u{1D15F}"
         case .eighth: return "\u{1D160}"
         case .sixteenth: return "\u{1D161}"
+        case .thirtySecond: return "\u{1D162}"
+        case .sixtyFourth: return "\u{1D163}"
         }
     }
 
@@ -605,6 +609,7 @@ extension ScoreNoteDuration {
         case .quarter: return nil
         case .eighth: return "♪"
         case .sixteenth: return "♬"
+        case .thirtySecond, .sixtyFourth: return nil
         }
     }
 
@@ -614,7 +619,7 @@ extension ScoreNoteDuration {
         case .half: return "music.note"
         case .quarter: return "music.quarternote.3"
         case .eighth: return nil
-        case .sixteenth: return nil
+        case .sixteenth, .thirtySecond, .sixtyFourth: return nil
         }
     }
 }

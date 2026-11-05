@@ -260,6 +260,7 @@ MSRSelectionInfo * _Nullable MakeSelectionInfo(const msr::render::ScoreSelection
                                           overlayPdfData:overlayPdfData];
     selectionInfo.isFirstMeasure = selectionState.isFirstMeasure;
     selectionInfo.isPickupMeasure = selectionState.isPickupMeasure;
+    selectionInfo.isDoubleDotted = selectionState.isDoubleDotted;
     selectionInfo.pickupActualNumerator = selectionState.pickupActualNumerator;
     selectionInfo.pickupActualDenominator = selectionState.pickupActualDenominator;
     selectionInfo.pickupNominalNumerator = selectionState.pickupNominalNumerator;
@@ -289,7 +290,7 @@ MSRPickupMeasureInfo *MakePickupMeasureInfo(const msr::render::PickupMeasureStat
 
 MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 {
-    return [[MSREditState alloc] initWithSelection:MakeSelectionInfo(editState.selection)
+    MSREditState *state = [[MSREditState alloc] initWithSelection:MakeSelectionInfo(editState.selection)
                                   noteInputEnabled:editState.noteInputEnabled
                              noteInputInsertsRests:editState.noteInputInsertsRests
                                   noteInputIsDotted:editState.noteInputIsDotted
@@ -306,6 +307,8 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                              staffSizeMillimeters:editState.staffSizeMillimeters
                              staffSpacingSpatium:editState.staffSpacingSpatium
                              systemSpacingSpatium:editState.systemSpacingSpatium];
+    state.noteInputIsDoubleDotted = editState.noteInputIsDoubleDotted;
+    return state;
 }
 #endif
 
@@ -2085,6 +2088,63 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (MSREditState *)toggleDoubleDotWithError:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->toggleDoubleDot(editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not toggle the double dot."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)addGraceNote:(NSInteger)graceKind
+                         error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->addGraceNote(static_cast<int>(graceKind), editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not add that grace note."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
 - (MSREditState *)toggleTieWithError:(NSError * _Nullable __autoreleasing *)error
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
@@ -2158,6 +2218,35 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
     if (!_session->addText(textKind.UTF8String ?: "", editState, errorMessage)) {
         if (error) {
             *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not add that text."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)setFingering:(NSInteger)finger
+                    error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->setFingering(static_cast<int>(finger), editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not set that fingering."));
         }
         return nil;
     }
@@ -2783,6 +2872,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
 - (MSREditState *)addTempoWithBeatUnit:(NSString *)beatUnit
                                    bpm:(NSInteger)bpm
+                                  text:(NSString *)text
                                  error:(NSError * _Nullable __autoreleasing *)error
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
@@ -2795,7 +2885,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
     msr::render::ScoreEditState editState;
     std::string errorMessage;
-    if (!_session->addTempo(beatUnit.UTF8String ?: "", static_cast<int>(bpm), editState, errorMessage)) {
+    if (!_session->addTempo(beatUnit.UTF8String ?: "", static_cast<int>(bpm), editState, errorMessage, text.UTF8String ?: "")) {
         if (error) {
             *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not add that tempo marking."));
         }

@@ -515,6 +515,7 @@ final class ScoreReaderState {
             }
         }
         interactionMode = .view
+        refreshMeasureRegionsAfterEditing()
         return transitionSucceeded && saveSucceeded
     }
 

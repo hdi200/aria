@@ -9,8 +9,11 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
     var hintTint: Color = .blue
 
     @State var viewportWidth: CGFloat = 0
-    @State var contentWidth: CGFloat = 0
+    @State var contentTrailingEdge: CGFloat = 0
     @State var hasInteracted = false
+    #if os(iOS)
+    @Namespace private var viewportSpace
+    #endif
 
     private let content: Content
 
@@ -33,12 +36,15 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
                     GeometryReader { proxy in
                         Color.clear
                             .preference(
-                                key: MobileHorizontalScrollContentWidthPreferenceKey.self,
-                                value: proxy.size.width
+                                key: MobileHorizontalScrollContentTrailingEdgePreferenceKey.self,
+                                value: trailingEdge(of: proxy)
                             )
                     }
                 }
         }
+        #if os(iOS)
+        .coordinateSpace(name: viewportSpace)
+        #endif
         .background {
             GeometryReader { proxy in
                 Color.clear
@@ -48,7 +54,7 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
                     )
             }
         }
-        .onPreferenceChange(MobileHorizontalScrollContentWidthPreferenceKey.self) { contentWidth = $0 }
+        .onPreferenceChange(MobileHorizontalScrollContentTrailingEdgePreferenceKey.self) { contentTrailingEdge = $0 }
         .onPreferenceChange(MobileHorizontalScrollViewportWidthPreferenceKey.self) { viewportWidth = $0 }
         .overlay(alignment: .trailing) {
             if showsOverflowHint {
@@ -81,14 +87,24 @@ struct MobileHintingHorizontalScrollView<Content: View>: View {
         )
     }
 
+    private func trailingEdge(of proxy: GeometryProxy) -> CGFloat {
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            // Follow the actual scroll position, including scrolls that don't trigger a drag gesture.
+            return proxy.frame(in: .named(viewportSpace)).maxX
+        }
+        #endif
+        return proxy.size.width
+    }
+
     private var showsOverflowHint: Bool {
         AriaWindowLayout.shared.usesPhoneLayout
-        && contentWidth > viewportWidth + 8
+        && contentTrailingEdge > viewportWidth + 8
         && !hasInteracted
     }
 }
 
-struct MobileHorizontalScrollContentWidthPreferenceKey: PreferenceKey {
+struct MobileHorizontalScrollContentTrailingEdgePreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {

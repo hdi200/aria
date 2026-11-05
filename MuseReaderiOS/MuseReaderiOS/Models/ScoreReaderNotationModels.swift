@@ -38,6 +38,44 @@ enum TempoBeatUnit: String, CaseIterable, Identifiable {
 struct TempoValue: Equatable {
     var beatUnit: TempoBeatUnit
     var bpm: Int
+    var text: String = ""
+}
+
+extension TempoValue {
+    /// MuseScore plainText uses SMuFL metronome glyphs. Also accept Unicode music
+    /// characters from imported scores. Match the final equation, not punctuation
+    /// or numbers in a description such as "Allegro, movement 2.". Imported markings may
+    /// wrap the equation in parentheses, write "c." before the number, or give a range
+    /// ("♩ = 112–120"); the range keeps its first number.
+    init?(markingText: String) {
+        let pattern = "(?s)^(.*?)\\s*\\(?\\s*([♩𝅘𝅥\\x{ECA5}♪𝅘𝅥𝅮\\x{ECA7}𝅗𝅥\\x{ECA3}])\\s*([.·\\x{ECB7}\\x{E1E7}]?)\\s*=\\s*"
+            + "(?:(?:ca?|approx)\\.?\\s*)?([0-9]{1,3})(?:\\s*[-–—]\\s*[0-9]{1,3})?\\s*\\)?\\s*$"
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: markingText, range: NSRange(markingText.startIndex..., in: markingText)),
+              let prefixRange = Range(match.range(at: 1), in: markingText),
+              let noteRange = Range(match.range(at: 2), in: markingText),
+              let dotRange = Range(match.range(at: 3), in: markingText),
+              let bpmRange = Range(match.range(at: 4), in: markingText),
+              let bpm = Int(markingText[bpmRange]), (20...300).contains(bpm) else { return nil }
+        let note = String(markingText[noteRange])
+        let unit: TempoBeatUnit
+        if ["𝅗𝅥", "\u{ECA3}"].contains(note) { unit = .half }
+        else if ["♪", "𝅘𝅥𝅮", "\u{ECA7}"].contains(note) { unit = .eighth }
+        else { unit = markingText[dotRange].isEmpty ? .quarter : .dottedQuarter }
+        self.init(beatUnit: unit, bpm: bpm, text: markingText[prefixRange].trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// What the tempo editor opens with for an existing marking. A text-only marking
+    /// ("Allegro") keeps its words as the description, so Done doesn't replace them with a
+    /// bare equation. A marking with an equation that can't be read opens at the default.
+    init(editing markingText: String) {
+        if let parsed = TempoValue(markingText: markingText) {
+            self = parsed
+            return
+        }
+        let words = markingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.init(beatUnit: .quarter, bpm: 112, text: words.contains("=") ? "" : words)
+    }
 }
 
 enum TempoToken: Equatable, Identifiable {

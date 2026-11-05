@@ -8,6 +8,7 @@ struct ScoreNoteInputIntent: Sendable {
     var enabled: Bool
     var rests: Bool
     var dotted: Bool
+    var doubleDotted: Bool
     var duration: ScoreNoteDuration
     var voice: Int
     var chord: Bool
@@ -16,6 +17,7 @@ struct ScoreNoteInputIntent: Sendable {
         enabled = state.noteInputEnabled
         rests = state.noteInputInsertsRests
         dotted = state.noteInputIsDotted
+        doubleDotted = state.noteInputIsDoubleDotted
         duration = state.duration
         voice = state.currentVoice
         self.chord = chord
@@ -39,6 +41,7 @@ enum ScoreReaderToolCategory: String, CaseIterable {
     case notes
     case chord
     case lyrics
+    case fingering
     case repeats
     case text
     case expression
@@ -163,6 +166,10 @@ extension ScoreReaderKeyboardShortcut {
             return .enterPitch(7)
         case (.character("0"), []):
             return .enterRest
+        case (.character("1"), []):
+            return .applyDuration(.sixtyFourth)
+        case (.character("2"), []):
+            return .applyDuration(.thirtySecond)
         case (.character("3"), []):
             return .applyDuration(.sixteenth)
         case (.character("4"), []):
@@ -854,6 +861,7 @@ extension ScoreReaderState {
         var intent = noteInputIntent
         intent.duration = duration
         intent.dotted = false // The engine clears augmentation dots on a duration change.
+        intent.doubleDotted = false
         queuedNoteInputIntent = intent
         performEditingAction(mutatesScore: editingState.selection != nil) { liveRenderSession in
             try await liveRenderSession.applyDuration(duration)
@@ -878,9 +886,45 @@ extension ScoreReaderState {
         guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
         var intent = noteInputIntent
         intent.dotted.toggle()
+        if intent.dotted { intent.doubleDotted = false }
         queuedNoteInputIntent = intent
         performEditingAction(mutatesScore: editingState.selection != nil) { liveRenderSession in
             try await liveRenderSession.toggleDot()
+        }
+    }
+
+    func toggleDoubleDot() {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        var intent = noteInputIntent
+        intent.doubleDotted.toggle()
+        if intent.doubleDotted { intent.dotted = false }
+        queuedNoteInputIntent = intent
+        performEditingAction(mutatesScore: editingState.selection != nil) { liveRenderSession in
+            try await liveRenderSession.toggleDoubleDot()
+        }
+    }
+
+    func addGraceNote(_ kind: ScoreGraceNoteKind) {
+        performEditingAction(mutatesScore: true) { liveRenderSession in
+            try await liveRenderSession.addGraceNote(kind)
+        }
+    }
+
+    /// The buttons in the More Notes row above the note-entry toolbar.
+    func applyMoreNoteTool(_ tool: ScoreReaderMoreNoteTool) {
+        switch tool {
+        case .duration(let duration):
+            applyDuration(duration)
+        case .doubleDot:
+            toggleDoubleDot()
+        case .grace(let kind):
+            addGraceNote(kind)
+        case .ornament(let key):
+            addExpression(key)
+        case .doubleAccidental(let sharp):
+            performEditingAction(mutatesScore: true, auditionNote: true) { liveRenderSession in
+                try await liveRenderSession.changeSelectedDoubleAccidental(sharp: sharp)
+            }
         }
     }
 
@@ -913,6 +957,39 @@ extension ScoreReaderState {
         }
     }
 
+    func prepareFingeringEntry() {
+        performEditingAction(mutatesScore: false, revealActiveNotation: true) { liveRenderSession in
+            try await liveRenderSession.setNoteInputEnabled(false)
+        }
+    }
+
+    func setFingering(_ finger: Int) {
+        guard (0...5).contains(finger), editingState.selection?.canEditFingering == true else { return }
+        performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
+            let editedState = try await liveRenderSession.setFingering(finger)
+            guard let anchor = editedState.selection else { return editedState }
+            let moveForward = finger > 0
+
+            var previousState = editedState
+            while true {
+                try Task.checkCancellation()
+                let nextState = try await liveRenderSession.selectAdjacentElement(next: moveForward)
+                if nextState.selection?.kind == .note {
+                    return nextState
+                }
+                guard let nextSelection = nextState.selection, nextSelection.kind == .rest,
+                      previousState.selection.map({ !nextSelection.hasSameNavigationPosition(as: $0) }) ?? true else {
+                    // At either boundary, stay on this note rather than leaving a rest selected.
+                    return try await liveRenderSession.selectElement(
+                        pageIndex: anchor.pageIndex,
+                        normalizedPoint: anchor.normalizedRect.center
+                    )
+                }
+                previousState = nextState
+            }
+        }
+    }
+
     func prepareChordTextEntry() {
         performEditingAction(mutatesScore: false, revealActiveNotation: true) { liveRenderSession in
             _ = try await liveRenderSession.setNoteInputEnabled(false)
@@ -939,22 +1016,25 @@ extension ScoreReaderState {
             if anchorSelection?.kind != .chordText {
                 _ = try await liveRenderSession.addText("Chord Text")
             }
-            _ = try await liveRenderSession.setSelectedText(trimmedChordText)
+            let editedState = try await liveRenderSession.setSelectedText(trimmedChordText)
+            // Audition the engine's voicing before navigation changes the selection.
+            self.auditionSelectedChordSymbol(in: editedState)
             guard let anchorSelection else {
-                let selectedState = try await liveRenderSession.selectAdjacentElement(next: false)
-                self.auditionChordText(trimmedChordText, in: selectedState)
-                return selectedState
+                return try await liveRenderSession.selectAdjacentElement(next: false)
             }
             let anchorPoint = anchorSelection.kind == .chordText
                 ? (anchorSelection.attachmentPoint ?? anchorSelection.normalizedRect.center)
                 : anchorSelection.normalizedRect.center
-            let anchorState = try await liveRenderSession.selectElement(pageIndex: anchorSelection.pageIndex, normalizedPoint: anchorPoint)
-            self.auditionChordText(trimmedChordText, in: anchorState)
-            return anchorState
+            _ = try await liveRenderSession.selectElement(pageIndex: anchorSelection.pageIndex, normalizedPoint: anchorPoint)
+            return try await liveRenderSession.selectAttachedChordText()
         }
     }
 
     func addChordTextAndSelectNext(_ chordText: String) {
+        addChordTextAndSelectAdjacent(chordText, next: true)
+    }
+
+    func addChordTextAndSelectAdjacent(_ chordText: String, next: Bool) {
         let trimmedChordText = chordText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedChordText.isEmpty else {
             editingErrorMessage = nil
@@ -967,8 +1047,36 @@ extension ScoreReaderState {
                 _ = try await liveRenderSession.addText("Chord Text")
             }
             let editedState = try await liveRenderSession.setSelectedText(trimmedChordText)
-            self.auditionChordText(trimmedChordText, in: editedState)
-            return try await liveRenderSession.selectAdjacentElement(next: true)
+            self.auditionSelectedChordSymbol(in: editedState)
+            _ = try await liveRenderSession.selectAdjacentElement(next: next)
+            return try await liveRenderSession.selectAttachedChordText()
+        }
+    }
+
+    /// Chord Entry erased to nothing: delete the chord symbol, then reselect its note so the
+    /// panel keeps a position, and move on when `next` is given (nil stays put).
+    func removeChordText(thenSelectNext next: Bool?) {
+        guard let anchorSelection = editingState.selection, anchorSelection.kind == .chordText else {
+            editingErrorMessage = nil
+            return
+        }
+
+        performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
+            _ = try await liveRenderSession.deleteSelection()
+            let noteState = try await liveRenderSession.selectElement(
+                pageIndex: anchorSelection.pageIndex,
+                normalizedPoint: anchorSelection.attachmentPoint ?? anchorSelection.normalizedRect.center
+            )
+            guard let next, noteState.selection != nil else { return noteState }
+            _ = try await liveRenderSession.selectAdjacentElement(next: next)
+            return try await liveRenderSession.selectAttachedChordText()
+        }
+    }
+
+    func selectAdjacentChordText(next: Bool) {
+        performEditingAction(mutatesScore: false, revealActiveNotation: true) { liveRenderSession in
+            _ = try await liveRenderSession.selectAdjacentElement(next: next)
+            return try await liveRenderSession.selectAttachedChordText()
         }
     }
 
@@ -1215,7 +1323,7 @@ extension ScoreReaderState {
 
     func addTempo(_ value: TempoValue) {
         performEditingAction(mutatesScore: true) { liveRenderSession in
-            try await liveRenderSession.addTempo(beatUnit: value.beatUnit, bpm: value.bpm)
+            try await liveRenderSession.addTempo(beatUnit: value.beatUnit, bpm: value.bpm, text: value.text)
         }
     }
 
@@ -2057,6 +2165,7 @@ extension ScoreReaderState {
         if state.currentVoice != intent.voice { state = try await session.setCurrentVoice(intent.voice) }
         if state.duration != intent.duration { state = try await session.applyDuration(intent.duration) }
         if state.noteInputIsDotted != intent.dotted { state = try await session.toggleDot() }
+        if state.noteInputIsDoubleDotted != intent.doubleDotted { state = try await session.toggleDoubleDot() }
         if state.noteInputInsertsRests != intent.rests { state = try await session.toggleRest() }
         return state
     }
@@ -2120,6 +2229,7 @@ extension ScoreReaderState {
             editingState.noteInputEnabled = intent.enabled
             editingState.noteInputInsertsRests = intent.rests
             editingState.noteInputIsDotted = intent.dotted
+            editingState.noteInputIsDoubleDotted = intent.doubleDotted
             editingState.duration = intent.duration
             editingState.currentVoice = intent.voice
         }
@@ -2354,129 +2464,5 @@ extension ScoreReaderState {
             playbackProgram: editingState.selection?.playbackProgram,
             playbackSetupData: editingState.selection?.playbackSetupData
         )
-    }
-
-    func auditionChordText(_ chordText: String, in editingState: ScoreEditingState) {
-        guard let midiPitches = midiPitches(forChordText: chordText) else {
-            auditionSelectedNote(in: editingState)
-            return
-        }
-
-        notePreviewController.play(
-            midiPitches: midiPitches,
-            fallbackMIDIPitch: nil,
-            playbackBank: editingState.selection?.playbackBank,
-            playbackProgram: editingState.selection?.playbackProgram,
-            playbackSetupData: editingState.selection?.playbackSetupData
-        )
-    }
-
-    private func midiPitches(forChordText chordText: String) -> [Int]? {
-        let trimmed = chordText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let root = chordRootPitchClass(in: trimmed) else {
-            return nil
-        }
-
-        let normalized = trimmed
-            .replacingOccurrences(of: "♭", with: "b")
-            .replacingOccurrences(of: "♯", with: "#")
-        let suffixStart = normalized.index(after: normalized.startIndex)
-        let suffix: String
-        if normalized.indices.contains(suffixStart), normalized[suffixStart] == "#" || normalized[suffixStart] == "b" {
-            suffix = String(normalized[normalized.index(after: suffixStart)...])
-        } else {
-            suffix = String(normalized[suffixStart...])
-        }
-
-        let intervals = chordIntervals(for: suffix)
-        return intervals.map { min(127, 60 + root + $0) }
-    }
-
-    private func chordRootPitchClass(in chordText: String) -> Int? {
-        let normalized = chordText
-            .replacingOccurrences(of: "♭", with: "b")
-            .replacingOccurrences(of: "♯", with: "#")
-        guard let first = normalized.first else {
-            return nil
-        }
-
-        let basePitchClass: Int
-        switch String(first).uppercased() {
-        case "C": basePitchClass = 0
-        case "D": basePitchClass = 2
-        case "E": basePitchClass = 4
-        case "F": basePitchClass = 5
-        case "G": basePitchClass = 7
-        case "A": basePitchClass = 9
-        case "B": basePitchClass = 11
-        default: return nil
-        }
-
-        let secondIndex = normalized.index(after: normalized.startIndex)
-        guard normalized.indices.contains(secondIndex) else {
-            return basePitchClass
-        }
-
-        if normalized[secondIndex] == "#" {
-            return (basePitchClass + 1) % 12
-        }
-        if normalized[secondIndex] == "b" {
-            return (basePitchClass + 11) % 12
-        }
-        return basePitchClass
-    }
-
-    private func chordIntervals(for suffix: String) -> [Int] {
-        let lowercaseSuffix = suffix.lowercased()
-        var intervals: [Int]
-        if lowercaseSuffix.hasPrefix("maj")
-            || lowercaseSuffix.hasPrefix("major")
-            || suffix.hasPrefix("M")
-            || suffix.hasPrefix("^")
-            || suffix.hasPrefix("△") {
-            intervals = [0, 4, 7]
-        } else if lowercaseSuffix.hasPrefix("min")
-            || lowercaseSuffix.hasPrefix("mi")
-            || lowercaseSuffix.hasPrefix("-")
-            || lowercaseSuffix.hasPrefix("=")
-            || (lowercaseSuffix.hasPrefix("m") && !lowercaseSuffix.hasPrefix("maj") && !lowercaseSuffix.hasPrefix("major")) {
-            intervals = [0, 3, 7]
-        } else if lowercaseSuffix.hasPrefix("ø") {
-            intervals = [0, 3, 6, 10]
-        } else if lowercaseSuffix.hasPrefix("°") || lowercaseSuffix.hasPrefix("dim") {
-            intervals = [0, 3, 6]
-        } else if lowercaseSuffix.hasPrefix("+") || lowercaseSuffix.hasPrefix("aug") {
-            intervals = [0, 4, 8]
-        } else if lowercaseSuffix.hasPrefix("sus") {
-            intervals = [0, 5, 7]
-        } else {
-            intervals = [0, 4, 7]
-        }
-
-        if lowercaseSuffix.contains("maj7") || lowercaseSuffix.contains("major7") || lowercaseSuffix.contains("△7") {
-            intervals.append(11)
-        } else if lowercaseSuffix.contains("7") || lowercaseSuffix.contains("9") || lowercaseSuffix.contains("11") || lowercaseSuffix.contains("13") {
-            intervals.append(10)
-        } else if lowercaseSuffix.contains("6") {
-            intervals.append(9)
-        }
-
-        if lowercaseSuffix.contains("b5"), let index = intervals.firstIndex(of: 7) {
-            intervals[index] = 6
-        } else if lowercaseSuffix.contains("#5"), let index = intervals.firstIndex(of: 7) {
-            intervals[index] = 8
-        }
-
-        if lowercaseSuffix.contains("9") {
-            intervals.append(lowercaseSuffix.contains("b9") ? 13 : (lowercaseSuffix.contains("#9") ? 15 : 14))
-        }
-        if lowercaseSuffix.contains("11") {
-            intervals.append(lowercaseSuffix.contains("#11") ? 18 : 17)
-        }
-        if lowercaseSuffix.contains("13") {
-            intervals.append(lowercaseSuffix.contains("b13") ? 20 : 21)
-        }
-
-        return Array(Set(intervals)).sorted()
     }
 }

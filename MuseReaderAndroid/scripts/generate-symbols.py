@@ -83,6 +83,8 @@ SYMBOLS = {
     "forward.end": "skip_next",
     "gearshape": "settings",
     "hand.tap": "touch_app",
+    "hand.point.up.left": "touch_app",
+    "delete.left": "backspace",
     "hands.clap": "celebration",
     "info.circle": "info",
     "info.circle.fill": "info",

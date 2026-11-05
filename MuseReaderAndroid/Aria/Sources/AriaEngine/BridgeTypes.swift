@@ -311,6 +311,7 @@ open class MSRSelectionInfo: NSObject, @unchecked Sendable {
     public let isSingleMeasure: Bool
     public var isFirstMeasure: Bool
     public var isPickupMeasure: Bool
+    public var isDoubleDotted = false
     /// Range highlights on later pages, for ranges that cross a page break; parallel to
     /// otherPageHighlightPageIndexes.
     public var otherPageHighlightRects: [MSRNormalizedRectInfo]
@@ -483,6 +484,7 @@ open class MSREditState: NSObject, @unchecked Sendable {
     public let noteInputEnabled: Bool
     public let noteInputInsertsRests: Bool
     public let noteInputIsDotted: Bool
+    public var noteInputIsDoubleDotted = false
     public let durationCode: Int
     public let currentVoice: Int
     public let canUndo: Bool

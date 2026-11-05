@@ -2176,7 +2176,13 @@ final class ScorePageOverlayView: UIView {
                     } else if index == 0 {
                         selectionFrame = locallyAdjustedRangePreviewFrame(selectionFrame, inside: imageRect)
                     }
-                    if selection.kind == .chordText {
+                    if selection.textKind == "Fingering" && AriaWindowLayout.shared.usesPhoneLayout {
+                        // This is one small glyph, not a text editing field. Fixed
+                        // text padding grows with page zoom and dwarfs the digit.
+                        let horizontalPadding = max(selectionFrame.height * 0.12, 2.5)
+                        let verticalPadding = max(selectionFrame.height * 0.10, 1.5)
+                        selectionFrame = selectionFrame.insetBy(dx: -horizontalPadding, dy: -verticalPadding)
+                    } else if selection.kind == .chordText {
                         selectionFrame = paddedChordTextSelectionFrame(selectionFrame, inside: imageRect)
                     } else if selection.kind == .text || selection.kind == .tempo || selection.kind == .dynamic
                         || selection.kind == .instrumentName || selection.kind == .instrumentChange {
@@ -2342,10 +2348,11 @@ final class ScorePageOverlayView: UIView {
             return
         }
 
-        // Chord symbols and fermatas show which note they will attach to while being dragged.
+        // Fingerings show their fixed note; chord symbols and fermatas can change anchors.
         guard
             let selection,
-            selection.kind == .chordText || (selection.kind == .other && !selection.attachmentTargets.isEmpty),
+            selection.kind == .chordText || selection.textKind == "Fingering"
+                || (selection.kind == .other && !selection.attachmentTargets.isEmpty),
             isDraggingSelectedMovableElement,
             let selectionFrame
         else {
@@ -2645,6 +2652,14 @@ final class ScorePageOverlayView: UIView {
     }
 
     private func applySelectionOverlayStyle(to view: UIView, selection: ScoreSelectedElement, frame: CGRect) {
+        if selection.textKind == "Fingering" && AriaWindowLayout.shared.usesPhoneLayout {
+            let blue = UIColor(red: 0.0, green: 0.396, blue: 0.749, alpha: 1.0)
+            view.layer.cornerRadius = min(3, frame.height / 4)
+            view.layer.borderWidth = 0.8
+            view.layer.borderColor = blue.withAlphaComponent(0.8).cgColor
+            view.backgroundColor = blue.withAlphaComponent(0.08)
+            return
+        }
         switch selection.kind {
         case .note, .rest:
             let museScoreVoiceOneBlue = UIColor(red: 0.0, green: 0.396, blue: 0.749, alpha: 1.0)
@@ -2882,6 +2897,10 @@ private extension ScoreNoteDuration {
             return "\u{1D13E}"
         case .sixteenth:
             return "\u{1D13F}"
+        case .thirtySecond:
+            return "\u{1D140}"
+        case .sixtyFourth:
+            return "\u{1D141}"
         }
     }
 }

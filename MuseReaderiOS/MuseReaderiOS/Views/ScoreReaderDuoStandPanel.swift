@@ -396,13 +396,16 @@ struct ScoreReaderDuoMeasureCard: View {
         min(max(scrubMeasure ?? currentMeasure, 0), max(measureCount - 1, 0))
     }
 
-    /// Numbered every four measures from 1, and the last.
+    /// Numbered every four measures from 1, and the last. Long scores step by a round
+    /// number instead, so no more than about 14 numbers share the track.
     private var numberedMeasures: [Int] {
-        let numbered = Array(stride(from: 0, to: measureCount, by: 4))
+        let step = measureCount <= 56 ? 4 : [5, 10, 20, 25, 50, 100, 200, 250, 500].first { measureCount <= $0 * 13 } ?? 1000
+        let numbered = Array(stride(from: 0, to: measureCount, by: step))
         guard let last = numbered.last, last != measureCount - 1 else {
             return numbered
         }
-        return measureCount - 1 - last < 2 ? Array(numbered.dropLast()) + [measureCount - 1] : numbered + [measureCount - 1]
+        let gap = measureCount - 1 - last
+        return gap < (step > 4 ? step : 2) ? Array(numbered.dropLast()) + [measureCount - 1] : numbered + [measureCount - 1]
     }
 
     private var track: some View {

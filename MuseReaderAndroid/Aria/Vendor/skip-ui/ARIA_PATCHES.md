@@ -6,6 +6,11 @@ marked `ARIA PATCH` in the source.
 
 ## Sheets (`Sources/SkipUI/SkipUI/Layout/Presentation.swift`, `SheetPresentation`)
 
+- `ARIA PATCH`: fixed-height detents subtract the IME inset when locating the card's
+  top. The presentation root already reserves the keyboard at the bottom; without
+  accounting for it at the top, Tempo's compact text-entry card starts behind the
+  keyboard and hides its text field. Keyboard-closed positioning is unchanged.
+
 - Tapping above a sheet dismisses it, unless `interactiveDismissDisabled`. Skip draws
   that area inside the ModalBottomSheet and clips it away with the sheet's shape, so
   taps there reached neither the sheet's content nor the scrim; on a phone, where a

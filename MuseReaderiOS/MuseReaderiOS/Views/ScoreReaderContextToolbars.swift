@@ -188,6 +188,10 @@ struct ScoreReaderKeyboardContextToolbar: View {
     let prepareAccidentalAction: (ScoreAccidentalKind) -> Void
     let changeAccidentalAction: (ScoreAccidentalKind) -> Void
     @Binding var preferFlats: Bool
+    /// Shows the up arrow that opens the More Notes row (iPad toolbar only for now).
+    var moreNoteToolAction: ((ScoreReaderMoreNoteTool) -> Void)? = nil
+    /// Stays open until the player closes it, across scores and launches.
+    @AppStorage("Aria.NoteEntry.MoreNotesExpanded") var moreNotesExpanded = false
 
     var body: some View {
         if isCompact {
@@ -202,30 +206,141 @@ struct ScoreReaderKeyboardContextToolbar: View {
     }
 
     private var regularBody: some View {
+        VStack(spacing: 6) {
+            if moreNotesExpanded, moreNoteToolAction != nil {
+                regularScaledRow(moreNotesRow, minimumWidth: Self.moreNotesRowMinimumWidth)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            regularScaledRow(regularRow, minimumWidth: Self.regularRowMinimumWidth)
+        }
+    }
+
+    @ViewBuilder
+    private func regularScaledRow<Row: View>(_ row: Row, minimumWidth: CGFloat) -> some View {
         #if os(Android)
         // Skip's maxWidth frame doesn't shrink to the panel, so a row wider than the panel
         // (tablet portrait) ran off both edges. There the row is laid out at its narrowest
         // and scaled down to the panel's width, so every button shows without scrolling.
         GeometryReader { proxy in
-            if proxy.size.width >= Self.regularRowMinimumWidth {
-                regularRowCard(regularRow, maxWidth: min(900, proxy.size.width - 20))
+            if proxy.size.width >= minimumWidth {
+                regularRowCard(row, maxWidth: min(900, proxy.size.width - 20))
                     .frame(maxWidth: .infinity)
             } else {
-                let scale = max(proxy.size.width, 1) / Self.regularRowMinimumWidth
-                regularRowCard(regularRow, maxWidth: nil)
-                    .frame(width: Self.regularRowMinimumWidth, height: 72)
+                let scale = max(proxy.size.width, 1) / minimumWidth
+                regularRowCard(row, maxWidth: nil)
+                    .frame(width: minimumWidth, height: 72)
                     .scaleEffect(scale, anchor: .center)
                     .frame(width: proxy.size.width, height: 72)
             }
         }
         .frame(height: 72)
         #else
-        regularRowCard(regularRow, maxWidth: 900)
+        regularRowCard(row, maxWidth: 900)
         #endif
     }
 
-    /// 6 icon buttons (38), 7 titled buttons (68), 12 dividers (5) and the card's padding.
-    private static let regularRowMinimumWidth: CGFloat = 6 * 38 + 7 * 68 + 12 * 5 + 20
+    /// Less common note tools, shown above the main row: shorter durations, double dot,
+    /// beams, grace notes, ornaments, tremolo and double accidentals.
+    private var moreNotesItems: [ScoreReaderMoreNotesItem] {
+        let rhythm = canUseRhythmTools
+        let note = canAddToSelectedNote
+        // Column by column over the main row below: 32nd and 64th over the eighth and 16th,
+        // double dot over the dot.
+        return [
+            ScoreReaderMoreNotesItem(id: "beam", glyph: "\u{266B}", title: "Beam", isEnabled: canChangeBeams,
+                                     menu: ScoreReaderMoreNotesOption.beamModes),
+            ScoreReaderMoreNotesItem(id: "trem", glyph: "\u{E222}", title: "Tremolo", isEnabled: note,
+                                     menu: ScoreReaderMoreNotesOption.tremolos, glyphOffset: -6),
+            ScoreReaderMoreNotesItem(id: "acc", glyph: "\u{E560}", title: "Acciaccatura", isEnabled: note,
+                                     tool: .grace(.acciaccatura)),
+            ScoreReaderMoreNotesItem(id: "app", glyph: "\u{E562}", title: "Appoggiatura", isEnabled: note,
+                                     tool: .grace(.appoggiatura)),
+            ScoreReaderMoreNotesItem(id: "32", glyph: ScoreNoteDuration.thirtySecond.bravuraTextGlyph, title: "32nd",
+                                     isSelected: selectedDuration == .thirtySecond, isEnabled: rhythm,
+                                     tool: .duration(.thirtySecond)),
+            ScoreReaderMoreNotesItem(id: "64", glyph: ScoreNoteDuration.sixtyFourth.bravuraTextGlyph, title: "64th",
+                                     isSelected: selectedDuration == .sixtyFourth, isEnabled: rhythm,
+                                     tool: .duration(.sixtyFourth)),
+            ScoreReaderMoreNotesItem(id: "dd", glyph: "\u{1D15F}..", title: "Double Dot",
+                                     isSelected: selectedIsDoubleDotted, isEnabled: rhythm, tool: .doubleDot),
+            ScoreReaderMoreNotesItem(id: "tr", glyph: "\u{E566}", title: "Trill", isEnabled: note, tool: .ornament("trill")),
+            ScoreReaderMoreNotesItem(id: "mor", glyph: "\u{E56C}", title: "Mordent", isEnabled: note,
+                                     tool: .ornament("mordent")),
+            ScoreReaderMoreNotesItem(id: "turn", glyph: "\u{E567}", title: "Turn", isEnabled: note, tool: .ornament("turn")),
+            ScoreReaderMoreNotesItem(id: "arp", glyph: "\u{E63C}", title: "Arpeggio", isEnabled: note,
+                                     tool: .ornament("arpeggio"), glyphScale: 0.8),
+            ScoreReaderMoreNotesItem(id: "bb", glyph: "\u{E264}", title: "Double Flat", isEnabled: canChangeDoubleAccidental,
+                                     tool: .doubleAccidental(sharp: false), glyphScale: 1.1, glyphOffset: 6),
+            ScoreReaderMoreNotesItem(id: "x", glyph: "\u{E263}", title: "Double Sharp", isEnabled: canChangeDoubleAccidental,
+                                     tool: .doubleAccidental(sharp: true), glyphScale: 1.6, glyphOffset: 3)
+        ]
+    }
+
+    private var moreNotesRow: some View {
+        let items = moreNotesItems
+        return HStack(spacing: 0) {
+            ForEach(items) { item in
+                ScoreReaderMoreNotesButton(item: item, action: performMoreNotesTool)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+
+                if item.id != items.last?.id {
+                    ScoreReaderContextDivider()
+                }
+            }
+
+            // An empty column over the main row's arrow keeps the two rows' columns in line.
+            ScoreReaderContextDivider()
+                .hidden()
+            Color.clear
+                .frame(minWidth: 0, maxWidth: .infinity, maxHeight: 1)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Phones: the same tools as a strip that scrolls sideways.
+    private var compactMoreNotesStrip: some View {
+        MobileHintingHorizontalScrollView(hintHeight: 52) {
+            HStack(spacing: 2) {
+                ForEach(moreNotesItems) { item in
+                    ScoreReaderMoreNotesButton(item: item, isCompact: true, action: performMoreNotesTool)
+                }
+            }
+            .padding(.horizontal, 2)
+            .background(Color.white.opacity(0.66), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 0.6)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func performMoreNotesTool(_ tool: ScoreReaderMoreNoteTool) {
+        moreNoteToolAction?(tool)
+    }
+
+    private var moreNotesToggle: some View {
+        ScoreReaderPaletteButton(
+            systemImage: moreNotesExpanded ? "chevron.down" : "chevron.up",
+            isSelected: false,
+            isEnabled: true,
+            action: toggleMoreNotes
+        )
+        .accessibilityLabel(moreNotesExpanded ? "Hide more note options" : "More note options")
+    }
+
+    private func toggleMoreNotes() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            moreNotesExpanded.toggle()
+        }
+    }
+
+    /// Both iPad/tablet rows are 14 equal columns, so each More Notes tool sits over its main-row
+    /// partner. Titled buttons are this wide; icon buttons stay 38.
+    static let columnButtonWidth: CGFloat = 52
+    /// 14 columns, 13 dividers (5) and the card's padding.
+    private static let regularRowMinimumWidth: CGFloat = 14 * columnButtonWidth + 13 * 5 + 20
+    private static let moreNotesRowMinimumWidth: CGFloat = regularRowMinimumWidth
 
     private func regularRowCard<Row: View>(_ row: Row, maxWidth: CGFloat?) -> some View {
         row
@@ -247,31 +362,23 @@ struct ScoreReaderKeyboardContextToolbar: View {
                 isEnabled: canUseStackedChordInput,
                 action: toggleStackedChordInputAction
             )
-            .frame(maxWidth: .infinity)
+            .frame(minWidth: 0, maxWidth: .infinity)
 
             ScoreReaderContextDivider()
 
-            ForEach(ScoreNoteDuration.allCases) { duration in
+            ForEach(ScoreNoteDuration.toolbarDurations) { duration in
                 ScoreReaderPaletteButton(
                     duration: duration,
                     isSelected: selectedDuration == duration,
                     isEnabled: canUseRhythmTools,
                     action: { applyDurationAction(duration) }
                 )
-                .frame(maxWidth: .infinity)
+                .frame(minWidth: 0, maxWidth: .infinity)
 
-                if duration != ScoreNoteDuration.allCases.last {
+                if duration != ScoreNoteDuration.toolbarDurations.last {
                     ScoreReaderContextDivider()
                 }
             }
-
-            ScoreReaderContextDivider()
-
-            ScoreReaderTupletMenuButton(
-                isEnabled: canUseRhythmTools,
-                action: addTupletAction
-            )
-            .frame(maxWidth: .infinity)
 
             ScoreReaderContextDivider()
 
@@ -279,11 +386,12 @@ struct ScoreReaderKeyboardContextToolbar: View {
                 textSymbol: "\u{1D15F}.",
                 title: "Dot",
                 usesMusicFont: true,
+                titledWidth: Self.columnButtonWidth,
                 isSelected: selectedIsDotted,
                 isEnabled: canUseRhythmTools,
                 action: toggleDotAction
             )
-            .frame(maxWidth: .infinity)
+            .frame(minWidth: 0, maxWidth: .infinity)
 
             ScoreReaderContextDivider()
 
@@ -292,22 +400,33 @@ struct ScoreReaderKeyboardContextToolbar: View {
                 title: "Rest",
                 usesMusicFont: true,
                 glyphBaselineOffset: 7,
+                titledWidth: Self.columnButtonWidth,
                 isSelected: selectedIsRest,
                 isEnabled: canUseRhythmTools,
                 action: toggleRestAction
             )
-            .frame(maxWidth: .infinity)
+            .frame(minWidth: 0, maxWidth: .infinity)
 
             ScoreReaderContextDivider()
 
             ScoreReaderPaletteButton(
                 textSymbol: "⌒",
                 title: "Tie",
+                titledWidth: Self.columnButtonWidth,
                 isSelected: editingState.selection?.isTiedForward == true,
                 isEnabled: editingState.selection?.kind == .note && !isBusy,
                 action: toggleTieAction
             )
-            .frame(maxWidth: .infinity)
+            .frame(minWidth: 0, maxWidth: .infinity)
+
+            ScoreReaderContextDivider()
+
+            ScoreReaderTupletMenuButton(
+                width: Self.columnButtonWidth,
+                isEnabled: canUseRhythmTools,
+                action: addTupletAction
+            )
+            .frame(minWidth: 0, maxWidth: .infinity)
 
             ScoreReaderContextDivider()
 
@@ -316,18 +435,30 @@ struct ScoreReaderKeyboardContextToolbar: View {
             accidentalButton(.natural)
             ScoreReaderContextDivider()
             accidentalButton(.sharp)
+
+            if moreNoteToolAction != nil {
+                ScoreReaderContextDivider()
+                moreNotesToggle
+                    .frame(minWidth: 0, maxWidth: .infinity)
+            }
         }
     }
 
     private var compactBody: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if moreNotesExpanded, moreNoteToolAction != nil, compactSections != .optionsOnly {
+                compactSectionTitle("More Notes")
+                    .padding(.leading, 4)
+                compactMoreNotesStrip
+            }
+
             if compactSections != .optionsOnly {
                 compactSectionTitle("Duration")
                     .padding(.leading, 4)
 
                 MobileHintingHorizontalScrollView(hintHeight: 46) {
                     HStack(spacing: 0) {
-                        ForEach(ScoreNoteDuration.allCases) { duration in
+                        ForEach(ScoreNoteDuration.toolbarDurations) { duration in
                             ScoreReaderCompactPaletteButton(
                                 duration: duration,
                                 width: 60,
@@ -416,6 +547,18 @@ struct ScoreReaderKeyboardContextToolbar: View {
                             action: toggleStackedChordInputAction
                         )
                     }
+
+                    if moreNoteToolAction != nil {
+                        ScoreReaderCompactControlGroup {
+                            ScoreReaderCompactGroupedPaletteButton(
+                                systemImage: moreNotesExpanded ? "chevron.down" : "chevron.up",
+                                isSelected: moreNotesExpanded,
+                                isEnabled: true,
+                                accessibilityLabel: moreNotesExpanded ? "Hide more note options" : "More note options",
+                                action: toggleMoreNotes
+                            )
+                        }
+                    }
                 }
                 .padding(.horizontal, 2)
             }
@@ -426,8 +569,12 @@ struct ScoreReaderKeyboardContextToolbar: View {
 
     private var compactPortraitGridBody: some View {
         VStack(spacing: 4) {
+            if moreNotesExpanded, moreNoteToolAction != nil {
+                compactMoreNotesStrip
+            }
+
             HStack(spacing: 4) {
-                ForEach(ScoreNoteDuration.allCases) { duration in
+                ForEach(ScoreNoteDuration.toolbarDurations) { duration in
                     ScoreReaderCompactGridPaletteButton(
                         duration: duration,
                         isSelected: selectedDuration == duration,
@@ -445,10 +592,21 @@ struct ScoreReaderKeyboardContextToolbar: View {
                     action: toggleDotAction
                 )
 
-                ScoreReaderCompactGridTupletMenuButton(
-                    isEnabled: canUseRhythmTools,
-                    action: addTupletAction
-                )
+                if moreNoteToolAction != nil {
+                    // Top row: the More Notes strip opens right above it.
+                    ScoreReaderCompactGridPaletteButton(
+                        systemImage: moreNotesExpanded ? "chevron.down" : "chevron.up",
+                        isSelected: moreNotesExpanded,
+                        isEnabled: true,
+                        accessibilityLabel: moreNotesExpanded ? "Hide more note options" : "More note options",
+                        action: toggleMoreNotes
+                    )
+                } else {
+                    ScoreReaderCompactGridTupletMenuButton(
+                        isEnabled: canUseRhythmTools,
+                        action: addTupletAction
+                    )
+                }
             }
 
             HStack(spacing: 4) {
@@ -483,6 +641,13 @@ struct ScoreReaderKeyboardContextToolbar: View {
                     accessibilityLabel: selectedIsRest ? "Note entry" : "Rest entry",
                     action: toggleRestAction
                 )
+
+                if moreNoteToolAction != nil {
+                    ScoreReaderCompactGridTupletMenuButton(
+                        isEnabled: canUseRhythmTools,
+                        action: addTupletAction
+                    )
+                }
 
                 ScoreReaderCompactGridPaletteButton(
                     systemImage: "trash",
@@ -529,11 +694,12 @@ struct ScoreReaderKeyboardContextToolbar: View {
         ScoreReaderPaletteButton(
             textSymbol: symbol(for: accidentalKind),
             title: title(for: accidentalKind),
+            titledWidth: Self.columnButtonWidth,
             isSelected: selectedAccidental == accidentalKind,
             isEnabled: canEditPitch,
             action: { applyAccidental(accidentalKind) }
         )
-        .frame(maxWidth: .infinity)
+        .frame(minWidth: 0, maxWidth: .infinity)
     }
 
     private func compactAccidentalButton(_ accidentalKind: ScoreAccidentalKind) -> some View {
@@ -577,6 +743,28 @@ struct ScoreReaderKeyboardContextToolbar: View {
 
     private var selectedIsDotted: Bool {
         editingState.noteInputEnabled ? editingState.noteInputIsDotted : editingState.selection?.isDotted == true
+    }
+
+    private var selectedIsDoubleDotted: Bool {
+        editingState.noteInputEnabled
+            ? editingState.noteInputIsDoubleDotted
+            : editingState.selection?.isDoubleDotted == true
+    }
+
+    /// Grace notes and ornaments attach to a selected note.
+    private var canAddToSelectedNote: Bool {
+        editingState.selection?.kind == .note && !isBusy
+    }
+
+    /// Beam modes apply to notes and rests, not to a selected slur or text.
+    private var canChangeBeams: Bool {
+        let kind = editingState.selection?.kind
+        return (editingState.noteInputEnabled || kind == .note || kind == .rest || kind == .measure) && !isBusy
+    }
+
+    /// Double accidentals change the selected note, or in note input the note just entered.
+    private var canChangeDoubleAccidental: Bool {
+        (editingState.selection?.canChangePitch == true || editingState.noteInputEnabled) && !isBusy
     }
 
     private var selectedAccidental: ScoreAccidentalKind? {
@@ -655,6 +843,112 @@ struct ScoreReaderKeyboardContextToolbar: View {
     }
 }
 
+enum ScoreReaderMoreNoteTool: Equatable {
+    case duration(ScoreNoteDuration)
+    case doubleDot
+    case grace(ScoreGraceNoteKind)
+    /// An engine expression key: an ornament, "arpeggio", a "beam…" mode or a "tremolo…".
+    case ornament(String)
+    case doubleAccidental(sharp: Bool)
+}
+
+struct ScoreReaderMoreNotesOption: Identifiable {
+    let title: String
+    /// An engine expression key.
+    let key: String
+
+    var id: String { key }
+
+    /// Desktop's beam modes for the selected notes.
+    static let beamModes = [
+        ScoreReaderMoreNotesOption(title: "Auto", key: "beamauto"),
+        ScoreReaderMoreNotesOption(title: "Break Beam", key: "beambreak"),
+        ScoreReaderMoreNotesOption(title: "Join Beams", key: "beamjoin"),
+        ScoreReaderMoreNotesOption(title: "No Beam", key: "beamnone")
+    ]
+
+    /// Single-note tremolos; choosing the one already on the note removes it.
+    static let tremolos = [
+        ScoreReaderMoreNotesOption(title: "1 Slash", key: "tremolo1"),
+        ScoreReaderMoreNotesOption(title: "2 Slashes", key: "tremolo2"),
+        ScoreReaderMoreNotesOption(title: "3 Slashes", key: "tremolo3")
+    ]
+}
+
+/// One tool in the More Notes row: a button, or a menu of engine keys when `menu` isn't empty.
+struct ScoreReaderMoreNotesItem: Identifiable {
+    let id: String
+    let glyph: String
+    let title: String
+    var isSelected = false
+    let isEnabled: Bool
+    var tool: ScoreReaderMoreNoteTool? = nil
+    var menu: [ScoreReaderMoreNotesOption] = []
+    /// Bravura glyphs sit at different heights and sizes; these even them out in the button.
+    var glyphScale: CGFloat = 1
+    var glyphOffset: CGFloat = 0
+}
+
+struct ScoreReaderMoreNotesButton: View {
+    let item: ScoreReaderMoreNotesItem
+    var isCompact = false
+    let action: (ScoreReaderMoreNoteTool) -> Void
+
+    var body: some View {
+        if item.menu.isEmpty {
+            Button {
+                if let tool = item.tool {
+                    action(tool)
+                }
+            } label: {
+                label
+            }
+            .buttonStyle(.plain)
+            .disabled(!item.isEnabled)
+            .opacity(item.isEnabled ? 1 : 0.42)
+            .accessibilityLabel(item.title)
+        } else {
+            Menu {
+                ForEach(item.menu) { option in
+                    Button(option.title) {
+                        action(.ornament(option.key))
+                    }
+                }
+            } label: {
+                label
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .disabled(!item.isEnabled)
+            .opacity(item.isEnabled ? 1 : 0.42)
+            .accessibilityLabel(item.title)
+        }
+    }
+
+    private var label: some View {
+        VStack(spacing: 2) {
+            Text(item.glyph)
+                .font(MusicNotationFont.font(size: (isCompact ? 21 : (item.glyph.count > 1 ? 21 : 25)) * item.glyphScale))
+                .naturalSizeOnAndroid()
+                .offset(y: item.glyphOffset)
+                .frame(height: isCompact ? 24 : 22)
+
+            Text(item.title)
+                .font(.system(size: isCompact ? 8 : 9, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+        }
+        .foregroundStyle(item.isSelected ? Color.white : Color.black.opacity(0.82))
+        .frame(width: isCompact ? 60 : ScoreReaderKeyboardContextToolbar.columnButtonWidth, height: isCompact ? 50 : 48)
+        .background(
+            item.isSelected ? Color(red: 0.12, green: 0.45, blue: 0.95) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+        )
+        .contentShape(Rectangle())
+    }
+}
+
 struct ScoreReaderContextDivider: View {
     var body: some View {
         Rectangle()
@@ -665,6 +959,7 @@ struct ScoreReaderContextDivider: View {
 }
 
 struct ScoreReaderTupletMenuButton: View {
+    var width: CGFloat = 68
     let isEnabled: Bool
     let action: (Int) -> Void
 
@@ -688,7 +983,7 @@ struct ScoreReaderTupletMenuButton: View {
                     .frame(maxWidth: .infinity)
             }
             .foregroundStyle(Color.black.opacity(0.82))
-            .frame(width: 68, height: 48)
+            .frame(width: width, height: 48)
             .contentShape(Rectangle())
         }
         .menuStyle(.button)
@@ -1037,6 +1332,8 @@ struct ScoreReaderTextContextToolbar: View {
     let openChordEntryAction: () -> Void
     let openLyricsEntryAction: () -> Void
     let openTempoEditorAction: () -> Void
+    let fingeringEnabled: Bool
+    let openFingeringAction: () -> Void
 
     var body: some View {
         ScoreReaderHorizontalContextToolbar {
@@ -1050,8 +1347,88 @@ struct ScoreReaderTextContextToolbar: View {
             ScoreReaderContextDivider()
             ScoreReaderPaletteButton(textSymbol: "Ly", title: "Lyrics", isSelected: false, isEnabled: isEnabled, action: openLyricsEntryAction)
             ScoreReaderContextDivider()
+            ScoreReaderPaletteButton.fingering(isEnabled: fingeringEnabled, action: openFingeringAction)
+            ScoreReaderContextDivider()
             ScoreReaderPaletteButton(systemImage: "metronome", title: "Tempo", isSelected: false, isEnabled: isEnabled, action: openTempoEditorAction)
         }
+    }
+}
+
+/// Text > Fingering: a persistent deck so the next note can be tapped on the score.
+struct ScoreReaderFingeringPanel: View {
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    let isEnabled: Bool
+    let setFingeringAction: (Int) -> Void
+    let backAction: () -> Void
+
+    private var isCompact: Bool { AriaWindowLayout.shared.usesPhoneLayout }
+
+    var body: some View {
+        VStack(spacing: isCompact ? 14 : 24) {
+            HStack {
+                Button(action: backAction) {
+                    Label("Text", systemImage: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.blue)
+                .frame(minWidth: 56, minHeight: 44)
+
+                Spacer()
+                Text("Fingering")
+                    .font(.system(size: isCompact ? 18 : 22, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.88))
+                Spacer()
+                Color.clear.frame(width: 56, height: 1)
+            }
+
+            HStack(spacing: isCompact ? 8 : 12) {
+                // Skip Fuse requires an Int-indexed collection here; ClosedRange
+                // has its own Index type and traps in the Android ForEach bridge.
+                ForEach([1, 2, 3, 4, 5], id: \.self) { finger in
+                    fingeringButton(finger)
+                }
+                fingeringButton(0)
+            }
+            .frame(maxWidth: 720)
+
+            if !isEnabled {
+                Text("Select a note to add or remove fingering.")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
+            }
+        }
+        .padding(.horizontal, isCompact ? 4 : 24)
+        .padding(.bottom, isCompact ? 4 : 12)
+    }
+
+    private func fingeringButton(_ finger: Int) -> some View {
+        Button { setFingeringAction(finger) } label: {
+            Group {
+                if finger == 0 {
+                    Image(systemName: "delete.left")
+                        .font(.system(size: isCompact ? 24 : 30, weight: .medium))
+                } else {
+                    Text(String(finger))
+                        .font(.system(size: isCompact ? 28 : 36, weight: .semibold))
+                }
+            }
+            .foregroundStyle(Color.black.opacity(0.88))
+            .frame(minWidth: 0, maxWidth: .infinity)
+            .frame(height: isCompact ? (verticalSizeClass == .compact ? 48 : 64) : 86)
+            .background(finger == 0 ? Color.black.opacity(0.05) : Color.white,
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.07), radius: 5, y: 3)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityLabel(finger == 0 ? "Remove fingering" : "Fingering \(finger)")
     }
 }
 

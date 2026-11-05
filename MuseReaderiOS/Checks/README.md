@@ -1,4 +1,12 @@
-# Video export checks
+# Lightweight source checks
+
+Run `python3 MuseReaderiOS/Checks/check_fingering_navigation.py` to exercise the actual
+fingering-entry action against a session double that regenerates selection render
+data on every read. It checks four-note entry followed by empty bars, both score
+boundaries, rest skipping, last-note replacement and erase/back navigation. It
+compiles standalone Swift without Xcode or the native engine.
+
+## Video export
 
 Run `python3 MuseReaderiOS/Checks/check_video_export.py` from the repository root
 to typecheck the production exporter against the iOS SDK. This does not invoke

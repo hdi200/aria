@@ -37,7 +37,7 @@ struct ScoreReaderEditorRail: View {
 
             ScoreReaderEditorRailDivider()
 
-            ForEach(ScoreNoteDuration.allCases) { duration in
+            ForEach(ScoreNoteDuration.toolbarDurations) { duration in
                 ScoreReaderDurationRailButton(
                     duration: duration,
                     isSelected: editingState.duration == duration,

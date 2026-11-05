@@ -214,8 +214,11 @@ struct ScoreReaderAddMeasuresSheet: View {
 
 struct ScoreReaderTempoEditorSheet: View {
     @Environment(\.dismiss) var dismiss
-    @State var tokens: [TempoToken]
+    @State var beatUnit: TempoBeatUnit
+    @State var bpmText: String
+    @State var tempoText: String
     @State var hasStartedNumberEntry = false
+    @FocusState var textIsFocused: Bool
 
     let isBusy: Bool
     let commitAction: (TempoValue) -> Void
@@ -223,199 +226,229 @@ struct ScoreReaderTempoEditorSheet: View {
     init(initialValue: TempoValue = TempoValue(beatUnit: .quarter, bpm: 112),
          isBusy: Bool,
          commitAction: @escaping (TempoValue) -> Void) {
-        _tokens = State(initialValue: [
-            .noteValue(initialValue.beatUnit),
-            .equals,
-            .number("\(initialValue.bpm)")
-        ])
+        _beatUnit = State(initialValue: initialValue.beatUnit)
+        _bpmText = State(initialValue: String(initialValue.bpm))
+        _tempoText = State(initialValue: initialValue.text)
         self.isBusy = isBusy
         self.commitAction = commitAction
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
-                HStack(spacing: 8) {
-                    ForEach(tokens) { token in
-                        Group {
-                            if case .noteValue(let beatUnit) = token {
-                                TempoBeatUnitGlyph(beatUnit: beatUnit, size: 30)
-                            } else {
-                                Text(token.displayText)
-                                    .font(tokenFont(for: token))
-                            }
-                        }
-                            .frame(minWidth: 34, minHeight: 38)
-                            .padding(.horizontal, 8)
-                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            ScrollView {
+                VStack(spacing: 18) {
+                    preview
+                    textEntry
+                    beatUnitPicker
+                    if !textIsFocused {
+                        numberPad
                     }
-                    Spacer()
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-
-                TempoKeyboard(
-                    tokens: $tokens,
-                    hasStartedNumberEntry: $hasStartedNumberEntry,
-                    doneEnabled: parsedValue != nil && !isBusy,
-                    doneAction: {
-                        guard let parsedValue else { return }
-                        commitAction(parsedValue)
-                        dismiss()
-                    }
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
+                .padding(24)
             }
+            .background(.regularMaterial)
             .navigationTitle("Tempo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-            }
-        }
-        .presentationDetents([.height(430)])
-    }
-
-    private var parsedValue: TempoValue? {
-        guard
-            case .noteValue(let beatUnit)? = tokens.first(where: {
-                if case .noteValue = $0 { return true }
-                return false
-            }),
-            tokens.contains(.equals),
-            let numberToken = tokens.first(where: {
-                if case .number = $0 { return true }
-                return false
-            }),
-            case .number(let numberString) = numberToken,
-            let bpm = Int(numberString),
-            (20...300).contains(bpm)
-        else {
-            return nil
-        }
-
-        return TempoValue(beatUnit: beatUnit, bpm: bpm)
-    }
-
-    private func tokenFont(for token: TempoToken) -> Font {
-        switch token {
-        case .noteValue: return MusicNotationFont.font(size: 30)
-        case .equals, .number: return .system(size: 24, weight: .semibold)
-        }
-    }
-}
-
-struct TempoKeyboard: View {
-    @Binding var tokens: [TempoToken]
-    @Binding var hasStartedNumberEntry: Bool
-    let doneEnabled: Bool
-    let doneAction: () -> Void
-
-    var body: some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-            GridRow {
-                ForEach(TempoBeatUnit.allCases) { beatUnit in
-                    beatUnitKey(beatUnit) { replaceNoteValue(beatUnit) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        guard let value else { return }
+                        textIsFocused = false
+                        commitAction(value)
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                    .disabled(value == nil || isBusy)
                 }
             }
-            GridRow {
-                ForEach(["1", "2", "3"], id: \.self) { digit in key(digit) { appendDigit(digit) } }
+        }
+        #if os(Android)
+        // Skip Fuse's custom ViewModifier defaults to EmptyModifier; apply the
+        // presentation preference directly so the card actually resizes.
+        .presentationDetents([.height(textIsFocused ? 360 : 640)])
+        #else
+        .modifier(ScoreReaderTempoSheetSizing(isEnteringText: textIsFocused))
+        #endif
+    }
+
+    private var value: TempoValue? {
+        guard let bpm = Int(bpmText), (20...300).contains(bpm) else { return nil }
+        return TempoValue(beatUnit: beatUnit, bpm: bpm, text: tempoText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private var preview: some View {
+        HStack(spacing: 22) {
+            TempoBeatUnitGlyph(beatUnit: beatUnit, size: 38)
+                .frame(width: 82, height: 68)
+                .background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 16))
+            Text("=")
+                .font(.system(size: 34, weight: .semibold))
+            Text(bpmText.isEmpty ? "—" : bpmText)
+                .font(.system(size: 38, weight: .bold))
+                .monospacedDigit()
+                .frame(width: 116, height: 68)
+                .background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityLabel("Tempo BPM")
+                .accessibilityValue(bpmText)
+        }
+        .foregroundStyle(Color.black.opacity(0.9))
+        .padding(.vertical, 2)
+        .onTapGesture { textIsFocused = false }
+    }
+
+    private var textEntry: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                TextField("e.g. Allegro", text: $tempoText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 20))
+                    .focused($textIsFocused)
+                    .submitLabel(.done)
+                    .onSubmit { textIsFocused = false }
+                    .accessibilityLabel("Tempo text")
+                if !tempoText.isEmpty {
+                    Button { tempoText = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Color.secondary)
+                            .frame(width: 32, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear tempo text")
+                }
             }
-            GridRow {
-                ForEach(["4", "5", "6"], id: \.self) { digit in key(digit) { appendDigit(digit) } }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 48)
+            .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12).stroke(Color.black.opacity(0.08), lineWidth: 1)
             }
-            GridRow {
-                ForEach(["7", "8", "9"], id: \.self) { digit in key(digit) { appendDigit(digit) } }
+            Text("Tempo text (optional)")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.secondary)
+                .padding(.horizontal, 2)
+        }
+    }
+
+    private var beatUnitPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Beat unit")
+                    .font(.system(size: 17, weight: .semibold))
+                Spacer(minLength: 8)
+                Text("The note value that gets the beat.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.secondary)
+                    .multilineTextAlignment(.trailing)
             }
-            GridRow {
-                key("=") { insertEquals() }
-                key("0") { appendDigit("0") }
-                key("⌫") { backspace() }
-                key("Done", isEnabled: doneEnabled, action: doneAction)
+            HStack(spacing: 10) {
+                ForEach(TempoBeatUnit.allCases) { unit in
+                    Button {
+                        beatUnit = unit
+                        textIsFocused = false
+                    } label: {
+                        TempoBeatUnitGlyph(beatUnit: unit, size: 31)
+                            .frame(maxWidth: .infinity, minHeight: 54)
+                            .foregroundStyle(beatUnit == unit ? Color.blue : Color.black.opacity(0.9))
+                            .background(beatUnit == unit ? Color.blue.opacity(0.12) : Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 14))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(beatUnit == unit ? Color.blue : Color.clear, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(unit == .dottedQuarter ? "Dotted quarter note" : unit.rawValue.capitalized + " note")
+                    .accessibilityValue(beatUnit == unit ? "Selected" : "")
+                }
             }
         }
     }
 
-    private func key(_ title: String, isEnabled: Bool = true, usesMusicFont: Bool = false, action: @escaping () -> Void) -> some View {
+    private var numberPad: some View {
+        VStack(spacing: 8) {
+            ForEach(0..<3) { row in
+                HStack(spacing: 10) {
+                    ForEach(1..<4) { column in
+                        let digit = String(row * 3 + column)
+                        numberKey(digit) { appendDigit(digit) }
+                    }
+                }
+            }
+            HStack(spacing: 10) {
+                numberKey("=") {
+                    textIsFocused = false
+                    hasStartedNumberEntry = false
+                }
+                numberKey("0") { appendDigit("0") }
+                Button {
+                    textIsFocused = false
+                    hasStartedNumberEntry = true
+                    bpmText = String(bpmText.dropLast())
+                } label: {
+                    Image(systemName: "delete.left")
+                        .font(.system(size: 24, weight: .medium))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Erase tempo digit")
+            }
+            if hasStartedNumberEntry && value == nil {
+                Text("Enter a tempo from 20 to 300 BPM.")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
+            }
+        }
+        .foregroundStyle(Color.black.opacity(0.9))
+    }
+
+    private func numberKey(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(keyFont(for: title, usesMusicFont: usesMusicFont))
-                .baselineOffset(usesMusicFont ? 2 : 0)
-                .frame(maxWidth: .infinity, minHeight: 46)
-                .background(isEnabled ? Color(.secondarySystemBackground) : Color(.systemGray5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .font(.system(size: 26, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.45)
-    }
-
-    private func beatUnitKey(_ beatUnit: TempoBeatUnit, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            TempoBeatUnitGlyph(beatUnit: beatUnit, size: beatUnit.isDotted ? 25 : 28)
-                .offset(y: -2)
-                .frame(maxWidth: .infinity, minHeight: 46)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func keyFont(for title: String, usesMusicFont: Bool) -> Font {
-        if usesMusicFont {
-            return MusicNotationFont.font(size: title.unicodeScalars.count > 1 ? 25 : 28)
-        }
-
-        return .system(size: title == "Done" ? 15 : 22, weight: .semibold)
-    }
-
-    private func replaceNoteValue(_ beatUnit: TempoBeatUnit) {
-        tokens.removeAll {
-            if case .noteValue = $0 { return true }
-            return false
-        }
-        tokens.insert(.noteValue(beatUnit), at: 0)
-    }
-
-    private func insertEquals() {
-        tokens.removeAll { $0 == .equals }
-        let index = tokens.firstIndex {
-            if case .noteValue = $0 { return true }
-            return false
-        }.map { $0 + 1 } ?? 0
-        tokens.insert(.equals, at: min(index, tokens.count))
     }
 
     private func appendDigit(_ digit: String) {
-        if let index = tokens.firstIndex(where: {
-            if case .number = $0 { return true }
-            return false
-        }), case .number(let value) = tokens[index] {
-            tokens[index] = .number(hasStartedNumberEntry ? (value + digit).prefix(3).description : digit)
-        } else {
-            tokens.append(.number(digit))
-        }
+        textIsFocused = false
+        bpmText = hasStartedNumberEntry ? String((bpmText + digit).prefix(3)) : digit
         hasStartedNumberEntry = true
     }
+}
 
-    private func backspace() {
-        guard let index = tokens.lastIndex(where: {
-            if case .number = $0 { return true }
-            return false
-        }), case .number(let value) = tokens[index] else {
-            _ = tokens.popLast()
-            return
-        }
+/// Keep the tempo editor a card when the text keyboard appears. A large detent
+/// makes iPad extend the sheet down to the keyboard, leaving an empty column.
+#if !os(Android)
+private struct ScoreReaderTempoSheetSizing: ViewModifier {
+    let isEnteringText: Bool
 
-        hasStartedNumberEntry = true
-        let trimmed = String(value.dropLast())
-        if trimmed.isEmpty {
-            tokens.remove(at: index)
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *), !AriaWindowLayout.shared.usesPhoneLayout {
+            content.presentationSizing(ScoreReaderTempoCardSizing(isEnteringText: isEnteringText))
         } else {
-            tokens[index] = .number(trimmed)
+            content.presentationDetents([.height(isEnteringText ? 360 : 640)])
         }
     }
 }
+
+@available(iOS 18.0, *)
+private struct ScoreReaderTempoCardSizing: PresentationSizing {
+    let isEnteringText: Bool
+
+    func proposedSize(for root: PresentationSizingRoot, context: PresentationSizingContext) -> ProposedViewSize {
+        ProposedViewSize(width: 600, height: isEnteringText ? 360 : 640)
+    }
+}
+#endif
 
 struct ScoreReaderTimeSignatureSheet: View {
     @Environment(\.dismiss) var dismiss
@@ -442,6 +475,7 @@ struct ScoreReaderTimeSignatureSheet: View {
 
     private let presets = [
         ScoreTimeSignatureValue(numerator: 4, denominator: 4),
+        ScoreTimeSignatureValue(numerator: 4, denominator: 4, style: .commonTime),
         ScoreTimeSignatureValue(numerator: 3, denominator: 4),
         ScoreTimeSignatureValue(numerator: 2, denominator: 4),
         ScoreTimeSignatureValue(numerator: 6, denominator: 8),
@@ -755,6 +789,10 @@ struct ScoreReaderTimeSignatureSheet: View {
     }
 
     private func applyCustomSelection() {
+        // Picking Common or Cut Time moves the pickers to its numbers; keep its symbol.
+        guard customNumerator != selected.numerator || customDenominator != selected.denominator else {
+            return
+        }
         selected = ScoreTimeSignatureValue(numerator: customNumerator, denominator: customDenominator)
     }
 

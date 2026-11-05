@@ -70,7 +70,6 @@ Views/ScoreReaderChromeBar.swift
 Views/ScoreReaderContextToolbars.swift
 Views/ScoreReaderEditingDeck.swift
 Views/ScoreReaderExportPanel.swift
-Views/ScoreReaderFeatureTour.swift
 Views/ScoreReaderFloatingPalette.swift
 Views/ScoreReaderInstrumentReplacementSheet.swift
 # Views/ScoreReaderKeyboardShortcuts.swift  -- UIKeyCommand; Android: AndroidPendingPorts.swift (not ported)

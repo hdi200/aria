@@ -270,6 +270,16 @@ bool msr::render::ScoreRenderSession::toggleDot(ScoreEditState& output, std::str
     return m_impl->toggleDot(output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::toggleDoubleDot(ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->toggleDoubleDot(output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::addGraceNote(const int graceKind, ScoreEditState& output, std::string& errorMessage)
+{
+    return m_impl->addGraceNote(graceKind, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::toggleRest(ScoreEditState& output, std::string& errorMessage)
 {
     return m_impl->toggleRest(output, errorMessage);
@@ -295,6 +305,13 @@ bool msr::render::ScoreRenderSession::addText(const std::string& textKind,
                                                std::string& errorMessage)
 {
     return m_impl->addText(textKind, output, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::setFingering(const int finger,
+                                                 ScoreEditState& output,
+                                                 std::string& errorMessage)
+{
+    return m_impl->setFingering(finger, output, errorMessage);
 }
 
 bool msr::render::ScoreRenderSession::selectAttachedChordText(ScoreEditState& output,
@@ -456,9 +473,10 @@ bool msr::render::ScoreRenderSession::updateLayoutOptions(const bool createMulti
 bool msr::render::ScoreRenderSession::addTempo(const std::string& beatUnit,
                                                const int bpm,
                                                ScoreEditState& output,
-                                               std::string& errorMessage)
+                                               std::string& errorMessage,
+                                               const std::string& text)
 {
-    return m_impl->addTempo(beatUnit, bpm, output, errorMessage);
+    return m_impl->addTempo(beatUnit, bpm, output, errorMessage, text);
 }
 
 bool msr::render::ScoreRenderSession::updateTimeSignature(const int numerator,

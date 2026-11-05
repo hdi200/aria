@@ -9,14 +9,14 @@ import SwiftUI
 /// Versioned so a later release can show a new notice by bumping `currentVersion`
 /// and `releaseDate`.
 struct UpdateNoticeStore {
-    static let currentVersion = 3
+    static let currentVersion = 4
 
-    // Anyone who got the app on or before October 29, 2026 (before October 30 at
+    // Anyone who got the app on or before November 5, 2026 (before November 6 at
     // 12:00 AM Eastern) sees the notice once, as soon as they have this update.
     // AppTransaction supplies Apple's signed date for when this customer first
     // acquired the app, which survives the update itself (on Android, the first install
     // time on the device).
-    static let releaseDate = Date(timeIntervalSince1970: 1_793_332_800)
+    static let releaseDate = Date(timeIntervalSince1970: 1_793_941_200)
 
     private let defaultsKey = "UpdateNotice.seenVersion"
     private var audienceKey: String {
@@ -106,43 +106,102 @@ struct UpdateNoticeSheet: View {
         let systemImage: String
         let title: String
         let detail: String
+        /// Split View and Stage Manager are iPad-only, so iPhone skips the item.
+        var isPadOnly = false
+        /// Listed first on an iPhone Duo and last everywhere else.
+        var isDuo = false
     }
 
     private static let fixes: [Item] = {
+        let engine = Item(
+            systemImage: "checkmark.circle",
+            title: "MuseScore Studio 4.7.6",
+            detail: "Aria now uses the same engine as the latest desktop release."
+        )
         #if os(Android)
         return [
             Item(
                 systemImage: "checkmark.circle",
-                title: "Fewer crashes",
-                detail: "Fixed crashes when saving in Score Setup, during playback, and when changing the viewing key."
+                title: "Open with",
+                detail: "Aria now shows up in Files by Google and other file managers that label scores "
+                    + "as zip files. Opening a score while another is open now works too."
             ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Score titles and composers",
-                detail: "The library and Edit Info now show each score's real title and composer."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Selecting multiple notes",
-                detail: "Fixed issues with selecting and editing several notes at once, including transposing part of a bar."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Following note entry",
-                detail: "Made improvements to auto-scroll during note entry, so the bar you're entering into stays in view more consistently."
-            ),
+            engine,
         ]
         #else
         return [
             Item(
                 systemImage: "checkmark.circle",
-                title: "Score titles and composers",
-                detail: "The library and Edit Info now show each score's real title and composer."
+                title: "Playback cursor",
+                detail: "It no longer covers tab numbers or notes at the edges of the bar."
             ),
             Item(
                 systemImage: "checkmark.circle",
-                title: "Selecting multiple notes",
-                detail: "Fixed issues with selecting and editing several notes at once, including transposing part of a bar."
+                title: "Opening scores from other apps",
+                detail: "Opening a score while another is open now saves the first one and opens the new one."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Highlighter marks",
+                detail: "They keep their shape after you edit the score.",
+                isPadOnly: true
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Transpose",
+                detail: "The sheet now starts at the top instead of leaving a gap."
+            ),
+            engine,
+        ]
+        #endif
+    }()
+
+    private static let items: [Item] = {
+        let shared = [
+            Item(
+                systemImage: "hand.point.up.left",
+                title: "Fingering",
+                detail: "Choose Text > Fingering and tap 1 to 5. Aria moves on to the next note by itself, skipping rests."
+            ),
+            Item(
+                systemImage: "music.note.list",
+                title: "More note entry tools",
+                detail: "Tap the arrow at the end of the note-entry toolbar for 32nd and 64th notes, grace notes, "
+                    + "trills, tremolos, double sharps and flats, and more."
+            ),
+            Item(
+                systemImage: "doc.on.doc",
+                title: "Duplicate scores",
+                detail: "Touch and hold a score in the library, then choose Duplicate."
+            ),
+            Item(
+                systemImage: "pianokeys",
+                title: "Redesigned chord entry",
+                detail: "Build chord symbols with buttons for the root, quality, extension and bass instead of "
+                    + "typing them. Previous and Next step through the score."
+            ),
+            Item(
+                systemImage: "metronome",
+                title: "Tempo text",
+                detail: "Add words like \"Allegro\" to a tempo marking. Playback still follows the number."
+            ),
+        ]
+        #if os(Android)
+        return shared
+        #else
+        return shared + [
+            Item(
+                systemImage: "rectangle.split.2x1",
+                title: "Split View and Stage Manager",
+                detail: "In a narrow window, Aria switches to its iPhone layout so everything fits.",
+                isPadOnly: true
+            ),
+            Item(
+                systemImage: "book.pages",
+                title: "iPhone Duo",
+                detail: "Read two pages side by side like a book, edit with your tools on the other page, "
+                    + "or stand it up like a music stand.",
+                isDuo: true
             ),
         ]
         #endif
@@ -154,39 +213,7 @@ struct UpdateNoticeSheet: View {
             systemImage: "sparkles",
             title: "New in this update",
             message: "",
-            items: [
-                Item(
-                    systemImage: "book.pages",
-                    title: "Page-turn pedals",
-                    detail: "Bluetooth pedals and arrow keys turn pages while you read."
-                ),
-                Item(
-                    systemImage: "lasso",
-                    title: "Select Similar",
-                    detail: "Tap a note, rest, chord symbol or text, then ••• > Select Similar to select everything "
-                        + "like it, in the whole score or on the same staff."
-                ),
-                Item(
-                    systemImage: "doc.on.clipboard",
-                    title: "Copy and paste between scores",
-                    detail: "Copy music in one score, open another, and paste it in."
-                ),
-                Item(
-                    systemImage: "arrow.right",
-                    title: "Select bars across pages",
-                    detail: "Select a bar, then ••• > Extend Selection, and tap the last bar you want on any page."
-                ),
-                Item(
-                    systemImage: "music.note",
-                    title: "Bar line types",
-                    detail: "Tap a bar line and choose double, final, dashed, dotted and more."
-                ),
-                Item(
-                    systemImage: "slider.vertical.3",
-                    title: "Chords in the mixer",
-                    detail: "Mute or turn down chord symbol playback with the new Chords channel."
-                ),
-            ],
+            items: items,
             fixes: fixes
         )
     ]
@@ -196,6 +223,20 @@ struct UpdateNoticeSheet: View {
         var page = page
         page.id = index
         return page
+    }
+
+    /// Drops iPad-only items on iPhone, and moves the iPhone Duo item to the top on a Duo
+    /// (it stays last everywhere else). Read in `body`, so the order follows the pose
+    /// monitor once it has heard from the hinge.
+    private func shown(_ items: [Item]) -> [Item] {
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        let fitting = items.filter { !$0.isPadOnly || !isPhone }
+        #if os(Android)
+        return fitting
+        #else
+        guard DuoPoseMonitor.shared.pose.isDuo else { return fitting }
+        return fitting.filter(\.isDuo) + fitting.filter { !$0.isDuo }
+        #endif
     }
 
     var body: some View {
@@ -268,7 +309,7 @@ struct UpdateNoticeSheet: View {
                 Text(page.title)
                     .font(.title3.weight(.semibold))
                     .accessibilityAddTraits(.isHeader)
-                ForEach(page.items) { item in
+                ForEach(shown(page.items)) { item in
                     HStack(alignment: .top, spacing: 14) {
                         Image(systemName: item.systemImage)
                             .font(.system(size: 20, weight: .medium))
@@ -291,7 +332,7 @@ struct UpdateNoticeSheet: View {
                         .font(.title3.weight(.semibold))
                         .padding(.top, 6)
                         .accessibilityAddTraits(.isHeader)
-                    ForEach(page.fixes) { item in
+                    ForEach(shown(page.fixes)) { item in
                         HStack(alignment: .top, spacing: 14) {
                             Image(systemName: item.systemImage)
                                 .font(.system(size: 17, weight: .medium))

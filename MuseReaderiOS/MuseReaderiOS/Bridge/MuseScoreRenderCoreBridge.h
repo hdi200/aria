@@ -367,6 +367,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isSingleMeasure;
 @property (nonatomic) BOOL isFirstMeasure;
 @property (nonatomic) BOOL isPickupMeasure;
+@property (nonatomic) BOOL isDoubleDotted;
 /// Range highlights on later pages, for ranges that cross a page break; parallel to
 /// otherPageHighlightPageIndexes.
 @property (nonatomic, copy) NSArray<MSRNormalizedRectInfo *> *otherPageHighlightRects;
@@ -537,6 +538,7 @@ isEditableText:(BOOL)isEditableText
 @property (nonatomic, readonly) BOOL noteInputEnabled;
 @property (nonatomic, readonly) BOOL noteInputInsertsRests;
 @property (nonatomic, readonly) BOOL noteInputIsDotted;
+@property (nonatomic) BOOL noteInputIsDoubleDotted;
 @property (nonatomic, readonly) NSInteger durationCode;
 @property (nonatomic, readonly) NSInteger currentVoice;
 @property (nonatomic, readonly) BOOL canUndo;
@@ -673,6 +675,9 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)applyDurationCode:(NSInteger)durationCode
                                         error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(applyDuration(code:));
 - (nullable MSREditState *)toggleDotWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(toggleDot());
+- (nullable MSREditState *)toggleDoubleDotWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(toggleDoubleDot());
+- (nullable MSREditState *)addGraceNote:(NSInteger)graceKind
+                                   error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addGraceNote(_:));
 - (nullable MSREditState *)toggleRestWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(toggleRest());
 - (nullable MSREditState *)enterRestAtCursorWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(enterRestAtCursor());
 - (nullable MSREditState *)toggleTieWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(toggleTie());
@@ -682,6 +687,8 @@ isEditableText:(BOOL)isEditableText
                               error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addText(_:));
 - (nullable MSREditState *)selectAttachedChordTextWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(selectAttachedChordText());
 - (nullable MSREditState *)selectAttachedLyricsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(selectAttachedLyrics());
+- (nullable MSREditState *)setFingering:(NSInteger)finger
+                                  error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setFingering(_:));
 - (nullable MSREditState *)setSelectedText:(NSString *)text
                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setSelectedText(_:));
 - (nullable MSREditState *)addLyricsText:(NSString *)text
@@ -732,7 +739,8 @@ isEditableText:(BOOL)isEditableText
                                                                     error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(updateLayoutOptions(createMultiMeasureRests:hideEmptyStaves:));
 - (nullable MSREditState *)addTempoWithBeatUnit:(NSString *)beatUnit
                                             bpm:(NSInteger)bpm
-                                          error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addTempo(beatUnit:bpm:));
+                                           text:(NSString *)text
+                                          error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(addTempo(beatUnit:bpm:text:));
 - (nullable MSREditState *)updateTimeSignatureWithNumerator:(NSInteger)numerator
                                                 denominator:(NSInteger)denominator
                                                  commonTime:(BOOL)commonTime

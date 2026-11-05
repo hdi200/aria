@@ -19,6 +19,7 @@ struct ScoreReaderFloatingToolPalette: View {
     let addTextAction: (String) -> Void
     let openChordEntryAction: () -> Void
     let openLyricsEntryAction: () -> Void
+    let openFingeringAction: () -> Void
     let addRepeatJumpAction: (String) -> Void
     let addExpressionAction: (String) -> Void
     let setPitchClassAction: (Int, Bool) -> Void
@@ -36,7 +37,7 @@ struct ScoreReaderFloatingToolPalette: View {
                 noteTools
             case .chord:
                 EmptyView()
-            case .lyrics:
+            case .lyrics, .fingering:
                 EmptyView()
             case .repeats:
                 repeatJumpTools
@@ -82,7 +83,7 @@ struct ScoreReaderFloatingToolPalette: View {
 
     @ViewBuilder
     private var noteTools: some View {
-        ForEach(ScoreNoteDuration.allCases) { duration in
+        ForEach(ScoreNoteDuration.toolbarDurations) { duration in
             ScoreReaderPaletteButton(
                 duration: duration,
                 isSelected: selectedDuration == duration,
@@ -90,13 +91,6 @@ struct ScoreReaderFloatingToolPalette: View {
                 action: { applyDurationAction(duration) }
             )
         }
-
-        ScoreReaderPaletteSeparator()
-
-        ScoreReaderTupletMenuButton(
-            isEnabled: canUseRhythmTools,
-            action: addTupletAction
-        )
 
         ScoreReaderPaletteSeparator()
 
@@ -123,6 +117,23 @@ struct ScoreReaderFloatingToolPalette: View {
 
         ScoreReaderPaletteSeparator()
 
+        ScoreReaderPaletteButton(
+            textSymbol: "⌒",
+            title: "Tie",
+            isSelected: editingState.selection?.isTiedForward == true,
+            isEnabled: editingState.selection?.kind == .note && !isBusy,
+            action: toggleTieAction
+        )
+
+        ScoreReaderPaletteSeparator()
+
+        ScoreReaderTupletMenuButton(
+            isEnabled: canUseRhythmTools,
+            action: addTupletAction
+        )
+
+        ScoreReaderPaletteSeparator()
+
         ScoreReaderPaletteButton(textSymbol: "♭", title: "Flat", isSelected: selectedAccidental == .flat, isEnabled: canEditPitch, action: {
             preferFlats = true
             if editingState.noteInputEnabled {
@@ -131,17 +142,6 @@ struct ScoreReaderFloatingToolPalette: View {
                 changeAccidentalAction(.flat)
             } else if let pitchClass = preparedPitchClass(for: .flat) {
                 setPitchClassAction(pitchClass, true)
-            }
-        })
-
-        ScoreReaderPaletteButton(textSymbol: "♯", title: "Sharp", isSelected: selectedAccidental == .sharp, isEnabled: canEditPitch, action: {
-            preferFlats = false
-            if editingState.noteInputEnabled {
-                prepareAccidentalAction(.sharp)
-            } else if editingState.selection?.canChangePitch == true {
-                changeAccidentalAction(.sharp)
-            } else if let pitchClass = preparedPitchClass(for: .sharp) {
-                setPitchClassAction(pitchClass, false)
             }
         })
 
@@ -155,15 +155,16 @@ struct ScoreReaderFloatingToolPalette: View {
             }
         })
 
-        ScoreReaderPaletteSeparator()
-
-        ScoreReaderPaletteButton(
-            textSymbol: "⌒",
-            title: "Tie",
-            isSelected: editingState.selection?.isTiedForward == true,
-            isEnabled: editingState.selection?.kind == .note && !isBusy,
-            action: toggleTieAction
-        )
+        ScoreReaderPaletteButton(textSymbol: "♯", title: "Sharp", isSelected: selectedAccidental == .sharp, isEnabled: canEditPitch, action: {
+            preferFlats = false
+            if editingState.noteInputEnabled {
+                prepareAccidentalAction(.sharp)
+            } else if editingState.selection?.canChangePitch == true {
+                changeAccidentalAction(.sharp)
+            } else if let pitchClass = preparedPitchClass(for: .sharp) {
+                setPitchClassAction(pitchClass, false)
+            }
+        })
     }
 
     @ViewBuilder
@@ -191,6 +192,7 @@ struct ScoreReaderFloatingToolPalette: View {
         ScoreReaderPaletteButton(textSymbol: "A", title: "Rehearsal Mark", isSelected: false, isEnabled: hasSelection, action: { addTextAction("Rehearsal Mark") })
         ScoreReaderPaletteButton(textSymbol: "C7", title: "Chord Text", isSelected: false, isEnabled: hasSelection, action: openChordEntryAction)
         ScoreReaderPaletteButton(textSymbol: "Ly", title: "Lyrics", isSelected: false, isEnabled: hasSelection, action: openLyricsEntryAction)
+        ScoreReaderPaletteButton.fingering(isEnabled: editingState.selection?.canEditFingering == true && !isBusy, action: openFingeringAction)
         ScoreReaderPaletteButton(systemImage: "metronome", title: "Tempo", isSelected: false, isEnabled: !isBusy, action: openTempoEditorAction)
     }
 
@@ -325,9 +327,20 @@ struct ScoreReaderPaletteButton: View {
     var title: String? = nil
     var usesMusicFont = false
     var glyphBaselineOffset: CGFloat? = nil
+    /// Width of a button with a title; the note-entry toolbar narrows it to fit its columns.
+    var titledWidth: CGFloat = 68
     let isSelected: Bool
     let isEnabled: Bool
     let action: () -> Void
+
+    static func fingering(isEnabled: Bool, action: @escaping () -> Void) -> Self {
+        #if os(iOS)
+        let icon = "hand.raised"
+        #else
+        let icon = "hand.point.up.left"
+        #endif
+        return Self(systemImage: icon, title: "Fingering", isSelected: false, isEnabled: isEnabled, action: action)
+    }
 
     var body: some View {
         Button(action: action) {
@@ -376,7 +389,7 @@ struct ScoreReaderPaletteButton: View {
                 }
             }
             .foregroundStyle(isSelected ? .white : Color.black.opacity(0.82))
-            .frame(width: title == nil ? 38 : 68, height: title == nil ? 32 : 48)
+            .frame(width: title == nil ? 38 : titledWidth, height: title == nil ? 32 : 48)
             .background(
                 isSelected ? Color(red: 0.12, green: 0.45, blue: 0.95) : Color.clear,
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)

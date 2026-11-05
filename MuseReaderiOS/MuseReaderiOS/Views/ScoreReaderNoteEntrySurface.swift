@@ -39,12 +39,19 @@ struct ScoreReaderNoteEntrySurface: View {
     let toggleRestAction: () -> Void
     let toggleTieAction: () -> Void
     let addTupletAction: (Int) -> Void
+    let moreNoteToolAction: (ScoreReaderMoreNoteTool) -> Void
     let toggleStackedChordInputAction: () -> Void
     let editSelectedTextAction: (ScoreSelectedElement) -> Void
     let addTextAction: (String) -> Void
     let addChordTextAction: (String) -> Void
     let addChordTextAndSelectNextAction: (String) -> Void
+    let addChordTextAndSelectPreviousAction: (String) -> Void
+    /// Chord Entry erased to nothing: delete the chord, then go to the next (true),
+    /// previous (false) or no other position (nil).
+    let removeChordTextAction: (Bool?) -> Void
     let openLyricsEntryAction: () -> Void
+    let openFingeringAction: () -> Void
+    let setFingeringAction: (Int) -> Void
     let addLyricsTextAction: (String, Bool) -> Void
     let addLyricsHyphenAction: (String) -> Void
     let addLyricsMelismaAction: (String) -> Void
@@ -84,7 +91,7 @@ struct ScoreReaderNoteEntrySurface: View {
         let _ = AndroidPhoneAuditGeometry.evaluate("panel")
         #endif
         if isCompactPhoneLayout {
-            if isCompactPhoneLandscapeLayout && selectedToolCategory != .chord && selectedToolCategory != .lyrics {
+            if isCompactPhoneLandscapeLayout && selectedToolCategory != .chord && selectedToolCategory != .lyrics && selectedToolCategory != .fingering {
                 compactLandscapeBody
             } else {
                 compactBody
@@ -126,7 +133,7 @@ struct ScoreReaderNoteEntrySurface: View {
 
                 detailToolbar
 
-                if selectedToolCategory != .chord && selectedToolCategory != .lyrics {
+                if selectedToolCategory != .chord && selectedToolCategory != .lyrics && selectedToolCategory != .fingering {
                     pitchInputArea
                 }
             }
@@ -235,7 +242,7 @@ struct ScoreReaderNoteEntrySurface: View {
                     .padding(.bottom, 4)
             }
 
-            if selectedToolCategory == .chord || selectedToolCategory == .lyrics {
+            if selectedToolCategory == .lyrics {
                 compactTextEntryHeader
                     .padding(.horizontal, 8)
                     .padding(.top, 8)
@@ -278,7 +285,7 @@ struct ScoreReaderNoteEntrySurface: View {
             Spacer(minLength: 8)
 
             Button {
-                selectedToolCategory = .select
+                selectedToolCategory = .text
                 selectModeAction()
             } label: {
                 Text("Done")
@@ -652,16 +659,33 @@ struct ScoreReaderNoteEntrySurface: View {
                 selectionID: editingState.selection?.textEditorID,
                 initialText: editingState.selection?.kind == .chordText ? (editingState.selection?.textContent ?? "") : "",
                 isInsertEnabled: hasSelection && !isBusy,
+                positionText: editingState.selection?.measureIndex.map { "Measure \($0 + 1)" } ?? "Select a note",
                 insertAction: addChordTextAction,
                 insertAndAdvanceAction: addChordTextAndSelectNextAction,
+                insertAndGoBackAction: addChordTextAndSelectPreviousAction,
+                removeAction: removeChordTextAction,
+                previousAction: selectPreviousElementAction,
                 nextAction: selectNextElementAction,
+                doneAction: {
+                    selectedToolCategory = .text
+                    selectModeAction()
+                },
                 cancelAction: {
-                    selectedToolCategory = .select
+                    selectedToolCategory = .text
                     selectModeAction()
                 }
             )
             .padding(.bottom, 12)
             .padding(.horizontal, 24)
+
+        case .fingering:
+            ScoreReaderFingeringPanel(
+                isEnabled: editingState.selection?.canEditFingering == true && !isBusy,
+                setFingeringAction: setFingeringAction,
+                backAction: { selectedToolCategory = .text }
+            )
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
 
         case .lyrics:
             ScoreReaderLyricsEntryPanel(
@@ -673,7 +697,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 hyphenAction: addLyricsHyphenAction,
                 melismaAction: addLyricsMelismaAction,
                 cancelAction: {
-                    selectedToolCategory = .select
+                    selectedToolCategory = .text
                     selectModeAction()
                 }
             )
@@ -726,7 +750,9 @@ struct ScoreReaderNoteEntrySurface: View {
                     selectedToolCategory = .chord
                 },
                 openLyricsEntryAction: openLyricsEntryAction,
-                openTempoEditorAction: openTempoEditorAction
+                openTempoEditorAction: openTempoEditorAction,
+                fingeringEnabled: editingState.selection?.canEditFingering == true && !isBusy,
+                openFingeringAction: openFingeringAction
             )
             .padding(.horizontal, 52)
 
@@ -794,7 +820,8 @@ struct ScoreReaderNoteEntrySurface: View {
                 setPitchClassAction: setPitchClassAction,
                 prepareAccidentalAction: prepareAccidentalAction,
                 changeAccidentalAction: changeAccidentalAction,
-                preferFlats: $preferFlats
+                preferFlats: $preferFlats,
+                moreNoteToolAction: moreNoteToolAction
             )
             .padding(.horizontal, 52)
         }
@@ -808,15 +835,32 @@ struct ScoreReaderNoteEntrySurface: View {
                 selectionID: editingState.selection?.textEditorID,
                 initialText: editingState.selection?.kind == .chordText ? (editingState.selection?.textContent ?? "") : "",
                 isInsertEnabled: hasSelection && !isBusy,
+                positionText: editingState.selection?.measureIndex.map { "Measure \($0 + 1)" } ?? "Select a note",
                 insertAction: addChordTextAction,
                 insertAndAdvanceAction: addChordTextAndSelectNextAction,
+                insertAndGoBackAction: addChordTextAndSelectPreviousAction,
+                removeAction: removeChordTextAction,
+                previousAction: selectPreviousElementAction,
                 nextAction: selectNextElementAction,
+                doneAction: {
+                    selectedToolCategory = .text
+                    selectModeAction()
+                },
                 cancelAction: {
-                    selectedToolCategory = .select
+                    selectedToolCategory = .text
                     selectModeAction()
                 }
             )
             .padding(.horizontal, 8)
+
+        case .fingering:
+            ScoreReaderFingeringPanel(
+                isEnabled: editingState.selection?.canEditFingering == true && !isBusy,
+                setFingeringAction: setFingeringAction,
+                backAction: { selectedToolCategory = .text }
+            )
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
 
         case .lyrics:
             ScoreReaderLyricsEntryPanel(
@@ -828,7 +872,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 hyphenAction: addLyricsHyphenAction,
                 melismaAction: addLyricsMelismaAction,
                 cancelAction: {
-                    selectedToolCategory = .select
+                    selectedToolCategory = .text
                     selectModeAction()
                 }
             )
@@ -852,7 +896,8 @@ struct ScoreReaderNoteEntrySurface: View {
                 setPitchClassAction: setPitchClassAction,
                 prepareAccidentalAction: prepareAccidentalAction,
                 changeAccidentalAction: changeAccidentalAction,
-                preferFlats: $preferFlats
+                preferFlats: $preferFlats,
+                moreNoteToolAction: moreNoteToolAction
             )
         default:
             // detailToolbar bakes in .padding(.horizontal, 52) — cancel it so
@@ -884,7 +929,8 @@ struct ScoreReaderNoteEntrySurface: View {
                 setPitchClassAction: setPitchClassAction,
                 prepareAccidentalAction: prepareAccidentalAction,
                 changeAccidentalAction: changeAccidentalAction,
-                preferFlats: $preferFlats
+                preferFlats: $preferFlats,
+                moreNoteToolAction: moreNoteToolAction
             )
 
         case .repeats:
@@ -931,7 +977,9 @@ struct ScoreReaderNoteEntrySurface: View {
                     selectedToolCategory = .chord
                 },
                 openLyricsEntryAction: openLyricsEntryAction,
-                openTempoEditorAction: openTempoEditorAction
+                openTempoEditorAction: openTempoEditorAction,
+                fingeringEnabled: editingState.selection?.canEditFingering == true && !isBusy,
+                openFingeringAction: openFingeringAction
             )
 
         case .expression:
@@ -978,7 +1026,7 @@ struct ScoreReaderNoteEntrySurface: View {
                 toggleConcertPitchAction: toggleConcertPitchAction
             )
 
-        case .chord, .lyrics:
+        case .chord, .lyrics, .fingering:
             compactDetailToolbar
         }
     }
@@ -1002,7 +1050,8 @@ struct ScoreReaderNoteEntrySurface: View {
             setPitchClassAction: setPitchClassAction,
             prepareAccidentalAction: prepareAccidentalAction,
             changeAccidentalAction: changeAccidentalAction,
-            preferFlats: $preferFlats
+            preferFlats: $preferFlats,
+            moreNoteToolAction: moreNoteToolAction
         )
     }
 

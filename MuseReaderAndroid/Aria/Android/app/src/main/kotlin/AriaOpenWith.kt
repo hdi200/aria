@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.IntentCompat
 import java.io.File
+import java.util.zip.ZipFile
 
 /// "Open with" and "Share" from other apps (the intent filters in AndroidManifest.xml).
 /// They hand Aria a content:// link, but the shared import code (ContentView's onOpenURL ->
@@ -34,9 +35,23 @@ object AriaOpenWith {
             "application/x-musescore+xml" -> "mscx"
             "application/vnd.recordare.musicxml" -> "mxl"
             "application/vnd.recordare.musicxml+xml" -> "musicxml"
-            else -> return path
+            else -> zippedScoreExtension(path) ?: return path
         }
         val renamed = "$path.$extension"
         return if (File(path).renameTo(File(renamed))) renamed else path
+    }
+
+    /// Files labelled zip or octet-stream: .mscz holds a .mscx, .mxl holds META-INF/container.xml.
+    private fun zippedScoreExtension(path: String): String? = try {
+        ZipFile(path).use { zip ->
+            val names = zip.entries().asSequence().map { it.name }.toList()
+            when {
+                names.any { it.endsWith(".mscx", ignoreCase = true) } -> "mscz"
+                "META-INF/container.xml" in names -> "mxl"
+                else -> null
+            }
+        }
+    } catch (e: Exception) {
+        null
     }
 }

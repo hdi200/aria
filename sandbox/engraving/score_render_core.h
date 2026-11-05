@@ -137,6 +137,7 @@ struct ScoreSelectionState {
     bool canChangePitch = false;
     bool canFillWithSlashes = false;
     bool isDotted = false;
+    bool isDoubleDotted = false;
     bool isTiedForward = false;
     std::string textContent;
     std::string textKind;
@@ -202,6 +203,7 @@ struct ScoreEditState {
     bool noteInputEnabled = false;
     bool noteInputInsertsRests = false;
     bool noteInputIsDotted = false;
+    bool noteInputIsDoubleDotted = false;
     int durationCode = 4;
     int currentVoice = 0;
     bool canUndo = false;
@@ -398,11 +400,16 @@ public:
     bool setCurrentVoice(int voice, ScoreEditState& output, std::string& errorMessage);
     bool applyDuration(int durationCode, ScoreEditState& output, std::string& errorMessage);
     bool toggleDot(ScoreEditState& output, std::string& errorMessage);
+    bool toggleDoubleDot(ScoreEditState& output, std::string& errorMessage);
+    // graceKind: 0 acciaccatura, 1 appoggiatura.
+    bool addGraceNote(int graceKind, ScoreEditState& output, std::string& errorMessage);
     bool toggleRest(ScoreEditState& output, std::string& errorMessage);
     bool enterRestAtCursor(ScoreEditState& output, std::string& errorMessage);
     bool toggleTie(ScoreEditState& output, std::string& errorMessage);
     bool addTuplet(int tupletCount, ScoreEditState& output, std::string& errorMessage);
     bool addText(const std::string& textKind, ScoreEditState& output, std::string& errorMessage);
+    // 1–5 sets/replaces the selected note's fingering; 0 removes it.
+    bool setFingering(int finger, ScoreEditState& output, std::string& errorMessage);
     bool selectAttachedChordText(ScoreEditState& output, std::string& errorMessage);
     bool selectAttachedLyrics(ScoreEditState& output, std::string& errorMessage);
     bool setSelectedText(const std::string& text, ScoreEditState& output, std::string& errorMessage);
@@ -437,7 +444,8 @@ public:
                              bool hideEmptyStaves,
                              ScoreEditState& output,
                              std::string& errorMessage);
-    bool addTempo(const std::string& beatUnit, int bpm, ScoreEditState& output, std::string& errorMessage);
+    bool addTempo(const std::string& beatUnit, int bpm, ScoreEditState& output, std::string& errorMessage,
+                  const std::string& text = {});
     bool updateTimeSignature(int numerator, int denominator, bool commonTime, bool cutTime, bool fromStart, ScoreEditState& output, std::string& errorMessage);
     bool updateKeySignature(int keyValue, bool fromStart, ScoreEditState& output, std::string& errorMessage);
     bool insertNote(int pageIndex, double normalizedX, double normalizedY, ScoreEditState& output, std::string& errorMessage);

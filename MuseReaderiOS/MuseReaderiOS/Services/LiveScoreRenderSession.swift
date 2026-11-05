@@ -414,6 +414,10 @@ actor LiveScoreRenderSession {
             state = try bridgeSession.toggleDot()
             invalidateCachedPlaybackArtifacts()
         }
+        if state.noteInputIsDoubleDotted != intent.doubleDotted {
+            state = try bridgeSession.toggleDoubleDot()
+            invalidateCachedPlaybackArtifacts()
+        }
         if state.noteInputInsertsRests != intent.rests {
             state = try bridgeSession.toggleRest()
             invalidateCachedPlaybackArtifacts()
@@ -540,6 +544,26 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func toggleDoubleDot() throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.toggleDoubleDot())
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
+    func addGraceNote(_ kind: ScoreGraceNoteKind) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.addGraceNote(kind.rawValue))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func toggleRest() throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
@@ -586,6 +610,15 @@ actor LiveScoreRenderSession {
         }
 
         let editState = try makeEditingState(from: bridgeSession.addText(textKind))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
+    func setFingering(_ finger: Int) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+        let editState = try makeEditingState(from: bridgeSession.setFingering(finger))
         invalidateCachedPlaybackArtifacts()
         return editState
     }
@@ -828,12 +861,12 @@ actor LiveScoreRenderSession {
         return editState
     }
 
-    func addTempo(beatUnit: TempoBeatUnit, bpm: Int) throws -> ScoreEditingState {
+    func addTempo(beatUnit: TempoBeatUnit, bpm: Int, text: String = "") throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
         }
 
-        let editState = try makeEditingState(from: bridgeSession.addTempo(beatUnit: beatUnit.rawValue, bpm: bpm))
+        let editState = try makeEditingState(from: bridgeSession.addTempo(beatUnit: beatUnit.rawValue, bpm: bpm, text: text))
         invalidateCachedPlaybackArtifacts()
         return editState
     }
@@ -1242,6 +1275,17 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    /// Engine accidental kinds 3 and 4; ScoreAccidentalKind keeps to the main row's three.
+    func changeSelectedDoubleAccidental(sharp: Bool) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.changeSelectedAccidental(sharp ? 3 : 4))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func flipSelectedStemDirection() throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
@@ -1564,6 +1608,7 @@ actor LiveScoreRenderSession {
                 canChangePitch: bridgeSelection.canChangePitch,
                 canFillWithSlashes: bridgeSelection.canFillWithSlashes,
                 isDotted: bridgeSelection.isDotted,
+                isDoubleDotted: bridgeSelection.isDoubleDotted,
                 isTiedForward: bridgeSelection.isTiedForward,
                 textContent: bridgeSelection.isEditableText ? bridgeSelection.textContent : nil,
                 textKind: bridgeSelection.isEditableText ? bridgeSelection.textKind : nil,
@@ -1629,6 +1674,7 @@ actor LiveScoreRenderSession {
             noteInputEnabled: editState.noteInputEnabled,
             noteInputInsertsRests: editState.noteInputInsertsRests,
             noteInputIsDotted: editState.noteInputIsDotted,
+            noteInputIsDoubleDotted: editState.noteInputIsDoubleDotted,
             duration: duration,
             currentVoice: Int(editState.currentVoice),
             canUndo: editState.canUndo,

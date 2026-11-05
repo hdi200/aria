@@ -379,6 +379,14 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
         try edit("The MuseScore render core could not toggle the augmentation dot.") { $0.pointee.toggleDot(&$1, &$2) }
     }
 
+    open func toggleDoubleDot() throws -> MSREditState {
+        try edit("The MuseScore render core could not toggle the double dot.") { $0.pointee.toggleDoubleDot(&$1, &$2) }
+    }
+
+    open func addGraceNote(_ graceKind: Int) throws -> MSREditState {
+        try edit("The MuseScore render core could not add that grace note.") { $0.pointee.addGraceNote(Int32(graceKind), &$1, &$2) }
+    }
+
     open func toggleRest() throws -> MSREditState {
         try edit("The MuseScore render core could not toggle rest mode.") { $0.pointee.toggleRest(&$1, &$2) }
     }
@@ -405,6 +413,10 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
 
     open func selectAttachedLyrics() throws -> MSREditState {
         try edit("The MuseScore render core could not select the attached lyrics.") { $0.pointee.selectAttachedLyrics(&$1, &$2) }
+    }
+
+    open func setFingering(_ finger: Int) throws -> MSREditState {
+        try edit("The MuseScore render core could not set that fingering.") { $0.pointee.setFingering(Int32(finger), &$1, &$2) }
     }
 
     open func setSelectedText(_ text: String) throws -> MSREditState {
@@ -506,9 +518,9 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
         }
     }
 
-    open func addTempo(beatUnit: String, bpm: Int) throws -> MSREditState {
+    open func addTempo(beatUnit: String, bpm: Int, text: String) throws -> MSREditState {
         try edit("The MuseScore render core could not add that tempo marking.") {
-            $0.pointee.addTempo(std.string(beatUnit), Int32(bpm), &$1, &$2)
+            $0.pointee.addTempo(std.string(beatUnit), Int32(bpm), &$1, &$2, std.string(text))
         }
     }
 

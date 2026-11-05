@@ -119,6 +119,7 @@ struct LibraryView: View {
                     openAction: openScore,
                     editInfoAction: presentScoreInfoEditor,
                     deleteAction: { scorePendingDeletion = $0 },
+                    duplicateAction: model.duplicateScore,
                     activeFolder: activeSetlistFolder,
                     addToFolderAction: { scorePendingFolderSelection = $0 },
                     removeFromFolderAction: { score, folder in
@@ -206,6 +207,7 @@ struct LibraryView: View {
                     openAction: openScore,
                     editInfoAction: presentScoreInfoEditor,
                     deleteAction: { scorePendingDeletion = $0 },
+                    duplicateAction: model.duplicateScore,
                     activeSetlist: activeSetlistFolder,
                     showAddScoresAction: { folder in
                         folderPendingScoreAdd = FolderScoreAddRequest(id: folder.id)
@@ -303,6 +305,17 @@ struct LibraryView: View {
 
             readerPresentation = LibraryReaderPresentation(session: session, startPageIndex: 0)
             model.consumePendingImportedSession()
+        }
+        .onChangeCompatible(of: readerPresentation?.id) { _ in
+            model.isReaderPresented = readerPresentation != nil
+            guard readerPresentation == nil, model.heldOpenURL != nil else {
+                return
+            }
+            Task { @MainActor in
+                // Let the reader's cover finish dismissing before a sheet presents.
+                try? await Task.sleep(for: .milliseconds(400))
+                model.importHeldOpenURL()
+            }
         }
         .alert(item: visibleErrorAlert) { alert in
             Alert(title: Text(alert.title), message: Text(alert.message))
@@ -414,6 +427,7 @@ struct LibraryView: View {
                     )
                 }
             }
+                .environment(\.scoreReaderCloseRequest, model.readerCloseRequest)
                 .onDisappear {
                     guard presentation.setlistSequence == nil else {
                         return
@@ -1422,6 +1436,7 @@ struct PhoneLibraryView: View {
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
+    let duplicateAction: (ReaderRecentDocument) -> Void
     let activeFolder: LibrarySetlistFolder?
     let addToFolderAction: (ReaderRecentDocument) -> Void
     let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
@@ -1689,6 +1704,7 @@ struct PhoneLibraryView: View {
                             openAction: openAction,
                             editInfoAction: editInfoAction,
                             deleteAction: deleteAction,
+                            duplicateAction: duplicateAction,
                             activeFolder: activeFolder,
                             addToFolderAction: addToFolderAction,
                             removeFromFolderAction: removeFromFolderAction
@@ -1700,6 +1716,7 @@ struct PhoneLibraryView: View {
                             openAction: openAction,
                             editInfoAction: editInfoAction,
                             deleteAction: deleteAction,
+                            duplicateAction: duplicateAction,
                             activeFolder: activeFolder,
                             addToFolderAction: addToFolderAction,
                             removeFromFolderAction: removeFromFolderAction
@@ -1922,6 +1939,7 @@ struct PhoneScoreList: View {
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
+    let duplicateAction: (ReaderRecentDocument) -> Void
     let activeFolder: LibrarySetlistFolder?
     let addToFolderAction: (ReaderRecentDocument) -> Void
     let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
@@ -1934,6 +1952,7 @@ struct PhoneScoreList: View {
                     openAction: { openAction(score) },
                     editInfoAction: { editInfoAction(score) },
                     deleteAction: { deleteAction(score) },
+                    duplicateAction: { duplicateAction(score) },
                     activeFolder: activeFolder,
                     addToFolderAction: { addToFolderAction(score) },
                     removeFromFolderAction: { folder in
@@ -1964,6 +1983,7 @@ struct PhoneScoreGrid: View {
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
+    let duplicateAction: (ReaderRecentDocument) -> Void
     let activeFolder: LibrarySetlistFolder?
     let addToFolderAction: (ReaderRecentDocument) -> Void
     let removeFromFolderAction: (ReaderRecentDocument, LibrarySetlistFolder) -> Void
@@ -1981,6 +2001,7 @@ struct PhoneScoreGrid: View {
                     openAction: { openAction(score) },
                     editInfoAction: { editInfoAction(score) },
                     deleteAction: { deleteAction(score) },
+                    duplicateAction: { duplicateAction(score) },
                     addToFolderAction: { addToFolderAction(score) },
                     removeFromFolderAction: activeFolder.map { folder in
                         { removeFromFolderAction(score, folder) }
@@ -1996,6 +2017,7 @@ struct PhoneScoreListRow: View {
     let openAction: () -> Void
     let editInfoAction: () -> Void
     let deleteAction: () -> Void
+    let duplicateAction: () -> Void
     let activeFolder: LibrarySetlistFolder?
     let addToFolderAction: () -> Void
     let removeFromFolderAction: (LibrarySetlistFolder) -> Void
@@ -2037,6 +2059,9 @@ struct PhoneScoreListRow: View {
         .contextMenu {
             Button(action: editInfoAction) {
                 Label("Edit Info", systemImage: "square.and.pencil")
+            }
+            Button(action: duplicateAction) {
+                Label("Duplicate", systemImage: "doc.on.doc")
             }
             Button(action: addToFolderAction) {
                 Label("Add to Setlist", systemImage: "text.badge.plus")
@@ -2289,6 +2314,7 @@ struct LibraryDashboardView: View {
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
+    let duplicateAction: (ReaderRecentDocument) -> Void
     let activeSetlist: LibrarySetlistFolder?
     let showAddScoresAction: (LibrarySetlistFolder) -> Void
     let deleteSetlistAction: (LibrarySetlistFolder) -> Void
@@ -2371,6 +2397,7 @@ struct LibraryDashboardView: View {
                         openAction: openAction,
                         editInfoAction: editInfoAction,
                         deleteAction: deleteAction,
+                        duplicateAction: duplicateAction,
                         removeFromSetlistAction: activeSetlist.map { setlist in
                             { score in removeFromSetlistAction(score, setlist) }
                         }
@@ -2385,6 +2412,7 @@ struct LibraryDashboardView: View {
                                 openAction: { openAction(score) },
                                 editInfoAction: { editInfoAction(score) },
                                 deleteAction: { deleteAction(score) },
+                                duplicateAction: { duplicateAction(score) },
                                 removeFromFolderAction: activeSetlist.map { setlist in
                                     { removeFromSetlistAction(score, setlist) }
                                 }
@@ -2593,6 +2621,7 @@ struct LibraryScoreList: View {
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
+    let duplicateAction: (ReaderRecentDocument) -> Void
     let removeFromSetlistAction: ((ReaderRecentDocument) -> Void)?
 
     var body: some View {
@@ -2603,6 +2632,7 @@ struct LibraryScoreList: View {
                     openAction: { openAction(score) },
                     editInfoAction: { editInfoAction(score) },
                     deleteAction: { deleteAction(score) },
+                    duplicateAction: { duplicateAction(score) },
                     removeFromSetlistAction: removeFromSetlistAction.map { action in
                         { action(score) }
                     }
@@ -2630,6 +2660,7 @@ struct LibraryScoreListRow: View {
     let openAction: () -> Void
     let editInfoAction: () -> Void
     let deleteAction: () -> Void
+    let duplicateAction: () -> Void
     let removeFromSetlistAction: (() -> Void)?
 
     var body: some View {
@@ -2666,6 +2697,9 @@ struct LibraryScoreListRow: View {
         .contextMenu {
             Button(action: editInfoAction) {
                 Label("Edit Info", systemImage: "square.and.pencil")
+            }
+            Button(action: duplicateAction) {
+                Label("Duplicate", systemImage: "doc.on.doc")
             }
             if let removeFromSetlistAction {
                 Button(action: removeFromSetlistAction) {
@@ -2972,6 +3006,7 @@ struct LibraryScoreCard: View {
     let openAction: () -> Void
     let editInfoAction: () -> Void
     let deleteAction: () -> Void
+    let duplicateAction: () -> Void
     let addToFolderAction: (() -> Void)?
     let removeFromFolderAction: (() -> Void)?
 
@@ -2983,6 +3018,7 @@ struct LibraryScoreCard: View {
         openAction: @escaping () -> Void,
         editInfoAction: @escaping () -> Void,
         deleteAction: @escaping () -> Void,
+        duplicateAction: @escaping () -> Void,
         addToFolderAction: (() -> Void)? = nil,
         removeFromFolderAction: (() -> Void)? = nil
     ) {
@@ -2991,6 +3027,7 @@ struct LibraryScoreCard: View {
         self.openAction = openAction
         self.editInfoAction = editInfoAction
         self.deleteAction = deleteAction
+        self.duplicateAction = duplicateAction
         self.addToFolderAction = addToFolderAction
         self.removeFromFolderAction = removeFromFolderAction
     }
@@ -3032,6 +3069,9 @@ struct LibraryScoreCard: View {
             .contextMenu {
                 Button(action: editInfoAction) {
                     Label("Edit Info", systemImage: "square.and.pencil")
+                }
+                Button(action: duplicateAction) {
+                    Label("Duplicate", systemImage: "doc.on.doc")
                 }
                 if let addToFolderAction {
                     Button(action: addToFolderAction) {
@@ -3674,6 +3714,18 @@ struct SetlistScoreReaderHost: View {
             )
             retryLoadingTitle = nil
         }
+    }
+}
+
+/// Bumped when a score is opened from another app while the reader is open; the reader closes.
+struct ScoreReaderCloseRequestKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
+extension EnvironmentValues {
+    var scoreReaderCloseRequest: Int {
+        get { self[ScoreReaderCloseRequestKey.self] }
+        set { self[ScoreReaderCloseRequestKey.self] = newValue }
     }
 }
 

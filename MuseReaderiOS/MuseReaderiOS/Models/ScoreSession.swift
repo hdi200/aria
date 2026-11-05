@@ -357,6 +357,11 @@ enum ScoreNoteDuration: Int, CaseIterable, Identifiable, Sendable {
     case quarter = 4
     case eighth = 8
     case sixteenth = 16
+    case thirtySecond = 32
+    case sixtyFourth = 64
+
+    /// The main row; 32nd and 64th live in the More Notes row.
+    static let toolbarDurations: [ScoreNoteDuration] = [.whole, .half, .quarter, .eighth, .sixteenth]
 
     var id: Int {
         rawValue
@@ -374,6 +379,10 @@ enum ScoreNoteDuration: Int, CaseIterable, Identifiable, Sendable {
             return "1/8"
         case .sixteenth:
             return "1/16"
+        case .thirtySecond:
+            return "1/32"
+        case .sixtyFourth:
+            return "1/64"
         }
     }
 
@@ -389,6 +398,10 @@ enum ScoreNoteDuration: Int, CaseIterable, Identifiable, Sendable {
             return "Eighth note"
         case .sixteenth:
             return "Sixteenth note"
+        case .thirtySecond:
+            return "32nd note"
+        case .sixtyFourth:
+            return "64th note"
         }
     }
 }
@@ -411,6 +424,11 @@ enum ScoreSelectedElementKind: Sendable, Equatable {
     case text
     case chordText
     case other
+}
+
+enum ScoreGraceNoteKind: Int, Sendable, Equatable {
+    case acciaccatura = 0
+    case appoggiatura = 1
 }
 
 enum ScoreAccidentalKind: Int, Sendable, Equatable {
@@ -450,6 +468,7 @@ struct ScoreSelectedElement: Sendable, Equatable {
     let canChangePitch: Bool
     let canFillWithSlashes: Bool
     let isDotted: Bool
+    var isDoubleDotted = false
     let isTiedForward: Bool
     let textContent: String?
     let textKind: String?
@@ -487,6 +506,14 @@ struct ScoreSelectedElement: Sendable, Equatable {
     /// highlight there, while the selection's actions stay on its own page.
     var isHighlightOnly = false
 
+    /// Navigation can repaint the same element on every read. Rendered PDF/image
+    /// bytes are presentation state, so full Equatable equality is not identity.
+    func hasSameNavigationPosition(as other: Self) -> Bool {
+        pageIndex == other.pageIndex && kind == other.kind && partID == other.partID
+            && measureIndex == other.measureIndex && tick == other.tick
+            && normalizedRect == other.normalizedRect
+    }
+
     func highlightOnly(onPage otherPageIndex: Int) -> ScoreSelectedElement? {
         guard let rects = otherPageHighlightRects[otherPageIndex], let firstRect = rects.first else {
             return nil
@@ -511,12 +538,7 @@ struct ScoreSelectedElement: Sendable, Equatable {
             return nil
         }
 
-        let bpmText = textContent.split { !$0.isNumber }.last.map(String.init)
-        guard let bpmText, let bpm = Int(bpmText), (20...300).contains(bpm) else {
-            return nil
-        }
-
-        return TempoValue(beatUnit: tempoBeatUnit(from: textContent), bpm: bpm)
+        return TempoValue(editing: textContent)
     }
 
     var currentTimeSignatureValue: ScoreTimeSignatureValue {
@@ -524,6 +546,10 @@ struct ScoreSelectedElement: Sendable, Equatable {
             numerator: currentTimeSignatureNumerator,
             denominator: currentTimeSignatureDenominator
         )
+    }
+
+    var canEditFingering: Bool {
+        kind == .note || textKind == "Fingering"
     }
 
     var allowsPlainTextEditing: Bool {
@@ -610,20 +636,6 @@ struct ScoreSelectedElement: Sendable, Equatable {
         return (pitchClass + stepDirection + 12) % 12
     }
 
-    private func tempoBeatUnit(from text: String) -> TempoBeatUnit {
-        if text.contains("𝅗𝅥") {
-            return .half
-        }
-        if text.contains("♪") || text.contains("𝅘𝅥𝅮") {
-            return .eighth
-        }
-        if text.contains(".") {
-            return .dottedQuarter
-        }
-
-        return .quarter
-    }
-
     private func nearestNaturalStep(for pitchClass: Int, in naturalPitchClasses: [Int]) -> Int {
         var bestStep = 0
         var bestDistance = Int.max
@@ -668,6 +680,7 @@ struct ScoreEditingState: Sendable, Equatable {
     var noteInputEnabled: Bool
     var noteInputInsertsRests: Bool
     var noteInputIsDotted: Bool
+    var noteInputIsDoubleDotted = false
     var duration: ScoreNoteDuration
     var currentVoice: Int
     var canUndo: Bool

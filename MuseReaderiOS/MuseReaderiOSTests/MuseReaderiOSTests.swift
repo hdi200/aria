@@ -21,17 +21,6 @@ struct MuseReaderiOSTests {
     }
 
     @Test
-    func featureTourUsesOriginalInstallDate() {
-        let beforeRelease = ScoreReaderFeatureTourStore.featureReleaseDate.addingTimeInterval(-1)
-        let atRelease = ScoreReaderFeatureTourStore.featureReleaseDate
-        let afterRelease = ScoreReaderFeatureTourStore.featureReleaseDate.addingTimeInterval(1)
-
-        #expect(ScoreReaderFeatureTourStore.isExistingInstall(originalPurchaseDate: beforeRelease))
-        #expect(!ScoreReaderFeatureTourStore.isExistingInstall(originalPurchaseDate: atRelease))
-        #expect(!ScoreReaderFeatureTourStore.isExistingInstall(originalPurchaseDate: afterRelease))
-    }
-
-    @Test
     func updateNoticeUsesOriginalInstallDate() {
         let beforeRelease = UpdateNoticeStore.releaseDate.addingTimeInterval(-1)
         let atRelease = UpdateNoticeStore.releaseDate
@@ -40,8 +29,8 @@ struct MuseReaderiOSTests {
         #expect(UpdateNoticeStore.isExistingInstall(originalPurchaseDate: beforeRelease))
         #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: atRelease))
         #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: afterRelease))
-        // October 30, 2026, 12:00 AM Eastern (EDT, UTC-4): installs on October 29 or earlier see it.
-        #expect(UpdateNoticeStore.releaseDate == ISO8601DateFormatter().date(from: "2026-10-30T04:00:00Z"))
+        // November 6, 2026, 12:00 AM Eastern (EST, UTC-5): installs on November 5 or earlier see it.
+        #expect(UpdateNoticeStore.releaseDate == ISO8601DateFormatter().date(from: "2026-11-06T05:00:00Z"))
     }
 
     @Test
@@ -57,10 +46,10 @@ struct MuseReaderiOSTests {
         let suiteName = "UpdateNoticeTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(2, forKey: "UpdateNotice.seenVersion")
+        defaults.set(3, forKey: "UpdateNotice.seenVersion")
         // The previous release's audience decision must not hide the new notice.
-        defaults.set(false, forKey: "UpdateNotice.v2.isExistingInstall")
-        defaults.set(true, forKey: "UpdateNotice.v3.isExistingInstall")
+        defaults.set(false, forKey: "UpdateNotice.v3.isExistingInstall")
+        defaults.set(true, forKey: "UpdateNotice.v4.isExistingInstall")
         let store = UpdateNoticeStore(userDefaults: defaults)
 
         #expect(await store.shouldPresentNotice())
@@ -73,17 +62,9 @@ struct MuseReaderiOSTests {
         let suiteName = "UpdateNoticeTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(false, forKey: "UpdateNotice.v3.isExistingInstall")
+        defaults.set(false, forKey: "UpdateNotice.v4.isExistingInstall")
         let store = UpdateNoticeStore(userDefaults: defaults)
         #expect(!(await store.shouldPresentNotice()))
-    }
-
-    @Test
-    func featureTourUsesApprovedMixerCopy() {
-        #expect(
-            ScoreReaderFeatureTour.defaultSteps.first?.message
-                == "Use the mixer to adjust volume and pan, or mute and solo any part. Your mix is saved with this score."
-        )
     }
 
     @Test
