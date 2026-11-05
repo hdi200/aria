@@ -78,7 +78,11 @@ class EditingPanelsScreenshotTest {
         // Merely opening the panel must leave the score untouched.
         click("Text")
         clickContains("Chord Text")
-        for (label in listOf("C", "B", "9", "11", "13", "/", "Erase chord character", "Next chord position")) {
+        val chordKeys = listOf(
+            "C", "B", "Chord flat", "Chord sharp", "9", "11", "13", "/",
+            "Erase chord character", "Enter chord and advance"
+        )
+        for (label in chordKeys) {
             assertInsideScreen(waitFor(label))
         }
         shot("07-chord-entry")
@@ -86,8 +90,8 @@ class EditingPanelsScreenshotTest {
         click("min")
         click("7")
         shot("08-chord-draft")
-        // Text cancels the draft; no test chord is committed.
-        click("Text")
+        // Back to Text cancels the draft.
+        click("Back to Text")
         shot("09-text-restored")
     }
 

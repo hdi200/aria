@@ -109,16 +109,9 @@ struct UpdateNoticeSheet: View {
         let detail: String
         /// Split View and Stage Manager are iPad-only, so iPhone skips the item.
         var isPadOnly = false
-        /// Listed first on an iPhone Duo and last everywhere else.
-        var isDuo = false
     }
 
     private static let fixes: [Item] = {
-        let engine = Item(
-            systemImage: "checkmark.circle",
-            title: "MuseScore Studio 4.7.6",
-            detail: "Aria now uses the same engine as the latest desktop release."
-        )
         #if os(Android)
         return [
             Item(
@@ -127,7 +120,6 @@ struct UpdateNoticeSheet: View {
                 detail: "Aria now shows up in Files by Google and other file managers that label scores "
                     + "as zip files. Opening a score while another is open now works too."
             ),
-            engine,
         ]
         #else
         return [
@@ -139,7 +131,8 @@ struct UpdateNoticeSheet: View {
             Item(
                 systemImage: "checkmark.circle",
                 title: "Opening scores from other apps",
-                detail: "Opening a score while another is open now saves the first one and opens the new one."
+                detail: "Opening a score from Files or another app while a score is open "
+                    + "now saves the current score and opens the new one."
             ),
             Item(
                 systemImage: "checkmark.circle",
@@ -152,29 +145,24 @@ struct UpdateNoticeSheet: View {
                 title: "Transpose",
                 detail: "The sheet now starts at the top instead of leaving a gap."
             ),
-            engine,
         ]
         #endif
     }()
 
-    private static let items: [Item] = {
-        #if os(iOS)
-        let chordAdvanceTitle = "Enter"
-        #else
-        let chordAdvanceTitle = "Next"
-        #endif
+    private static var items: [Item] {
+        let fingering = Item(
+            systemImage: ScoreReaderPaletteButton.fingeringSystemImage,
+            title: "Finger numbers",
+            detail: "Add finger numbers to your score. Choose Text > Fingering and tap 1 to 5. "
+                + "Aria moves to the next note for you and skips rests."
+        )
+        let noteEntry = Item(
+            systemImage: "music.note.list",
+            title: "More note entry tools",
+            detail: "Tap the arrow at the end of the note-entry toolbar for 32nd and 64th notes, grace notes, "
+                + "trills, tremolos, double sharps and flats, and more."
+        )
         let shared = [
-            Item(
-                systemImage: ScoreReaderPaletteButton.fingeringSystemImage,
-                title: "Fingering Entry",
-                detail: "Choose Text > Fingering and tap 1 to 5. Aria moves on to the next note by itself, skipping rests."
-            ),
-            Item(
-                systemImage: "music.note.list",
-                title: "More note entry tools",
-                detail: "Tap the arrow at the end of the note-entry toolbar for 32nd and 64th notes, grace notes, "
-                    + "trills, tremolos, double sharps and flats, and more."
-            ),
             Item(
                 systemImage: "doc.on.doc",
                 title: "Duplicate scores",
@@ -185,65 +173,65 @@ struct UpdateNoticeSheet: View {
                 textSymbol: "C7",
                 title: "Redesigned chord entry",
                 detail: "Build chord symbols with buttons for the root, quality, extension and bass instead of "
-                    + "typing them. Previous and \(chordAdvanceTitle) step through the score."
-            ),
-            Item(
-                systemImage: "metronome",
-                title: "Tempo text",
-                detail: "Add words like \"Allegro\" to a tempo marking. Playback still follows the number."
+                    + "typing them. Previous and Enter step through the score."
             ),
         ]
-        #if os(Android)
-        return shared
-        #else
-        return shared + [
-            Item(
-                systemImage: "rectangle.split.2x1",
-                title: "Split View and Stage Manager",
-                detail: "In a narrow window, Aria switches to its iPhone layout so everything fits.",
-                isPadOnly: true
-            ),
-            Item(
-                systemImage: "book.pages",
-                title: "iPhone Duo",
-                detail: "Read two pages side by side like a book, edit with your tools on the other page, "
-                    + "or stand it up like a music stand.",
-                isDuo: true
-            ),
-        ]
-        #endif
-    }()
-
-    private let pages: [Page] = [
-        Page(
-            clip: nil,
-            systemImage: "sparkles",
-            title: "New in this update",
-            message: "",
-            items: items,
-            fixes: fixes
+        let engine = Item(
+            systemImage: "gearshape",
+            title: "MuseScore Studio 4.7.6",
+            detail: "Aria now uses the same engine as MuseScore Studio 4.7.6 on desktop."
         )
-    ]
-    .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
-    .enumerated()
-    .map { index, page in
-        var page = page
-        page.id = index
-        return page
+        let tempo = Item(
+            systemImage: "metronome",
+            title: "Tempo text",
+            detail: "Add words like \"Allegro\" to a tempo marking. Playback still follows the number."
+        )
+        let features = [noteEntry, fingering] + shared
+        #if os(Android)
+        return features + [engine, tempo]
+        #else
+        let duo = Item(
+            systemImage: "book.pages",
+            title: "Redesigned for The iPhone Duo",
+            detail: "Read two pages side by side like a book, or keep your tools on one page while you edit on the other. "
+                + "Partly fold your phone to play and enter notes on a virtual piano, or control playback."
+        )
+        let splitView = Item(
+            systemImage: "rectangle.split.2x1",
+            title: "Split View and Stage Manager",
+            detail: "In a narrow window, Aria switches to its iPhone layout so everything fits.",
+            isPadOnly: true
+        )
+        if DuoPoseMonitor.shared.pose.isDuo {
+            return [duo] + features + [splitView, engine, tempo]
+        }
+        return features + [tempo, splitView, engine, duo]
+        #endif
     }
 
-    /// Drops iPad-only items on iPhone, and moves the iPhone Duo item to the top on a Duo
-    /// (it stays last everywhere else). Read in `body`, so the order follows the pose
-    /// monitor once it has heard from the hinge.
+    private var pages: [Page] {
+        [
+            Page(
+                clip: nil,
+                systemImage: "sparkles",
+                title: "New in this update",
+                message: "",
+                items: Self.items,
+                fixes: Self.fixes
+            )
+        ]
+        .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
+        .enumerated()
+        .map { index, page in
+            var page = page
+            page.id = index
+            return page
+        }
+    }
+
     private func shown(_ items: [Item]) -> [Item] {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-        let fitting = items.filter { !$0.isPadOnly || !isPhone }
-        #if os(Android)
-        return fitting
-        #else
-        guard DuoPoseMonitor.shared.pose.isDuo else { return fitting }
-        return fitting.filter(\.isDuo) + fitting.filter { !$0.isDuo }
-        #endif
+        return items.filter { !$0.isPadOnly || !isPhone }
     }
 
     var body: some View {

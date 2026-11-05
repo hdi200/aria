@@ -675,12 +675,8 @@ struct ScoreReaderView: View {
     }
 
     private var placesPhoneModeBarAboveEntry: Bool {
-        #if os(iOS)
         isPhoneInterface && !duoMovesModeBarToDeck
             && (selectedToolCategory == .chord || selectedToolCategory == .fingering)
-        #else
-        false
-        #endif
     }
 
     @ViewBuilder

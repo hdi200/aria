@@ -84,6 +84,7 @@ SYMBOLS = {
     "gearshape": "settings",
     "hand.tap": "touch_app",
     "hand.point.up.left": "touch_app",
+    "hand.raised": "pan_tool",
     "delete.left": "backspace",
     "hands.clap": "celebration",
     "info.circle": "info",

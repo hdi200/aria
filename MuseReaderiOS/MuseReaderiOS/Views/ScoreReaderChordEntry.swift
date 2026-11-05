@@ -1,9 +1,15 @@
 import SwiftUI
 import UIKit
+#if os(Android)
+import SkipFuse
+#endif
 
 struct ScoreReaderChordEntryPanel: View {
     @State var draft: ScoreReaderChordBuilderDraft
     @State var activeSelectionID: String?
+    #if os(Android)
+    @State var nativePreview: AnyDynamicObject?
+    #endif
 
     let selectionID: String?
     let initialText: String
@@ -46,18 +52,15 @@ struct ScoreReaderChordEntryPanel: View {
         self.cancelAction = cancelAction
         _draft = State(initialValue: ScoreReaderChordBuilderDraft(text: initialText))
         _activeSelectionID = State(initialValue: selectionID)
+        #if os(Android)
+        let fontSize: Double = AriaWindowLayout.shared.usesPhoneLayout ? 22 : 26
+        _nativePreview = State(initialValue: try? AnyDynamicObject(
+            className: "aria.skip.AriaChordPreviewText", initialText, fontSize
+        ))
+        #endif
     }
 
     private var isCompact: Bool { AriaWindowLayout.shared.usesPhoneLayout }
-    private var usesIOSLayout: Bool {
-        #if os(iOS)
-        true
-        #else
-        false
-        #endif
-    }
-    private var advanceTitle: String { usesIOSLayout ? "Enter" : "Next" }
-    private var usesCompactIOSKeys: Bool { usesIOSLayout && isCompact }
     private var hasChanges: Bool { draft.text != initialText && draft.isComplete }
     /// An existing chord erased to nothing is deleted on Done, Previous or Next.
     private var removesChord: Bool { draft.text.isEmpty && !initialText.isEmpty }
@@ -73,48 +76,55 @@ struct ScoreReaderChordEntryPanel: View {
         .onChangeCompatible(of: selectionID) { newID in
             guard activeSelectionID != newID else { return }
             activeSelectionID = newID
-            draft = ScoreReaderChordBuilderDraft(text: initialText)
+            updateDraft { $0 = ScoreReaderChordBuilderDraft(text: initialText) }
         }
         .onChangeCompatible(of: initialText) { newText in
-            draft = ScoreReaderChordBuilderDraft(text: newText)
+            updateDraft { $0 = ScoreReaderChordBuilderDraft(text: newText) }
         }
+    }
+
+    private func updateDraft(_ edit: (inout ScoreReaderChordBuilderDraft) -> Void) {
+        edit(&draft)
+        #if os(Android)
+        if let nativePreview {
+            try? nativePreview.updateText(draft.text) as Void
+        }
+        #endif
     }
 
     private var keys: some View {
         VStack(spacing: spacing) {
-            keyRow(verticalPadding: usesCompactIOSKeys ? 4 : 2) {
+            keyRow(keyCount: 9, hasDivider: true, verticalPadding: isCompact ? 4 : 2) { width in
                 ForEach(ScoreReaderChordDraft.naturalNotes, id: \.self) { root in
                     key(root, selected: draft.selectedRoot == root,
-                        weight: usesCompactIOSKeys ? .bold : .semibold) {
-                        draft.chooseRoot(root)
+                        weight: isCompact ? .bold : .semibold) {
+                        updateDraft { $0.chooseRoot(root) }
                     }
+                    .frame(width: width)
                 }
-                if usesIOSLayout {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.10))
-                        .frame(width: 1, height: 22)
-                        .accessibilityHidden(true)
-                    modifierKey("♭")
-                    modifierKey("#")
-                }
-                if !isCompact && !usesIOSLayout { eraseKey }
+                Rectangle()
+                    .fill(Color.black.opacity(0.10))
+                    .frame(width: 1, height: 22)
+                    .accessibilityHidden(true)
+                modifierKey("♭")
+                    .frame(width: width)
+                modifierKey("#")
+                    .frame(width: width)
             }
-            keyRow(verticalPadding: usesCompactIOSKeys ? 4 : 2) {
-                ForEach(usesIOSLayout ? ["maj", "min", "°", "ø", "aug", "sus"] : ["maj", "min", "dim", "ø", "aug", "sus", "°"], id: \.self) { quality in
+            keyRow(keyCount: 6, verticalPadding: isCompact ? 4 : 2) { width in
+                ForEach(["maj", "min", "°", "ø", "aug", "sus"], id: \.self) { quality in
                     qualityKey(quality)
+                        .frame(width: width)
                 }
             }
-            if isCompact && !usesIOSLayout {
-                extensionRow(Array(ScoreReaderChordDraft.extensions.prefix(5)))
-                extensionRow(Array(ScoreReaderChordDraft.extensions.dropFirst(5)))
-            } else {
-                extensionRow(ScoreReaderChordDraft.extensions)
-            }
-            keyRow {
-                ForEach(usesIOSLayout ? ["add", "no", "♭5", "#5", "/"] : ["♭", "#", "add", "no", "♭5", "#5", "/"], id: \.self) { modifier in
+            extensionRow
+            keyRow(keyCount: 6) { width in
+                ForEach(["add", "no", "♭5", "#5", "/"], id: \.self) { modifier in
                     modifierKey(modifier)
+                        .frame(width: width)
                 }
-                if usesIOSLayout { eraseKey }
+                eraseKey
+                    .frame(width: width)
             }
             navigation
                 .padding(.top, 4)
@@ -126,27 +136,22 @@ struct ScoreReaderChordEntryPanel: View {
     private var header: some View {
         HStack(spacing: isCompact ? 6 : 12) {
             Button(action: cancelAction) {
-                if usesIOSLayout {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.black.opacity(0.80))
-                        .frame(width: 44, height: 44)
-                        .background(Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
-                } else {
-                    Label("Text", systemImage: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.blue)
-                        .frame(minWidth: isCompact ? 64 : 80, minHeight: 44)
-                        .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                }
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.80))
+                    .frame(width: 44, height: 44)
+                    .background(keyFill, in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(usesIOSLayout ? "Back to Text" : "Text")
-            .frame(minWidth: usesIOSLayout ? doneButtonWidth : nil, alignment: .leading)
+            .accessibilityLabel("Back to Text")
+            .frame(minWidth: doneButtonWidth, alignment: .leading)
             Spacer(minLength: 4)
-            chordPreview
+            #if os(Android)
+            ScoreReaderChordPreview(draft: $draft, isCompact: isCompact, nativeText: nativePreview)
+            #else
+            ScoreReaderChordPreview(draft: $draft, isCompact: isCompact)
+            #endif
             Spacer(minLength: 4)
-            if isCompact && !usesIOSLayout { headerEraseKey }
             Button {
                 if hasChanges { insertAction(draft.text) } else if removesChord { removeAction(nil) }
                 doneAction()
@@ -165,87 +170,75 @@ struct ScoreReaderChordEntryPanel: View {
 
     private var doneButtonWidth: CGFloat { isCompact ? 64 : 76 }
 
-    private var chordPreview: some View {
-        Group {
-            if usesIOSLayout {
-                HStack(spacing: 3) {
-                    if !draft.text.isEmpty {
-                        chordPreviewText(draft.text)
-                    }
-                    Rectangle()
-                        .fill(Color.blue)
-                        .frame(width: 2, height: isCompact ? 24 : 28)
-                }
-                .frame(minWidth: isCompact ? 88 : 104, minHeight: isCompact ? 32 : 36)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.25))
-                        .frame(height: 1)
-                }
-            } else {
-                chordPreviewText(draft.text.isEmpty ? "Chord Entry" : draft.text)
+    @ViewBuilder
+    private func keyRow<Content: View>(
+        keyCount: Int,
+        hasDivider: Bool = false,
+        gap: CGFloat? = nil,
+        verticalPadding: CGFloat = 2,
+        @ViewBuilder content: @escaping (CGFloat?) -> Content
+    ) -> some View {
+        #if os(Android)
+        // Give every key its width before drawing. Flexible bridged HStack children
+        // otherwise briefly give the first key the full row before redistributing it.
+        GeometryReader { proxy in
+            let rowGap = gap ?? spacing
+            let gapCount = keyCount - 1 + (hasDivider ? 1 : 0)
+            let dividerWidth: CGFloat = hasDivider ? 1 : 0
+            let keyWidth = max(0, (proxy.size.width - rowGap * CGFloat(gapCount) - dividerWidth) / CGFloat(keyCount))
+            HStack(spacing: rowGap) {
+                content(keyWidth)
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Chord preview")
-        .accessibilityValue(draft.text)
-        .accessibilityHidden(usesIOSLayout && draft.text.isEmpty)
-    }
-
-    private func chordPreviewText(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: isCompact ? 22 : 26, weight: .semibold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-    }
-
-    private var headerEraseKey: some View {
-        eraseKey
-            .frame(width: isCompact ? 44 : 48)
-            .disabled(!isInsertEnabled)
-            .opacity(isInsertEnabled ? 1 : 0.45)
-    }
-
-    private func keyRow<Content: View>(gap: CGFloat? = nil, verticalPadding: CGFloat = 2, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: gap ?? spacing, content: content)
+        .frame(height: 44)
+        .padding(.vertical, verticalPadding)
+        #else
+        HStack(spacing: gap ?? spacing) {
+            content(nil)
+        }
             .padding(.vertical, verticalPadding)
+        #endif
     }
 
-    private func extensionRow(_ degrees: [String]) -> some View {
-        keyRow(gap: usesCompactIOSKeys ? 2 : nil, verticalPadding: usesCompactIOSKeys ? 0 : 2) {
-            ForEach(degrees, id: \.self) { degree in
+    private var extensionRow: some View {
+        keyRow(keyCount: ScoreReaderChordDraft.extensions.count,
+               gap: isCompact ? 2 : nil, verticalPadding: isCompact ? 0 : 2) { width in
+            ForEach(ScoreReaderChordDraft.extensions, id: \.self) { degree in
                 key(degree, selected: draft.selectedExtension == degree, enabled: draft.hasChord,
-                    fontSize: usesCompactIOSKeys ? 16 : nil) {
-                    draft.chooseExtension(degree)
+                    fontSize: isCompact ? 16 : nil) {
+                    updateDraft { $0.chooseExtension(degree) }
                 }
+                .frame(width: width)
             }
         }
     }
 
     private func qualityKey(_ quality: String) -> some View {
         // Imported dim spellings still highlight the single diminished key and can be cleared.
-        let token = usesIOSLayout && quality == "°" && draft.selectedQuality == "dim" ? "dim" : quality
-        let title = usesIOSLayout && quality == "aug" ? "+" : quality
+        let token = quality == "°" && draft.selectedQuality == "dim" ? "dim" : quality
+        let title = quality == "aug" ? "+" : quality
         let spokenName = title == "+" ? "Augmented" : title == "°" ? "Diminished" : title == "ø" ? "Half-diminished" : nil
         return key(title, selected: draft.hasChord && draft.selectedQuality == token, enabled: draft.hasChord,
-                   accessibilityName: usesIOSLayout ? spokenName : nil) {
-            draft.chooseQuality(token)
+                   accessibilityName: spokenName) {
+            updateDraft { $0.chooseQuality(token) }
         }
     }
 
     private func modifierKey(_ title: String) -> some View {
         let token = title.replacingOccurrences(of: "♭", with: "b")
         return key(title, selected: modifierIsSelected(token), enabled: draft.hasChord) {
-            if usesIOSLayout && token == "/" && draft.editsBass {
-                draft.clearSlashBass()
-            } else {
-                draft.pressModifier(token)
+            updateDraft { draft in
+                if token == "/" && draft.editsBass {
+                    draft.clearSlashBass()
+                } else {
+                    draft.pressModifier(token)
+                }
             }
         }
     }
 
     private var eraseKey: some View {
-        Button { draft.backspace() } label: {
+        Button { updateDraft { $0.backspace() } } label: {
             Image(systemName: "delete.left")
                 .font(.system(size: isCompact ? 21 : 25, weight: .medium))
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -254,7 +247,7 @@ struct ScoreReaderChordEntryPanel: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Erase chord character")
-        .onLongPressGesture { draft = ScoreReaderChordBuilderDraft() }
+        .onLongPressGesture { updateDraft { $0 = ScoreReaderChordBuilderDraft() } }
     }
 
     private var keyFill: Color { Color.black.opacity(0.045) }
@@ -262,8 +255,8 @@ struct ScoreReaderChordEntryPanel: View {
     private func key(_ title: String, selected: Bool = false, enabled: Bool = true,
                      fontSize: CGFloat? = nil, weight: Font.Weight? = nil,
                      accessibilityName: String? = nil, action: @escaping () -> Void) -> some View {
-        let defaultFontSize: CGFloat = usesIOSLayout && title == "♭" ? (isCompact ? 24 : 28) : (isCompact ? 17 : 20)
-        let defaultWeight: Font.Weight = usesCompactIOSKeys ? .medium : .semibold
+        let defaultFontSize: CGFloat = title == "♭" ? (isCompact ? 24 : 28) : (isCompact ? 17 : 20)
+        let defaultWeight: Font.Weight = isCompact ? .medium : .semibold
         return Button(action: action) {
             Text(title)
                 .font(.system(size: fontSize ?? defaultFontSize, weight: weight ?? defaultWeight))
@@ -307,7 +300,7 @@ struct ScoreReaderChordEntryPanel: View {
                 if hasChanges { insertAndAdvanceAction(draft.text) } else if removesChord { removeAction(true) } else { nextAction() }
             } label: {
                 HStack {
-                    Text(advanceTitle)
+                    Text("Enter")
                     Image(systemName: "chevron.right")
                 }
                 .foregroundStyle(Color.white)
@@ -315,7 +308,7 @@ struct ScoreReaderChordEntryPanel: View {
                 .padding(.horizontal, isCompact ? 16 : 32)
                 .background(Color.blue, in: RoundedRectangle(cornerRadius: 10))
             }
-            .accessibilityLabel(advanceTitle == "Enter" ? "Enter chord and advance" : "Next chord position")
+            .accessibilityLabel("Enter chord and advance")
             .disabled(hasIncompleteDraft)
         }
         .font(.system(size: isCompact ? 14 : 16, weight: .semibold))
@@ -326,6 +319,73 @@ struct ScoreReaderChordEntryPanel: View {
         if token == "/" { return draft.editsBass }
         if token == "b" || token == "#" { return draft.hasAccidental(token) }
         return draft.hasModifier(token)
+    }
+}
+
+struct ScoreReaderChordPreview: View {
+    @Binding var draft: ScoreReaderChordBuilderDraft
+    let isCompact: Bool
+    #if os(Android)
+    let nativeText: AnyDynamicObject?
+    #endif
+
+    var body: some View {
+        let text = draft.text
+        return HStack(spacing: 3) {
+            #if os(Android)
+            // This Compose label observes its own text so Skip cannot retain a stale glyph.
+            if let nativeText {
+                ComposeView { nativeText }
+            }
+            #else
+            if !text.isEmpty {
+                Text(verbatim: text)
+                    .font(.system(size: isCompact ? 22 : 26, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            #endif
+            ScoreReaderChordCaret(text: text, height: isCompact ? 24 : 28)
+        }
+        .frame(minWidth: isCompact ? 88 : 104, minHeight: isCompact ? 32 : 36)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.black.opacity(0.25))
+                .frame(height: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Chord preview")
+        .accessibilityValue(text)
+        .accessibilityHidden(text.isEmpty)
+    }
+}
+
+struct ScoreReaderChordCaret: View {
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @State var isVisible = true
+
+    let text: String
+    let height: CGFloat
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.blue)
+            .frame(width: 2, height: height)
+            .opacity(reduceMotion || isVisible ? 1 : 0)
+            .accessibilityHidden(true)
+            .task(id: reduceMotion ? nil : text) {
+                isVisible = true
+                guard !reduceMotion else { return }
+                while !Task.isCancelled {
+                    do {
+                        try await Task.sleep(for: .milliseconds(530))
+                    } catch {
+                        return
+                    }
+                    guard !Task.isCancelled else { return }
+                    isVisible.toggle()
+                }
+            }
     }
 }
 

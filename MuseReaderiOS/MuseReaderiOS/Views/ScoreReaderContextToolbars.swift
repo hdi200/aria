@@ -1375,13 +1375,6 @@ struct ScoreReaderFingeringPanel: View {
                 .frame(minWidth: 56, minHeight: 44)
 
                 Spacer()
-                Label("Fingering Entry", systemImage: ScoreReaderPaletteButton.fingeringSystemImage)
-                    .font(.system(size: isCompact ? 18 : 22, weight: .semibold))
-                    .foregroundStyle(Color.black.opacity(0.88))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Spacer()
-                Color.clear.frame(width: 56, height: 1)
             }
 
             HStack(spacing: isCompact ? 8 : 12) {

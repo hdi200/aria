@@ -27,8 +27,8 @@ from this editing session, including shared Android behavior and verification li
 
 - Replaced keyboard-based chord entry in the Text deck with **Chord Entry**: root,
   quality, extension, accidental, alteration, slash-bass and erase buttons, plus a
-  live chord preview and Previous/Next controls.
-- Previous and Next commit a changed, complete draft before navigating. Existing
+  live chord preview and Previous/Enter controls.
+- Previous and Enter commit a changed, complete draft before navigating. Existing
   symbols prefill from the score when revisiting a position in either direction.
   Imported spellings remain unchanged until edited; incomplete drafts cannot commit.
 - Renamed Apply to **Done**. Done commits a changed complete chord and returns to
@@ -36,16 +36,16 @@ from this editing session, including shared Android behavior and verification li
 - Lyrics Done and dismissal also return to Text. Both the compact phone and
   full-size tablet/folded layouts use this destination, retaining lyric-session
   cleanup and keyboard dismissal.
-- iOS Chord Entry fits all extensions on one row, with smaller numbers in compact
+- Chord Entry fits all extensions on one row, with smaller numbers in compact
   layouts. Unselected keys share a light gray fill. The quality row shows maj,
   min, °, ø, + and sus. The preview stays blank until there is a chord to show.
-  Android phones keep two extension rows.
-- The iOS chord preview has an underline and a blue caret. On iPhone, larger
-  extension numbers and heavier root letters distinguish the rows, and the mode
-  toolbar sits above the chord and Fingering Entry panels.
+  The underlined preview has a blinking blue caret that stays steady with Reduce
+  Motion enabled. On phones, larger extension numbers and heavier root letters
+  distinguish the rows, and the mode toolbar sits above the chord and Fingering
+  Entry panels.
 - On iPhone, the toolbar fade clears at the end of the scroll. Chord Text uses
-  C7 again, and Fingering uses the open-hand icon on iPhone and iPad.
-- On iPhone and iPad, flat and sharp follow B, the flat glyph is larger, and
+  C7 again. Fingering uses an open-hand icon on iOS and Android.
+- Flat and sharp follow B, the flat glyph is larger, and
   Enter keeps its arrow. Backspace sits directly after slash in the modifier row.
   Tap the active slash key to clear the bass, or tap a selected extension to clear it.
 - Entry preview now uses the chord pitches MuseScore returns, including a slash
