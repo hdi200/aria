@@ -415,24 +415,16 @@
         }
 
         if (type == mu::engraving::TextStyleType::HARMONY_A) {
-            if (mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(commandItem)) {
-                const mu::engraving::Segment* segment = chordRest->segment();
-                const mu::engraving::track_idx_t targetTrack = mu::engraving::trackZeroVoice(chordRest->track());
-                if (segment) {
-                    for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
-                        if (annotation && annotation->isHarmony() && annotation->track() == targetTrack) {
-                            mu::engraving::EngravingItem* selectedHarmony = annotation;
-                            if (commandScore != score) {
-                                selectedHarmony = linkedItemInScore(annotation, score);
-                            }
-                            if (selectedHarmony) {
-                                score->select(selectedHarmony, mu::engraving::SelectType::SINGLE, selectedHarmony->staffIdx());
-                            }
-                            output = makeEditState(score);
-                            return true;
-                        }
-                    }
+            if (mu::engraving::Harmony* existing = attachedChordText(mu::engraving::InputState::chordRest(commandItem))) {
+                mu::engraving::EngravingItem* selectedHarmony = existing;
+                if (commandScore != score) {
+                    selectedHarmony = linkedItemInScore(existing, score);
                 }
+                if (selectedHarmony) {
+                    score->select(selectedHarmony, mu::engraving::SelectType::SINGLE, selectedHarmony->staffIdx());
+                }
+                output = makeEditState(score);
+                return true;
             }
         }
 
@@ -552,6 +544,29 @@
         return true;
     }
 
+    // A chord symbol takes the track of the note it was added to, so one on a voice 2 note
+    // sits on voice 2. Prefer the chord rest's own track, then any other voice of its staff.
+    static mu::engraving::Harmony* attachedChordText(const mu::engraving::ChordRest* chordRest)
+    {
+        const mu::engraving::Segment* segment = chordRest ? chordRest->segment() : nullptr;
+        if (!segment) {
+            return nullptr;
+        }
+        mu::engraving::Harmony* staffMatch = nullptr;
+        for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
+            if (!annotation || !annotation->isHarmony() || annotation->staffIdx() != chordRest->staffIdx()) {
+                continue;
+            }
+            if (annotation->track() == chordRest->track()) {
+                return mu::engraving::toHarmony(annotation);
+            }
+            if (!staffMatch) {
+                staffMatch = mu::engraving::toHarmony(annotation);
+            }
+        }
+        return staffMatch;
+    }
+
     bool selectAttachedChordText(msr::render::ScoreEditState& output,
                                  std::string& errorMessage)
     {
@@ -573,15 +588,8 @@
             return true;
         }
 
-        const mu::engraving::Segment* segment = chordRest->segment();
-        const mu::engraving::track_idx_t targetTrack = mu::engraving::trackZeroVoice(chordRest->track());
-        if (segment) {
-            for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
-                if (annotation && annotation->isHarmony() && annotation->track() == targetTrack) {
-                    score->select(annotation, mu::engraving::SelectType::SINGLE, annotation->staffIdx());
-                    break;
-                }
-            }
+        if (mu::engraving::Harmony* harmony = attachedChordText(chordRest)) {
+            score->select(harmony, mu::engraving::SelectType::SINGLE, harmony->staffIdx());
         }
 
         output = makeEditState(score);
@@ -4363,16 +4371,7 @@
 
         mu::engraving::EngravingItem* selectableTarget = nullptr;
         if (selectingFromChordText && targetChordRest) {
-            const mu::engraving::Segment* segment = targetChordRest->segment();
-            const mu::engraving::track_idx_t targetTrack = mu::engraving::trackZeroVoice(targetChordRest->track());
-            if (segment) {
-                for (mu::engraving::EngravingItem* annotation : segment->annotations()) {
-                    if (annotation && annotation->isHarmony() && annotation->track() == targetTrack) {
-                        selectableTarget = annotation;
-                        break;
-                    }
-                }
-            }
+            selectableTarget = attachedChordText(targetChordRest);
         }
         if (!selectableTarget) {
             selectableTarget = noteOrRestSelectionItem(targetChordRest);

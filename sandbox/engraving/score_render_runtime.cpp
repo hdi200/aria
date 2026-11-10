@@ -3046,7 +3046,17 @@ mu::engraving::ChordRest* selectedChordRest(const mu::engraving::Score* score)
         mu::engraving::Harmony* harmony = mu::engraving::toHarmony(selectedItem);
         mu::engraving::Segment* parentSegment = harmony ? harmony->getParentSeg() : nullptr;
         if (parentSegment) {
-            return mu::engraving::InputState::chordRest(parentSegment->element(harmony->track()));
+            if (mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(parentSegment->element(harmony->track()))) {
+                return chordRest;
+            }
+            // Its own voice has nothing on this beat; use another voice of the staff.
+            const mu::engraving::track_idx_t firstTrack = mu::engraving::trackZeroVoice(harmony->track());
+            for (mu::engraving::track_idx_t track = firstTrack; track < firstTrack + mu::engraving::VOICES; ++track) {
+                if (mu::engraving::ChordRest* chordRest = mu::engraving::InputState::chordRest(parentSegment->element(track))) {
+                    return chordRest;
+                }
+            }
+            return nullptr;
         }
     }
 

@@ -3,99 +3,93 @@ import Testing
 
 @MainActor
 struct ScoreReaderChordBuilderTests {
-    @Test func changesComponentsWithoutAppendingDuplicateRootsOrQualities() {
-        var draft = ScoreReaderChordBuilderDraft(text: "Cmaj7")
-        draft.chooseRoot("D")
-        draft.chooseQuality("min")
-        draft.chooseExtension("9")
-        #expect(draft.text == "Dmin9")
-        #expect(draft.selectedRoot == "D")
-        #expect(draft.selectedQuality == "min")
-        #expect(draft.selectedExtension == "9")
+    private func typed(_ keys: [String], from text: String = "") -> ScoreReaderChordBuilderDraft {
+        var draft = ScoreReaderChordBuilderDraft(text: text)
+        for key in keys { draft.type(key) }
+        return draft
     }
 
-    @Test func changesSlashBassAndKeepsAlterationsBeforeIt() {
-        var draft = ScoreReaderChordBuilderDraft(text: "C7")
-        draft.pressModifier("/")
+    @Test func keysTypeInOrder() {
+        #expect(typed(["B", "b", "7", "b", "9"]).text == "Bb7b9")
+        #expect(typed(["C", "7", "sus", "4"]).text == "C7sus4")
+        #expect(typed(["C", "maj", "7"]).text == "Cmaj7")
+        #expect(typed(["C", "6", "/", "9"]).text == "C6/9")
+        #expect(typed(["F", "#", "maj", "7", "/", "C", "#"]).text == "F#maj7/C#")
+    }
+
+    @Test func majAfterMinorOrDiminishedSpellsTheMajorSeventh() {
+        var draft = typed(["C", "min", "maj"])
+        #expect(draft.text == "Cmin(maj")
         #expect(!draft.isComplete)
-        draft.chooseRoot("G")
-        draft.pressModifier("b")
-        #expect(draft.text == "C7/Gb")
-        draft.pressModifier("b5")
-        #expect(draft.text == "C7b5/Gb")
-        draft.pressModifier("add")
-        #expect(!draft.isComplete)
-        draft.chooseExtension("11")
-        #expect(draft.text == "C7b5add11/Gb")
+        draft.type("7")
+        #expect(draft.text == "Cmin(maj7)")
         #expect(draft.isComplete)
+        #expect(typed(["C", "°", "maj", "7"]).text == "C°(maj7)")
+
+        draft.backspace()
+        #expect(draft.text == "Cmin(maj")
+        draft.backspace()
+        #expect(draft.text == "Cmin")
+        draft.backspace()
+        #expect(draft.text == "C")
     }
 
-    @Test func preservesPrefilledChordUntilAComponentIsChanged() {
-        var draft = ScoreReaderChordBuilderDraft(text: "F#7(b9)/C#")
-        #expect(draft.text == "F#7(b9)/C#")
-        draft.chooseRoot("A")
-        #expect(draft.text == "A#7(b9)/C#")
-        draft.chooseQuality("maj")
-        #expect(draft.text == "A#maj7(b9)/C#")
-        draft.chooseExtension("13")
-        #expect(draft.text == "A#maj13(b9)/C#")
-        let previous = ScoreReaderChordBuilderDraft(text: "Ebmaj7/Bb")
-        #expect(previous.text == "Ebmaj7/Bb")
-        #expect(previous.selectedRoot == "E")
-        #expect(previous.selectedQuality == "maj")
-    }
-
-    @Test func dominantChordsLightNoQualityAndTappingAQualityAgainClearsIt() {
-        var draft = ScoreReaderChordBuilderDraft(text: "C7")
-        #expect(draft.selectedQuality == "")
-        draft.chooseQuality("maj")
-        #expect(draft.text == "Cmaj7")
-        draft.chooseQuality("maj")
-        #expect(draft.text == "C7")
-        draft.chooseQuality("min")
-        draft.chooseQuality("min")
-        #expect(draft.text == "C7")
-
-        var triad = ScoreReaderChordBuilderDraft(text: "C")
-        #expect(triad.selectedQuality == "maj")
-        triad.chooseQuality("maj")
-        #expect(triad.text == "C")
-        #expect(ScoreReaderChordBuilderDraft(text: "C6").selectedQuality == "maj")
-    }
-
-    @Test func tappingTheSelectedExtensionClearsOnlyThatExtension() {
-        var draft = ScoreReaderChordBuilderDraft(text: "Amin9/E")
-        draft.chooseExtension("9")
-        #expect(draft.text == "Amin/E")
-        #expect(draft.selectedExtension.isEmpty)
-
-        draft.chooseExtension("7")
-        draft.pressModifier("add")
-        draft.chooseExtension("7")
-        #expect(draft.text == "Amin7add7/E")
-        draft.chooseExtension("7")
-        #expect(draft.text == "Aminadd7/E")
-    }
-
-    @Test func clearingAnExtensionKeepsAnAlteredFifthDistinctFromTheRoot() {
-        var draft = ScoreReaderChordBuilderDraft(text: "C7b5/E")
-        draft.chooseExtension("7")
-        #expect(draft.text == "C(b5)/E")
-        #expect(draft.hasModifier("b5"))
-        #expect(!draft.hasAccidental("b"))
-        draft.pressModifier("b5")
-        #expect(draft.text == "C/E")
-    }
-
-    @Test func clearSlashBassKeepsTheChordAndCancelsAnUnfinishedBass() {
-        var draft = ScoreReaderChordBuilderDraft(text: "C7/E")
-        draft.clearSlashBass()
-        #expect(draft.text == "C7")
-        draft.pressModifier("/")
-        #expect(!draft.isComplete)
-        draft.clearSlashBass()
-        #expect(draft.text == "C7")
+    @Test func anExistingChordStartsAsTypedAndKeysAddToIt() {
+        let draft = ScoreReaderChordBuilderDraft(text: "CmMaj7")
+        #expect(draft.text == "CmMaj7")
         #expect(draft.isComplete)
-        #expect(!draft.editsBass)
+        #expect(typed(["/", "G"], from: "Am7").text == "Am7/G")
+    }
+
+    @Test func backspaceErasesAKeyAtATime() {
+        var draft = ScoreReaderChordBuilderDraft(text: "Bb7")
+        draft.backspace()
+        draft.backspace()
+        #expect(draft.text == "B")
+        draft.type("7")
+        #expect(draft.text == "B7")
+
+        var words = ScoreReaderChordBuilderDraft(text: "Cmaj13add")
+        words.backspace()
+        #expect(words.text == "Cmaj13")
+        words.backspace()
+        #expect(words.text == "Cmaj")
+        words.backspace()
+        #expect(words.text == "C")
+
+        var imported = ScoreReaderChordBuilderDraft(text: "Cdim")
+        imported.backspace()
+        #expect(imported.text == "C")
+
+        var slash = ScoreReaderChordBuilderDraft(text: "C7/E")
+        slash.backspace()
+        #expect(slash.text == "C7/")
+        slash.backspace()
+        #expect(slash.text == "C7")
+    }
+
+    @Test func unfinishedChordsAreNotComplete() {
+        #expect(!typed(["C", "7", "/"]).isComplete)
+        #expect(!typed(["C", "add"]).isComplete)
+        #expect(!typed(["C", "7", "no"]).isComplete)
+        #expect(!typed(["C", "7", "b"]).isComplete)
+        #expect(!typed(["C", "7", "#"]).isComplete)
+        #expect(!ScoreReaderChordBuilderDraft(text: "").isComplete)
+        #expect(!ScoreReaderChordBuilderDraft(text: "maj7").hasChord)
+    }
+
+    @Test func noteAccidentalsAreComplete() {
+        #expect(typed(["C", "b"]).isComplete)
+        #expect(typed(["C", "#", "#"]).isComplete)
+        #expect(typed(["C", "/", "E", "b"]).isComplete)
+        #expect(ScoreReaderChordBuilderDraft(text: "B♭7/A♭").isComplete)
+        #expect(typed(["C", "7", "b", "9"]).isComplete)
+    }
+
+    @Test func clearErasesEverything() {
+        var draft = ScoreReaderChordBuilderDraft(text: "G7/B")
+        draft.clear()
+        #expect(draft.text.isEmpty)
+        #expect(!draft.hasChord)
     }
 }

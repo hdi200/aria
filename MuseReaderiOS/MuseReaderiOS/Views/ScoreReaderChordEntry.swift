@@ -96,9 +96,8 @@ struct ScoreReaderChordEntryPanel: View {
         VStack(spacing: spacing) {
             keyRow(keyCount: 9, hasDivider: true, verticalPadding: isCompact ? 4 : 2) { width in
                 ForEach(ScoreReaderChordDraft.naturalNotes, id: \.self) { root in
-                    key(root, selected: draft.selectedRoot == root,
-                        weight: isCompact ? .bold : .semibold) {
-                        updateDraft { $0.chooseRoot(root) }
+                    key(root, weight: isCompact ? .bold : .semibold) {
+                        updateDraft { $0.type(root) }
                     }
                     .frame(width: width)
                 }
@@ -106,21 +105,21 @@ struct ScoreReaderChordEntryPanel: View {
                     .fill(Color.black.opacity(0.10))
                     .frame(width: 1, height: 22)
                     .accessibilityHidden(true)
-                modifierKey("♭")
+                typingKey("♭", token: "b")
                     .frame(width: width)
-                modifierKey("#")
+                typingKey("#", token: "#")
                     .frame(width: width)
             }
             keyRow(keyCount: 6, verticalPadding: isCompact ? 4 : 2) { width in
-                ForEach(["maj", "min", "°", "ø", "aug", "sus"], id: \.self) { quality in
-                    qualityKey(quality)
+                ForEach(["maj", "min", "°", "ø", "+", "sus"], id: \.self) { quality in
+                    typingKey(quality, token: quality, accessibilityName: Self.spokenQualityNames[quality])
                         .frame(width: width)
                 }
             }
             extensionRow
             keyRow(keyCount: 6) { width in
                 ForEach(["add", "no", "♭5", "#5", "/"], id: \.self) { modifier in
-                    modifierKey(modifier)
+                    typingKey(modifier, token: modifier.replacingOccurrences(of: "♭", with: "b"))
                         .frame(width: width)
                 }
                 eraseKey
@@ -204,36 +203,19 @@ struct ScoreReaderChordEntryPanel: View {
         keyRow(keyCount: ScoreReaderChordDraft.extensions.count,
                gap: isCompact ? 2 : nil, verticalPadding: isCompact ? 0 : 2) { width in
             ForEach(ScoreReaderChordDraft.extensions, id: \.self) { degree in
-                key(degree, selected: draft.selectedExtension == degree, enabled: draft.hasChord,
-                    fontSize: isCompact ? 16 : nil) {
-                    updateDraft { $0.chooseExtension(degree) }
-                }
-                .frame(width: width)
+                typingKey(degree, token: degree, fontSize: isCompact ? 16 : nil)
+                    .frame(width: width)
             }
         }
     }
 
-    private func qualityKey(_ quality: String) -> some View {
-        // Imported dim spellings still highlight the single diminished key and can be cleared.
-        let token = quality == "°" && draft.selectedQuality == "dim" ? "dim" : quality
-        let title = quality == "aug" ? "+" : quality
-        let spokenName = title == "+" ? "Augmented" : title == "°" ? "Diminished" : title == "ø" ? "Half-diminished" : nil
-        return key(title, selected: draft.hasChord && draft.selectedQuality == token, enabled: draft.hasChord,
-                   accessibilityName: spokenName) {
-            updateDraft { $0.chooseQuality(token) }
-        }
-    }
+    private static let spokenQualityNames = ["°": "Diminished", "ø": "Half-diminished", "+": "Augmented"]
 
-    private func modifierKey(_ title: String) -> some View {
-        let token = title.replacingOccurrences(of: "♭", with: "b")
-        return key(title, selected: modifierIsSelected(token), enabled: draft.hasChord) {
-            updateDraft { draft in
-                if token == "/" && draft.editsBass {
-                    draft.clearSlashBass()
-                } else {
-                    draft.pressModifier(token)
-                }
-            }
+    /// Every key but the note letters needs a root to follow.
+    private func typingKey(_ title: String, token: String, fontSize: CGFloat? = nil,
+                           accessibilityName: String? = nil) -> some View {
+        key(title, enabled: draft.hasChord, fontSize: fontSize, accessibilityName: accessibilityName) {
+            updateDraft { $0.type(token) }
         }
     }
 
@@ -247,12 +229,12 @@ struct ScoreReaderChordEntryPanel: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Erase chord character")
-        .onLongPressGesture { updateDraft { $0 = ScoreReaderChordBuilderDraft() } }
+        .onLongPressGesture { updateDraft { $0.clear() } }
     }
 
     private var keyFill: Color { Color.black.opacity(0.045) }
 
-    private func key(_ title: String, selected: Bool = false, enabled: Bool = true,
+    private func key(_ title: String, enabled: Bool = true,
                      fontSize: CGFloat? = nil, weight: Font.Weight? = nil,
                      accessibilityName: String? = nil, action: @escaping () -> Void) -> some View {
         let defaultFontSize: CGFloat = title == "♭" ? (isCompact ? 24 : 28) : (isCompact ? 17 : 20)
@@ -263,8 +245,8 @@ struct ScoreReaderChordEntryPanel: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 44)
-                .foregroundStyle(selected ? Color.white : Color.black.opacity(0.86))
-                .background(selected ? Color.blue : keyFill, in: RoundedRectangle(cornerRadius: 10))
+                .foregroundStyle(Color.black.opacity(0.86))
+                .background(keyFill, in: RoundedRectangle(cornerRadius: 10))
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.black.opacity(0.035), lineWidth: 1)
@@ -275,7 +257,6 @@ struct ScoreReaderChordEntryPanel: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.4)
         .accessibilityLabel(accessibilityName ?? (title == "♭" ? "Chord flat" : title == "#" ? "Chord sharp" : title))
-        .accessibilityValue(selected ? "Selected" : "")
     }
 
     private var navigation: some View {
@@ -313,12 +294,6 @@ struct ScoreReaderChordEntryPanel: View {
         }
         .font(.system(size: isCompact ? 14 : 16, weight: .semibold))
         .buttonStyle(.plain)
-    }
-
-    private func modifierIsSelected(_ token: String) -> Bool {
-        if token == "/" { return draft.editsBass }
-        if token == "b" || token == "#" { return draft.hasAccidental(token) }
-        return draft.hasModifier(token)
     }
 }
 

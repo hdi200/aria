@@ -2360,6 +2360,9 @@ struct ScoreReaderView: View {
                     ) { selection in
                         if selection?.kind == .instrumentName {
                             presentInstrumentReplacement()
+                        } else if selectedToolCategory == .chord, let selection, selection.kind != .chordText {
+                            // Chord Entry edits the tapped note's chord symbol, as Next and Previous do.
+                            readerState.prepareChordTextEntry()
                         }
                     }
                 } else if isPageTurn {

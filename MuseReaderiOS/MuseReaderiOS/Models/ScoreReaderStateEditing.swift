@@ -1017,16 +1017,9 @@ extension ScoreReaderState {
                 _ = try await liveRenderSession.addText("Chord Text")
             }
             let editedState = try await liveRenderSession.setSelectedText(trimmedChordText)
-            // Audition the engine's voicing before navigation changes the selection.
             self.auditionSelectedChordSymbol(in: editedState)
-            guard let anchorSelection else {
-                return try await liveRenderSession.selectAdjacentElement(next: false)
-            }
-            let anchorPoint = anchorSelection.kind == .chordText
-                ? (anchorSelection.attachmentPoint ?? anchorSelection.normalizedRect.center)
-                : anchorSelection.normalizedRect.center
-            _ = try await liveRenderSession.selectElement(pageIndex: anchorSelection.pageIndex, normalizedPoint: anchorPoint)
-            return try await liveRenderSession.selectAttachedChordText()
+            // setSelectedText leaves the chord symbol selected.
+            return editedState
         }
     }
 
@@ -1048,8 +1041,13 @@ extension ScoreReaderState {
             }
             let editedState = try await liveRenderSession.setSelectedText(trimmedChordText)
             self.auditionSelectedChordSymbol(in: editedState)
-            _ = try await liveRenderSession.selectAdjacentElement(next: next)
-            return try await liveRenderSession.selectAttachedChordText()
+            do {
+                _ = try await liveRenderSession.selectAdjacentElement(next: next)
+                return try await liveRenderSession.selectAttachedChordText()
+            } catch {
+                // The chord is saved. Stay on it, so Enter replaces it rather than adding another.
+                return editedState
+            }
         }
     }
 
@@ -1062,11 +1060,15 @@ extension ScoreReaderState {
         }
 
         performEditingAction(mutatesScore: true, revealActiveNotation: true) { liveRenderSession in
-            _ = try await liveRenderSession.deleteSelection()
-            let noteState = try await liveRenderSession.selectElement(
-                pageIndex: anchorSelection.pageIndex,
-                normalizedPoint: anchorSelection.attachmentPoint ?? anchorSelection.normalizedRect.center
-            )
+            let deletedState = try await liveRenderSession.deleteSelection()
+            // MuseScore selects the note on the deleted chord's beat. Finding it by its old
+            // position can miss once the layout has moved, so that is only the fallback.
+            let noteState = deletedState.selection != nil
+                ? deletedState
+                : try await liveRenderSession.selectElement(
+                    pageIndex: anchorSelection.pageIndex,
+                    normalizedPoint: anchorSelection.attachmentPoint ?? anchorSelection.normalizedRect.center
+                )
             guard let next, noteState.selection != nil else { return noteState }
             _ = try await liveRenderSession.selectAdjacentElement(next: next)
             return try await liveRenderSession.selectAttachedChordText()
