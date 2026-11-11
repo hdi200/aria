@@ -58,6 +58,9 @@ extension ScoreReaderState {
                 if self.countInBeatNumber != beat { self.countInBeatNumber = beat }
                 self.updatePlaybackPreparationMessage(for: playbackController)
                 self.updatePlaybackFollowState(with: latestPlaybackState)
+                if latestPlaybackState.status == .playing, !countingIn {
+                    self.advanceTempoRampIfNeeded(position: latestPlaybackState.positionSeconds)
+                }
                 try? await Task.sleep(for: self.playbackMonitorInterval)
             }
         }
@@ -143,10 +146,15 @@ extension ScoreReaderState {
                     )
                 } else {
                     let shouldUseSelection = self.isEditingMode && self.editingState.selection != nil
-                    let startTimeSeconds = shouldUseSelection
-                        ? (self.playbackRegionForCurrentSelection()?.startTimeSeconds ?? 0)
-                        : (self.playbackLoopIsActive ? (self.playbackLoopRange?.startTimeSeconds ?? 0) : 0)
-                    try playbackController.seek(to: startTimeSeconds)
+                    let startTimeSeconds: TimeInterval
+                    if self.playbackLoopIsActive, let range = self.playbackLoopRange {
+                        try await playbackController.setLoopRange(startTimeSeconds: range.startTimeSeconds,
+                                                                  endTimeSeconds: range.endTimeSeconds)
+                        startTimeSeconds = range.startTimeSeconds
+                    } else {
+                        startTimeSeconds = shouldUseSelection ? (self.playbackRegionForCurrentSelection()?.startTimeSeconds ?? 0) : 0
+                        try playbackController.seek(to: startTimeSeconds)
+                    }
                     try await self.playWithOptionalCountIn(
                         at: startTimeSeconds,
                         liveRenderSession: liveRenderSession,
@@ -178,6 +186,7 @@ extension ScoreReaderState {
         playbackWasExplicitlyStopped = true
         playbackErrorMessage = nil
         playbackPreparationMessage = nil
+        endTempoRamp()
 
         Task { @MainActor [weak self] in
             defer {
@@ -214,14 +223,173 @@ extension ScoreReaderState {
         UserDefaults.standard.set(countInEnabled, forKey: "ScoreReader.countInEnabled")
     }
 
+    func setMetronomeEnabled(_ enabled: Bool) {
+        if enabled != metronomeEnabled { toggleMetronome() }
+    }
+
+    /// Count-in: 0 bars turns it off.
+    func setCountInBars(_ bars: Int) {
+        guard session.capabilities.supportsPlayback else { return }
+        let enabled = bars > 0
+        if enabled != countInEnabled {
+            countInEnabled = enabled
+            UserDefaults.standard.set(enabled, forKey: "ScoreReader.countInEnabled")
+        }
+        if enabled {
+            countInBars = min(max(bars, 1), 2)
+            UserDefaults.standard.set(countInBars, forKey: "ScoreReader.countInBars")
+        }
+    }
+
+    static let practiceSpeedRange: ClosedRange<Double> = 0.25...1.5
+    private var practiceSpeedKey: String {
+        "ScoreReader.practiceSpeed." + session.document.fileReference
+    }
+
+    /// Practice speed for this score, as desktop's playback speed: every tempo (and its changes)
+    /// is scaled, pitch is unchanged, the count-in follows, and saved files are unaffected.
+    func setPracticeSpeed(_ speed: Double) {
+        guard session.capabilities.supportsPlayback else { return }
+        let newSpeed = (min(max(speed, Self.practiceSpeedRange.lowerBound), Self.practiceSpeedRange.upperBound) * 100).rounded() / 100
+        guard abs(newSpeed - practiceSpeed) > 0.001 else { return }
+        practiceSpeed = newSpeed
+        // One key per score (Android's UserDefaults has no dictionaries); 0 = written tempo.
+        UserDefaults.standard.set(abs(newSpeed - 1) < 0.001 ? 0 : newSpeed, forKey: practiceSpeedKey)
+        schedulePracticeSpeed(newSpeed)
+    }
+
+    private func schedulePracticeSpeed(_ speed: Double, delay: Duration = .milliseconds(250)) {
+        let previous = practiceSpeedTask
+        previous?.cancel()
+        practiceSpeedTask = Task { @MainActor [weak self] in
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            await previous?.value
+            guard let self, !Task.isCancelled else { return }
+            await self.applyPracticeSpeed(speed, warmUp: true)
+            if !Task.isCancelled { self.practiceSpeedTask = nil }
+        }
+    }
+
+    /// The speed remembered for this score, applied when it opens.
+    func applyStoredPracticeSpeed() async {
+        let stored = UserDefaults.standard.double(forKey: practiceSpeedKey)
+        guard stored > 0, abs(stored - 1) > 0.001 else { return }
+        practiceSpeed = min(max(stored, Self.practiceSpeedRange.lowerBound), Self.practiceSpeedRange.upperBound)
+        await applyPracticeSpeed(practiceSpeed, warmUp: true)
+    }
+
+    @discardableResult
+    private func applyPracticeSpeed(_ speed: Double, warmUp: Bool = false) async -> Bool {
+        guard let liveRenderSession = session.liveRenderSession else { return false }
+        do {
+            try await liveRenderSession.setPlaybackSpeed(speed)
+        } catch {
+            playbackErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return false
+        }
+        let oldSpeed = appliedPracticeSpeed
+        appliedPracticeSpeed = speed
+        // A loop keeps its bars: its times scale with the speed.
+        let loop = playbackLoopRange.map { range in
+            ScorePlaybackLoopRange(pageIndex: range.pageIndex, startMeasureIndex: range.startMeasureIndex,
+                endMeasureIndex: range.endMeasureIndex, normalizedRects: range.normalizedRects,
+                startTimeSeconds: range.startTimeSeconds * oldSpeed / speed,
+                endTimeSeconds: range.endTimeSeconds * oldSpeed / speed)
+        }
+        let loopWasActive = playbackLoopIsActive
+        invalidatePlaybackAfterScoreMutation(startWarmup: warmUp)
+        playbackLoopRange = loop
+        playbackLoopIsActive = loopWasActive && loop != nil
+        return true
+    }
+
+    /// Exports play at the written tempo; returns the practice speed to restore afterwards.
+    func suspendPracticeSpeedForExport() async -> Double? {
+        await practiceSpeedTask?.value
+        guard abs(practiceSpeed - 1) > 0.001, let liveRenderSession = session.liveRenderSession else { return nil }
+        try? await liveRenderSession.setPlaybackSpeed(1)
+        return practiceSpeed
+    }
+
+    func restorePracticeSpeedAfterExport(_ speed: Double?) async {
+        guard let speed, let liveRenderSession = session.liveRenderSession else { return }
+        try? await liveRenderSession.setPlaybackSpeed(speed)
+    }
+
+    var tempoRampWrittenLoopDuration: TimeInterval {
+        guard let range = playbackLoopRange else { return 0 }
+        return (range.endTimeSeconds - range.startTimeSeconds) * appliedPracticeSpeed
+    }
+
+    func startTempoRamp(startSpeed: Double, targetSpeed: Double, step: Double, repeatsPerStep: Int) {
+        guard playbackLoopRange != nil, session.capabilities.supportsPlayback,
+              targetSpeed > startSpeed, repeatsPerStep > 0 else { return }
+        let base = tempoRamp?.baseSpeed ?? practiceSpeed
+        tempoRamp = ScoreTempoRamp(baseSpeed: base, startSpeed: startSpeed, targetSpeed: targetSpeed,
+                                   step: max(step, 0.01), repeatsPerStep: repeatsPerStep)
+        Task { @MainActor [weak self] in
+            await self?.restartTempoRampLoop(at: startSpeed, playsCountIn: true)
+        }
+    }
+
+    /// Ends the ramp and returns to the practice speed it started from.
+    func endTempoRamp() {
+        guard let ramp = tempoRamp else { return }
+        tempoRamp = nil
+        tempoRampSuppressesCountIn = false
+        practiceSpeed = ramp.baseSpeed
+        schedulePracticeSpeed(ramp.baseSpeed, delay: .zero)
+    }
+
+    private func advanceTempoRampIfNeeded(position: Double) {
+        guard var ramp = tempoRamp, !ramp.reachedTarget, playbackLoopIsActive, let range = playbackLoopRange else { return }
+        let previous = tempoRampLastPosition
+        tempoRampLastPosition = position
+        let loopLength = range.endTimeSeconds - range.startTimeSeconds
+        // A repeat: playback jumped back from the loop's end to its start.
+        guard loopLength > 0, position + loopLength * 0.5 < previous else { return }
+        let previousSpeed = ramp.currentSpeed
+        ramp.loopNumber += 1
+        tempoRamp = ramp
+        let speed = ramp.currentSpeed
+        guard speed != previousSpeed else { return }
+        Task { @MainActor [weak self] in
+            await self?.restartTempoRampLoop(at: speed, playsCountIn: false)
+        }
+    }
+
+    /// Re-renders playback at `speed` and starts the loop again from its first bar.
+    private func restartTempoRampLoop(at speed: Double, playsCountIn: Bool) async {
+        await practiceSpeedTask?.value
+        guard let ramp = tempoRamp, playbackLoopRange != nil else { return }
+        if let playbackController, playbackController.isLoaded {
+            try? playbackController.stop()
+        }
+        guard await applyPracticeSpeed(speed), tempoRamp == ramp else { return }
+        practiceSpeed = speed
+        tempoRampLastPosition = 0
+        tempoRampSuppressesCountIn = !playsCountIn
+        startSelectedPlaybackLoop()
+    }
+
+    /// The panel's Reset: metronome off, written tempo, no count-in.
+    func resetPracticeSettings() {
+        setMetronomeEnabled(false)
+        setCountInBars(0)
+        countInBars = 1
+        UserDefaults.standard.set(1, forKey: "ScoreReader.countInBars")
+        setPracticeSpeed(1)
+    }
+
     private func playWithOptionalCountIn(
         at startTimeSeconds: TimeInterval,
         liveRenderSession: LiveScoreRenderSession,
         playbackController: NativePlaybackController
     ) async throws {
-        let countIn = countInEnabled
-            ? try await liveRenderSession.playbackCountIn(startTimeSeconds: startTimeSeconds)
+        let countIn = countInEnabled && !tempoRampSuppressesCountIn
+            ? try await liveRenderSession.playbackCountIn(startTimeSeconds: startTimeSeconds, bars: countInBars)
             : nil
+        tempoRampSuppressesCountIn = false
         try playbackController.play(countIn: countIn)
     }
 
@@ -414,6 +582,7 @@ extension ScoreReaderState {
         liveRenderSession: LiveScoreRenderSession,
         playbackController: NativePlaybackController
     ) async throws {
+        await practiceSpeedTask?.value
         try await waitForPendingPartSelection()
 
         guard !playbackController.isLoaded else {
@@ -883,6 +1052,7 @@ extension ScoreReaderState {
 
     func toggleSelectedPlaybackLoop() {
         if playbackLoopIsActive {
+            endTempoRamp()
             #if os(Android)
             endSelectedPlaybackLoop()
             #else
@@ -972,9 +1142,10 @@ extension ScoreReaderState {
                     playbackController.clearLoopRange()
                     return
                 }
-                let countIn = self.countInEnabled
-                    ? try await liveRenderSession.playbackCountIn(startTimeSeconds: range.startTimeSeconds)
+                let countIn = self.countInEnabled && !self.tempoRampSuppressesCountIn
+                    ? try await liveRenderSession.playbackCountIn(startTimeSeconds: range.startTimeSeconds, bars: self.countInBars)
                     : nil
+                self.tempoRampSuppressesCountIn = false
                 // End loop can run while count-in preparation is suspended.
                 guard self.playbackLoopIsActive, self.playbackLoopRange == range else {
                     return

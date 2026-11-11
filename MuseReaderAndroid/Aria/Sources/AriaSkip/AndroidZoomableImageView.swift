@@ -31,6 +31,8 @@ struct ZoomableImageView: View {
     var activeNotationTopInset: CGFloat = 0
     var activeNotationBottomInset: CGFloat = 0
     var activeNotationViewportHeight: CGFloat = 0
+    /// iOS's Select-tap nudge; Android leaves the list where it is on Select taps.
+    var activeNotationRevealsOnlyWhenObscured = false
     var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
     var centersPageVertically = false
     var restingHorizontalEdgePadding: CGFloat = 0
@@ -94,6 +96,8 @@ struct ZoomableImageView: View {
     @State var panStartOffset: CGPoint?
     @State var hasPlacedInitialOffset = false
     @State var lastActiveNotationRevision = 0
+    /// A scroll request that arrived before the page zoomed in; carried out once it has.
+    @State var pendingActiveNotationRevision: Int?
     @State var lastPlaybackRect: ScoreNormalizedRect?
     @State var dragMode: DragMode?
     @State var selectionDragOffset: CGSize = .zero
@@ -139,6 +143,13 @@ struct ZoomableImageView: View {
         activeNotationTopInset > 0 || activeNotationBottomInset > 0
     }
 
+    /// Whether this page view moves its own contents to show the active bar. Only when
+    /// zoomed in: the reader first scrolls this page's top to the top of the screen, which
+    /// the placement below assumes. At normal zoom the page list does the placing.
+    private var innerFocusScrolls: Bool {
+        usesActiveNotationFocus && scale > 1.01
+    }
+
     var body: some View {
         #if os(Android) && ARIA_PHONE_AUDIT
         let _ = AndroidPhoneAuditGeometry.evaluate("page")
@@ -168,6 +179,9 @@ struct ZoomableImageView: View {
         .onChange(of: zoomScale) { _, _ in
             guard liveScale == nil else { return }
             clampOffset()
+            if let pendingActiveNotationRevision, innerFocusScrolls {
+                scrollToActiveNotation(revision: pendingActiveNotationRevision)
+            }
             publishViewport()
         }
         .onChange(of: displayedPageSize) { _, _ in
@@ -531,8 +545,9 @@ struct ZoomableImageView: View {
             restingHorizontalEdgePadding: restingHorizontalEdgePadding,
             restingTopInset: restingTopInset
         )
-        // Room to lift the active bar above the bottom panel, as on iOS.
-        if usesActiveNotationFocus {
+        // Room to lift the active bar above the bottom panel when zoomed in. At normal zoom
+        // the reader's page list lifts it instead (ScoreReaderView.revealActiveNotation).
+        if innerFocusScrolls {
             inset.bottom += activeNotationBottomInset
         }
         return inset
@@ -560,6 +575,12 @@ struct ZoomableImageView: View {
             // Top of the page, horizontally where the insets put it (the score starts at
             // the left when zoomed in).
             contentOffset = clamped(CGPoint(x: -.greatestFiniteMagnitude, y: -.greatestFiniteMagnitude))
+            // A page view is rebuilt when its viewport changes (the keyboard opening for lyrics,
+            // for example) and would start at the page's top-left. If it holds the active bar,
+            // show that instead (BUG-011 on Android).
+            if usesActiveNotationFocus, activeNotationAutoScrollRevision > 0 {
+                scrollToActiveNotation(revision: activeNotationAutoScrollRevision, animated: false)
+            }
         } else {
             clampOffset()
         }
@@ -648,15 +669,26 @@ struct ZoomableImageView: View {
             return frame(for: noteEntryPreview.overlayNormalizedRect).insetBy(dx: -18, dy: -18)
         }
         if let selection,
-           selection.kind == .note || selection.kind == .rest || selection.kind == .measure || selection.canDragMovableElement {
+           selection.kind == .note || selection.kind == .rest || selection.kind == .measure
+            // Lyrics and chord symbols, so text entry follows each syllable or chord (as on iOS).
+            || selection.kind == .text || selection.kind == .chordText
+            || selection.canDragMovableElement {
             return frame(for: selection.normalizedRect).insetBy(dx: -22, dy: -22)
         }
         return nil
     }
 
-    private func scrollToActiveNotation(revision: Int) {
+    private func scrollToActiveNotation(revision: Int, animated: Bool = true) {
         guard revision > lastActiveNotationRevision, liveScale == nil, let target = activeNotationFrame else { return }
+        guard innerFocusScrolls else {
+            // Not zoomed (yet): the page list places the bar. Text entry asks for the scroll while
+            // its zoom-in is still animating, so keep the request for when the zoom lands (BUG-011).
+            pendingActiveNotationRevision = revision
+            clampOffset()
+            return
+        }
         lastActiveNotationRevision = revision
+        pendingActiveNotationRevision = nil
         let visibleHeight = activeNotationViewportHeight > 0 ? min(boundsSize.height, activeNotationViewportHeight) : boundsSize.height
         let desiredY: CGFloat
         if usesActiveNotationFocus {
@@ -667,7 +699,7 @@ struct ZoomableImageView: View {
         }
         let safeBottomY = max(activeNotationTopInset + 80, visibleHeight - activeNotationBottomInset - 36)
         setOffset(CGPoint(x: target.midX - boundsSize.width * 0.5,
-                          y: max(target.midY - desiredY, target.maxY - safeBottomY)), animated: true)
+                          y: max(target.midY - desiredY, target.maxY - safeBottomY)), animated: animated)
     }
 
     private func followPlayback() {
@@ -684,7 +716,7 @@ struct ZoomableImageView: View {
     // MARK: Gestures
 
     private var canPan: Bool {
-        scale > 1.01 || usesActiveNotationFocus || zoomedPageSize.height > boundsSize.height + 1
+        scale > 1.01 || innerFocusScrolls || zoomedPageSize.height > boundsSize.height + 1
     }
 
     /// Where a drag moves the selection, in view space: the selected note or element (and a
@@ -899,6 +931,11 @@ struct ZoomableImageView: View {
         switch event {
         case 0:
             if let normalized = normalizedPoint(at: point) { onTap?(normalized, .direct) }
+            // Reading: a tap in the margin beside the page turns the page (BUG-012), as on iOS.
+            else if !allowsEditingInteractions, zoomedPageSize.width > 0 {
+                onTap?(CGPoint(x: (point.x - contentOrigin.x) / zoomedPageSize.width,
+                               y: (point.y - contentOrigin.y) / zoomedPageSize.height), .direct)
+            }
         case 1:
             gestureStart = point
             dragMode = beginDrag(at: point, held: a != 0)
@@ -934,6 +971,7 @@ struct ZoomableImageView: View {
             if event == 7 { readingDragStart = nil }
         case 8:
             pinchStart = (scale, contentOffset, point)
+            pendingActiveNotationRevision = nil // a pinch is the user's own zoom
         case 9:
             guard let start = pinchStart else { return 0 }
             let newScale = min(max(start.scale * a, ScoreReaderZoomLimits.minimumScale), Self.maximumScale)

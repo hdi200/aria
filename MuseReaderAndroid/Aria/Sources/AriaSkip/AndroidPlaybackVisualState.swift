@@ -76,10 +76,13 @@ struct AndroidPlaybackTimeLabel: View {
     let fallback: ScorePlaybackState
     let isCountingIn: Bool
     let preparationMessage: String?
+    /// Practice speed, shown after the time when it isn't 100%.
+    var practiceSpeed: Double = 1
 
     var body: some View {
         let clock = playback?.clockText ?? "\(fallback.currentTimeLabel) / \(fallback.durationLabel)"
-        Text(isCountingIn ? "Count-in" : preparationMessage ?? clock)
+        let speed = abs(practiceSpeed - 1) > 0.001 ? " · \(Int((practiceSpeed * 100).rounded()))%" : ""
+        Text(isCountingIn ? "Count-in" : preparationMessage ?? clock + speed)
     }
 }
 

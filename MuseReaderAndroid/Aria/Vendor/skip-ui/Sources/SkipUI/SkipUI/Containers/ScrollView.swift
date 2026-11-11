@@ -157,11 +157,23 @@ public struct ScrollView : View, Renderable {
 public struct ScrollViewProxy {
     #if SKIP
     let scrollToID: (Any) -> Void
+    // ARIA PATCH: containers that can place an item by anchor (LazyVStack) supply this.
+    let scrollToIDAnchored: ((Any, UnitPoint) -> Void)?
+
+    init(scrollToID: @escaping (Any) -> Void, scrollToIDAnchored: ((Any, UnitPoint) -> Void)? = nil) {
+        self.scrollToID = scrollToID
+        self.scrollToIDAnchored = scrollToIDAnchored
+    }
     #endif
 
     public func scrollTo(_ id: Any, anchor: UnitPoint? = nil) {
         #if SKIP
-        // Warning: anchor is currently ignored
+        // ARIA PATCH: honour the anchor where the container supports it; elsewhere the
+        // anchor is still ignored and the item is scrolled to the start.
+        if let anchor, let scrollToIDAnchored {
+            scrollToIDAnchored(id, anchor)
+            return
+        }
         scrollToID(id)
         #endif
     }
@@ -191,7 +203,7 @@ public struct ScrollViewReader : View, Renderable {
     @Composable override func Render(context: ComposeContext) {
         let scrollToID = rememberSaveable(stateSaver: context.stateSaver as! Saver<Preference<ScrollToIDAction>, Any>) { mutableStateOf(Preference<ScrollToIDAction>(key: ScrollToIDPreferenceKey.self)) }
         let scrollToIDCollector = PreferenceCollector<ScrollToIDAction>(key: ScrollToIDPreferenceKey.self, state: scrollToID)
-        let scrollProxy = ScrollViewProxy(scrollToID: scrollToID.value.reduced.action)
+        let scrollProxy = ScrollViewProxy(scrollToID: scrollToID.value.reduced.action, scrollToIDAnchored: scrollToID.value.reduced.anchoredAction) // ARIA PATCH
         PreferenceValues.shared.collectPreferences([scrollToIDCollector]) {
             content(scrollProxy).Compose(context)
         }
@@ -236,6 +248,15 @@ struct ScrollToIDAction : Equatable {
     // recompose when the remembered state might change, the preference action is updated
     let key: Any?
     let action: (Any) -> Void
+    // ARIA PATCH: optional anchor-aware scroll (SwiftUI semantics), nil where unsupported.
+    let anchoredAction: ((Any, UnitPoint) -> Void)?
+
+    // The anchored action comes before `action` so trailing-closure call sites keep binding to `action`.
+    init(key: Any?, anchoredAction: ((Any, UnitPoint) -> Void)? = nil, action: @escaping (Any) -> Void) {
+        self.key = key
+        self.action = action
+        self.anchoredAction = anchoredAction
+    }
 
     static func ==(lhs: ScrollToIDAction, rhs: ScrollToIDAction) -> Bool {
         return lhs.key == rhs.key

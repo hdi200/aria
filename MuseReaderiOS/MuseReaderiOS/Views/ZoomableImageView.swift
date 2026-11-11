@@ -25,6 +25,7 @@ struct ZoomableImageView: UIViewRepresentable {
     var activeNotationTopInset: CGFloat = 0
     var activeNotationBottomInset: CGFloat = 0
     var activeNotationViewportHeight: CGFloat = 0
+    var activeNotationRevealsOnlyWhenObscured = false
     var pageHorizontalAlignment: ScoreReaderPageHorizontalAlignment = .center
     var centersPageVertically = false
     var restingHorizontalEdgePadding: CGFloat = 0
@@ -157,6 +158,13 @@ struct ZoomableImageView: UIViewRepresentable {
         tapGestureRecognizer.onPencilInteractionStart = context.coordinator.onPencilInteractionStart
         overlayView.addGestureRecognizer(tapGestureRecognizer)
 
+        // The page overlay cannot receive a touch in the viewport's side margins.
+        let marginTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleReadingMarginTap(_:)))
+        marginTap.delegate = context.coordinator
+        marginTap.isEnabled = !allowsEditingInteractions && !annotationModeActive
+        scrollView.addGestureRecognizer(marginTap)
+        context.coordinator.readingMarginTap = marginTap
+
         let annotationGestureRecognizer = ScoreAnnotationGestureRecognizer(
             target: context.coordinator,
             action: #selector(Coordinator.handleAnnotationGesture(_:))
@@ -265,6 +273,7 @@ struct ZoomableImageView: UIViewRepresentable {
             ? [NSNumber(value: UITouch.TouchType.direct.rawValue), NSNumber(value: UITouch.TouchType.pencil.rawValue)]
             : [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
         context.coordinator.tapGestureRecognizer?.isEnabled = !annotationModeActive
+        context.coordinator.readingMarginTap?.isEnabled = !allowsEditingInteractions && !annotationModeActive
         context.coordinator.doubleTapGestureRecognizer?.isEnabled = Self.allowsReadingDoubleTapZoom && !allowsEditingInteractions && !annotationModeActive
         context.coordinator.swipeLeftGestureRecognizer?.isEnabled = !allowsEditingInteractions && !annotationModeActive
         context.coordinator.swipeRightGestureRecognizer?.isEnabled = !allowsEditingInteractions && !annotationModeActive
@@ -273,6 +282,8 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.activeNotationTopInset = activeNotationTopInset
         context.coordinator.activeNotationBottomInset = activeNotationBottomInset
         context.coordinator.activeNotationViewportHeight = activeNotationViewportHeight
+        context.coordinator.activeNotationRevealsOnlyWhenObscured = activeNotationRevealsOnlyWhenObscured
+        context.coordinator.allowsEditingInteractions = allowsEditingInteractions
         context.coordinator.pageHorizontalAlignment = pageHorizontalAlignment
         context.coordinator.centersPageVertically = centersPageVertically
         context.coordinator.restingHorizontalEdgePadding = restingHorizontalEdgePadding
@@ -355,6 +366,8 @@ struct ZoomableImageView: UIViewRepresentable {
         var activeNotationTopInset: CGFloat = 0
         var activeNotationBottomInset: CGFloat = 0
         var activeNotationViewportHeight: CGFloat = 0
+        var activeNotationRevealsOnlyWhenObscured = false
+        var allowsEditingInteractions = true
         var playbackHighlight: ScorePlaybackMeasureHighlight? {
             didSet {
                 if playbackHighlight == nil {
@@ -374,6 +387,7 @@ struct ZoomableImageView: UIViewRepresentable {
         weak var annotationOverlayView: ScoreAnnotationOverlayView?
         weak var annotationGestureRecognizer: ScoreAnnotationGestureRecognizer?
         weak var tapGestureRecognizer: ScorePageTapGestureRecognizer?
+        weak var readingMarginTap: UITapGestureRecognizer?
         weak var noteDragGestureRecognizer: ScorePageLongPressGestureRecognizer?
         weak var pencilHoverGestureRecognizer: UIHoverGestureRecognizer?
         weak var pencilInteraction: UIPencilInteraction?
@@ -532,7 +546,8 @@ struct ZoomableImageView: UIViewRepresentable {
             // Keep extra scroll room in edit mode so programmatic note-entry
             // focus can lift the active bar above the bottom panel.
             if usesActiveNotationFocus {
-                nextInset.bottom += activeNotationBottomScrollInset(for: scrollView)
+                nextInset.bottom += max(activeNotationBottomScrollInset(for: scrollView),
+                                        playbackBottomScrollInset(for: scrollView))
             }
             if scrollView.contentInset != nextInset {
                 scrollView.contentInset = nextInset
@@ -632,6 +647,11 @@ struct ZoomableImageView: UIViewRepresentable {
                 width: targetFrame.width * scale,
                 height: targetFrame.height * scale
             )
+            if activeNotationRevealsOnlyWhenObscured {
+                lastHandledActiveNotationAutoScrollRevision = activeNotationAutoScrollRevision
+                nudgeObscuredActiveNotationIntoView(scaledTargetFrame, in: scrollView)
+                return
+            }
             let desiredViewportY = activeNotationDesiredViewportY(in: scrollView)
             let visibleViewportHeight = activeNotationVisibleViewportHeight(in: scrollView)
             let safeBottomY = max(activeNotationTopInset + 80, visibleViewportHeight - activeNotationBottomInset - 36)
@@ -659,6 +679,10 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         func scrollPlaybackIntoViewIfNeeded(in scrollView: UIScrollView) {
+            if followsPlaybackAbovePanel {
+                followPlaybackAbovePanel(in: scrollView)
+                return
+            }
             guard
                 scrollView.zoomScale > 1.01,
                 allowsPlaybackFollow,
@@ -723,6 +747,130 @@ struct ZoomableImageView: UIViewRepresentable {
             scrollView.setContentOffset(clampedOffset, animated: true)
         }
 
+        /// Editing with the edit panel open: playback is followed here, in screen terms, so the
+        /// playing bar stays in the free area above the panel (IOS-037/038). Each edit page sits in
+        /// a screen-tall frame, so the page list can't do this by itself.
+        private var followsPlaybackAbovePanel: Bool {
+            allowsEditingInteractions && usesActiveNotationFocus
+        }
+
+        private func playbackFrameOnScreen(in scrollView: UIScrollView) -> (scaled: CGRect, screen: CGRect)? {
+            guard let targetFrame = overlayView?.playbackFrame, scrollView.window != nil else {
+                return nil
+            }
+            let scale = scrollView.zoomScale
+            let scaled = CGRect(x: targetFrame.minX * scale, y: targetFrame.minY * scale,
+                                width: targetFrame.width * scale, height: targetFrame.height * scale)
+            return (scaled, scrollView.convert(scaled, to: nil))
+        }
+
+        /// The screen band between the top chrome and the edit panel.
+        private func freeScreenBand(in scrollView: UIScrollView) -> (top: CGFloat, bottom: CGFloat)? {
+            guard let window = scrollView.window else {
+                return nil
+            }
+            let top = activeNotationTopInset + 8
+            let bottom = window.bounds.height - activeNotationBottomInset - 12
+            return bottom - top > 80 ? (top, bottom) : nil
+        }
+
+        /// How far down the page has to be able to move for the playing bar to reach the middle of
+        /// the free band; added to the bottom inset while playback is followed.
+        private func playbackBottomScrollInset(for scrollView: UIScrollView) -> CGFloat {
+            guard
+                followsPlaybackAbovePanel,
+                allowsPlaybackFollow,
+                playbackHighlight != nil,
+                let target = playbackFrameOnScreen(in: scrollView),
+                let band = freeScreenBand(in: scrollView)
+            else {
+                return 0
+            }
+            let desiredCenterY = (band.top + band.bottom) * 0.5
+            let targetOffsetY = scrollView.contentOffset.y + (target.screen.midY - desiredCenterY)
+            let naturalMaxOffsetY = max(scrollView.contentSize.height - scrollView.bounds.height, 0)
+            return max(0, targetOffsetY - naturalMaxOffsetY + 24)
+        }
+
+        private func followPlaybackAbovePanel(in scrollView: UIScrollView) {
+            guard
+                allowsPlaybackFollow,
+                !isUserZooming,
+                !scrollView.isTracking,
+                !scrollView.isDragging,
+                !scrollView.isDecelerating,
+                let playbackHighlight,
+                playbackHighlight.normalizedRect != lastHandledPlaybackRect,
+                let target = playbackFrameOnScreen(in: scrollView),
+                let band = freeScreenBand(in: scrollView)
+            else {
+                return
+            }
+            lastHandledPlaybackRect = playbackHighlight.normalizedRect
+            // Leave the page alone while the playing bar is comfortably inside the band; once it
+            // nears the panel (or the top), bring it back to the middle. Zoomed in (phones), also
+            // keep it inside the screen's width.
+            let margin = min((band.bottom - band.top) * 0.15, 90)
+            let needsVertical = target.screen.minY < band.top || target.screen.maxY > band.bottom - margin
+            let visibleMinX = scrollView.contentOffset.x
+            let visibleMaxX = visibleMinX + scrollView.bounds.width
+            let sideMargin = min(scrollView.bounds.width * 0.12, 60)
+            let needsHorizontal = target.scaled.minX < visibleMinX + sideMargin * 0.25
+                || target.scaled.maxX > visibleMaxX - sideMargin
+            guard needsVertical || needsHorizontal else {
+                return
+            }
+            let desiredCenterY = (band.top + band.bottom) * 0.5
+            let adjustedInset = scrollView.adjustedContentInset
+            let minOffsetY = -adjustedInset.top
+            let maxOffsetY = max(scrollView.contentSize.height - scrollView.bounds.height + adjustedInset.bottom, minOffsetY)
+            let minOffsetX = -adjustedInset.left
+            let maxOffsetX = max(scrollView.contentSize.width - scrollView.bounds.width + adjustedInset.right, minOffsetX)
+            let targetY = needsVertical
+                ? min(max(scrollView.contentOffset.y + target.screen.midY - desiredCenterY, minOffsetY), maxOffsetY)
+                : scrollView.contentOffset.y
+            // Put the playing bar near the left so the bars after it are in view.
+            let targetX = needsHorizontal
+                ? min(max(target.scaled.minX - sideMargin, minOffsetX), maxOffsetX)
+                : scrollView.contentOffset.x
+            guard abs(targetY - scrollView.contentOffset.y) > 4 || abs(targetX - scrollView.contentOffset.x) > 4 else {
+                return
+            }
+            scrollView.setContentOffset(CGPoint(x: targetX, y: targetY), animated: true)
+        }
+
+        /// Moves the page only as far as needed to show a bar hidden under the bottom
+        /// panel or the top chrome; a bar already in view stays where it is.
+        private func nudgeObscuredActiveNotationIntoView(_ scaledTargetFrame: CGRect, in scrollView: UIScrollView) {
+            guard let window = scrollView.window else {
+                return
+            }
+
+            // The page list may be scrolled too, so compare on screen, not inside the page.
+            let frameOnScreen = scrollView.convert(scaledTargetFrame, to: nil)
+            let topLimit = activeNotationTopInset + 8
+            let bottomLimit = window.bounds.height - activeNotationBottomInset - 12
+            var deltaY: CGFloat = 0
+            if frameOnScreen.maxY > bottomLimit {
+                // A bar taller than the free area keeps its top in view.
+                deltaY = min(frameOnScreen.maxY - bottomLimit, max(frameOnScreen.minY - topLimit, 0))
+            } else if frameOnScreen.minY < topLimit {
+                deltaY = frameOnScreen.minY - topLimit
+            }
+            guard abs(deltaY) > 4 else {
+                return
+            }
+
+            let adjustedInset = scrollView.adjustedContentInset
+            let minOffsetY = -adjustedInset.top
+            let maxOffsetY = max(scrollView.contentSize.height - scrollView.bounds.height + adjustedInset.bottom, minOffsetY)
+            let targetY = min(max(scrollView.contentOffset.y + deltaY, minOffsetY), maxOffsetY)
+            guard abs(targetY - scrollView.contentOffset.y) > 4 else {
+                return
+            }
+            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: targetY), animated: true)
+        }
+
         var usesActiveNotationFocus: Bool {
             activeNotationTopInset > 0 || activeNotationBottomInset > 0
         }
@@ -738,11 +886,22 @@ struct ZoomableImageView: UIViewRepresentable {
             let pagePoint = gestureRecognizer.pageLocation(in: overlayView)
             guard let normalizedPoint = overlayView.normalizedLayoutMarkerTapPoint(at: pagePoint)
                 ?? overlayView.normalizedPoint(at: pagePoint)
+                // Reading: a tap in the margin beside the page turns the page (BUG-012); its
+                // point lies left of 0 or right of 1, which View mode's tap zones handle.
+                ?? (allowsEditingInteractions ? nil : overlayView.normalizedPoint(at: pagePoint, clampedToImage: false))
             else {
                 return
             }
 
             onTap?(normalizedPoint, gestureRecognizer.inputKind)
+        }
+
+        @objc
+        func handleReadingMarginTap(_ gestureRecognizer: UITapGestureRecognizer) {
+            guard let overlayView,
+                  let point = overlayView.normalizedPoint(at: gestureRecognizer.location(in: overlayView), clampedToImage: false)
+            else { return }
+            onTap?(point, .direct)
         }
 
         @objc
@@ -1103,6 +1262,14 @@ struct ZoomableImageView: UIViewRepresentable {
             // manually pulling earlier content back into view. Upward page drags
             // should remain positional so they do not fight automatic focus.
             return velocity.y > 0
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard gestureRecognizer === readingMarginTap else { return true }
+            guard let overlayView,
+                  let point = overlayView.normalizedPoint(at: touch.location(in: overlayView), clampedToImage: false)
+            else { return false }
+            return point.x < 0 || point.x > 1
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -1751,7 +1918,10 @@ final class ScorePageOverlayView: UIView {
             return previewFrame.insetBy(dx: -18, dy: -18)
         }
         if let selectionFrame,
-           selection?.kind == .note || selection?.kind == .rest || selection?.kind == .measure || selection?.canDragMovableElement == true {
+           selection?.kind == .note || selection?.kind == .rest || selection?.kind == .measure
+            // Lyrics and chord symbols, so text entry follows each syllable or chord.
+            || selection?.kind == .text || selection?.kind == .chordText
+            || selection?.canDragMovableElement == true {
             return selectionFrame.insetBy(dx: -22, dy: -22)
         }
         return nil
@@ -1813,7 +1983,7 @@ final class ScorePageOverlayView: UIView {
         updateOverlayFrames()
     }
 
-    func normalizedPoint(at point: CGPoint) -> CGPoint? {
+    func normalizedPoint(at point: CGPoint, clampedToImage: Bool = true) -> CGPoint? {
         guard
             bounds.width > 0,
             bounds.height > 0,
@@ -1824,7 +1994,7 @@ final class ScorePageOverlayView: UIView {
         }
 
         let imageRect = AVMakeRect(aspectRatio: imageSize, insideRect: bounds)
-        guard imageRect.contains(point) else {
+        guard !clampedToImage || imageRect.contains(point) else {
             return nil
         }
 

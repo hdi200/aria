@@ -137,6 +137,7 @@ struct ScoreReaderPageCanvas: View {
     let noteEntryPreviewDuration: ScoreNoteDuration
     let showsLayoutMarkers: Bool
     let activeNotationAutoScrollRevision: Int
+    var activeNotationRevealsOnlyWhenObscured = false
     var fitsPageToViewport = false
     var allowsEditingInteractions = true
     var allowsPlaybackFollow = true
@@ -172,6 +173,8 @@ struct ScoreReaderPageCanvas: View {
     var playFromHereAction: () -> Void = {}
     var loopFromHereAction: () -> Void = {}
     var togglePlaybackLoopAction: () -> Void = {}
+    var tempoRampAction: () -> Void = {}
+    var tempoRampStatus: String? = nil
     var manualScrollAction: () -> Void = {}
     var annotationConfiguration: ScoreAnnotationPageConfiguration?
 
@@ -185,17 +188,25 @@ struct ScoreReaderPageCanvas: View {
         let zoomViewportWidth = pageLayoutPolicy.usesFullCanvasZoom
             ? max(availableWidth, pageWidth)
             : pageWidth
+        // Android keeps a resting page `restingTopInset` below its frame's top (iOS scrolls that
+        // gap away inside the page). Without the extra height the page's bottom was cut off, so
+        // a last page's final system could never be scrolled clear of the edit panel (BUG-010).
+        let restingExtraHeight = Self.androidRestingExtraHeight(policy: pageLayoutPolicy,
+                                                                fitsPageToViewport: fitsPageToViewport)
         let zoomViewportHeight = pageLayoutPolicy.usesFullCanvasZoom
-            ? max(viewportSize.height, pageHeight)
-            : pageHeight
+            ? max(viewportSize.height, pageHeight + restingExtraHeight)
+            : pageHeight + restingExtraHeight
         #if os(Android) && ARIA_PHONE_AUDIT
         let _ = AndroidPhoneAuditGeometry.surfaceTrace(page: pageIndex, size: fittedPageSize,
             viewport: CGSize(width: zoomViewportWidth, height: zoomViewportHeight))
         #endif
         let topPadding = topPagePadding
         let bottomPadding: CGFloat = fitsPageToViewport ? 0 : 6
-        let usesActiveNotationFocus = selectedElement?.pageIndex == pageIndex
-            && selectedElement?.isHighlightOnly == false
+        // The playing page also needs the panel insets, so the page view can follow playback
+        // above the edit panel (IOS-037/038).
+        let usesActiveNotationFocus = ((selectedElement?.pageIndex == pageIndex
+                && selectedElement?.isHighlightOnly == false)
+            || (allowsEditingInteractions && playbackHighlight?.pageIndex == pageIndex))
             && (activeNotationTopInset > 0 || activeNotationBottomInset > 0)
         let zoomActiveNotationTopInset = usesActiveNotationFocus ? activeNotationTopInset : 0
         let zoomActiveNotationBottomInset = usesActiveNotationFocus ? activeNotationBottomInset : 0
@@ -228,6 +239,7 @@ struct ScoreReaderPageCanvas: View {
                 activeNotationBottomInset: zoomActiveNotationBottomInset,
                 activeNotationViewportHeight: viewportSize.height,
                 activeNotationAutoScrollRevision: activeNotationAutoScrollRevision,
+                activeNotationRevealsOnlyWhenObscured: activeNotationRevealsOnlyWhenObscured,
                 allowsEditingInteractions: allowsEditingInteractions,
                 allowsPlaybackFollow: allowsPlaybackFollow,
                 editSelectedTextAction: editSelectedTextAction,
@@ -262,6 +274,8 @@ struct ScoreReaderPageCanvas: View {
                 playFromHereAction: playFromHereAction,
                 loopFromHereAction: loopFromHereAction,
                 togglePlaybackLoopAction: togglePlaybackLoopAction,
+                tempoRampAction: tempoRampAction,
+                tempoRampStatus: tempoRampStatus,
                 manualScrollAction: manualScrollAction,
                 annotationConfiguration: annotationConfiguration
             )
@@ -396,22 +410,133 @@ struct ScoreReaderPageCanvas: View {
             return nil
         }
 
+        return Self.activeNotationAnchorOffset(
+            selectionRect: selectedElement.normalizedRect,
+            pageHeight: pageHeight,
+            topPadding: topPadding,
+            zoomScale: zoomScale,
+            viewportHeight: viewportSize.height,
+            topInset: activeNotationTopInset,
+            bottomInset: activeNotationBottomInset
+        )
+    }
+
+    /// How far down the page (from the canvas top) the list must be scrolled so the active
+    /// bar sits where note entry wants it.
+    static func activeNotationAnchorOffset(
+        selectionRect: ScoreNormalizedRect,
+        pageHeight: CGFloat,
+        topPadding: CGFloat,
+        zoomScale: CGFloat,
+        viewportHeight: CGFloat,
+        topInset: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGFloat {
+        // Zoomed in (text entry zooms to 1.7x), the page's own zoom view places the bar inside
+        // a screen-tall frame; the list only lines that frame up with the top of the screen.
+        // Scrolling the list as well moved the bar a second time (BUG-011).
+        guard zoomScale <= 1.01 else {
+            return 0
+        }
         let zoomedOutScale = min(max(zoomScale, 0.01), 1)
         let visiblePageHeight = pageHeight * zoomedOutScale
-        let selectionRect = selectedElement.normalizedRect
         let targetCenterY = topPadding + CGFloat(selectionRect.center.y) * visiblePageHeight
         let targetBottomY = topPadding + CGFloat(selectionRect.y + selectionRect.height) * visiblePageHeight
         // Aim for the middle of the viewport area left visible between the top
         // chrome and the bottom entry panel, but treat clearing the bottom
         // controls as a hard constraint on tight landscape/zoomed-out layouts.
-        let usableHeight = max(viewportSize.height - activeNotationTopInset - activeNotationBottomInset, 80)
-        let desiredViewportY = activeNotationTopInset + usableHeight * 0.5
+        let usableHeight = max(viewportHeight - topInset - bottomInset, 80)
+        let desiredViewportY = topInset + usableHeight * 0.5
         let centeredOffset = targetCenterY - desiredViewportY
-        let safeBottomY = max(activeNotationTopInset + 80, viewportSize.height - activeNotationBottomInset - 36)
+        let safeBottomY = max(topInset + 80, viewportHeight - bottomInset - 36)
         let bottomProtectedOffset = targetBottomY - safeBottomY
         let targetOffset = max(centeredOffset, bottomProtectedOffset)
         return min(max(targetOffset, 0), topPadding + pageHeight)
     }
+
+    static func androidRestingExtraHeight(policy: ScoreReaderPageLayoutPolicy, fitsPageToViewport: Bool) -> CGFloat {
+        #if os(Android)
+        return fitsPageToViewport ? 0 : policy.restingTopInset
+        #else
+        return 0
+        #endif
+    }
+
+    #if os(Android)
+    /// Android: Skip can't scroll to the anchor view inside a page, so the reader scrolls the
+    /// page itself with this anchor, which puts the active bar where iOS's anchor view does.
+    /// Mirrors the continuous (not page-turn) canvas layout in `body`.
+    static func androidActiveNotationListAnchor(
+        selection: ScoreSelectedElement,
+        pageDisplaySize: CGSize?,
+        availableWidth: CGFloat,
+        viewportSize: CGSize,
+        isCompactPhoneLayout: Bool,
+        floatingPaletteDockedLeft: Bool,
+        zoomScale: CGFloat,
+        listViewportHeight: CGFloat,
+        topInset: CGFloat,
+        bottomInset: CGFloat
+    ) -> UnitPoint? {
+        guard !selection.isHighlightOnly else {
+            return nil
+        }
+        return androidListAnchor(for: selection.normalizedRect, pageDisplaySize: pageDisplaySize,
+            availableWidth: availableWidth, viewportSize: viewportSize,
+            isCompactPhoneLayout: isCompactPhoneLayout, floatingPaletteDockedLeft: floatingPaletteDockedLeft,
+            zoomScale: zoomScale, listViewportHeight: listViewportHeight,
+            topInset: topInset, bottomInset: bottomInset)
+    }
+
+    /// The list anchor that places a bar (selection or playing measure) in the free area.
+    static func androidListAnchor(
+        for targetRect: ScoreNormalizedRect,
+        pageDisplaySize: CGSize?,
+        availableWidth: CGFloat,
+        viewportSize: CGSize,
+        isCompactPhoneLayout: Bool,
+        floatingPaletteDockedLeft: Bool,
+        zoomScale: CGFloat,
+        listViewportHeight: CGFloat,
+        topInset: CGFloat,
+        bottomInset: CGFloat
+    ) -> UnitPoint? {
+        guard viewportSize.height > 0 else {
+            return nil
+        }
+        let policy = ScoreReaderPageLayoutPolicy(
+            isEditing: true,
+            fitsPageToViewport: false,
+            isPortrait: viewportSize.height > viewportSize.width,
+            isCompactPhoneLayout: isCompactPhoneLayout,
+            floatingPaletteDockedLeft: floatingPaletteDockedLeft
+        )
+        let width = min(max(availableWidth - policy.reservedPaletteGutter - policy.viewportEdgePadding * 2, 320), 980)
+        let pageHeight = preferredPageHeight(for: width, displaySize: pageDisplaySize)
+        let offset = activeNotationAnchorOffset(
+            selectionRect: targetRect,
+            pageHeight: pageHeight,
+            topPadding: policy.topPagePadding,
+            zoomScale: zoomScale,
+            viewportHeight: viewportSize.height,
+            topInset: topInset,
+            bottomInset: bottomInset
+        )
+        // The page item: top padding, the zoom viewport (at least the screen tall), 6pt bottom padding.
+        let itemHeight = policy.topPagePadding
+            + max(viewportSize.height, pageHeight + androidRestingExtraHeight(policy: policy, fitsPageToViewport: false)) + 6
+        // The list starts at the top of the reader (no top padding while editing). At normal zoom
+        // the Android page view keeps the page `restingTopInset` below its frame's top, so the
+        // frame must sit that much higher too. Anchors are relative to the list's own height.
+        let itemTop = -(offset + policy.restingTopInset)
+        let travel = listViewportHeight - itemHeight
+        guard abs(travel) >= 1 else {
+            return nil
+        }
+        // SwiftUI anchor semantics: item top = anchor.y * (viewport - item height).
+        return UnitPoint(x: 0.5, y: itemTop / travel)
+    }
+    #endif
 
     private func playbackAnchorY(pageHeight: CGFloat, topPadding: CGFloat) -> CGFloat? {
         guard
@@ -428,7 +553,11 @@ struct ScoreReaderPageCanvas: View {
     }
 
     private func preferredHeight(for width: CGFloat) -> CGFloat {
-        guard let imageSize = page?.displaySize, imageSize.width > 0 else {
+        Self.preferredPageHeight(for: width, displaySize: page?.displaySize)
+    }
+
+    static func preferredPageHeight(for width: CGFloat, displaySize: CGSize?) -> CGFloat {
+        guard let imageSize = displaySize, imageSize.width > 0 else {
             return max(width * 1.35, 560)
         }
 
@@ -465,6 +594,7 @@ struct ScoreReaderPageSurface: View {
     let activeNotationBottomInset: CGFloat
     let activeNotationViewportHeight: CGFloat
     let activeNotationAutoScrollRevision: Int
+    var activeNotationRevealsOnlyWhenObscured = false
     let allowsEditingInteractions: Bool
     let allowsPlaybackFollow: Bool
     let editSelectedTextAction: (ScoreSelectedElement) -> Void
@@ -499,6 +629,8 @@ struct ScoreReaderPageSurface: View {
     let playFromHereAction: () -> Void
     let loopFromHereAction: () -> Void
     let togglePlaybackLoopAction: () -> Void
+    var tempoRampAction: () -> Void = {}
+    var tempoRampStatus: String? = nil
     let manualScrollAction: () -> Void
     let annotationConfiguration: ScoreAnnotationPageConfiguration?
 
@@ -527,6 +659,7 @@ struct ScoreReaderPageSurface: View {
                         activeNotationTopInset: activeNotationTopInset,
                         activeNotationBottomInset: activeNotationBottomInset,
                         activeNotationViewportHeight: activeNotationViewportHeight,
+                        activeNotationRevealsOnlyWhenObscured: activeNotationRevealsOnlyWhenObscured,
                         pageHorizontalAlignment: pageHorizontalAlignment,
                         centersPageVertically: centersPageVertically,
                         restingHorizontalEdgePadding: viewportEdgePadding,
@@ -617,7 +750,9 @@ struct ScoreReaderPageSurface: View {
                 addExpressionAction: addExpressionAction,
                 playFromHereAction: playFromHereAction,
                 loopFromHereAction: loopFromHereAction,
-                togglePlaybackLoopAction: togglePlaybackLoopAction
+                togglePlaybackLoopAction: togglePlaybackLoopAction,
+                tempoRampAction: tempoRampAction,
+                tempoRampStatus: tempoRampStatus
             )
         }
     }
@@ -663,6 +798,8 @@ struct ScoreReaderPageViewportOverlays: View {
     let playFromHereAction: () -> Void
     let loopFromHereAction: () -> Void
     let togglePlaybackLoopAction: () -> Void
+    var tempoRampAction: () -> Void = {}
+    var tempoRampStatus: String? = nil
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -750,7 +887,9 @@ struct ScoreReaderPageViewportOverlays: View {
                     isActive: playbackLoopIsActive,
                     imageSize: imageSize,
                     zoomViewport: $zoomViewport,
-                    toggleAction: togglePlaybackLoopAction
+                    toggleAction: togglePlaybackLoopAction,
+                    tempoRampAction: tempoRampAction,
+                    tempoRampStatus: tempoRampStatus
                 )
             }
         }
@@ -1038,8 +1177,16 @@ struct ScoreReaderPlaybackLoopOverlay: View {
     let imageSize: CGSize?
     @Binding var zoomViewport: ScoreReaderZoomViewport
     let toggleAction: () -> Void
+    var tempoRampAction: () -> Void = {}
+    /// The running ramp's progress ("85% · loop 4 of 7"), shown on the End pill.
+    var tempoRampStatus: String? = nil
 
     private static let accent = Color(red: 0.46, green: 0.24, blue: 0.82)
+    #if os(Android)
+    private static let tempoRampSymbol = "metronome"
+    #else
+    private static let tempoRampSymbol = "speedometer"
+    #endif
 
     var body: some View {
         GeometryReader { geometry in
@@ -1070,24 +1217,36 @@ struct ScoreReaderPlaybackLoopOverlay: View {
                 }
 
                 if !bounds.isNull {
-                    Button(action: toggleAction) {
-                        Label(
-                            isActive ? "End loop" : "Loop range",
-                            systemImage: isActive ? "repeat.circle.fill" : "repeat"
-                        )
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Self.accent, in: Capsule())
-                        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
+                    HStack(spacing: 6) {
+                        Button(action: toggleAction) {
+                            Label(
+                                isActive ? (tempoRampStatus.map { "End ramp · \($0)" } ?? "End loop") : "Loop range",
+                                systemImage: isActive ? "repeat.circle.fill" : "repeat"
+                            )
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Self.accent, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityValue("\(range.measureCount) \(range.measureCount == 1 ? "measure" : "measures")")
+
+                        if !isActive {
+                            Button(action: tempoRampAction) {
+                                Label("Tempo ramp", systemImage: Self.tempoRampSymbol)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Self.accent)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(.regularMaterial, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Tempo ramp on the selected measures")
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .shadow(color: Color.black.opacity(0.18), radius: 8, y: 3)
                     .position(pillPosition(for: bounds, in: geometry.size))
-                    .accessibilityLabel(isActive ? "End playback loop" : "Loop selected measures")
-                    .accessibilityValue(
-                        "\(range.measureCount) \(range.measureCount == 1 ? "measure" : "measures")"
-                    )
                 }
             }
         }
@@ -1127,8 +1286,9 @@ struct ScoreReaderPlaybackLoopOverlay: View {
     private func pillPosition(for rect: CGRect, in size: CGSize) -> CGPoint {
         let preferredY = rect.minY - 26
         let rawY = preferredY < 30 ? rect.maxY + 26 : preferredY
+        let horizontalInset = min(isActive && tempoRampStatus == nil ? 82 : 128, size.width * 0.5)
         return CGPoint(
-            x: min(max(rect.midX, 82), max(size.width - 82, 82)),
+            x: min(max(rect.midX, horizontalInset), size.width - horizontalInset),
             y: min(max(rawY, 30), max(size.height - 30, 30))
         )
     }

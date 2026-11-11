@@ -169,9 +169,20 @@ bool msr::render::ScoreRenderSession::playbackNotes(std::vector<PlaybackNote>& o
 bool msr::render::ScoreRenderSession::playbackCountIn(const std::string& soundFontPath,
                                                       const double startTimeSeconds,
                                                       PlaybackCountIn& output,
-                                                      std::string& errorMessage) const
+                                                      std::string& errorMessage,
+                                                      const int bars) const
 {
-    return m_impl->playbackCountIn(soundFontPath, startTimeSeconds, output, errorMessage);
+    return m_impl->playbackCountIn(soundFontPath, startTimeSeconds, output, errorMessage, bars);
+}
+
+bool msr::render::ScoreRenderSession::setPlaybackSpeed(const double multiplier, std::string& errorMessage)
+{
+    return m_impl->setPlaybackSpeed(multiplier, errorMessage);
+}
+
+double msr::render::ScoreRenderSession::playbackSpeed() const
+{
+    return m_impl->playbackSpeed();
 }
 
 bool msr::render::ScoreRenderSession::playbackTrackSummary(std::vector<PlaybackTrackSummary>& output,

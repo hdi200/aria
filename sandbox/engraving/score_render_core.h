@@ -380,7 +380,12 @@ public:
     bool playbackCountIn(const std::string& soundFontPath,
                          double startTimeSeconds,
                          PlaybackCountIn& output,
-                         std::string& errorMessage) const;
+                         std::string& errorMessage,
+                         int bars = 1) const;
+    //! Practice speed (1 = written tempo). Playback, count-in and the measure timings follow
+    //! it; saved files are unaffected.
+    bool setPlaybackSpeed(double multiplier, std::string& errorMessage);
+    double playbackSpeed() const;
     bool playbackTrackSummary(std::vector<PlaybackTrackSummary>& output, std::string& errorMessage) const;
     bool playbackMeasureRegions(std::vector<PlaybackMeasureRegion>& output, std::string& errorMessage) const;
     //! Where each beat falls on the line and when it sounds, for a playhead

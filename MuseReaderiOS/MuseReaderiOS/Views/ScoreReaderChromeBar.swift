@@ -70,6 +70,12 @@ struct ScoreReaderChromeBar: View {
     let stopPlaybackAction: () -> Void
     let toggleMetronomeAction: () -> Void
     let toggleCountInAction: () -> Void
+    var practiceSpeed: Double = 1
+    var countInBars: Int = 1
+    var setMetronomeEnabledAction: (Bool) -> Void = { _ in }
+    var setPracticeSpeedAction: (Double) -> Void = { _ in }
+    var setCountInBarsAction: (Int) -> Void = { _ in }
+    var resetPracticeAction: () -> Void = {}
     let toggleMixerAction: () -> Void
     let isMixerPresented: Bool
     let exportAction: () -> Void
@@ -327,7 +333,8 @@ struct ScoreReaderChromeBar: View {
             if showsElapsedTime {
                 #if os(Android)
                 AndroidPlaybackTimeLabel(fallback: playbackState, isCountingIn: isCountingIn,
-                                         preparationMessage: playbackPreparationMessage)
+                                         preparationMessage: playbackPreparationMessage,
+                                         practiceSpeed: practiceSpeed)
                     .font(.system(size: isCompactHeader ? 11 : 13, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)
@@ -360,7 +367,8 @@ struct ScoreReaderChromeBar: View {
 
     private var playbackTimeLabel: String {
         if isCountingIn { return "Count-in" }
-        return playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)"
+        let speed = abs(practiceSpeed - 1) > 0.001 ? " · \(ScoreReaderPracticePanel.percent(practiceSpeed))" : ""
+        return playbackPreparationMessage ?? "\(playbackState.currentTimeLabel) / \(playbackState.durationLabel)\(speed)"
     }
 
     private func metronomeIcon(compact: Bool, iconSize: CGFloat) -> some View {
@@ -372,7 +380,7 @@ struct ScoreReaderChromeBar: View {
             #endif
             .overlay(alignment: .topTrailing) {
                 if countInEnabled {
-                    Text("1")
+                    Text("\(countInBars)")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: 14, height: 14)
@@ -391,81 +399,51 @@ struct ScoreReaderChromeBar: View {
 
     private func metronomeButton(compact: Bool, iconSize: CGFloat) -> some View {
         let isEnabled = playbackState.isAvailable && !isPlaybackBusy
-        #if os(Android)
-        // Android: a long press on a Button never reaches its gesture (the button takes the
-        // press), so tap and hold are both gestures on the icon.
-        return metronomeIcon(compact: compact, iconSize: iconSize)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if isEnabled { toggleMetronomeAction() }
-            }
-            .onLongPressGesture(minimumDuration: 0.22, maximumDistance: 18) {
-                if isEnabled { presentMetronomeSettings() }
-            }
-            .accessibilityAddTraits(.isButton)
-            .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
-            .opacity(playbackState.isAvailable ? 1 : 0.45)
-            .popover(isPresented: $isMetronomeSettingsPresented, arrowEdge: .top) {
-                metronomeSettingsPopover
-                    .presentationCompactPopoverWhenAvailable()
-            }
-            .accessibilityLabel("Metronome")
-            .accessibilityHint("Touch and hold for count-in settings")
-        #else
-        return Button(action: toggleMetronomeAction) {
+        // A tap opens Playback & Practice (metronome, practice speed, count-in). It replaces
+        // tap-to-toggle and hold-for-count-in.
+        let button = Button(action: presentMetronomeSettings) {
             metronomeIcon(compact: compact, iconSize: iconSize)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(metronomeEnabled ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
+        .foregroundStyle(metronomeEnabled || abs(practiceSpeed - 1) > 0.001
+            ? Color(red: 0.12, green: 0.45, blue: 0.92) : Color.black.opacity(0.84))
         .disabled(!isEnabled)
         .opacity(playbackState.isAvailable ? 1 : 0.45)
-        .highPriorityGesture(
-            LongPressGesture(minimumDuration: 0.22, maximumDistance: 18)
-                .onEnded { _ in
-                    presentMetronomeSettings()
-                }
-        )
-        .popover(isPresented: $isMetronomeSettingsPresented, arrowEdge: .top) {
+        .accessibilityLabel("Playback and practice")
+        .accessibilityValue(metronomeAccessibilityValue)
+
+        #if os(Android)
+        return button.sheet(isPresented: $isMetronomeSettingsPresented) {
+            ScrollView { metronomeSettingsPopover }
+                .ariaSkipPresentationDetents([.height(435), .large])
+        }
+        #else
+        return button.popover(isPresented: $isMetronomeSettingsPresented, arrowEdge: .top) {
             metronomeSettingsPopover
                 .presentationCompactPopoverWhenAvailable()
         }
-        .accessibilityLabel("Metronome")
-        .accessibilityHint("Touch and hold for count-in settings")
         #endif
     }
 
-    private var metronomeSettingsPopover: some View {
-        Toggle(isOn: Binding(
-            get: { countInEnabled },
-            set: { enabled in
-                if enabled != countInEnabled {
-                    toggleCountInAction()
-                }
-            }
-        )) {
-            HStack(spacing: 11) {
-                Image(systemName: "metronome")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.blue)
+    private var metronomeAccessibilityValue: String {
+        var parts: [String] = []
+        parts.append(metronomeEnabled ? "Metronome on" : "Metronome off")
+        if abs(practiceSpeed - 1) > 0.001 { parts.append("Speed \(ScoreReaderPracticePanel.percent(practiceSpeed))") }
+        if countInEnabled { parts.append(countInBars == 2 ? "Two-bar count-in" : "One-bar count-in") }
+        return parts.joined(separator: ", ")
+    }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Count-in")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("One bar before playback")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .toggleStyle(.switch)
-        .padding(.horizontal, 16)
-        .frame(height: 64)
-        #if os(Android)
-        .frame(maxWidth: .infinity)
-        #else
-        .frame(width: 275)
-        #endif
-        .presentationDetents([.height(64)])
+    private var metronomeSettingsPopover: some View {
+        ScoreReaderPracticePanel(
+            metronomeEnabled: metronomeEnabled,
+            practiceSpeed: practiceSpeed,
+            countInEnabled: countInEnabled,
+            countInBars: countInBars,
+            setMetronomeEnabledAction: setMetronomeEnabledAction,
+            setPracticeSpeedAction: setPracticeSpeedAction,
+            setCountInBarsAction: setCountInBarsAction,
+            resetAction: resetPracticeAction
+        )
     }
 
     private var compactMixerButton: some View {
@@ -787,7 +765,8 @@ struct ScoreReaderChromeBar: View {
             if showsElapsedTime {
                 #if os(Android)
                 AndroidPlaybackTimeLabel(fallback: playbackState, isCountingIn: isCountingIn,
-                                         preparationMessage: playbackPreparationMessage)
+                                         preparationMessage: playbackPreparationMessage,
+                                         practiceSpeed: practiceSpeed)
                     .font(.system(size: 10, weight: .semibold))
                     .monospacedDigit()
                     .lineLimit(1)

@@ -6934,7 +6934,8 @@ bool renderFluidSynthCountIn(mu::engraving::Score* score,
                              const std::string& soundFontPath,
                              const double startTimeSeconds,
                              msr::render::PlaybackCountIn& output,
-                             std::string& errorMessage)
+                             std::string& errorMessage,
+                             const int bars)
 {
     output = {};
     if (!score) {
@@ -6974,7 +6975,8 @@ bool renderFluidSynthCountIn(mu::engraving::Score* score,
     const double bps = score->tempomap()->multipliedTempo(measureStartTick).val;
     const int stepTicks = std::max(1, timeSig.isBeatedCompound(bps) ? timeSig.beatTicks() : timeSig.dUnitTicks());
     const int beatsPerBar = std::max(1, timeSig.ticksPerMeasure() / stepTicks);
-    const double stepSeconds = static_cast<double>(mu::engraving::durationFromTempoAndTicks(bps, stepTicks)) / 1000000.0;
+    const auto stepDuration = mu::engraving::durationFromTempoAndTicks(bps, stepTicks);
+    const auto fullBarDuration = stepDuration * beatsPerBar;
 
     muse::mpe::PlaybackSetupData setupData;
     mu::engraving::PlaybackSetupDataResolver().resolveMetronomeSetupData(setupData);
@@ -6990,7 +6992,6 @@ bool renderFluidSynthCountIn(mu::engraving::Score* score,
             }
             const muse::mpe::NoteEvent& noteEvent = std::get<muse::mpe::NoteEvent>(event);
             const muse::mpe::ArrangementContext& arrangement = noteEvent.arrangementCtx();
-            const int startFrame = frameForMpeTimestamp(arrangement.actualTimestamp);
             const int durationFrames = std::max(1, static_cast<int>(std::llround(
                 (static_cast<double>(arrangement.actualDuration) / 1000000.0) * kFluidSynthSampleRate
             )));
@@ -7001,17 +7002,25 @@ bool renderFluidSynthCountIn(mu::engraving::Score* score,
                 127
             );
             const int velocity = velocityForNoteEvent(noteEvent, useDynamicEvents, false);
-            synthEvents.push_back(makeNoteSynthEvent(startFrame, metronomeChannel, key, velocity, true));
-            synthEvents.push_back(makeNoteSynthEvent(startFrame + durationFrames, metronomeChannel, key, 0, false));
+            const int beatIndex = stepDuration > 0 ? static_cast<int>(arrangement.actualTimestamp / stepDuration) : 0;
+            // Prepend full bars. Desktop's extra pickup or mid-bar clicks belong only at the end.
+            const int firstBar = beatIndex < beatsPerBar ? 0 : bars - 1;
+            for (int bar = firstBar; bar < bars; ++bar) {
+                const auto timestamp = arrangement.actualTimestamp + fullBarDuration * bar;
+                const int startFrame = frameForMpeTimestamp(timestamp);
+                synthEvents.push_back(makeNoteSynthEvent(startFrame, metronomeChannel, key, velocity, true));
+                synthEvents.push_back(makeNoteSynthEvent(startFrame + durationFrames, metronomeChannel, key, 0, false));
 
-            msr::render::PlaybackCountInClick click;
-            click.timeSeconds = static_cast<double>(arrangement.actualTimestamp) / 1000000.0;
-            const int beatIndex = stepSeconds > 0.0 ? static_cast<int>(std::llround(click.timeSeconds / stepSeconds)) : 0;
-            click.beatNumber = beatIndex % beatsPerBar + 1;
-            click.isDownbeat = click.beatNumber == 1;
-            output.clicks.push_back(click);
+                msr::render::PlaybackCountInClick click;
+                click.timeSeconds = static_cast<double>(timestamp) / 1000000.0;
+                click.beatNumber = beatIndex % beatsPerBar + 1;
+                click.isDownbeat = click.beatNumber == 1;
+                output.clicks.push_back(click);
+            }
         }
     }
+    countInDuration += fullBarDuration * (bars - 1);
+    std::sort(output.clicks.begin(), output.clicks.end(), [](const auto& a, const auto& b) { return a.timeSeconds < b.timeSeconds; });
     std::sort(synthEvents.begin(), synthEvents.end());
 
     // A count-in is a few seconds of one channel, so hold the lock for all of it.

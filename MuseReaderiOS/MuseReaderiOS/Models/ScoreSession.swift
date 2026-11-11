@@ -329,6 +329,45 @@ struct ScorePlayFromHereTarget: Sendable, Equatable {
     }
 }
 
+/// Speeds are practice-speed multipliers (1 = written tempo).
+struct ScoreTempoRamp: Sendable, Equatable {
+    /// The practice speed to return to when the ramp ends.
+    let baseSpeed: Double
+    let startSpeed: Double
+    let targetSpeed: Double
+    let step: Double
+    let repeatsPerStep: Int
+    /// The repeat being played, from 1.
+    var loopNumber = 1
+
+    var totalLoops: Int {
+        guard step > 0.001, targetSpeed > startSpeed + 0.001 else { return 1 }
+        let increases = Int(((targetSpeed - startSpeed) / step - 0.001).rounded(.up))
+        return increases * repeatsPerStep + 1
+    }
+
+    var reachedTarget: Bool { loopNumber >= totalLoops }
+
+    var currentSpeed: Double { speed(onLoop: loopNumber) }
+
+    private func speed(onLoop loop: Int) -> Double {
+        if loop >= totalLoops { return targetSpeed }
+        return startSpeed + Double((loop - 1) / repeatsPerStep) * step
+    }
+
+    /// Time spent playing the loops before the first pass at the target speed.
+    func timeToTarget(writtenLoopDuration: TimeInterval) -> TimeInterval {
+        stride(from: 1, to: totalLoops, by: repeatsPerStep).reduce(0) { elapsed, loop in
+            elapsed + Double(repeatsPerStep) * writtenLoopDuration / speed(onLoop: loop)
+        }
+    }
+
+    var statusText: String {
+        let percent = "\(Int((currentSpeed * 100).rounded()))%"
+        return reachedTarget ? "\(percent) · target reached" : "\(percent) · loop \(loopNumber) of \(totalLoops)"
+    }
+}
+
 /// A view-mode measure range selected for repeated playback. The timing comes
 /// from MuseScore's expanded playback timeline, while the rectangles keep the
 /// selection attached to the rendered score page.

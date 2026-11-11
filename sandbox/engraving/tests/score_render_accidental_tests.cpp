@@ -2900,6 +2900,130 @@ bool runTest(const std::string& name, Function&& function)
 
 } // namespace
 
+// Undo inside note input stays in note input, as on desktop (BUG-006): undoing an entered
+// note must not drop the user back to Select.
+void testUndoKeepsNoteInput(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "undo-keeps-note-input", scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(60), "Could not locate the first note");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectElement(0, notes[60].x, notes[60].y, 1.0, state, error), "Could not select the first note: " + error);
+    expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input: " + error);
+    expect(state.noteInputEnabled, "Note input did not turn on");
+    expect(session->insertMIDIPitchAtCursor(67, false, false, state, error), "Could not enter a note: " + error);
+    expect(state.noteInputEnabled, "Entering a note left note input");
+    expect(session->undo(state, error), "Undo failed: " + error);
+    expect(state.noteInputEnabled, "Undo left note input");
+    expect(session->redo(state, error), "Redo failed: " + error);
+    expect(state.noteInputEnabled, "Redo left note input");
+
+    // Starting from a selected bar (as when Note Entry is turned on with a bar selected).
+    expect(session->setNoteInputEnabled(false, state, error), "Could not leave note input: " + error);
+    expect(session->selectMeasureRange(0, notes[60].x, notes[60].y, notes[60].x, notes[60].y, state, error),
+           "Could not select the first bar: " + error);
+    expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input from a bar: " + error);
+    expect(session->insertMIDIPitchAtCursor(69, false, false, state, error), "Could not enter a note from a bar: " + error);
+    expect(state.noteInputEnabled, "Entering a note from a bar left note input");
+    expect(session->undo(state, error), "Undo from a bar failed: " + error);
+    expect(state.noteInputEnabled, "Undo of a note entered from a selected bar left note input");
+}
+
+// Chord mode with a single note selected adds the key to that note (BUG-007): the app starts
+// note input at the selection and adds the pitch to the current chord.
+void testChordModeAddsToSelectedNote(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "chord-mode-adds", scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(62), "Could not locate the second note");
+    msr::render::ScoreEditState state;
+    std::string error;
+    const std::string before = saveSnapshot(*session, root, "chord-mode-before");
+    expect(session->selectElement(0, notes[62].x, notes[62].y, 1.0, state, error), "Could not select the note: " + error);
+    expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input: " + error);
+    expect(session->insertMIDIPitchAtCursor(67, false, true, state, error), "Could not add to the chord: " + error);
+    const std::string after = saveSnapshot(*session, root, "chord-mode-after");
+    expect(countOccurrences(after, "<Chord>") == countOccurrences(before, "<Chord>"),
+           "Adding to the chord created a new chord instead");
+    expect(countOccurrences(after, "<Note>") == countOccurrences(before, "<Note>") + 1,
+           "Adding to the chord did not add exactly one note");
+    expect(after.find("<pitch>67</pitch>") != std::string::npos, "The added pitch is missing");
+    expect(after.find("<pitch>62</pitch>") != std::string::npos, "The selected note was replaced");
+}
+
+// BUG-008: adding to a selected note's chord must not change that note's value. Mirrors the
+// app: the note-input intent carries the duration the toolbar showed before note input
+// started, and the app re-applies it if note input reports a different one.
+void testChordAddKeepsNoteValue(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "chord-add-keeps-value", scoreXml(0, { { 62, 16 } }, 1));
+    std::map<int, LocatedItem> notes = locateNotesByPitch(*session);
+    expect(notes.count(62), "Could not locate the whole note");
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->selectElement(0, notes[62].x, notes[62].y, 1.0, state, error), "Could not select the note: " + error);
+    // The app now uses the selected note's own value (whole) for note input.
+    const int selectedNoteDuration = 1;
+    expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input: " + error);
+    if (state.durationCode != selectedNoteDuration) {
+        expect(session->applyDuration(selectedNoteDuration, state, error), "Could not apply the duration: " + error);
+    }
+    expect(session->insertMIDIPitchAtCursor(67, false, true, state, error), "Could not add to the chord: " + error);
+    expect(state.durationCode == selectedNoteDuration && state.selection.chordMidiPitches.size() == 2,
+           "After adding to a whole-note chord the toolbar should still show a whole note (BUG-008)");
+    const std::string after = saveSnapshot(*session, root, "chord-add-keeps-value");
+    expect(after.find("<pitch>67</pitch>") != std::string::npos, "The added pitch is missing");
+    expect(countOccurrences(after, "<durationType>whole</durationType>") >= 1 && after.find("<pitch>62</pitch>") != std::string::npos
+               && countOccurrences(after, "<Chord>") == 1,
+           "Adding to the chord changed the whole note's value (BUG-008)");
+}
+
+// Practice speed: playback timings follow the multiplier; the saved file does not change.
+void testPracticeSpeedScalesPlaybackOnly(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } }, 2);
+    const auto firstChord = xml.find("<Chord>");
+    const auto secondChord = xml.find("<Chord>", firstChord + 1);
+    const auto thirdChord = xml.find("<Chord>", secondChord + 1);
+    xml.insert(thirdChord, "<Tempo><tempo>1</tempo><text>Slower</text></Tempo>");
+    xml.insert(firstChord, "<Tempo><tempo>2</tempo><text>Faster</text></Tempo>");
+    auto session = openSession(root, "practice-speed", xml);
+    std::string error;
+    std::vector<msr::render::PlaybackMeasureRegion> regions;
+    expect(session->playbackMeasureRegions(regions, error) && !regions.empty(), "No measure regions: " + error);
+    const double writtenEnd = regions.back().endTimeSeconds;
+    std::vector<msr::render::PlaybackNote> writtenNotes;
+    expect(session->playbackNotes(writtenNotes, error) && writtenNotes.size() == 4, "No written playback notes: " + error);
+    expect(std::abs(writtenNotes[1].startTimeSeconds - writtenNotes[0].startTimeSeconds - 0.5) < 0.01
+               && std::abs(writtenNotes[3].startTimeSeconds - writtenNotes[2].startTimeSeconds - 1.0) < 0.01,
+           "Fixture must change from 120 BPM to 60 BPM");
+    const std::string before = saveSnapshot(*session, root, "practice-speed-before");
+    expect(session->setPlaybackSpeed(0.5, error), "Could not set the practice speed: " + error);
+    expect(std::abs(session->playbackSpeed() - 0.5) < 1e-9, "Practice speed was not stored");
+    regions.clear();
+    expect(session->playbackMeasureRegions(regions, error) && !regions.empty(), "No measure regions at half speed: " + error);
+    expect(std::abs(regions.back().endTimeSeconds - writtenEnd * 2.0) < 0.01,
+           "At 50% the score should take twice as long (got " + std::to_string(regions.back().endTimeSeconds)
+           + "s, expected " + std::to_string(writtenEnd * 2.0) + "s)");
+    const std::string after = saveSnapshot(*session, root, "practice-speed-after");
+    expect(countOccurrences(after, "<tempo>") == countOccurrences(before, "<tempo>"), "Practice speed changed the saved tempos");
+    for (double speed : { 0.5, 1.5 }) {
+        expect(session->setPlaybackSpeed(speed, error), "Could not set the practice speed: " + error);
+        std::vector<msr::render::PlaybackNote> notes;
+        expect(session->playbackNotes(notes, error) && notes.size() == writtenNotes.size(), "Practice speed changed the note count");
+        for (size_t index = 0; index < notes.size(); ++index) {
+            expect(notes[index].pitch == writtenNotes[index].pitch, "Practice speed changed the sounding pitch");
+            expect(std::abs(notes[index].startTimeSeconds * speed - writtenNotes[index].startTimeSeconds) < 0.01,
+                   "Practice speed did not scale a note at its written tempo");
+        }
+    }
+    expect(session->setPlaybackSpeed(1.0, error), "Could not reset the practice speed: " + error);
+    regions.clear();
+    expect(session->playbackMeasureRegions(regions, error) && std::abs(regions.back().endTimeSeconds - writtenEnd) < 0.01,
+           "Resetting to 100% did not restore the written timing");
+}
+
 int main()
 {
     TestDirectory testDirectory;
@@ -2926,6 +3050,10 @@ int main()
     passed &= runTest("fermata button toggles on notes, rests and ranges",
                       [&] { testFermataButtonTogglesOnNotesRestsAndRanges(testDirectory.path); });
     passed &= runTest("range highlights cover every page", [&] { testRangeHighlightCoversEveryPage(testDirectory.path); });
+    passed &= runTest("practice speed scales playback only", [&] { testPracticeSpeedScalesPlaybackOnly(testDirectory.path); });
+    passed &= runTest("adding to a chord keeps the note value", [&] { testChordAddKeepsNoteValue(testDirectory.path); });
+    passed &= runTest("chord mode adds to the selected note", [&] { testChordModeAddsToSelectedNote(testDirectory.path); });
+    passed &= runTest("undo keeps note input", [&] { testUndoKeepsNoteInput(testDirectory.path); });
     passed &= runTest("pencil input works on later pages", [&] { testPencilInputWorksOnLaterPages(testDirectory.path); });
     passed &= runTest("editing works on later pages and edge bars", [&] { testEditingWorksOnLaterPagesAndEdgeBars(testDirectory.path); });
     passed &= runTest("fermata drag shows its anchor and can move to another note",

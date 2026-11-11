@@ -1463,8 +1463,31 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (BOOL)setPlaybackSpeed:(double)multiplier error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return NO;
+    }
+    std::string errorMessage;
+    if (!_session->setPlaybackSpeed(multiplier, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not change the practice speed."));
+        }
+        return NO;
+    }
+    return YES;
+#else
+    return YES;
+#endif
+}
+
 - (MSRPlaybackCountIn *)playbackCountInWithSoundFontPath:(NSString *)soundFontPath
                                          startTimeSeconds:(NSTimeInterval)startTimeSeconds
+                                                     bars:(NSInteger)bars
                                                     error:(NSError * _Nullable __autoreleasing *)error
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
@@ -1477,7 +1500,7 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
     msr::render::PlaybackCountIn countIn;
     std::string errorMessage;
-    if (!_session->playbackCountIn(soundFontPath.UTF8String ?: "", startTimeSeconds, countIn, errorMessage)) {
+    if (!_session->playbackCountIn(soundFontPath.UTF8String ?: "", startTimeSeconds, countIn, errorMessage, static_cast<int>(bars))) {
         if (error) {
             *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not render the count-in."));
         }

@@ -161,6 +161,17 @@ final class ScoreReaderState {
     var isExtendingSelection = false
     var metronomeEnabled = false
     var countInEnabled = UserDefaults.standard.bool(forKey: "ScoreReader.countInEnabled")
+    /// Bars of count-in (1 or 2) when count-in is on.
+    var countInBars = max(1, min(2, UserDefaults.standard.integer(forKey: "ScoreReader.countInBars")))
+    /// Practice speed for this score (1 = written tempo), remembered per score.
+    var practiceSpeed: Double = 1
+    var appliedPracticeSpeed: Double = 1
+    var practiceSpeedTask: Task<Void, Never>?
+    /// The running tempo ramp on the loop, if any.
+    var tempoRamp: ScoreTempoRamp?
+    var tempoRampLastPosition: Double = 0
+    /// A ramp step restarts the loop; only the first start plays the count-in.
+    var tempoRampSuppressesCountIn = false
     var isCountingIn = false
     var countInBeatNumber: Int?
     var editingState: ScoreEditingState = .inactive
@@ -194,13 +205,22 @@ final class ScoreReaderState {
     var pendingPreferFlats = false
     var pendingAccidentalKind: ScoreAccidentalKind?
     var stackedChordInputEnabled = false
+    /// Chord entry the user turned on with the Chord button. It stays on when another note is
+    /// selected; without this, selecting a single note turned it off and the next pitch key
+    /// replaced that note instead of adding to it (BUG-007).
+    var stackedChordInputChosen = false
     var noteEntryPreview: ScoreNoteEntryPreview?
     var activeNotationAutoScrollRevision = 0
+    /// True when the next auto-scroll should move the page only if the selected bar is
+    /// hidden (a Select-mode tap), instead of centering it as note entry does.
+    var activeNotationRevealIsMinimal = false
     var activePageCount: Int
     var concertPitchEnabled = false
     var hasConcertPitchRelevantTransposition = false
     var viewTransposeSourceKey: ScoreTransposeTargetKey?
     var viewTransposeKey: ScoreTransposeTargetKey?
+    /// The temporary View mode key in use when Edit was entered; reapplied on return.
+    var viewTransposeKeyBeforeEdit: ScoreTransposeTargetKey?
     var isViewTransposeActionInFlight = false
     var viewTransposeErrorMessage: String?
     var corruptionReport: ScoreCorruptionReport
@@ -394,6 +414,8 @@ final class ScoreReaderState {
                     guard let self else {
                         return
                     }
+                    // Editing works on the score as written; View mode gets this key back on return.
+                    self.viewTransposeKeyBeforeEdit = self.viewTransposeKey
                     self.viewTransposeKey = self.viewTransposeSourceKey
                     self.refreshAfterViewTranspose(pageCount: updatedPageCount, preparesPlayback: false)
                 }
@@ -486,6 +508,7 @@ final class ScoreReaderState {
         pendingPitchClass = nil
         pendingMIDIPitch = nil
         stackedChordInputEnabled = false
+        stackedChordInputChosen = false
         pickupEditorContext = nil
 
         var transitionSucceeded = true
@@ -512,8 +535,15 @@ final class ScoreReaderState {
             if let key = ScoreTransposeTargetKey(coreKey: coreKey) {
                 viewTransposeSourceKey = key
                 viewTransposeKey = key
+                // Restore the temporary key the reader chose before editing (BUG-013).
+                if let temporaryKey = viewTransposeKeyBeforeEdit, temporaryKey != key,
+                   let pageCount = try? await liveRenderSession.setViewTransposeKey(temporaryKey.coreKey) {
+                    viewTransposeKey = temporaryKey
+                    refreshAfterViewTranspose(pageCount: pageCount, preparesPlayback: false)
+                }
             }
         }
+        viewTransposeKeyBeforeEdit = nil
         interactionMode = .view
         refreshMeasureRegionsAfterEditing()
         return transitionSucceeded && saveSucceeded

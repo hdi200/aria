@@ -522,12 +522,17 @@ extension ScoreReaderState {
             return
         }
 
+        let shouldInsert = editingState.noteInputEnabled
+        if !shouldInsert {
+            // Set before the page change below, so moving to another page doesn't
+            // re-center the list on the tapped bar.
+            activeNotationRevealIsMinimal = true
+        }
         updateSelection(to: pageIndex)
         if isExtendingSelection {
             extendSelection(pageIndex: pageIndex, normalizedPoint: normalizedPoint)
             return
         }
-        let shouldInsert = editingState.noteInputEnabled
         let selectionHitRadiusScale = inputKind == .pencil ? 0.52 : 1.0
         let pendingAccidentalKind = self.pendingAccidentalKind
         // WYSIWYG: when inserting with the Pencil, commit at the spot the live
@@ -600,6 +605,12 @@ extension ScoreReaderState {
                     self?.lastKeyboardInputCanReceiveAccidental = false
                     self?.applyEditingState(newState)
                     self?.auditionSelectedChordSymbol(in: newState)
+                    #if !os(Android)
+                    // Bring a tapped bar out from under the bottom panel or top chrome.
+                    if newState.selection != nil {
+                        self?.revealActiveSelection(in: newState, onlyWhenObscured: true)
+                    }
+                    #endif
                 }
                 selectionAction?(newState.selection)
             } catch {
@@ -787,6 +798,7 @@ extension ScoreReaderState {
                 self?.noteInputWasActivatedByPencil = false
                 self?.lastKeyboardInputCanReceiveAccidental = false
                 self?.stackedChordInputEnabled = false
+                self?.stackedChordInputChosen = false
                 self?.updateNoteEntryPreview(pageIndex: pageIndex, normalizedPoint: nil)
                 self?.applyEditingState(newState)
                 self?.clearMeasureRangePreview()
@@ -845,6 +857,7 @@ extension ScoreReaderState {
             noteInputWasActivatedByPencil = false
             lastKeyboardInputCanReceiveAccidental = false
             stackedChordInputEnabled = false
+            stackedChordInputChosen = false
             queuedNoteInputIntent?.chord = false
             updateNoteEntryPreview(pageIndex: selectedPageIndex, normalizedPoint: nil)
         }
@@ -871,7 +884,7 @@ extension ScoreReaderState {
     func toggleRest() {
         guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
         var intent = noteInputIntent
-        if !intent.rests { stackedChordInputEnabled = false; intent.chord = false }
+        if !intent.rests { stackedChordInputEnabled = false; stackedChordInputChosen = false; intent.chord = false }
         let shouldEnterRestAtCursor = intent.enabled && !noteInputWasActivatedByPencil
         if shouldEnterRestAtCursor { intent.rests = true }
         else { intent.rests.toggle() }
@@ -1803,13 +1816,27 @@ extension ScoreReaderState {
 
     func handleKeyboardPitch(_ pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
         guard supportsEditing, isEditingMode else { return }
-        let replaceSelection = (shouldEditSelectedPitchBeforeContinuingKeyboardInput
-            && editingState.selection?.canChangePitch == true)
+        // Chord entry the user turned on adds the key to the selected note's chord (BUG-007);
+        // note input starts at that chord, so the pitch is added rather than replacing it.
+        let addsToSelectedChord = stackedChordInputChosen && editingState.selection?.kind == .note
+        let replaceSelection = !addsToSelectedChord
+            && ((shouldEditSelectedPitchBeforeContinuingKeyboardInput
+                && editingState.selection?.canChangePitch == true)
             || (!noteInputIntent.enabled && !hasContinuousNoteInputCursor
                 && (editingState.selection?.canChangePitch == true || editingState.selection?.kind == .rest
-                    || editingState.selection?.kind == .measure))
+                    || editingState.selection?.kind == .measure)))
+        var capturedIntent: ScoreNoteInputIntent?
+        if addsToSelectedChord, !noteInputIntent.enabled, let selection = editingState.selection {
+            // Note input starts at the selected chord with its value, as on desktop. Re-applying
+            // the toolbar's earlier value showed a different one than the chord has (BUG-008).
+            var intent = noteInputIntent
+            intent.duration = selection.duration
+            intent.dotted = selection.isDotted
+            intent.doubleDotted = selection.isDoubleDotted
+            capturedIntent = intent
+        }
         enqueueKeyboardPitch(pitchClass: pitchClass, midiPitch: midiPitch, preferFlats: preferFlats,
-            exactMIDIPitch: exactMIDIPitch, replaceSelection: replaceSelection)
+            exactMIDIPitch: exactMIDIPitch, replaceSelection: replaceSelection, capturedIntent: capturedIntent)
     }
 
     func enableNoteInputThenInsertKeyboardPitch(pitchClass: Int, midiPitch: Int?, preferFlats: Bool, exactMIDIPitch: Bool = false) {
@@ -1822,6 +1849,7 @@ extension ScoreReaderState {
             return
         }
         stackedChordInputEnabled.toggle()
+        stackedChordInputChosen = stackedChordInputEnabled
         if queuedNoteInputIntent != nil { queuedNoteInputIntent?.chord = stackedChordInputEnabled }
         if stackedChordInputEnabled && noteInputIntent.rests {
             toggleRest()
@@ -2279,10 +2307,10 @@ extension ScoreReaderState {
         let selectedChordPitchCount = editingState.selection?.chordMidiPitches.count ?? 0
         if editingCommandTask != nil, let intent = queuedNoteInputIntent {
             stackedChordInputEnabled = intent.chord
-        } else if selectedChordPitchCount > 1 {
-            stackedChordInputEnabled = true
         } else {
-            stackedChordInputEnabled = false
+            // A selected chord shows chord entry so its notes can be added to or removed;
+            // otherwise chord entry stays as the user set it.
+            stackedChordInputEnabled = stackedChordInputChosen || selectedChordPitchCount > 1
         }
         if !editingState.noteInputEnabled {
             noteEntryPreviewTask?.cancel()
@@ -2417,7 +2445,8 @@ extension ScoreReaderState {
                      String(describing: saveDelay)))
     }
 
-    func revealActiveSelection(in editingState: ScoreEditingState) {
+    func revealActiveSelection(in editingState: ScoreEditingState, onlyWhenObscured: Bool = false) {
+        activeNotationRevealIsMinimal = onlyWhenObscured
         if let selectedPageIndex = editingState.selection?.pageIndex, isValid(selectedPageIndex) {
             self.selectedPageIndex = selectedPageIndex
         }

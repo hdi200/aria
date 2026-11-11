@@ -632,7 +632,10 @@ isEditableText:(BOOL)isEditableText
                                                                      error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackMixedAudioData(soundFontPath:startTimeSeconds:durationSeconds:metronomeEnabled:partMixSettings:));
 - (nullable MSRPlaybackCountIn *)playbackCountInWithSoundFontPath:(NSString *)soundFontPath
                                                   startTimeSeconds:(NSTimeInterval)startTimeSeconds
-                                                             error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackCountIn(soundFontPath:startTimeSeconds:));
+                                                              bars:(NSInteger)bars
+                                                             error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackCountIn(soundFontPath:startTimeSeconds:bars:));
+/// Practice speed (1 = written tempo); playback only, never saved.
+- (BOOL)setPlaybackSpeed:(double)multiplier error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setPlaybackSpeed(_:));
 - (nullable NSArray<MSRPlaybackMeasureRegion *> *)playbackMeasureRegionsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackMeasureRegions());
 /// Every pitched note of playback in start order, percussion left out.
 - (nullable NSArray<MSRPlaybackNote *> *)playbackNotesWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackNotes());

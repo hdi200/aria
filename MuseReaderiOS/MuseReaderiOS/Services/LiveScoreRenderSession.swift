@@ -236,7 +236,13 @@ actor LiveScoreRenderSession {
 
     /// The metronome count-in leading into playback at `startTimeSeconds`, or
     /// nil when there is no bar to count in from.
-    func playbackCountIn(startTimeSeconds: TimeInterval) throws -> MSRPlaybackCountIn? {
+    /// Practice speed (1 = written tempo). Playback, count-in and measure timings follow it.
+    func setPlaybackSpeed(_ speed: Double) throws {
+        try bridgeSession.setPlaybackSpeed(speed)
+        invalidateCachedPlaybackArtifacts()
+    }
+
+    func playbackCountIn(startTimeSeconds: TimeInterval, bars: Int = 1) throws -> MSRPlaybackCountIn? {
         guard let soundFontURL = playbackSoundFontURL() else {
             throw NativePlaybackController.PlaybackError.soundBankUnavailable(
                 "Add `MuseScore_General.sf2` to the app bundle resources."
@@ -245,7 +251,8 @@ actor LiveScoreRenderSession {
 
         let countIn = try bridgeSession.playbackCountIn(
             soundFontPath: soundFontURL.path,
-            startTimeSeconds: startTimeSeconds
+            startTimeSeconds: startTimeSeconds,
+            bars: bars
         )
         return countIn.clicks.isEmpty ? nil : countIn
     }

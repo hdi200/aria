@@ -228,11 +228,20 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
         return makePlaybackAudioData(audio)
     }
 
-    open func playbackCountIn(soundFontPath: String, startTimeSeconds: TimeInterval) throws -> MSRPlaybackCountIn {
+    /// Practice speed (1 = written tempo); playback only, never saved.
+    open func setPlaybackSpeed(_ multiplier: Double) throws {
+        let session = try requireSession()
+        var message = std.string()
+        guard session.pointee.setPlaybackSpeed(multiplier, &message) else {
+            throw failure(message, "The MuseScore render core could not change the practice speed.")
+        }
+    }
+
+    open func playbackCountIn(soundFontPath: String, startTimeSeconds: TimeInterval, bars: Int = 1) throws -> MSRPlaybackCountIn {
         let session = try requireSession()
         var countIn = msr.render.PlaybackCountIn()
         var message = std.string()
-        guard session.pointee.playbackCountIn(std.string(soundFontPath), startTimeSeconds, &countIn, &message) else {
+        guard session.pointee.playbackCountIn(std.string(soundFontPath), startTimeSeconds, &countIn, &message, Int32(bars)) else {
             throw failure(message, "The MuseScore render core could not render the count-in.")
         }
         let clicks = countIn.clicks.map {

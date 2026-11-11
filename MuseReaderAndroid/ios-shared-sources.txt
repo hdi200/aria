@@ -66,6 +66,8 @@ Views/ScoreDetailView.swift
 Views/ScoreLegacyRepairSheet.swift
 Views/ScoreReaderAnnotationControls.swift
 Views/ScoreReaderChordEntry.swift
+Views/ScoreReaderPracticePanel.swift
+Views/ScoreReaderTempoRampSheet.swift
 Views/ScoreReaderChromeBar.swift
 Views/ScoreReaderContextToolbars.swift
 Views/ScoreReaderEditingDeck.swift

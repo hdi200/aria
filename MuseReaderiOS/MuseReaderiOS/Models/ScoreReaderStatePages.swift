@@ -84,6 +84,7 @@ extension ScoreReaderState {
             viewTransposeKey = nil
             return
         }
+        await applyStoredPracticeSpeed()
 
         let sourceCoreKey = await liveRenderSession.scoreStartKey()
         guard let sourceKey = ScoreTransposeTargetKey(coreKey: sourceCoreKey) else {

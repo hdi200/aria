@@ -4,6 +4,8 @@
 #if SKIP
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.gestures.animateScrollBy // ARIA PATCH
+import androidx.compose.foundation.gestures.scrollBy // ARIA PATCH
 import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
@@ -83,7 +85,45 @@ public struct LazyVStack : View, Renderable {
                         listState.animateScrollToItem(0)
                     }
                 })
-                let scrollToID = ScrollToIDAction(key: listState) { id in
+                let scrollToID = ScrollToIDAction(key: listState, anchoredAction: { id, anchor in
+                    // ARIA PATCH: SwiftUI's scrollTo(_:anchor:) aligns the item's anchor point with
+                    // the same point of the viewport: item top = anchor.y * (viewport - item height).
+                    guard let itemIndex = itemCollector.value.index(for: id) else {
+                        return
+                    }
+                    let animated = Animation.isInWithAnimation
+                    coroutineScope.launch {
+                        var itemTop: Int? = nil
+                        var itemSize = 0
+                        for info in listState.layoutInfo.visibleItemsInfo {
+                            if info.index == itemIndex {
+                                itemTop = info.offset
+                                itemSize = info.size
+                            }
+                        }
+                        if itemTop == nil {
+                            // Not laid out yet: bring it in first, then measure it.
+                            listState.scrollToItem(itemIndex)
+                            for info in listState.layoutInfo.visibleItemsInfo {
+                                if info.index == itemIndex {
+                                    itemTop = info.offset
+                                    itemSize = info.size
+                                }
+                            }
+                        }
+                        guard let currentTop = itemTop else {
+                            return
+                        }
+                        let viewport = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
+                        let desiredTop = anchor.y * Double(viewport - itemSize)
+                        let delta = Float(Double(currentTop) - desiredTop)
+                        if animated {
+                            listState.animateScrollBy(delta)
+                        } else {
+                            listState.scrollBy(delta)
+                        }
+                    }
+                }, action: { id in
                     if let itemIndex = itemCollector.value.index(for: id) {
                         coroutineScope.launch {
                             if Animation.isInWithAnimation {
@@ -93,7 +133,7 @@ public struct LazyVStack : View, Renderable {
                             }
                         }
                     }
-                }
+                })
                 PreferenceValues.shared.contribute(context: context, key: ScrollToIDPreferenceKey.self, value: scrollToID)
 
                 // Observe scroll position changes and contribute them via preferences

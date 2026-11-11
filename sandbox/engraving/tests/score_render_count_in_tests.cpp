@@ -33,11 +33,12 @@ bool nearlyEqual(const double lhs, const double rhs)
 
 msr::render::PlaybackCountIn countIn(const msr::render::ScoreRenderSession& session,
                                      const std::string& soundFontPath,
-                                     const double startTimeSeconds)
+                                     const double startTimeSeconds,
+                                     const int bars = 1)
 {
     msr::render::PlaybackCountIn output;
     std::string error;
-    if (!session.playbackCountIn(soundFontPath, startTimeSeconds, output, error)) {
+    if (!session.playbackCountIn(soundFontPath, startTimeSeconds, output, error, bars)) {
         fail("playbackCountIn failed: " + error);
     }
     return output;
@@ -113,6 +114,11 @@ int main(int argc, char* argv[])
                       { 1, 2, 3, 4, 1, 2 }, quarter, "4/4 beat 3");
         // 3/8 at this tempo is counted in eighths.
         expectCountIn(countIn(*session, soundFontPath, regions[2].startTimeSeconds), { 1, 2, 3 }, quarter / 2, "3/8 bar");
+        expect(session->setPlaybackSpeed(0.5, error), "practice speed unavailable: " + error);
+        expectCountIn(countIn(*session, soundFontPath, regions[1].startTimeSeconds * 2, 2),
+                      { 1, 2, 3, 4, 1, 2, 3, 4 }, quarter * 2, "two bars at 50%");
+        expectCountIn(countIn(*session, soundFontPath, regions[0].startTimeSeconds, 2),
+                      { 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3 }, quarter * 2, "two bars into pickup at 50%");
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << std::endl;
         return 1;

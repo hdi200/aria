@@ -369,6 +369,7 @@ public:
         m_viewTransposeActiveScore = nullptr;
         m_viewTransposeMasterScore = std::move(transposedMasterScore);
         m_viewTransposeActiveScore = transposedActiveScore;
+        applyPlaybackSpeed(m_viewTransposeMasterScore.get());
         m_totalPageCount = transposedPageCount;
         totalPageCount = transposedPageCount;
         return true;
@@ -459,11 +460,19 @@ public:
         }
 
         const mu::engraving::MasterScore* masterScore = m_masterScore.get();
+        // The score's own fields (File > Score properties on desktop, which the library reads
+        // too) come first; the printed text is the fallback. A title frame can carry a
+        // collection name ("5 Lieder, Op.49") in the Title style above the song's name, and
+        // reading that first renamed the score in the library after any edit.
         const auto styledValue = [masterScore](const mu::engraving::TextStyleType textStyleType, const char16_t* tag) {
+            const std::string tagValue = masterScore->metaTag(muse::String(tag)).trimmed().toStdString();
+            if (!tagValue.empty()) {
+                return tagValue;
+            }
             if (const mu::engraving::Text* textItem = masterScore->getText(textStyleType)) {
                 return textItem->plainText().toStdString();
             }
-            return masterScore->metaTag(muse::String(tag)).toStdString();
+            return std::string();
         };
 
         output.title = styledValue(mu::engraving::TextStyleType::TITLE, u"workTitle");

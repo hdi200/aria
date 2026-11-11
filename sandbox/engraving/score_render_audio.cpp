@@ -65,10 +65,43 @@
                                               output, errorMessage);
     }
 
+    //! Practice speed: a tempo multiplier on every tempo of the score, as desktop's playback
+    //! speed (NotationPlayback::setTempoMultiplier). Playback only; never written to files.
+    bool setPlaybackSpeed(const double multiplier, std::string& errorMessage)
+    {
+        if (!m_masterScore) {
+            errorMessage = "Playback is unavailable because the score session is closed.";
+            return false;
+        }
+        const double clamped = std::clamp(multiplier, 0.1, 4.0);
+        m_playbackSpeed = clamped;
+        applyPlaybackSpeed(m_masterScore.get());
+        applyPlaybackSpeed(m_viewTransposeMasterScore.get());
+        m_playbackStream.reset();
+        ++m_playbackStreamRevision;
+        return true;
+    }
+
+    double playbackSpeed() const
+    {
+        return m_playbackSpeed;
+    }
+
+    void applyPlaybackSpeed(mu::engraving::MasterScore* score)
+    {
+        if (!score || !score->tempomap()) {
+            return;
+        }
+        if (score->tempomap()->setTempoMultiplier(mu::engraving::BeatsPerSecond(m_playbackSpeed))) {
+            score->updateRepeatListTempo();
+        }
+    }
+
     bool playbackCountIn(const std::string& soundFontPath,
                          const double startTimeSeconds,
                          msr::render::PlaybackCountIn& output,
-                         std::string& errorMessage) const
+                         std::string& errorMessage,
+                         const int bars = 1) const
     {
         if (blockDelayedSubsystemIfCorrupted(m_masterScore.get(), "count-in render", errorMessage)) {
             output = {};
@@ -80,5 +113,6 @@
                                        soundFontPath,
                                        startTimeSeconds,
                                        output,
-                                       errorMessage);
+                                       errorMessage,
+                                       std::max(bars, 1));
     }

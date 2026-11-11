@@ -162,3 +162,13 @@ skip-ui identity.
   `TopAppBarOptions.preferCenterAlignedStyle` defaults to true. Skip drew them left-aligned,
   right next to a sheet's Cancel button (Score Setup, Choose Scores).
 
+
+## Scroll anchors (`Sources/SkipUI/SkipUI/Containers/ScrollView.swift`, `LazyVStack.swift`)
+
+- `ScrollViewProxy.scrollTo(_:anchor:)` honours the anchor in a `LazyVStack`, with
+  SwiftUI's meaning: the item's anchor point is aligned with the same point of the
+  viewport (item top = anchor.y × (viewport height − item height)). Skip ignored the
+  anchor and always scrolled the item to the top. `ScrollToIDAction` gains an optional
+  `anchoredAction` (placed before `action`, so trailing-closure call sites in the other
+  containers are unchanged); containers without one still scroll to the item's start.
+  Aria's reader uses it to place the selected bar above the edit panel, as on iOS.

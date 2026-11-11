@@ -160,6 +160,7 @@ private:
     std::unordered_set<const mu::engraving::EngravingItem*> m_fileUnlinkedPartHarmonies;
     mutable std::unique_ptr<FluidSynthPlaybackStream> m_playbackStream;
     int m_playbackStreamRevision = 0;
+    double m_playbackSpeed = 1.0;
     // 4.7.5 declares the renderer per-context; the render core registers it globally.
     muse::ContextInject<mu::engraving::rendering::IScoreRenderer> m_scoreRenderer { muse::modularity::globalCtx() };
 };

@@ -66,6 +66,7 @@ actor LiveScoreRenderSession {
     /// derive them from their MIDI fixture.
     func playbackNotes() throws -> [ScoreVideoPianoNote] { ScoreVideoPianoNotes.notes(fromMIDI: midi) }
     func playbackBeatPoints() throws -> [ScorePlaybackBeatPoint] { [] }
+    func videoTextFonts() -> (title: ScoreVideoTextFont, composer: ScoreVideoTextFont) { (.init(), .init()) }
     func renderPage(at index: Int, dpi: Int) throws -> ScorePage { ScorePage(pdfData: page) }
     /// Export audio with the user's mix; the stub ignores the mix.
     func playbackExportAudioChunk(startTimeSeconds: TimeInterval, durationSeconds: TimeInterval,

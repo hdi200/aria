@@ -295,6 +295,7 @@ struct ScoreReaderView: View {
     @State var exportProgress: Double?
     @State var selectedPartID = "full-score"
     @State var isTempoEditorPresented = false
+    @State var isTempoRampPresented = false
     @State var isTimeSignaturePresented = false
     @State var isKeySignaturePresented = false
     @State var isScoreSetupPresented = false
@@ -895,6 +896,12 @@ struct ScoreReaderView: View {
             stopPlaybackAction: readerState.stopPlayback,
             toggleMetronomeAction: readerState.toggleMetronome,
             toggleCountInAction: readerState.toggleCountIn,
+            practiceSpeed: readerState.practiceSpeed,
+            countInBars: readerState.countInBars,
+            setMetronomeEnabledAction: readerState.setMetronomeEnabled,
+            setPracticeSpeedAction: readerState.setPracticeSpeed,
+            setCountInBarsAction: readerState.setCountInBars,
+            resetPracticeAction: readerState.resetPracticeSettings,
             toggleMixerAction: toggleMixerFromControls,
             isMixerPresented: isMixerPresented,
             exportAction: {
@@ -1214,6 +1221,13 @@ struct ScoreReaderView: View {
                         pinsStaffHeader: selectedPartID == "full-score" && pinsVideoStaffHeader,
                         vertical: exportDraft.videoVertical)
                 }
+            )
+        }
+        .scoreReaderSheet(isPresented: $isTempoRampPresented) {
+            ScoreReaderTempoRampSheet(
+                writtenLoopDuration: readerState.tempoRampWrittenLoopDuration,
+                initialStartSpeed: readerState.practiceSpeed,
+                startAction: readerState.startTempoRamp
             )
         }
         .scoreReaderSheet(isPresented: $isTempoEditorPresented) {
@@ -2231,9 +2245,9 @@ struct ScoreReaderView: View {
                 }
                 .onChangeCompatible(of: readerState.selectedPageIndex) { newValue in
                     if activeNotationFocusIsActive, readerState.editingState.selection?.pageIndex == newValue {
-                        revealActiveNotation(using: proxy)
+                        revealActiveNotation(using: proxy, viewportSize: geometry.size)
                         DispatchQueue.main.async {
-                            revealActiveNotation(using: proxy)
+                            revealActiveNotation(using: proxy, viewportSize: geometry.size)
                         }
                         return
                     }
@@ -2249,12 +2263,18 @@ struct ScoreReaderView: View {
                     }
                 }
                 .onChangeCompatible(of: readerState.activeNotationAutoScrollRevision) { _ in
-                    revealActiveNotation(using: proxy)
+                    revealActiveNotation(using: proxy, viewportSize: geometry.size)
                     DispatchQueue.main.async {
-                        revealActiveNotation(using: proxy)
+                        revealActiveNotation(using: proxy, viewportSize: geometry.size)
                     }
                 }
                 .onChangeCompatible(of: playbackScrollTarget) { target in
+                    #if !os(Android)
+                    // While editing, each page's own view follows playback (ZoomableImageView).
+                    if readerState.isEditingMode {
+                        return
+                    }
+                    #endif
                     guard
                         target != nil,
                         readerState.playbackState.status == .playing,
@@ -2264,9 +2284,9 @@ struct ScoreReaderView: View {
                         return
                     }
 
-                    revealPlayback(using: proxy)
+                    revealPlayback(using: proxy, viewportSize: geometry.size)
                     DispatchQueue.main.async {
-                        revealPlayback(using: proxy)
+                        revealPlayback(using: proxy, viewportSize: geometry.size)
                     }
                 }
                 .onChangeCompatible(of: selectedToolCategory) { oldValue, newValue in
@@ -2331,6 +2351,7 @@ struct ScoreReaderView: View {
             noteEntryPreviewDuration: readerState.editingState.duration,
             showsLayoutMarkers: editingEnabled && selectedToolCategory == .layout,
             activeNotationAutoScrollRevision: readerState.activeNotationAutoScrollRevision,
+            activeNotationRevealsOnlyWhenObscured: readerState.activeNotationRevealIsMinimal,
             fitsPageToViewport: isPageTurn,
             allowsEditingInteractions: editingEnabled,
             allowsPlaybackFollow: readerState.shouldFollowPlayback,
@@ -2407,6 +2428,8 @@ struct ScoreReaderView: View {
             playFromHereAction: readerState.playFromHere,
             loopFromHereAction: readerState.loopFromHere,
             togglePlaybackLoopAction: readerState.toggleSelectedPlaybackLoop,
+            tempoRampAction: { isTempoRampPresented = true },
+            tempoRampStatus: readerState.tempoRamp?.statusText,
             manualScrollAction: {
                 readerState.suspendPlaybackFollow()
                 readerState.dismissPlayFromHere()
@@ -2522,7 +2545,12 @@ struct ScoreReaderView: View {
         )
     }
 
-    private func revealActiveNotation(using proxy: ScrollViewProxy) {
+    private func revealActiveNotation(using proxy: ScrollViewProxy, viewportSize: CGSize) {
+        // A Select-mode tap only nudges its bar into view; the page's own zoom view does
+        // that (iOS), so the list stays where the user put it.
+        if readerState.activeNotationRevealIsMinimal {
+            return
+        }
         #if os(Android)
         // Skip's scrollTo reaches only the page items and ignores the anchor, so the
         // active-notation anchor inside a page never moves the list. A zoomed page fills the
@@ -2536,6 +2564,39 @@ struct ScoreReaderView: View {
             }
             return
         }
+        // At normal zoom the list does the placing (as iOS's anchor view does), through
+        // Skip's anchored scrollTo (ARIA PATCH in skip-ui): the page's own view no longer
+        // shifts its contents, which assumed the page's top was at the top of the screen.
+        if activeNotationFocusIsActive,
+           let selection = readerState.editingState.selection,
+           selection.pageIndex == readerState.selectedPageIndex,
+           let element = readerState.selectedElement(for: selection.pageIndex),
+           let anchor = ScoreReaderPageCanvas.androidActiveNotationListAnchor(
+               selection: element,
+               pageDisplaySize: readerState.page(at: selection.pageIndex)?.displaySize,
+               availableWidth: viewportSize.width,
+               viewportSize: viewportSize,
+               isCompactPhoneLayout: isPhoneInterface,
+               floatingPaletteDockedLeft: floatingPaletteDockedLeft,
+               zoomScale: zoomScale,
+               // Skip lays the list's bottom padding out as padding, so the list ends at the
+               // top of the edit panel rather than running behind it as on iOS.
+               listViewportHeight: viewportSize.height - scrollContentBottomInset(
+                   isCompactPhoneLayout: isPhoneInterface,
+                   isPhoneLandscapeLayout: isPhoneInterface && viewportSize.width > viewportSize.height),
+               topInset: activeNotationTopInset(isCompactPhoneLayout: isPhoneInterface),
+               bottomInset: activeNotationBottomInset(isCompactPhoneLayout: isPhoneInterface,
+                   isPhoneLandscapeLayout: isPhoneInterface && viewportSize.width > viewportSize.height)
+           ) {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                proxy.scrollTo(selection.pageIndex, anchor: anchor)
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                proxy.scrollTo(readerState.selectedPageIndex, anchor: .top)
+            }
+        }
+        return
         #endif
         withAnimation(.easeInOut(duration: 0.22)) {
             if activeNotationFocusIsActive, readerState.editingState.selection?.pageIndex == readerState.selectedPageIndex {
@@ -2565,10 +2626,34 @@ struct ScoreReaderView: View {
             && readerState.viewTransposeKey != readerState.viewTransposeSourceKey
     }
 
-    private func revealPlayback(using proxy: ScrollViewProxy) {
+    private func revealPlayback(using proxy: ScrollViewProxy, viewportSize: CGSize = .zero) {
         guard let target = playbackScrollTarget else {
             return
         }
+        #if os(Android)
+        // Editing: Skip can't scroll to the playback marker inside a page, so scroll the page
+        // itself with an anchor that puts the playing bar above the edit panel (IOS-037/038).
+        if readerState.isEditingMode, viewportSize.height > 0,
+           let anchor = ScoreReaderPageCanvas.androidListAnchor(
+               for: target.normalizedRect,
+               pageDisplaySize: readerState.page(at: target.pageIndex)?.displaySize,
+               availableWidth: viewportSize.width,
+               viewportSize: viewportSize,
+               isCompactPhoneLayout: isPhoneInterface,
+               floatingPaletteDockedLeft: floatingPaletteDockedLeft,
+               zoomScale: zoomScale,
+               listViewportHeight: viewportSize.height - scrollContentBottomInset(
+                   isCompactPhoneLayout: isPhoneInterface,
+                   isPhoneLandscapeLayout: isPhoneInterface && viewportSize.width > viewportSize.height),
+               topInset: activeNotationTopInset(isCompactPhoneLayout: isPhoneInterface),
+               bottomInset: activeNotationBottomInset(isCompactPhoneLayout: isPhoneInterface,
+                   isPhoneLandscapeLayout: isPhoneInterface && viewportSize.width > viewportSize.height)) {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                proxy.scrollTo(target.pageIndex, anchor: anchor)
+            }
+            return
+        }
+        #endif
 
         withAnimation(.easeInOut(duration: 0.22)) {
             proxy.scrollTo(
@@ -2701,7 +2786,17 @@ struct ScoreReaderView: View {
             return false
         }
 
-        return textEntryFocusIsActive || selectedToolCategory == .chord || selectedToolCategory == .fingering || readerState.editingState.noteInputEnabled
+        if textEntryFocusIsActive || selectedToolCategory == .chord || selectedToolCategory == .fingering || readerState.editingState.noteInputEnabled {
+            return true
+        }
+        // Playback while editing follows the playing bar above the edit panel.
+        if readerState.playbackState.status == .playing {
+            return true
+        }
+        // Any selection keeps the room to lift its bar above the bottom panel. Without
+        // it, switching to Select (or an Undo that leaves note input) dropped that room
+        // and the page snapped back with the bar hidden under the panel.
+        return readerState.editingState.selection != nil
     }
 
     private func scrollContentBottomInset(isCompactPhoneLayout: Bool, isPhoneLandscapeLayout: Bool) -> CGFloat {
@@ -3198,6 +3293,13 @@ struct ScoreReaderView: View {
         let videoMixerSnapshot = readerState.mixerSettings
 
         exportTask = Task {
+            // Exports play at the written tempo, whatever the practice speed.
+            let suspendedPracticeSpeed = await readerState.suspendPracticeSpeedForExport()
+            defer {
+                Task { @MainActor in
+                    await readerState.restorePracticeSpeedAfterExport(suspendedPracticeSpeed)
+                }
+            }
             defer {
                 Task { @MainActor in
                     exportProgress = nil
@@ -3903,6 +4005,7 @@ struct ScoreReaderView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             zoomScale = max(zoomScale, textEntryFocusZoomScale)
         }
+        readerState.activeNotationRevealIsMinimal = false
         readerState.activeNotationAutoScrollRevision += 1
     }
 
