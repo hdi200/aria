@@ -9,5 +9,5 @@ Remaining device checks. Remove an item once it passes. Confirmed failures are t
   already verifies identical sounding MIDI pitches and scaled timing across a tempo change.
 - [ ] **Metronome at 70%.** Listen for clicks aligned with the slower beat.
 - [ ] **Tempo Ramp every 2 repeats.** Set 70% to 100% with +5% every 2 repeats.
-  Check that the sheet shows loop 13 and an estimated time. Listen for two passes at
-  each speed before the inincrease, with loop 13 starting at 100%.
+  Check that the sheet shows the estimated time to reach 100%. Listen for two passes
+  at each speed before the increase, with loop 13 starting at 100%.

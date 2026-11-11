@@ -70,18 +70,22 @@ struct ScoreReaderTempoRampSheet: View {
                                    accessibilityName: "target speed")
                 }
                 Divider()
-                settingRow("Tempo step") { increaseStepper }
+                settingRow("Increase tempo by") { increaseStepper }
                 Divider()
-                settingRow("Increase after") { repeatStepper }
+                settingRow("After") { repeatStepper }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 3)
             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.08)))
 
-            if let ramp {
-                rampSummary(ramp)
-            } else {
+            if let ramp, let summary = timeToTargetSummary(for: ramp) {
+                Text(summary)
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+            } else if ramp == nil {
                 Text("Set a target above the starting tempo.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -119,50 +123,17 @@ struct ScoreReaderTempoRampSheet: View {
                               step: step, repeatsPerStep: repeatsPerStep)
     }
 
-    private func rampSummary(_ ramp: ScoreTempoRamp) -> some View {
-        let levels = (ramp.totalLoops - 1) / ramp.repeatsPerStep + 1
-        let target = "Reaches \(Self.percent(ramp.targetSpeed)) on loop \(ramp.totalLoops)"
-        return ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 14) {
-                summaryItem("repeat", title: "\(levels) tempo levels")
-                Spacer(minLength: 0)
-                summaryItem("clock", title: target, detail: timeEstimate(for: ramp))
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                summaryItem("repeat", title: "\(levels) tempo levels")
-                summaryItem("clock", title: target, detail: timeEstimate(for: ramp))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func summaryItem(_ symbol: String, title: String, detail: String? = nil) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: symbol)
-                .font(.subheadline)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold))
-                if let detail {
-                    Text(detail).font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private func timeEstimate(for ramp: ScoreTempoRamp) -> String? {
+    private func timeToTargetSummary(for ramp: ScoreTempoRamp) -> String? {
         let estimate = ramp.timeToTarget(writtenLoopDuration: writtenLoopDuration)
         guard estimate > 0, estimate.isFinite else { return nil }
         let (minutes, seconds) = Int(estimate.rounded(.up)).quotientAndRemainder(dividingBy: 60)
         let time = minutes == 0 ? "\(seconds) sec" : seconds == 0 ? "\(minutes) min" : "\(minutes) min \(seconds) sec"
-        return "In about \(time)"
+        return "Reaches \(Self.percent(ramp.targetSpeed)) in about \(time)"
     }
 
     private var increaseStepper: some View {
         percentStepper(value: $step, range: Self.stepRange, increment: 0.01,
-                       accessibilityName: "tempo step", isStep: true)
+                       accessibilityName: "tempo increase", prefix: "+")
     }
 
     private var repeatStepper: some View {
@@ -183,9 +154,8 @@ struct ScoreReaderTempoRampSheet: View {
     }
 
     private func percentStepper(value: Binding<Double>, range: ClosedRange<Double>, increment: Double,
-                                accessibilityName: String, isStep: Bool = false) -> some View {
-        let label = isStep ? "+\(Int((value.wrappedValue * 100).rounded())) pts" : Self.percent(value.wrappedValue)
-        return stepper(value: label,
+                                accessibilityName: String, prefix: String = "") -> some View {
+        stepper(value: prefix + Self.percent(value.wrappedValue),
                 accessibilityName: accessibilityName,
                 decrease: {
                     value.wrappedValue = max(range.lowerBound, ((value.wrappedValue - increment) * 100).rounded() / 100)

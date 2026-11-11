@@ -20,10 +20,22 @@ struct ScoreReaderPracticePanel: View {
 
     private var selectedCountIn: Int { countInEnabled ? countInBars : 0 }
 
+    private var usesCompactTypography: Bool {
+        #if os(Android)
+        false
+        #else
+        AriaWindowLayout.shared.usesPhoneLayout
+        #endif
+    }
+
+    private var sectionFont: Font { .system(size: usesCompactTypography ? 15 : 16, weight: .semibold) }
+    private var detailFont: Font { .system(size: usesCompactTypography ? 12 : 13) }
+    private var optionFont: Font { .system(size: usesCompactTypography ? 13 : 14, weight: .semibold) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Playback & Practice")
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: usesCompactTypography ? 16 : 17, weight: .bold))
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
                 .padding(.bottom, 12)
@@ -51,7 +63,7 @@ struct ScoreReaderPracticePanel: View {
             HStack {
                 Button(action: resetAction) {
                     Label("Reset", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(optionFont)
                         .padding(.horizontal, 12)
                         .frame(minHeight: 36)
                         .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
@@ -79,9 +91,9 @@ struct ScoreReaderPracticePanel: View {
         Toggle(isOn: Binding(get: { metronomeEnabled }, set: setMetronomeEnabledAction)) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Metronome")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(sectionFont)
                 Text("Clicks during playback")
-                    .font(.system(size: 13))
+                    .font(detailFont)
                     .foregroundStyle(.secondary)
             }
         }
@@ -93,15 +105,15 @@ struct ScoreReaderPracticePanel: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Practice speed")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(sectionFont)
                     Text("For this score · relative to written tempo")
-                        .font(.system(size: 13))
+                        .font(detailFont)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
                 Spacer(minLength: 8)
                 Text(Self.percent(shownSpeed))
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: usesCompactTypography ? 22 : 26, weight: .bold))
                     .monospacedDigit()
                     .accessibilityHidden(true)
             }
@@ -138,7 +150,7 @@ struct ScoreReaderPracticePanel: View {
                         setPracticeSpeedAction(preset)
                     } label: {
                         Text(Self.percent(preset))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(optionFont)
                             .frame(maxWidth: .infinity, minHeight: 36)
                             .foregroundStyle(isSelected ? Color.white : Color.blue)
                             .background(isSelected ? Color.blue : Color.blue.opacity(0.09),
@@ -155,9 +167,9 @@ struct ScoreReaderPracticePanel: View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Count-in")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(sectionFont)
                 Text("Clicks before playback starts")
-                    .font(.system(size: 13))
+                    .font(detailFont)
                     .foregroundStyle(.secondary)
             }
 
@@ -168,7 +180,7 @@ struct ScoreReaderPracticePanel: View {
                         setCountInBarsAction(option.0)
                     } label: {
                         Text(option.1)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(optionFont)
                             .frame(maxWidth: .infinity, minHeight: 36)
                             .foregroundStyle(isSelected ? Color.white : Color.primary)
                             .background(isSelected ? Color.blue : Color.black.opacity(0.05),
