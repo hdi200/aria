@@ -170,6 +170,7 @@ extension ScoreReaderState {
                              saveRevision,
                              startedAt.timeIntervalSince(scheduledAt),
                              destinationURL.lastPathComponent))
+                await self?.backUpOriginalBeforeFirstSave(of: destinationURL)
                 try await liveRenderSession.save(to: destinationURL)
                 guard let self, self.autosaveRevision == saveRevision else {
                     return
@@ -223,6 +224,7 @@ extension ScoreReaderState {
             }
 
             do {
+                await self?.backUpOriginalBeforeFirstSave(of: destinationURL)
                 try await liveRenderSession.save(to: destinationURL)
                 guard let self, self.autosaveRevision == saveRevision else {
                     return
@@ -293,6 +295,7 @@ extension ScoreReaderState {
         do {
             let startedAt = Date()
             print("Aria autosave close flush begin: revision=\(saveRevision) destination=\"\(destinationURL.lastPathComponent)\"")
+            await backUpOriginalBeforeFirstSave(of: destinationURL)
             try await liveRenderSession.save(to: destinationURL)
             print(String(format: "Aria autosave close flush end: revision=%d elapsed=%.3fs",
                          saveRevision,
@@ -307,6 +310,21 @@ extension ScoreReaderState {
             recordSaveFailure(error)
             editingErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return false
+        }
+    }
+
+    /// A score that opened with problems is saved as it is, like desktop after "Open anyway".
+    /// Before Aria first writes over it, the untouched file is copied to Aria Backups.
+    func backUpOriginalBeforeFirstSave(of fileURL: URL) async {
+        guard session.corruptionReport.isCorrupted, !hasBackedUpOriginalWithProblems else { return }
+        hasBackedUpOriginalWithProblems = true
+        do {
+            let backupURL = try await Task.detached(priority: .userInitiated) {
+                try ScoreLegacyRepairBackup.createUntouchedCopy(of: fileURL)
+            }.value
+            print("Aria score with problems: original backed up to \"\(backupURL.path)\"")
+        } catch {
+            print("Aria score with problems: original backup failed: \(error.localizedDescription)")
         }
     }
 

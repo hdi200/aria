@@ -230,6 +230,14 @@ struct ScoreCorruptionIssue {
     std::string message;
 };
 
+/// Repairs offered for a score problem. Values are shared with the iOS and Android bridges.
+enum class CorruptionRepairAction : int {
+    Clear = 0,
+    FillWithRests = 1,
+    TrimToFit = 2,
+    FitTimeSignature = 3,
+};
+
 struct ScoreCorruptionReport {
     bool corrupted = false;
     std::string details;
@@ -386,6 +394,8 @@ public:
     //! it; saved files are unaffected.
     bool setPlaybackSpeed(double multiplier, std::string& errorMessage);
     double playbackSpeed() const;
+    //! Written tempo (quarter notes per minute) at a playback measure index; 0 if unknown.
+    double writtenTempoBpm(int measureIndex) const;
     bool playbackTrackSummary(std::vector<PlaybackTrackSummary>& output, std::string& errorMessage) const;
     bool playbackMeasureRegions(std::vector<PlaybackMeasureRegion>& output, std::string& errorMessage) const;
     //! Where each beat falls on the line and when it sounds, for a playhead
@@ -396,6 +406,7 @@ public:
     bool applyLegacyRepairs(const std::vector<int>& issueIndexes, ScoreEditState& output, std::string& errorMessage);
     bool selectCorruptionIssue(int issueIndex, ScoreEditState& output, std::string& errorMessage);
     bool clearCorruptionIssue(int issueIndex, ScoreEditState& output, ScoreCorruptionReport& report, std::string& errorMessage);
+    bool repairCorruptionIssue(int issueIndex, int action, ScoreEditState& output, ScoreCorruptionReport& report, std::string& errorMessage);
     bool currentEditState(ScoreEditState& output, std::string& errorMessage) const;
     //! Read input flags without producing selection artwork. This is a live query,
     //! not a cached UI snapshot; the existing full-state API remains unchanged.

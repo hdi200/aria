@@ -242,6 +242,11 @@ actor LiveScoreRenderSession {
         invalidateCachedPlaybackArtifacts()
     }
 
+    /// Written tempo (quarter notes per minute) at a playback measure index; 0 if unknown.
+    func writtenTempoBpm(measureIndex: Int) -> Double {
+        bridgeSession.writtenTempoBpm(measureIndex: measureIndex)
+    }
+
     func playbackCountIn(startTimeSeconds: TimeInterval, bars: Int = 1) throws -> MSRPlaybackCountIn? {
         guard let soundFontURL = playbackSoundFontURL() else {
             throw NativePlaybackController.PlaybackError.soundBankUnavailable(
@@ -370,6 +375,16 @@ actor LiveScoreRenderSession {
 
     func selectCorruptionIssue(_ issue: ScoreCorruptionIssue) throws -> ScoreEditingState {
         try makeEditingState(from: bridgeSession.selectCorruptionIssue(index: issue.index))
+    }
+
+    func repairCorruptionIssue(_ issue: ScoreCorruptionIssue, repair: ScoreCorruptionRepair) throws -> (ScoreEditingState, ScoreCorruptionReport) {
+        var bridgeEditState: MSREditState?
+        let bridgeReport = try bridgeSession.repairCorruptionIssue(index: issue.index, action: repair.rawValue, editState: &bridgeEditState)
+        guard let bridgeEditState else {
+            throw LiveScoreRenderSessionError.missingEditState
+        }
+        invalidateCachedPlaybackArtifacts()
+        return (try makeEditingState(from: bridgeEditState, refreshScope: .all), makeCorruptionReport(from: bridgeReport))
     }
 
     func clearCorruptionIssue(_ issue: ScoreCorruptionIssue) throws -> (ScoreEditingState, ScoreCorruptionReport) {

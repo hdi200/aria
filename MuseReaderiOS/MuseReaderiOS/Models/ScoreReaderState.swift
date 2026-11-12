@@ -169,7 +169,14 @@ final class ScoreReaderState {
     var practiceSpeedTask: Task<Void, Never>?
     /// The running tempo ramp on the loop, if any.
     var tempoRamp: ScoreTempoRamp?
+    /// Written tempo (quarter notes per minute) at the loop's first bar, else at the playback
+    /// position; shown × practice speed in Playback & Practice and Tempo Ramp. 0 if unknown.
+    var writtenTempoBpm: Double = 0
+    var writtenTempoMeasureIndex: Int?
     var tempoRampLastPosition: Double = 0
+    /// True while a ramp step re-renders and restarts its own loop, which clears the loop on
+    /// the way; any other clearing of the loop ends the ramp.
+    var isRestartingTempoRamp = false
     /// A ramp step restarts the loop; only the first start plays the count-in.
     var tempoRampSuppressesCountIn = false
     var isCountingIn = false
@@ -224,6 +231,9 @@ final class ScoreReaderState {
     var isViewTransposeActionInFlight = false
     var viewTransposeErrorMessage: String?
     var corruptionReport: ScoreCorruptionReport
+    var isCorruptionNoticeDismissed = false
+    /// Set once the untouched original of a score with problems is in Aria Backups.
+    var hasBackedUpOriginalWithProblems = false
     var pickupEditorContext: ScorePickupEditorContext?
     private(set) var lastSelectedMeasureIndex: Int?
     private(set) var lastSelectedMeasureTick: Int64?
@@ -319,8 +329,9 @@ final class ScoreReaderState {
         currentPage?.sourceName ?? session.renderPipeline.summaryLabel
     }
 
+    /// Scores with problems open for editing too, like desktop's "Open anyway".
     var supportsEditing: Bool {
-        session.capabilities.supportsEditing && !corruptionReport.isCorrupted
+        session.capabilities.supportsEditing
     }
 
     var supportsPlayback: Bool {
@@ -339,8 +350,9 @@ final class ScoreReaderState {
         playbackFollowEnabled && !playbackFollowIsSuspended
     }
 
+    /// The problems notice shows until it is closed or every problem is fixed.
     var isRepairingCorruption: Bool {
-        session.liveRenderSession != nil && corruptionReport.isCorrupted
+        session.liveRenderSession != nil && corruptionReport.isCorrupted && !isCorruptionNoticeDismissed
     }
 
     init(
@@ -352,7 +364,7 @@ final class ScoreReaderState {
     ) {
         self.session = session
         self.preferredDPI = preferredDPI
-        self.interactionMode = session.capabilities.supportsEditing && !session.corruptionReport.isCorrupted
+        self.interactionMode = session.capabilities.supportsEditing
             ? initialInteractionMode
             : .view
         self.activePageCount = session.pageCount

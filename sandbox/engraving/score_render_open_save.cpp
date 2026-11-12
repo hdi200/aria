@@ -677,12 +677,8 @@ public:
         }
         m_totalPageCount = activePageCount();
 
-        if (blockDelayedSubsystemIfCorrupted(m_masterScore.get(), "saving/autosave", errorMessage)) {
-            std::cout << "Aria corruption guard: save blocked"
-                      << " elapsed=" << elapsedSecondsSince(started)
-                      << "s" << std::endl;
-            return false;
-        }
+        // Corrupted scores save as they are, like desktop's save after "Open anyway"; the
+        // reader keeps the original and warns before the first save.
         if (!validateMasterHarmonyRetainedBeforeSave(m_masterScore.get(), m_maxObservedMasterHarmonyCount, errorMessage)) {
             std::cout << "Aria save guard: save blocked"
                       << " elapsed=" << elapsedSecondsSince(started)

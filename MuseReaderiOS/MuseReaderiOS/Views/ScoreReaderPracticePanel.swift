@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Playback & Practice: opened by tapping the metronome button. Metronome, practice speed
 /// (per score, relative to the written tempo) and count-in. Changes apply as they are made.
@@ -7,12 +8,28 @@ struct ScoreReaderPracticePanel: View {
     let practiceSpeed: Double
     let countInEnabled: Bool
     let countInBars: Int
+    /// Written tempo at the bar playback starts from; the BPM shown is this × the speed.
+    var writtenTempoBpm: Double = 0
     let setMetronomeEnabledAction: (Bool) -> Void
     let setPracticeSpeedAction: (Double) -> Void
     let setCountInBarsAction: (Int) -> Void
     let resetAction: () -> Void
 
     @State var draftSpeed: Double?
+    /// Android: the option rows' measured width. Buttons that share a row by
+    /// `maxWidth: .infinity` were briefly laid out at uneven widths each time the panel
+    /// redrew; fixed widths from this avoid it.
+    @State var optionRowWidth: CGFloat = 0
+
+    /// A button's width in a row of `count`, or nil to share the row (iOS, or not measured yet).
+    private func optionWidth(count: Int, spacing: CGFloat) -> CGFloat? {
+        #if os(Android)
+        guard optionRowWidth > 0 else { return nil }
+        return ((optionRowWidth - spacing * CGFloat(count - 1)) / CGFloat(count)).rounded(.down)
+        #else
+        return nil
+        #endif
+    }
 
     private static let presets: [Double] = [0.5, 0.7, 0.85, 1.0]
 
@@ -112,16 +129,32 @@ struct ScoreReaderPracticePanel: View {
                         .lineLimit(2)
                 }
                 Spacer(minLength: 8)
-                Text(Self.percent(shownSpeed))
-                    .font(.system(size: usesCompactTypography ? 22 : 26, weight: .bold))
-                    .monospacedDigit()
-                    .accessibilityHidden(true)
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(Self.percent(shownSpeed))
+                        .font(.system(size: usesCompactTypography ? 22 : 26, weight: .bold))
+                        .monospacedDigit()
+                    if writtenTempoBpm > 0 {
+                        Text(Self.bpm(writtenTempoBpm * shownSpeed))
+                            .font(.system(size: usesCompactTypography ? 12 : 13, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityHidden(true)
             }
 
             Slider(
                 value: Binding(
                     get: { shownSpeed },
-                    set: { draftSpeed = ($0 * 20).rounded() / 20 }
+                    set: { newValue in
+                        // 5% steps, with 100% a little "sticky": it snaps there from
+                        // nearby, with a tap of haptic feedback as it lands.
+                        let snapped = abs(newValue - 1) < 0.04 ? 1 : (newValue * 20).rounded() / 20
+                        if abs(snapped - 1) < 0.001, abs(shownSpeed - 1) >= 0.001 {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }
+                        draftSpeed = snapped
+                    }
                 ),
                 in: ScoreReaderState.practiceSpeedRange,
                 onEditingChanged: { editing in
@@ -132,7 +165,9 @@ struct ScoreReaderPracticePanel: View {
                 }
             )
             .accessibilityLabel("Practice speed")
-            .accessibilityValue(Self.percent(shownSpeed))
+            .accessibilityValue(writtenTempoBpm > 0
+                ? "\(Self.percent(shownSpeed)), \(Self.bpm(writtenTempoBpm * shownSpeed))"
+                : Self.percent(shownSpeed))
 
             HStack {
                 Text(Self.percent(ScoreReaderState.practiceSpeedRange.lowerBound))
@@ -145,13 +180,16 @@ struct ScoreReaderPracticePanel: View {
             HStack(spacing: 8) {
                 ForEach(Self.presets, id: \.self) { preset in
                     let isSelected = abs(shownSpeed - preset) < 0.001
+                    let width = optionWidth(count: Self.presets.count, spacing: 8)
                     Button {
                         draftSpeed = nil
                         setPracticeSpeedAction(preset)
                     } label: {
                         Text(Self.percent(preset))
                             .font(optionFont)
-                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .lineLimit(1)
+                            .frame(width: width)
+                            .frame(maxWidth: width == nil ? .infinity : nil, minHeight: 36)
                             .foregroundStyle(isSelected ? Color.white : Color.blue)
                             .background(isSelected ? Color.blue : Color.blue.opacity(0.09),
                                         in: RoundedRectangle(cornerRadius: 9))
@@ -160,6 +198,18 @@ struct ScoreReaderPracticePanel: View {
                     .accessibilitySelected(isSelected)
                 }
             }
+            #if os(Android)
+            .frame(maxWidth: .infinity)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { optionRowWidth = proxy.size.width }
+                        .onChange(of: proxy.size.width) { _, newWidth in
+                            if abs(newWidth - optionRowWidth) > 1 { optionRowWidth = newWidth }
+                        }
+                }
+            )
+            #endif
         }
     }
 
@@ -176,12 +226,15 @@ struct ScoreReaderPracticePanel: View {
             HStack(spacing: 6) {
                 ForEach([(0, "Off"), (1, "1 bar"), (2, "2 bars")], id: \.0) { option in
                     let isSelected = selectedCountIn == option.0
+                    let width = optionWidth(count: 3, spacing: 6)
                     Button {
                         setCountInBarsAction(option.0)
                     } label: {
                         Text(option.1)
                             .font(optionFont)
-                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .lineLimit(1)
+                            .frame(width: width)
+                            .frame(maxWidth: width == nil ? .infinity : nil, minHeight: 36)
                             .foregroundStyle(isSelected ? Color.white : Color.primary)
                             .background(isSelected ? Color.blue : Color.black.opacity(0.05),
                                         in: RoundedRectangle(cornerRadius: 9))
@@ -200,5 +253,9 @@ struct ScoreReaderPracticePanel: View {
 
     static func percent(_ speed: Double) -> String {
         "\(Int((speed * 100).rounded()))%"
+    }
+
+    static func bpm(_ beatsPerMinute: Double) -> String {
+        "\(Int(beatsPerMinute.rounded())) BPM"
     }
 }

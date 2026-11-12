@@ -1491,6 +1491,14 @@ final class MuseReaderAppModel {
             else {
                 throw ScoreDocumentServiceError.bridgeFailure("Aria created the converted score but could not reopen it safely.")
             }
+            // An import with problems (irregular bars from another program) opens anyway, like
+            // desktop; the imported file is kept in Aria Backups so it can be imported again.
+            if packagedSession.corruptionReport.isCorrupted {
+                let sourceURL = sourceDocument.canonicalURL
+                _ = try? await Task.detached(priority: .utility) {
+                    try ScoreLegacyRepairBackup.createUntouchedCopy(of: sourceURL)
+                }.value
+            }
 
             print("Aria import normalization complete: source=\(sourceDocument.canonicalURL.lastPathComponent) destination=\(packagedDocument.canonicalURL.lastPathComponent)")
             return PreparedManagedScoreSession(

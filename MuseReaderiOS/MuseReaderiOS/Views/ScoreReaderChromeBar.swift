@@ -71,6 +71,7 @@ struct ScoreReaderChromeBar: View {
     let toggleMetronomeAction: () -> Void
     let toggleCountInAction: () -> Void
     var practiceSpeed: Double = 1
+    var writtenTempoBpm: Double = 0
     var countInBars: Int = 1
     var setMetronomeEnabledAction: (Bool) -> Void = { _ in }
     var setPracticeSpeedAction: (Double) -> Void = { _ in }
@@ -413,9 +414,15 @@ struct ScoreReaderChromeBar: View {
         .accessibilityValue(metronomeAccessibilityValue)
 
         #if os(Android)
+        // Sized to the panel's measured content, like the parts and export panels: two
+        // detents let Skip open at either one and switch between them as the panel redraws.
         return button.sheet(isPresented: $isMetronomeSettingsPresented) {
-            ScrollView { metronomeSettingsPopover }
-                .ariaSkipPresentationDetents([.height(435), .large])
+            ScrollView(.vertical, showsIndicators: false) {
+                metronomeSettingsPopover
+                    .padding(.bottom, 12)
+                    .popoverPanelScrollContent()
+            }
+            .presentationCompactPopoverWhenAvailable()
         }
         #else
         return button.popover(isPresented: $isMetronomeSettingsPresented, arrowEdge: .top) {
@@ -439,6 +446,7 @@ struct ScoreReaderChromeBar: View {
             practiceSpeed: practiceSpeed,
             countInEnabled: countInEnabled,
             countInBars: countInBars,
+            writtenTempoBpm: writtenTempoBpm,
             setMetronomeEnabledAction: setMetronomeEnabledAction,
             setPracticeSpeedAction: setPracticeSpeedAction,
             setCountInBarsAction: setCountInBarsAction,

@@ -636,6 +636,7 @@ isEditableText:(BOOL)isEditableText
                                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackCountIn(soundFontPath:startTimeSeconds:bars:));
 /// Practice speed (1 = written tempo); playback only, never saved.
 - (BOOL)setPlaybackSpeed:(double)multiplier error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(setPlaybackSpeed(_:));
+- (double)writtenTempoBpmAtMeasureIndex:(NSInteger)measureIndex NS_SWIFT_NAME(writtenTempoBpm(measureIndex:));
 - (nullable NSArray<MSRPlaybackMeasureRegion *> *)playbackMeasureRegionsWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackMeasureRegions());
 /// Every pitched note of playback in start order, percussion left out.
 - (nullable NSArray<MSRPlaybackNote *> *)playbackNotesWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(playbackNotes());
@@ -649,6 +650,10 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSRScoreCorruptionReport *)clearCorruptionIssueAtIndex:(NSInteger)index
                                                          editState:(MSREditState * _Nullable * _Nullable)editState
                                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(clearCorruptionIssue(index:editState:));
+- (nullable MSRScoreCorruptionReport *)repairCorruptionIssueAtIndex:(NSInteger)index
+                                                              action:(NSInteger)action
+                                                           editState:(MSREditState * _Nullable * _Nullable)editState
+                                                               error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(repairCorruptionIssue(index:action:editState:));
 - (nullable MSREditState *)currentEditStateWithError:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(currentEditState());
 - (nullable MSREditState *)selectElementAtPageIndex:(NSInteger)pageIndex
                                         normalizedX:(double)normalizedX

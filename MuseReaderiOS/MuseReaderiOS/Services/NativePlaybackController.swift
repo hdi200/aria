@@ -63,6 +63,34 @@ final class NativePlaybackController {
         let endHostTime: UInt64
     }
 
+    /// One pass of a tempo-ramp loop on the audio timeline. Passes after a speed change
+    /// have their own loop times, so score time is mapped per pass.
+    private struct LoopPassSegment {
+        let originTimelineSeconds: TimeInterval
+        let loop: PlaybackLoopTimeline
+        let speed: Double
+        let pass: Int
+
+        func scorePosition(for timelinePosition: TimeInterval) -> TimeInterval {
+            let elapsed = max(timelinePosition - originTimelineSeconds, 0)
+            return loop.startTimeSeconds + elapsed.truncatingRemainder(dividingBy: loop.durationSeconds)
+        }
+    }
+
+    /// Tempo ramp: the speed of each loop pass. A new speed is set on the render session
+    /// when rendering reaches the loop wrap, a few seconds before it is heard, so the
+    /// next pass follows the last one without stopping.
+    private struct LoopPassPlan {
+        let speedForPass: (Int) -> Double
+        /// The pass and speed being rendered.
+        var renderPass: Int
+        var renderSpeed: Double
+        /// The speed last set on the render session.
+        var engineSpeed: Double
+        /// Rendered passes not yet finished playing, oldest first.
+        var segments: [LoopPassSegment]
+    }
+
     private let chunkDurationSeconds: TimeInterval = 0.125
     /// Mixed audio scheduled on the player. Mixer changes reach the output within this window.
     private let mixAheadDurationSeconds: TimeInterval = 0.5
@@ -122,6 +150,9 @@ final class NativePlaybackController {
     private var schedulingTask: Task<Void, Never>?
     private var playWhenBuffered = false
     private var loopRange: PlaybackLoopTimeline?
+    private var loopPassPlan: LoopPassPlan?
+    /// The pass being heard, updated as the position is read.
+    private var audibleLoopPassSegment: LoopPassSegment?
 
     var isLoaded: Bool {
         engine != nil && playerNode != nil && liveRenderSession != nil
@@ -365,6 +396,8 @@ final class NativePlaybackController {
             throw PlaybackError.playerUnavailable
         }
 
+        // A ramp keeps going from the pass being heard; the new times are at its speed.
+        rewindLoopPassToAudible()
         // Quantize to frames so each pass is a whole number of samples and the
         // wrapped clock cannot drift from the audio.
         let startFrame = frame(forSeconds: bounded(startTimeSeconds))
@@ -377,7 +410,7 @@ final class NativePlaybackController {
             startTimeSeconds: Double(startFrame) / sampleRate,
             endTimeSeconds: Double(endFrame) / sampleRate
         )
-        resetPlaybackQueue(to: Double(startFrame) / sampleRate, wasPlaying: false)
+        resetPlaybackQueue(to: Double(startFrame) / sampleRate, wasPlaying: false, rewindsLoopPass: false)
         log("loop configured start=\(formatSeconds(startTimeSeconds)) end=\(formatSeconds(endTimeSeconds)) revision=\(revision)")
     }
 
@@ -391,6 +424,8 @@ final class NativePlaybackController {
         let resumePosition = currentPositionSeconds()
         let wasPlaying = playerNode?.isPlaying == true || playWhenBuffered
         loopRange = nil
+        loopPassPlan = nil
+        audibleLoopPassSegment = nil
 
         guard playerNode != nil else {
             return
@@ -405,6 +440,96 @@ final class NativePlaybackController {
             }
         }
         log("loop cleared position=\(formatSeconds(resumePosition)) revision=\(revision)")
+    }
+
+    /// Tempo ramp on the current loop: `speedForPass` gives each pass's speed, from
+    /// `firstPass` (playing at `currentSpeed`). Speed changes happen in the stream at
+    /// the loop wrap, without stopping. Cleared with the loop or when playback is invalidated.
+    func setLoopPassSpeeds(currentSpeed: Double, firstPass: Int, speedForPass: @escaping (Int) -> Double) {
+        guard let loopRange else { return }
+        let segment = LoopPassSegment(originTimelineSeconds: loopRange.startTimeSeconds, loop: loopRange,
+                                      speed: currentSpeed, pass: firstPass)
+        // A plan already running may have set the session ahead of `currentSpeed`.
+        loopPassPlan = LoopPassPlan(speedForPass: speedForPass, renderPass: firstPass, renderSpeed: currentSpeed,
+                                    engineSpeed: loopPassPlan?.engineSpeed ?? currentSpeed, segments: [segment])
+        audibleLoopPassSegment = segment
+    }
+
+    /// The tempo-ramp pass being heard and its speed.
+    func audibleLoopPass() -> (number: Int, speed: Double)? {
+        guard loopPassPlan != nil else { return nil }
+        _ = currentPositionSeconds()
+        return audibleLoopPassSegment.map { ($0.pass, $0.speed) }
+    }
+
+    /// Rendering may run a pass ahead of the output. Before the queue is rebuilt, go back
+    /// to the pass being heard; the render session's speed follows before the next render.
+    private func rewindLoopPassToAudible() {
+        guard var plan = loopPassPlan else { return }
+        _ = currentPositionSeconds()
+        guard let segment = audibleLoopPassSegment else { return }
+        if abs(segment.speed - plan.renderSpeed) > 0.000_001 {
+            durationSeconds *= plan.renderSpeed / segment.speed
+        }
+        plan.renderPass = segment.pass
+        plan.renderSpeed = segment.speed
+        loopPassPlan = plan
+        loopRange = segment.loop
+    }
+
+    /// At a loop wrap, moves rendering to the next pass and its speed; also brings the
+    /// render session to the planned speed after a rewind. Returns true if the loop or
+    /// the session's speed changed, so the next chunk request must be made again.
+    private func prepareLoopPass(using liveRenderSession: LiveScoreRenderSession) async throws -> Bool {
+        guard var plan = loopPassPlan, let loop = loopRange else { return false }
+        var changed = false
+        let wrapTimeline = renderedUntilSeconds
+        if previousChunkEndedLoopPass,
+           let last = plan.segments.last, last.originTimelineSeconds < wrapTimeline - 0.000_001 {
+            let pass = plan.renderPass + 1
+            let speed = plan.speedForPass(pass)
+            var nextLoop = loop
+            if abs(speed - plan.renderSpeed) > 0.000_001 {
+                // Every tempo scales by the same factor, so loop times scale with the speed.
+                let scale = plan.renderSpeed / speed
+                let startFrame = frame(forSeconds: loop.startTimeSeconds * scale)
+                let endFrame = max(frame(forSeconds: loop.endTimeSeconds * scale), startFrame + 2)
+                nextLoop = PlaybackLoopTimeline(startTimeSeconds: Double(startFrame) / sampleRate,
+                                                endTimeSeconds: Double(endFrame) / sampleRate)
+                durationSeconds *= scale
+                loopRange = nextLoop
+                nextRenderFrame = startFrame
+                changed = true
+            }
+            plan.renderPass = pass
+            plan.renderSpeed = speed
+            plan.segments.append(LoopPassSegment(originTimelineSeconds: wrapTimeline, loop: nextLoop,
+                                                 speed: speed, pass: pass))
+            loopPassPlan = plan
+        }
+        if abs(plan.engineSpeed - plan.renderSpeed) > 0.000_001 {
+            let speed = plan.renderSpeed
+            try await liveRenderSession.setPlaybackSpeed(speed)
+            loopPassPlan?.engineSpeed = speed
+            log("loop pass speed=\(formatSeconds(speed)) pass=\(plan.renderPass) revision=\(revision)")
+            changed = true
+        }
+        return changed
+    }
+
+    /// The pass at a position. While playing the position is on the audio timeline;
+    /// otherwise it is already a score position in the pass last heard.
+    private func loopPassSegment(at timelinePosition: TimeInterval) -> LoopPassSegment? {
+        guard var plan = loopPassPlan else { return nil }
+        guard playerNode?.isPlaying == true, !isCountingIn else {
+            return audibleLoopPassSegment
+        }
+        while plan.segments.count > 1, plan.segments[1].originTimelineSeconds <= timelinePosition {
+            plan.segments.removeFirst()
+        }
+        loopPassPlan = plan
+        audibleLoopPassSegment = plan.segments.first
+        return audibleLoopPassSegment
     }
 
     func invalidate() {
@@ -424,6 +549,8 @@ final class NativePlaybackController {
         renderedStemIDs.removeAll()
         durationSeconds = 0
         loopRange = nil
+        loopPassPlan = nil
+        audibleLoopPassSegment = nil
         resetQueueState(to: 0)
         isPaused = false
         metronomeEnabled = false
@@ -606,9 +733,15 @@ final class NativePlaybackController {
 
             while revision == self.revision,
                   self.renderedUntilSeconds < self.bufferProgress.consumedUntilSeconds + self.renderAheadDurationSeconds,
-                  let request = self.nextChunkRequest() {
+                  var request = self.nextChunkRequest() {
                 do {
                     try Task.checkCancellation()
+                    if self.loopPassPlan != nil, try await self.prepareLoopPass(using: liveRenderSession) {
+                        try Task.checkCancellation()
+                        guard revision == self.revision else { return }
+                        guard let nextRequest = self.nextChunkRequest() else { break }
+                        request = nextRequest
+                    }
                     let audioData = try await liveRenderSession.playbackAudioChunk(
                         startTimeSeconds: Double(request.startFrame) / self.sampleRate,
                         durationSeconds: Double(request.frameCount) / self.sampleRate,
@@ -658,6 +791,7 @@ final class NativePlaybackController {
     }
 
     private func handleStreamingFailure(_ error: Error) {
+        rewindLoopPassToAudible()
         playWhenBuffered = false
         let position = currentPositionSeconds()
         cancelCountIn()
@@ -691,9 +825,19 @@ final class NativePlaybackController {
         pendingCountIn = nil
         activeCountIn = nil
         reverb?.reset()
+        if var plan = loopPassPlan, let loopRange {
+            let segment = LoopPassSegment(originTimelineSeconds: loopRange.startTimeSeconds, loop: loopRange,
+                                          speed: plan.renderSpeed, pass: plan.renderPass)
+            plan.segments = [segment]
+            loopPassPlan = plan
+            audibleLoopPassSegment = segment
+        }
     }
 
-    private func resetPlaybackQueue(to positionSeconds: TimeInterval, wasPlaying: Bool) {
+    private func resetPlaybackQueue(to positionSeconds: TimeInterval, wasPlaying: Bool, rewindsLoopPass: Bool = true) {
+        if rewindsLoopPass {
+            rewindLoopPassToAudible()
+        }
         cancelCountIn()
         playerNode?.stop()
         cancelSchedulingTask()
@@ -906,6 +1050,11 @@ final class NativePlaybackController {
     }
 
     private func scorePosition(for timelinePosition: TimeInterval) -> TimeInterval {
+        if let segment = loopPassSegment(at: timelinePosition) {
+            return playerNode?.isPlaying == true && !isCountingIn
+                ? segment.scorePosition(for: timelinePosition)
+                : segment.loop.wrappedPosition(for: timelinePosition)
+        }
         if let loopRange {
             return loopRange.wrappedPosition(for: timelinePosition)
         }
@@ -913,6 +1062,7 @@ final class NativePlaybackController {
     }
 
     private func stopInternally() {
+        rewindLoopPassToAudible()
         cancelCountIn()
         playerNode?.stop()
         cancelSchedulingTask()

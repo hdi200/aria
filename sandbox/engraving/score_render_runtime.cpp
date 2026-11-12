@@ -849,10 +849,13 @@ muse::Ret loadScoreForRenderCore(mu::engraving::MasterScore* score, const muse::
 
     if (mu::engraving::mscIoModeBySuffix(suffix) != mu::engraving::MscIoMode::Unknown) {
         muse::Ret result = mu::engraving::compat::loadMsczOrMscx(score, path, false);
-        if (!result && result.code() == static_cast<int>(mu::engraving::Err::FileTooNew)) {
-            // Files from MuseScore 5 (format 5.00+). Open them anyway, like desktop
-            // 4.7.5's "Open anyway"; saving writes them back as 4.70.
-            std::cout << "Aria load: newer-format file, opening anyway path=\"" << path.toStdString() << "\"" << std::endl;
+        if (!result && (result.code() == static_cast<int>(mu::engraving::Err::FileTooNew)
+                        || result.code() == static_cast<int>(mu::engraving::Err::FileTooOld)
+                        || result.code() == static_cast<int>(mu::engraving::Err::FileOld300Format))) {
+            // Files from MuseScore 5 (format 5.00+), MuseScore 1.x before 1.14 and 3.0 betas.
+            // Open them anyway, like desktop 4.7's "Open anyway"; saving writes 4.70.
+            std::cout << "Aria load: version-mismatched file, opening anyway code=" << result.code()
+                      << " path=\"" << path.toStdString() << "\"" << std::endl;
             result = mu::engraving::compat::loadMsczOrMscx(score, path, true);
         }
         if (result) {
@@ -2455,12 +2458,14 @@ msr::render::ScoreCorruptionReport scanScoreCorruptions(mu::engraving::MasterSco
                 }
 
                 if (voices[0] != measureLength) {
-                    const std::string message = "Incomplete measure: " + scoreLabel
+                    // "Bar too short" / "Bar too long": voice 1 doesn't fill the bar exactly.
+                    const std::string kind = voices[0] < measureLength ? "Bar too short" : "Bar too long";
+                    const std::string message = kind + ": " + scoreLabel
                         + ", measure " + std::to_string(measureNumber)
                         + ", staff " + std::to_string(staffIndex + 1)
                         + ". Found: " + fractionLabel(voices[0])
                         + ". Expected: " + fractionLabel(measureLength) + ".";
-                    appendCorruptionIssue(report, score, scoreIndex, measureNumber, static_cast<int>(staffIndex), 1, "Incomplete measure", message);
+                    appendCorruptionIssue(report, score, scoreIndex, measureNumber, static_cast<int>(staffIndex), 1, kind, message);
                     measure->setCorrupted(staffIndex, true);
                     score->setHasCorruptedMeasures(true);
                     if (fullMeasureRest) {
@@ -2499,12 +2504,22 @@ bool blockDelayedSubsystemIfCorrupted(mu::engraving::MasterScore* masterScore,
     if (!report.corrupted) {
         return false;
     }
+    // Like desktop's "Open anyway": incomplete measures and over-long voices play, save and
+    // export as they are. Only a measure repeat group without its repeat element is still
+    // blocked: playback reads that element, and the repair menu resets the group.
+    const bool hasUnsafeIssue = std::any_of(report.issues.begin(), report.issues.end(),
+                                            [](const msr::render::ScoreCorruptionIssue& issue) {
+        return issue.kind == "Corrupted measure";
+    });
+    if (!hasUnsafeIssue) {
+        return false;
+    }
 
     std::cout << "Aria corruption guard: block subsystem=\"" << subsystem << "\""
               << " remainingIssues=" << report.issues.size()
               << std::endl;
     logCorruptionReportIssues("Aria corruption guard", report);
-    errorMessage = std::string("Repair all detected score corruption before ") + subsystem + ".";
+    errorMessage = std::string("Repair the broken measure repeat before ") + subsystem + ".";
     return true;
 }
 
@@ -2985,6 +3000,245 @@ bool clearLinkedMeasureStaffsToRest(mu::engraving::Score* score,
               << " repairedAny=" << (repairedAny ? "true" : "false")
               << std::endl;
     return repairedAny;
+}
+
+// MARK: - Corruption repairs that keep the music
+
+namespace {
+bool isTrackChordRest(mu::engraving::Segment* segment, mu::engraving::track_idx_t track)
+{
+    mu::engraving::EngravingItem* element = segment ? segment->element(track) : nullptr;
+    return element && element->isChordRest();
+}
+}
+
+// The length of one track's chords and rests in a measure.
+mu::engraving::Fraction trackContentLength(mu::engraving::Measure* measure, const mu::engraving::track_idx_t track)
+{
+    mu::engraving::Fraction length(0, 1);
+    for (mu::engraving::Segment* segment = measure->first(mu::engraving::SegmentType::ChordRest);
+         segment;
+         segment = segment->next(mu::engraving::SegmentType::ChordRest)) {
+        if (isTrackChordRest(segment, track)) {
+            length += mu::engraving::toChordRest(segment->element(track))->actualTicks();
+        }
+    }
+    return length;
+}
+
+// Rests of standard values from `from` (measure-relative) for `length`, without the undo
+// stack (see clearMeasureStaffToRest for why repairs of broken bars are raw).
+bool addRestsRaw(mu::engraving::Score* score,
+                 mu::engraving::Measure* measure,
+                 const mu::engraving::track_idx_t track,
+                 const mu::engraving::Fraction& from,
+                 const mu::engraving::Fraction& length)
+{
+    if (length <= mu::engraving::Fraction(0, 1)) {
+        return true;
+    }
+    const std::vector<mu::engraving::TDuration> durations = mu::engraving::toDurationList(length, true);
+    mu::engraving::Fraction total(0, 1);
+    for (const mu::engraving::TDuration& duration : durations) {
+        total += duration.fraction();
+    }
+    if (durations.empty() || total != length) {
+        std::cout << "Aria corruption repair: rest fill not representable length=" << length.toString().toStdString() << std::endl;
+        return false;
+    }
+    mu::engraving::Fraction tick = measure->tick() + from;
+    for (const mu::engraving::TDuration& duration : durations) {
+        mu::engraving::Segment* segment = measure->getSegment(mu::engraving::SegmentType::ChordRest, tick);
+        if (!segment || segment->element(track)) {
+            return false;
+        }
+        mu::engraving::Rest* rest = mu::engraving::Factory::createRest(score->dummy()->segment(), duration);
+        rest->setTicks(duration.fraction());
+        rest->setTrack(track);
+        rest->setTuplet(nullptr);
+        rest->setGenerated(false);
+        segment->add(rest);
+        tick += duration.fraction();
+    }
+    return true;
+}
+
+void markScoreRepaired(mu::engraving::Score* score)
+{
+    score->setPlaylistDirty();
+    score->setLayoutAll();
+    score->setUpdateAll();
+}
+
+// "Fill with rests": rests after the last chord or rest of a short track.
+bool fillLinkedTrackWithRests(mu::engraving::Score* score,
+                              mu::engraving::Measure* measure,
+                              const mu::engraving::staff_idx_t staffIndex,
+                              const mu::engraving::voice_idx_t voice)
+{
+    bool repairedAny = false;
+    for (const LinkedRepairTarget& target : linkedRepairTargets(score, measure, staffIndex)) {
+        if (!target.score || !target.measure || target.staffIndex == muse::nidx) {
+            continue;
+        }
+        prepareScoreForRawRepair(target.score);
+        const mu::engraving::track_idx_t track = target.staffIndex * mu::engraving::VOICES + voice;
+        const mu::engraving::Fraction content = trackContentLength(target.measure, track);
+        const mu::engraving::Fraction measureLength = target.measure->ticks();
+        if (content < measureLength && !addRestsRaw(target.score, target.measure, track, content, measureLength - content)) {
+            return false;
+        }
+        markScoreRepaired(target.score);
+        repairedAny = true;
+    }
+    return repairedAny;
+}
+
+// "Trim to fit": removes what starts at or after the barline; a chord or rest that crosses
+// it is replaced by rests up to the barline.
+bool trimLinkedTrackToMeasure(mu::engraving::Score* score,
+                              mu::engraving::Measure* measure,
+                              const mu::engraving::staff_idx_t staffIndex,
+                              const mu::engraving::voice_idx_t voice)
+{
+    bool repairedAny = false;
+    for (const LinkedRepairTarget& target : linkedRepairTargets(score, measure, staffIndex)) {
+        if (!target.score || !target.measure || target.staffIndex == muse::nidx) {
+            continue;
+        }
+        prepareScoreForRawRepair(target.score);
+        const mu::engraving::track_idx_t track = target.staffIndex * mu::engraving::VOICES + voice;
+        const mu::engraving::Fraction measureLength = target.measure->ticks();
+        std::vector<mu::engraving::Segment*> overflowing;
+        mu::engraving::Fraction crossingStart(-1, 1);
+        mu::engraving::Fraction position(0, 1);
+        for (mu::engraving::Segment* segment = target.measure->first(mu::engraving::SegmentType::ChordRest);
+             segment;
+             segment = segment->next(mu::engraving::SegmentType::ChordRest)) {
+            if (!isTrackChordRest(segment, track)) {
+                continue;
+            }
+            const mu::engraving::Fraction length = mu::engraving::toChordRest(segment->element(track))->actualTicks();
+            const mu::engraving::Fraction start = position;
+            position += length;
+            if (start >= measureLength) {
+                overflowing.push_back(segment);
+            } else if (start + length > measureLength) {
+                overflowing.push_back(segment);
+                crossingStart = start;
+            }
+        }
+        std::unordered_set<mu::engraving::Spanner*> detachedSpanners;
+        std::unordered_set<mu::engraving::Tie*> detachedTies;
+        for (mu::engraving::Segment* segment : overflowing) {
+            detachTrackElement(target.score, segment, track, detachedSpanners, detachedTies);
+        }
+        if (crossingStart >= mu::engraving::Fraction(0, 1)
+            && !addRestsRaw(target.score, target.measure, track, crossingStart, measureLength - crossingStart)) {
+            return false;
+        }
+        std::cout << "Aria corruption repair: trimmed track=" << track << " removed=" << overflowing.size() << std::endl;
+        markScoreRepaired(target.score);
+        repairedAny = true;
+    }
+    return repairedAny;
+}
+
+// "Change the time signature": the bar takes a time signature of its contents' length
+// (5/4 for five beats in 4/4) and the next bar restates the original, so the change is
+// visible. Other staves are filled with rests to the new length. Every score (parts too)
+// gets the new bar length, since parts share the full score's bars.
+bool fitMeasureTimeSignatureToContent(mu::engraving::MasterScore* masterScore,
+                                      mu::engraving::Measure* measure,
+                                      const mu::engraving::staff_idx_t staffIndex,
+                                      std::string& errorMessage)
+{
+    const mu::engraving::Fraction length = trackContentLength(measure, staffIndex * mu::engraving::VOICES).reduced();
+    const int denominator = length.denominator();
+    const bool powerOfTwo = denominator > 0 && denominator <= 64 && (denominator & (denominator - 1)) == 0;
+    if (length <= mu::engraving::Fraction(0, 1) || !powerOfTwo || length.numerator() > 63) {
+        errorMessage = "This bar's length can't be written as a time signature. Try Fill with rests or Trim to fit.";
+        return false;
+    }
+    if (length == measure->ticks()) {
+        return true;
+    }
+
+    const mu::engraving::Fraction tick = measure->tick();
+    const mu::engraving::Fraction nominal = measure->timesig();
+    mu::engraving::TimeSigType originalType = mu::engraving::TimeSigType::NORMAL;
+    if (mu::engraving::TimeSig* current = measure->score()->staff(staffIndex)->timeSig(tick)) {
+        originalType = current->timeSigType();
+    }
+
+    for (mu::engraving::Score* score : masterScore->scoreList()) {
+        mu::engraving::Measure* target = score ? score->tick2measure(tick) : nullptr;
+        if (!target || target->tick() != tick) {
+            continue;
+        }
+        prepareScoreForRawRepair(score);
+        mu::engraving::Measure* next = target->nextMeasure();
+        const bool nextHasTimeSig = next && next->findSegment(mu::engraving::SegmentType::TimeSig, next->tick());
+
+        target->setTicks(length);
+        target->setTimesig(length);
+        for (mu::engraving::staff_idx_t staff = 0; staff < score->nstaves(); ++staff) {
+            const mu::engraving::track_idx_t track = staff * mu::engraving::VOICES;
+            mu::engraving::Rest* measureRest = nullptr;
+            int chordRestCount = 0;
+            for (mu::engraving::Segment* segment = target->first(mu::engraving::SegmentType::ChordRest);
+                 segment;
+                 segment = segment->next(mu::engraving::SegmentType::ChordRest)) {
+                if (!isTrackChordRest(segment, track)) {
+                    continue;
+                }
+                ++chordRestCount;
+                mu::engraving::ChordRest* chordRest = mu::engraving::toChordRest(segment->element(track));
+                if (chordRest->isRest() && chordRest->durationType().isMeasure()) {
+                    measureRest = mu::engraving::toRest(chordRest);
+                }
+            }
+            if (chordRestCount == 1 && measureRest) {
+                measureRest->setTicks(length);
+                continue;
+            }
+            const mu::engraving::Fraction content = trackContentLength(target, track);
+            if (content < length && !addRestsRaw(score, target, track, content, length - content)) {
+                errorMessage = "Aria couldn't fill the other staves of that bar with rests.";
+                return false;
+            }
+        }
+
+        mu::engraving::Segment* timeSigSegment = target->getSegment(mu::engraving::SegmentType::TimeSig, tick);
+        for (mu::engraving::staff_idx_t staff = 0; staff < score->nstaves(); ++staff) {
+            const mu::engraving::track_idx_t track = staff * mu::engraving::VOICES;
+            if (mu::engraving::EngravingItem* existing = timeSigSegment->element(track); existing && existing->isTimeSig()) {
+                mu::engraving::toTimeSig(existing)->setSig(length, mu::engraving::TimeSigType::NORMAL);
+                continue;
+            }
+            mu::engraving::TimeSig* timeSig = mu::engraving::Factory::createTimeSig(timeSigSegment);
+            timeSig->setTrack(track);
+            timeSig->setSig(length, mu::engraving::TimeSigType::NORMAL);
+            timeSigSegment->add(timeSig);
+        }
+
+        // Measure ticks after the bar move with its new length.
+        score->setUpTempoMap();
+        if (next && !nextHasTimeSig) {
+            mu::engraving::Segment* nextSegment = next->getSegment(mu::engraving::SegmentType::TimeSig, next->tick());
+            for (mu::engraving::staff_idx_t staff = 0; staff < score->nstaves(); ++staff) {
+                mu::engraving::TimeSig* restated = mu::engraving::Factory::createTimeSig(nextSegment);
+                restated->setTrack(staff * mu::engraving::VOICES);
+                restated->setSig(nominal, originalType);
+                nextSegment->add(restated);
+            }
+            score->setUpTempoMap();
+        }
+        markScoreRepaired(score);
+        std::cout << "Aria corruption repair: bar time signature fitted score=\"" << corruptionScoreLabel(score) << "\""
+                  << " tick=" << tick.ticks() << " length=" << length.toString().toStdString() << std::endl;
+    }
+    return true;
 }
 
 double chordRestSegmentPageX(const mu::engraving::Segment* segment)

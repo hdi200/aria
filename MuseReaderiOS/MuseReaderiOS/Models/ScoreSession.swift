@@ -350,7 +350,7 @@ struct ScoreTempoRamp: Sendable, Equatable {
 
     var currentSpeed: Double { speed(onLoop: loopNumber) }
 
-    private func speed(onLoop loop: Int) -> Double {
+    func speed(onLoop loop: Int) -> Double {
         if loop >= totalLoops { return targetSpeed }
         return startSpeed + Double((loop - 1) / repeatsPerStep) * step
     }
@@ -802,10 +802,52 @@ struct ScoreCorruptionIssue: Identifiable, Sendable, Equatable {
 
     var title: String {
         var parts = ["Measure \(measureNumber)", "Staff \(staffIndex + 1)"]
-        if voice > 0 {
+        if voice > 1 {
             parts.append("Voice \(voice)")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// "Bar too long", "Bar too short", "Voice too long" or "Broken measure repeat".
+    var problemName: String {
+        kind == "Corrupted measure" ? "Broken measure repeat" : kind
+    }
+
+    /// Repairs that keep the music come first; Clear Bar is always last.
+    var repairs: [ScoreCorruptionRepair] {
+        guard repairable else { return [] }
+        switch kind {
+        case "Bar too short": return [.fillWithRests, .fitTimeSignature, .clear]
+        case "Bar too long": return [.fitTimeSignature, .trimToFit, .clear]
+        case "Voice too long": return [.trimToFit, .clear]
+        default: return [.clear]
+        }
+    }
+}
+
+/// Values match msr::render::CorruptionRepairAction.
+enum ScoreCorruptionRepair: Int, Sendable {
+    case clear = 0
+    case fillWithRests = 1
+    case trimToFit = 2
+    case fitTimeSignature = 3
+
+    var title: String {
+        switch self {
+        case .clear: return "Clear Bar"
+        case .fillWithRests: return "Fill with Rests"
+        case .trimToFit: return "Trim to Fit"
+        case .fitTimeSignature: return "Change Time Signature"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .clear: return "eraser"
+        case .fillWithRests: return "plus.circle"
+        case .trimToFit: return "scissors"
+        case .fitTimeSignature: return "music.note.list"
+        }
     }
 }
 

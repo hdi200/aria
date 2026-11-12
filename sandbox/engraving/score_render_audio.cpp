@@ -87,6 +87,23 @@
         return m_playbackSpeed;
     }
 
+    /// The written tempo at a playback measure (numbered as playbackMeasureRegions does), in
+    /// quarter notes per minute like desktop's playback toolbar; 0 if there is none.
+    double writtenTempoBpm(const int measureIndex) const
+    {
+        mu::engraving::Score* score = presentationScore();
+        if (!score || !score->tempomap() || measureIndex < 0) {
+            return 0;
+        }
+        int index = 0;
+        for (mu::engraving::Measure* measure = score->firstMeasureMM(); measure; measure = measure->nextMeasureMM(), ++index) {
+            if (index == measureIndex) {
+                return score->tempomap()->tempo(measure->tick().ticks()).toBPM().val;
+            }
+        }
+        return 0;
+    }
+
     void applyPlaybackSpeed(mu::engraving::MasterScore* score)
     {
         if (!score || !score->tempomap()) {

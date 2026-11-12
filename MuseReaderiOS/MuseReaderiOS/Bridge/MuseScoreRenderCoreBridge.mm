@@ -1463,6 +1463,15 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (double)writtenTempoBpmAtMeasureIndex:(NSInteger)measureIndex
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    return _session ? _session->writtenTempoBpm(static_cast<int>(measureIndex)) : 0;
+#else
+    return 0;
+#endif
+}
+
 - (BOOL)setPlaybackSpeed:(double)multiplier error:(NSError * _Nullable __autoreleasing *)error
 {
 #if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
@@ -1729,6 +1738,41 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
     }
 
     return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore corruption repair yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSRScoreCorruptionReport *)repairCorruptionIssueAtIndex:(NSInteger)index
+                                                     action:(NSInteger)action
+                                                  editState:(MSREditState * _Nullable __autoreleasing *)editState
+                                                      error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    msr::render::ScoreEditState coreEditState;
+    msr::render::ScoreCorruptionReport report;
+    std::string errorMessage;
+    if (!_session->repairCorruptionIssue(static_cast<int>(index), static_cast<int>(action), coreEditState, report, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not repair that bar."));
+        }
+        return nil;
+    }
+
+    if (editState) {
+        *editState = MakeEditState(coreEditState);
+    }
+    return MakeScoreCorruptionReport(report);
 #else
     if (error) {
         *error = UnavailableError(@"This build of Aria is not linked to MuseScore corruption repair yet.");

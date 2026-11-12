@@ -1462,6 +1462,10 @@ extension ScoreReaderState {
     }
 
     func clearCorruptionIssue(_ issue: ScoreCorruptionIssue) {
+        repairCorruptionIssue(issue, repair: .clear)
+    }
+
+    func repairCorruptionIssue(_ issue: ScoreCorruptionIssue, repair: ScoreCorruptionRepair) {
         guard
             issue.repairable,
             let liveRenderSession = session.liveRenderSession,
@@ -1480,7 +1484,7 @@ extension ScoreReaderState {
             }
 
             do {
-                let (newState, report) = try await liveRenderSession.clearCorruptionIssue(issue)
+                let (newState, report) = try await liveRenderSession.repairCorruptionIssue(issue, repair: repair)
                 self?.corruptionReport = report
                 self?.refreshAfterScoreMutation(with: newState)
             } catch {
@@ -2087,6 +2091,7 @@ extension ScoreReaderState {
             }
 
             do {
+                await self?.backUpOriginalBeforeFirstSave(of: destinationURL)
                 try await liveRenderSession.save(to: destinationURL)
                 if self?.autosaveRevision == saveRevision {
                     self?.hasUnsavedAutosaveChanges = false
@@ -2382,6 +2387,16 @@ extension ScoreReaderState {
         return centerDistance <= tolerance
     }
 
+    /// Scores with problems can be edited; the list shrinks as edits fix them.
+    func refreshCorruptionReport() {
+        guard let liveRenderSession = session.liveRenderSession else { return }
+        Task { @MainActor [weak self] in
+            guard let report = try? await liveRenderSession.corruptionReport(),
+                  let self, report != self.corruptionReport else { return }
+            self.corruptionReport = report
+        }
+    }
+
     func refreshAfterScoreMutation(with editingState: ScoreEditingState, auditionNote: Bool = false, revealActiveNotation: Bool = false) {
         #if os(Android) && ARIA_PHONE_AUDIT
         AndroidInteractionTrace.point("refresh_mutation_begin")
@@ -2392,6 +2407,9 @@ extension ScoreReaderState {
 
         let startedAt = Date()
         applyEditingState(editingState)
+        if corruptionReport.isCorrupted {
+            refreshCorruptionReport()
+        }
         let appliedAt = Date()
         if auditionNote {
             auditionSelectedNote(in: editingState)

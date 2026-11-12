@@ -57,10 +57,9 @@ extension ScoreReaderState {
                 let beat = countingIn ? playbackController.currentCountInClick()?.beatNumber : nil
                 if self.countInBeatNumber != beat { self.countInBeatNumber = beat }
                 self.updatePlaybackPreparationMessage(for: playbackController)
+                self.followTempoRampPass(of: playbackController)
+                self.updateWrittenTempo()
                 self.updatePlaybackFollowState(with: latestPlaybackState)
-                if latestPlaybackState.status == .playing, !countingIn {
-                    self.advanceTempoRampIfNeeded(position: latestPlaybackState.positionSeconds)
-                }
                 try? await Task.sleep(for: self.playbackMonitorInterval)
             }
         }
@@ -154,6 +153,7 @@ extension ScoreReaderState {
                     } else {
                         startTimeSeconds = shouldUseSelection ? (self.playbackRegionForCurrentSelection()?.startTimeSeconds ?? 0) : 0
                         try playbackController.seek(to: startTimeSeconds)
+                        self.tempoRampLastPosition = startTimeSeconds
                     }
                     try await self.playWithOptionalCountIn(
                         at: startTimeSeconds,
@@ -252,6 +252,11 @@ extension ScoreReaderState {
         guard session.capabilities.supportsPlayback else { return }
         let newSpeed = (min(max(speed, Self.practiceSpeedRange.lowerBound), Self.practiceSpeedRange.upperBound) * 100).rounded() / 100
         guard abs(newSpeed - practiceSpeed) > 0.001 else { return }
+        // Choosing a speed during a ramp ends the ramp and keeps the chosen speed.
+        if tempoRamp != nil {
+            tempoRamp = nil
+            tempoRampSuppressesCountIn = false
+        }
         practiceSpeed = newSpeed
         // One key per score (Android's UserDefaults has no dictionaries); 0 = written tempo.
         UserDefaults.standard.set(abs(newSpeed - 1) < 0.001 ? 0 : newSpeed, forKey: practiceSpeedKey)
@@ -341,35 +346,99 @@ extension ScoreReaderState {
         schedulePracticeSpeed(ramp.baseSpeed, delay: .zero)
     }
 
-    private func advanceTempoRampIfNeeded(position: Double) {
-        guard var ramp = tempoRamp, !ramp.reachedTarget, playbackLoopIsActive, let range = playbackLoopRange else { return }
-        let previous = tempoRampLastPosition
-        tempoRampLastPosition = position
-        let loopLength = range.endTimeSeconds - range.startTimeSeconds
-        // A repeat: playback jumped back from the loop's end to its start.
-        guard loopLength > 0, position + loopLength * 0.5 < previous else { return }
-        let previousSpeed = ramp.currentSpeed
-        ramp.loopNumber += 1
-        tempoRamp = ramp
-        let speed = ramp.currentSpeed
-        guard speed != previousSpeed else { return }
+    /// The playback stream changes speed at the loop wrap itself (see `setLoopPassSpeeds`).
+    /// This follows the pass being heard: the loop number, the speed shown, and the loop and
+    /// measure times, which scale with the speed.
+    private func followTempoRampPass(of playbackController: NativePlaybackController) {
+        guard var ramp = tempoRamp, let pass = playbackController.audibleLoopPass() else { return }
+        if abs(pass.speed - appliedPracticeSpeed) > 0.000_001 {
+            let scale = appliedPracticeSpeed / pass.speed
+            appliedPracticeSpeed = pass.speed
+            practiceSpeed = pass.speed
+            playbackLoopRange = playbackLoopRange.map { range in
+                ScorePlaybackLoopRange(pageIndex: range.pageIndex, startMeasureIndex: range.startMeasureIndex,
+                    endMeasureIndex: range.endMeasureIndex, normalizedRects: range.normalizedRects,
+                    startTimeSeconds: range.startTimeSeconds * scale,
+                    endTimeSeconds: range.endTimeSeconds * scale)
+            }
+            playbackMeasureRegions = playbackMeasureRegions.map { region in
+                ScorePlaybackMeasureRegion(measureEID: region.measureEID, measureIndex: region.measureIndex,
+                    pageIndex: region.pageIndex, startTimeSeconds: region.startTimeSeconds * scale,
+                    endTimeSeconds: region.endTimeSeconds * scale, normalizedRect: region.normalizedRect)
+            }
+        }
+        if ramp.loopNumber != pass.number {
+            ramp.loopNumber = pass.number
+            tempoRamp = ramp
+        }
+    }
+
+    /// Keeps `writtenTempoBpm` for the bar it describes, fetching only when that bar changes.
+    func updateWrittenTempo() {
+        let index: Int
+        if let loop = playbackLoopRange {
+            index = loop.startMeasureIndex
+        } else {
+            let position = playbackState.positionSeconds
+            index = playbackMeasureRegions.first {
+                position >= $0.startTimeSeconds && position < $0.endTimeSeconds
+            }?.measureIndex ?? writtenTempoMeasureIndex ?? 0
+        }
+        guard index != writtenTempoMeasureIndex, let liveRenderSession = session.liveRenderSession else { return }
+        writtenTempoMeasureIndex = index
         Task { @MainActor [weak self] in
-            await self?.restartTempoRampLoop(at: speed, playsCountIn: false)
+            let bpm = await liveRenderSession.writtenTempoBpm(measureIndex: index)
+            guard let self, self.writtenTempoMeasureIndex == index else { return }
+            if self.writtenTempoBpm != bpm { self.writtenTempoBpm = bpm }
+        }
+    }
+
+    /// Hands the ramp's speed for each pass to the playback stream, after its loop is set.
+    private func startTempoRampPasses(on playbackController: NativePlaybackController) {
+        guard let ramp = tempoRamp else { return }
+        playbackController.setLoopPassSpeeds(currentSpeed: appliedPracticeSpeed, firstPass: ramp.loopNumber) { pass in
+            ramp.speed(onLoop: pass)
         }
     }
 
     /// Re-renders playback at `speed` and starts the loop again from its first bar.
     private func restartTempoRampLoop(at speed: Double, playsCountIn: Bool) async {
         await practiceSpeedTask?.value
+        // Another playback action (preparation, a Play tap) may still be running; the loop
+        // restart below is refused while it is, which would leave the ramp stopped.
+        var waited: Duration = .zero
+        while isPlaybackActionInFlight, waited < .seconds(10) {
+            try? await Task.sleep(for: .milliseconds(50))
+            waited += .milliseconds(50)
+        }
         guard let ramp = tempoRamp, playbackLoopRange != nil else { return }
+        guard !isPlaybackActionInFlight else {
+            // Still busy after the wait: end the ramp rather than leave it stopped.
+            endTempoRamp()
+            return
+        }
         if let playbackController, playbackController.isLoaded {
             try? playbackController.stop()
         }
-        guard await applyPracticeSpeed(speed), tempoRamp == ramp else { return }
+        isRestartingTempoRamp = true
+        let applied = await applyPracticeSpeed(speed)
+        isRestartingTempoRamp = false
+        guard applied, tempoRamp == ramp else { return }
         practiceSpeed = speed
         tempoRampLastPosition = 0
+        // Something may have started while the speed was applied; the restart would be refused.
+        guard !isPlaybackActionInFlight else {
+            endTempoRamp()
+            return
+        }
         tempoRampSuppressesCountIn = !playsCountIn
         startSelectedPlaybackLoop()
+        // startSelectedPlaybackLoop marks itself in flight when it starts; if it didn't,
+        // end the ramp rather than leave it stopped with the count-in turned off.
+        if !isPlaybackActionInFlight {
+            tempoRampSuppressesCountIn = false
+            endTempoRamp()
+        }
     }
 
     /// The panel's Reset: metronome off, written tempo, no count-in.
@@ -440,6 +509,8 @@ extension ScoreReaderState {
                 )
                 let targetPosition = min(max(progress, 0), 1) * latestDuration
                 try playbackController.seek(to: targetPosition)
+                // A seek is not a loop repeat: the ramp compares against where the seek landed.
+                self.tempoRampLastPosition = targetPosition
 
                 let latestPlaybackState = playbackController.state()
                 self.playbackState = latestPlaybackState
@@ -492,6 +563,7 @@ extension ScoreReaderState {
                 let region = self.playbackRegionForCurrentSelection()
                 let startTimeSeconds = region?.startTimeSeconds ?? 0
                 try playbackController.seek(to: startTimeSeconds)
+                self.tempoRampLastPosition = startTimeSeconds
                 try await self.playWithOptionalCountIn(
                     at: startTimeSeconds,
                     liveRenderSession: liveRenderSession,
@@ -638,6 +710,8 @@ extension ScoreReaderState {
         playbackWarmupRevision += 1
         playbackMeasureRegions = []
         playbackMeasureHighlight = nil
+        // An edit may have changed a tempo marking; fetch it again.
+        writtenTempoMeasureIndex = nil
         playbackController?.invalidate()
         clearPlaybackLoop()
         playbackState = session.capabilities.supportsPlayback
@@ -931,6 +1005,11 @@ extension ScoreReaderState {
     }
 
     func clearPlaybackLoop() {
+        // Entering Edit, play-from-here or a score edit clears the loop: the ramp ends with it
+        // and the speed returns to the practice speed it started from.
+        if tempoRamp != nil, !isRestartingTempoRamp {
+            endTempoRamp()
+        }
         playbackController?.clearLoopRange()
         playbackLoopIsActive = false
         playbackLoopRange = nil
@@ -1012,6 +1091,7 @@ extension ScoreReaderState {
                 )
 
                 try playbackController.seek(to: target.startTimeSeconds)
+                self.tempoRampLastPosition = target.startTimeSeconds
                 try await self.playWithOptionalCountIn(
                     at: target.startTimeSeconds,
                     liveRenderSession: liveRenderSession,
@@ -1137,6 +1217,7 @@ extension ScoreReaderState {
                     startTimeSeconds: range.startTimeSeconds,
                     endTimeSeconds: range.endTimeSeconds
                 )
+                self.startTempoRampPasses(on: playbackController)
                 #if os(Android)
                 guard self.playbackLoopIsActive, self.playbackLoopRange == range else {
                     playbackController.clearLoopRange()

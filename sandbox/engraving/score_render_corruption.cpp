@@ -139,6 +139,17 @@
                               msr::render::ScoreCorruptionReport& report,
                               std::string& errorMessage)
     {
+        return repairCorruptionIssue(issueIndex, msr::render::CorruptionRepairAction::Clear, output, report, errorMessage);
+    }
+
+    /// Clear the bar, or a repair that keeps the music: fill a short voice with rests, trim
+    /// what runs past the barline, or give the bar a time signature of its contents' length.
+    bool repairCorruptionIssue(const int issueIndex,
+                               const msr::render::CorruptionRepairAction action,
+                               msr::render::ScoreEditState& output,
+                               msr::render::ScoreCorruptionReport& report,
+                               std::string& errorMessage)
+    {
         if (!supportsEditing()) {
             errorMessage = "Editing is unavailable for this score session.";
             return false;
@@ -180,7 +191,30 @@
                   << " measure=" << issue.measureNumber
                   << " staff=" << issue.staffIndex
                   << std::endl;
-        const bool didRepair = clearLinkedMeasureStaffsToRest(score, measure, static_cast<mu::engraving::staff_idx_t>(issue.staffIndex));
+        const auto staffIndex = static_cast<mu::engraving::staff_idx_t>(issue.staffIndex);
+        const auto voice = static_cast<mu::engraving::voice_idx_t>(std::max(issue.voice - 1, 0));
+        bool didRepair = false;
+        switch (action) {
+        case msr::render::CorruptionRepairAction::Clear:
+            didRepair = clearLinkedMeasureStaffsToRest(score, measure, staffIndex);
+            break;
+        case msr::render::CorruptionRepairAction::FillWithRests:
+            didRepair = issue.kind == "Bar too short" && fillLinkedTrackWithRests(score, measure, staffIndex, voice);
+            break;
+        case msr::render::CorruptionRepairAction::TrimToFit:
+            didRepair = (issue.kind == "Bar too long" || issue.kind == "Voice too long")
+                && trimLinkedTrackToMeasure(score, measure, staffIndex, voice);
+            break;
+        case msr::render::CorruptionRepairAction::FitTimeSignature:
+            if (issue.kind != "Bar too short" && issue.kind != "Bar too long") {
+                break;
+            }
+            didRepair = fitMeasureTimeSignatureToContent(m_masterScore.get(), measure, staffIndex, errorMessage);
+            if (!didRepair) {
+                return false;
+            }
+            break;
+        }
         if (!didRepair) {
             errorMessage = "MuseScore could not rewrite that corrupted bar.";
             return false;

@@ -9,14 +9,14 @@ import SwiftUI
 /// Versioned so a later release can show a new notice by bumping `currentVersion`
 /// and `releaseDate`.
 struct UpdateNoticeStore {
-    static let currentVersion = 4
+    static let currentVersion = 5
 
-    // Anyone who got the app on or before November 5, 2026 (before November 6 at
-    // 12:00 AM Eastern) sees the notice once, as soon as they have this update.
+    // Anyone who got the app before November 12, 2026 (12:00 AM Eastern) sees the
+    // notice once, as soon as they have this update.
     // AppTransaction supplies Apple's signed date for when this customer first
     // acquired the app, which survives the update itself (on Android, the first install
     // time on the device).
-    static let releaseDate = Date(timeIntervalSince1970: 1_793_941_200)
+    static let releaseDate = Date(timeIntervalSince1970: 1_794_459_600)
 
     private let defaultsKey = "UpdateNotice.seenVersion"
     private var audienceKey: String {
@@ -112,101 +112,72 @@ struct UpdateNoticeSheet: View {
     }
 
     private static let fixes: [Item] = {
-        #if os(Android)
-        return [
+        var fixes = [
             Item(
                 systemImage: "checkmark.circle",
-                title: "Open with",
-                detail: "Aria now shows up in Files by Google and other file managers that label scores "
-                    + "as zip files. Opening a score while another is open now works too."
+                title: "Bottom of the page",
+                detail: "The last line no longer gets stuck behind the editing keyboard, "
+                    + "and the page no longer jumps when you switch tools."
             ),
         ]
-        #else
-        return [
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Playback cursor",
-                detail: "It no longer covers tab numbers or notes at the edges of the bar."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Opening scores from other apps",
-                detail: "Opening a score from Files or another app while a score is open "
-                    + "now saves the current score and opens the new one."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Highlighter marks",
-                detail: "They keep their shape after you edit the score.",
-                isPadOnly: true
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Transpose",
-                detail: "The sheet now starts at the top instead of leaving a gap."
-            ),
-        ]
+        #if !os(Android)
+        fixes.append(Item(
+            systemImage: "checkmark.circle",
+            title: "Lyrics",
+            detail: "The bottom line stays in view while you type."
+        ))
         #endif
+        fixes += [
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Page turns",
+                detail: "In landscape, tap beside the page to turn it."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Chord mode",
+                detail: "It no longer turns off when you select another note."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Score names",
+                detail: "Editing a score no longer renames it in your library."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "View mode key",
+                detail: "A key you chose is kept after you edit."
+            ),
+        ]
+        return fixes
     }()
 
     private static var items: [Item] {
-        let fingering = Item(
-            systemImage: ScoreReaderPaletteButton.fingeringSystemImage,
-            title: "Finger numbers",
-            detail: "Add finger numbers to your score. Choose Text > Fingering and tap 1 to 5. "
-                + "Aria moves to the next note for you and skips rests."
-        )
-        let noteEntry = Item(
-            systemImage: "music.note.list",
-            title: "More note entry tools",
-            detail: "Tap the arrow at the end of the note-entry toolbar for 32nd and 64th notes, grace notes, "
-                + "trills, tremolos, double sharps and flats, and more."
-        )
-        let shared = [
+        [
             Item(
-                systemImage: "doc.on.doc",
-                title: "Duplicate scores",
-                detail: "Touch and hold a score in the library, then choose Duplicate."
+                systemImage: "metronome",
+                title: "Playback & Practice",
+                detail: "Tapping the metronome opens a new panel where you can turn the metronome on or off, "
+                    + "set a practice speed and choose a count-in."
             ),
             Item(
-                systemImage: "pianokeys",
-                textSymbol: "C7",
-                title: "Redesigned chord entry",
-                detail: "Build chord symbols with buttons for the root, quality, extension and bass instead of "
-                    + "typing them. Previous and Enter step through the score."
+                systemImage: "speedometer",
+                title: "Practice speed",
+                detail: "Play at 25% to 150% of the written tempo. "
+                    + "Aria remembers the speed for each score."
+            ),
+            Item(
+                systemImage: "chart.line.uptrend.xyaxis",
+                title: "Tempo ramp",
+                detail: "Tap and drag to select a range of bars, then choose Tempo ramp. "
+                    + "Aria plays the loop a little faster each time until you reach your target."
+            ),
+            Item(
+                systemImage: "timer",
+                title: "Two-bar count-in",
+                detail: "Choose a one- or two-bar count-in. It follows your practice speed."
             ),
         ]
-        let engine = Item(
-            systemImage: "gearshape",
-            title: "MuseScore Studio 4.7.6",
-            detail: "Aria now uses the same engine as MuseScore Studio 4.7.6 on desktop."
-        )
-        let tempo = Item(
-            systemImage: "metronome",
-            title: "Tempo text",
-            detail: "Add words like \"Allegro\" to a tempo marking. Playback still follows the number."
-        )
-        let features = [noteEntry, fingering] + shared
-        #if os(Android)
-        return features + [engine, tempo]
-        #else
-        let duo = Item(
-            systemImage: "book.pages",
-            title: "Redesigned for The iPhone Duo",
-            detail: "Read two pages side by side like a book, or keep your tools on one page while you edit on the other. "
-                + "Partly fold your phone to play and enter notes on a virtual piano, or control playback."
-        )
-        let splitView = Item(
-            systemImage: "rectangle.split.2x1",
-            title: "Split View and Stage Manager",
-            detail: "In a narrow window, Aria switches to its iPhone layout so everything fits.",
-            isPadOnly: true
-        )
-        if DuoPoseMonitor.shared.pose.isDuo {
-            return [duo] + features + [splitView, engine, tempo]
-        }
-        return features + [tempo, splitView, engine, duo]
-        #endif
     }
 
     private var pages: [Page] {

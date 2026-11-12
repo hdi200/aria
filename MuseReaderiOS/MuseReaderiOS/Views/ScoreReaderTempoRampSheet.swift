@@ -6,6 +6,8 @@ import UIKit
 struct ScoreReaderTempoRampSheet: View {
     let writtenLoopDuration: TimeInterval
     let initialStartSpeed: Double
+    /// Written tempo at the loop's first bar; each speed also shows as BPM.
+    var writtenTempoBpm: Double = 0
     let startAction: (_ start: Double, _ target: Double, _ step: Double, _ repeatsPerStep: Int) -> Void
 
     @Environment(\.dismiss) var dismiss
@@ -24,14 +26,20 @@ struct ScoreReaderTempoRampSheet: View {
             didLoadInitialValue = true
             startSpeed = min(max((initialStartSpeed * 20).rounded() / 20, Self.speedRange.lowerBound), Self.speedRange.upperBound)
             if abs(initialStartSpeed - 1) < 0.001 { startSpeed = 0.7 }
+            // A practice speed above 100% would otherwise leave the target below the start.
+            if startSpeed >= Self.speedRange.upperBound { startSpeed = Self.speedRange.upperBound - step }
+            targetSpeed = max(targetSpeed, ((startSpeed + step) * 100).rounded() / 100)
         }
     }
 
     @ViewBuilder
     private var presentation: some View {
         #if os(Android)
-        ScrollView { controls }
-            .ariaSkipPresentationDetents([.height(470), .large])
+        // One detent from the measured content (see the Playback & Practice sheet).
+        ScrollView(.vertical, showsIndicators: false) {
+            controls.popoverPanelScrollContent()
+        }
+        .presentationCompactPopoverWhenAvailable()
         #else
         ScrollView { controls }
             .presentationDetents([.height(470), .large])
@@ -80,7 +88,7 @@ struct ScoreReaderTempoRampSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.08)))
 
             if let ramp, let summary = timeToTargetSummary(for: ramp) {
-                Text(summary)
+                summaryLabel(summary)
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -89,6 +97,9 @@ struct ScoreReaderTempoRampSheet: View {
                 Text("Set a target above the starting tempo.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    #if os(Android)
+                    .padding(12) // the height of the summary box it replaces
+                    #endif
             }
 
             Button {
@@ -104,17 +115,48 @@ struct ScoreReaderTempoRampSheet: View {
             .buttonStyle(.plain)
             .disabled(targetSpeed <= startSpeed)
 
-            if ramp != nil {
-                Text("Playback keeps looping at \(Self.percent(targetSpeed)) until you stop.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-            }
+            #if os(Android)
+            // Kept in the layout so the sheet, sized to its content, doesn't resize while
+            // the values change.
+            loopingFootnote.opacity(ramp != nil ? 1 : 0)
+            #else
+            if ramp != nil { loopingFootnote }
+            #endif
         }
         .padding(20)
         .frame(maxWidth: 500)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Android's font sits "→" low, on the math baseline; there the arrow is the
+    /// arrow.right icon, centred on the text.
+    @ViewBuilder
+    private func summaryLabel(_ summary: String) -> some View {
+        #if os(Android)
+        let parts = summary.components(separatedBy: " → ")
+        if parts.count == 2 {
+            HStack(spacing: 5) {
+                Text(parts[0])
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .bold))
+                Text(parts[1])
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(summary.replacingOccurrences(of: " → ", with: " to "))
+        } else {
+            Text(summary)
+        }
+        #else
+        Text(summary)
+        #endif
+    }
+
+    private var loopingFootnote: some View {
+        Text("Playback keeps looping at \(Self.percent(targetSpeed)) until you stop.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
     }
 
     private var ramp: ScoreTempoRamp? {
@@ -128,7 +170,13 @@ struct ScoreReaderTempoRampSheet: View {
         guard estimate > 0, estimate.isFinite else { return nil }
         let (minutes, seconds) = Int(estimate.rounded(.up)).quotientAndRemainder(dividingBy: 60)
         let time = minutes == 0 ? "\(seconds) sec" : seconds == 0 ? "\(minutes) min" : "\(minutes) min \(seconds) sec"
-        return "Reaches \(Self.percent(ramp.targetSpeed)) in about \(time)"
+        // "84 → 120 BPM over about 1 min 14 sec" when the written tempo is known.
+        guard writtenTempoBpm > 0 else {
+            return "Reaches \(Self.percent(ramp.targetSpeed)) in about \(time)"
+        }
+        let start = Int((writtenTempoBpm * ramp.startSpeed).rounded())
+        let target = Int((writtenTempoBpm * ramp.targetSpeed).rounded())
+        return "\(start) → \(target) BPM over about \(time)"
     }
 
     private var increaseStepper: some View {

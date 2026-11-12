@@ -185,6 +185,11 @@ double msr::render::ScoreRenderSession::playbackSpeed() const
     return m_impl->playbackSpeed();
 }
 
+double msr::render::ScoreRenderSession::writtenTempoBpm(const int measureIndex) const
+{
+    return m_impl->writtenTempoBpm(measureIndex);
+}
+
 bool msr::render::ScoreRenderSession::playbackTrackSummary(std::vector<PlaybackTrackSummary>& output,
                                                            std::string& errorMessage) const
 {
@@ -233,6 +238,19 @@ bool msr::render::ScoreRenderSession::clearCorruptionIssue(const int issueIndex,
                                                            std::string& errorMessage)
 {
     return m_impl->clearCorruptionIssue(issueIndex, output, report, errorMessage);
+}
+
+bool msr::render::ScoreRenderSession::repairCorruptionIssue(const int issueIndex,
+                                                            const int action,
+                                                            ScoreEditState& output,
+                                                            ScoreCorruptionReport& report,
+                                                            std::string& errorMessage)
+{
+    if (action < 0 || action > static_cast<int>(CorruptionRepairAction::FitTimeSignature)) {
+        errorMessage = "Unknown score repair.";
+        return false;
+    }
+    return m_impl->repairCorruptionIssue(issueIndex, static_cast<CorruptionRepairAction>(action), output, report, errorMessage);
 }
 
 bool msr::render::ScoreRenderSession::currentEditState(ScoreEditState& output, std::string& errorMessage) const

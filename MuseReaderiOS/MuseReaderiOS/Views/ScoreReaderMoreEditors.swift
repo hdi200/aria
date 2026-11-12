@@ -683,8 +683,11 @@ struct ScoreReaderTimeSignatureSheet: View {
         return isPhone ? [.large] : [.height(620), .large]
     }
 
+    /// Like desktop, the same time signature can be added again (a restatement, or 4/4 after
+    /// common time): `currentValue` doesn't carry the common/cut style, and the engine ignores
+    /// an identical time signature already on that bar.
     private var canCommit: Bool {
-        !isBusy && selected != currentValue
+        !isBusy
     }
 
     private func pickerButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

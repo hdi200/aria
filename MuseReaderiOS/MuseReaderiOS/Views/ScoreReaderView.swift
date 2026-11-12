@@ -575,7 +575,8 @@ struct ScoreReaderView: View {
                                 report: readerState.corruptionReport,
                                 isBusy: readerState.isEditingActionInFlight,
                                 selectIssueAction: readerState.selectCorruptionIssue,
-                                clearIssueAction: readerState.clearCorruptionIssue
+                                repairIssueAction: readerState.repairCorruptionIssue,
+                                dismissAction: { readerState.isCorruptionNoticeDismissed = true }
                             )
                             .padding(.top, isPhoneInterface ? 72 : 84)
                             .padding(.trailing, isPhoneInterface ? 12 : 24)
@@ -897,6 +898,7 @@ struct ScoreReaderView: View {
             toggleMetronomeAction: readerState.toggleMetronome,
             toggleCountInAction: readerState.toggleCountIn,
             practiceSpeed: readerState.practiceSpeed,
+            writtenTempoBpm: readerState.writtenTempoBpm,
             countInBars: readerState.countInBars,
             setMetronomeEnabledAction: readerState.setMetronomeEnabled,
             setPracticeSpeedAction: readerState.setPracticeSpeed,
@@ -1227,6 +1229,7 @@ struct ScoreReaderView: View {
             ScoreReaderTempoRampSheet(
                 writtenLoopDuration: readerState.tempoRampWrittenLoopDuration,
                 initialStartSpeed: readerState.practiceSpeed,
+                writtenTempoBpm: readerState.writtenTempoBpm,
                 startAction: readerState.startTempoRamp
             )
         }
@@ -4037,7 +4040,8 @@ struct ScoreReaderCorruptionMenu: View {
     let report: ScoreCorruptionReport
     let isBusy: Bool
     let selectIssueAction: (ScoreCorruptionIssue) -> Void
-    let clearIssueAction: (ScoreCorruptionIssue) -> Void
+    let repairIssueAction: (ScoreCorruptionIssue, ScoreCorruptionRepair) -> Void
+    var dismissAction: () -> Void = {}
 
     private var firstIssue: ScoreCorruptionIssue? {
         report.issues.first
@@ -4050,11 +4054,11 @@ struct ScoreReaderCorruptionMenu: View {
                 .foregroundStyle(Color(red: 0.78, green: 0.10, blue: 0.08))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Fix score corruption")
+                Text("This score has \(report.issues.count) problem\(report.issues.count == 1 ? "" : "s")")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.black.opacity(0.88))
 
-                Text("\(report.issues.count) issue\(report.issues.count == 1 ? "" : "s") found. Editing is locked.")
+                Text("It plays, edits and saves as it is. The original is kept in Aria Backups.")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(Color.black.opacity(0.58))
             }
@@ -4064,27 +4068,30 @@ struct ScoreReaderCorruptionMenu: View {
                     Button {
                         selectIssueAction(firstIssue)
                     } label: {
-                        Label("Go to First Corrupt Bar", systemImage: "scope")
+                        Label("Go to First Problem", systemImage: "scope")
                     }
                 }
 
+                Divider()
+
+                // One submenu per problem: go to it, then its repairs (the ones that keep
+                // the music first, Clear Bar last).
                 ForEach(Array(report.issues.prefix(12))) { issue in
-                    Button {
-                        selectIssueAction(issue)
+                    Menu {
+                        Button {
+                            selectIssueAction(issue)
+                        } label: {
+                            Label("Go to Bar", systemImage: "location")
+                        }
+                        ForEach(issue.repairs, id: \.rawValue) { repair in
+                            Button(role: repair == .clear ? .destructive : nil) {
+                                repairIssueAction(issue, repair)
+                            } label: {
+                                Label(repair.title, systemImage: repair.systemImage)
+                            }
+                        }
                     } label: {
-                        Label(issue.title, systemImage: "location")
-                    }
-                }
-
-                if !report.issues.isEmpty {
-                    Divider()
-                }
-
-                ForEach(Array(report.issues.prefix(12).filter(\.repairable))) { issue in
-                    Button(role: .destructive) {
-                        clearIssueAction(issue)
-                    } label: {
-                        Label("Clear \(issue.title)", systemImage: "eraser")
+                        Label("\(issue.problemName) · \(issue.title)", systemImage: "exclamationmark.triangle")
                     }
                 }
             } label: {
@@ -4096,7 +4103,16 @@ struct ScoreReaderCorruptionMenu: View {
                     .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
             }
             .disabled(isBusy || report.issues.isEmpty)
-            .accessibilityLabel("Corruption repair options")
+            .accessibilityLabel("Score problems")
+
+            Button(action: dismissAction) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.black.opacity(0.55))
+                    .frame(width: 30, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hide")
         }
         .padding(.leading, 13)
         .padding(.trailing, 8)
