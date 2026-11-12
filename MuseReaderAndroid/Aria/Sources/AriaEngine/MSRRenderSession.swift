@@ -228,6 +228,12 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
         return makePlaybackAudioData(audio)
     }
 
+    /// Written tempo (quarter notes per minute) at a playback measure index; 0 if unknown.
+    open func writtenTempoBpm(measureIndex: Int) -> Double {
+        guard let session = try? requireSession() else { return 0 }
+        return session.pointee.writtenTempoBpm(Int32(measureIndex))
+    }
+
     /// Practice speed (1 = written tempo); playback only, never saved.
     open func setPlaybackSpeed(_ multiplier: Double) throws {
         let session = try requireSession()
@@ -336,6 +342,18 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
         var message = std.string()
         guard session.pointee.clearCorruptionIssue(Int32(index), &state, &report, &message) else {
             throw failure(message, "The MuseScore render core could not clear that corrupted bar.")
+        }
+        editState?.pointee = makeEditState(state)
+        return makeScoreCorruptionReport(report)
+    }
+
+    open func repairCorruptionIssue(index: Int, action: Int, editState: UnsafeMutablePointer<MSREditState?>?) throws -> MSRScoreCorruptionReport {
+        let session = try requireSession()
+        var state = msr.render.ScoreEditState()
+        var report = msr.render.ScoreCorruptionReport()
+        var message = std.string()
+        guard session.pointee.repairCorruptionIssue(Int32(index), Int32(action), &state, &report, &message) else {
+            throw failure(message, "The MuseScore render core could not repair that bar.")
         }
         editState?.pointee = makeEditState(state)
         return makeScoreCorruptionReport(report)
