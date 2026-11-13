@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6DCA5C012FE0000000DD6DE1 /* ScannerCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6DCA5C032FE0000000DD6DE1 /* ScannerCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6D8D1FD22F8D3F3E00DD6DE1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -57,6 +61,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6DCA5C012FE0000000DD6DE1 /* ScannerCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,6 +127,9 @@
 				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
 			);
 			name = Aria;
+			packageProductDependencies = (
+				6DCA5C032FE0000000DD6DE1 /* ScannerCore */,
+			);
 			productName = MuseReaderiOS;
 			productReference = 6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */;
 			productType = "com.apple.product-type.application";
@@ -200,6 +208,9 @@
 			);
 			mainGroup = 6D8D1FBB2F8D3F3C00DD6DE1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6DCA5C022FE0000000DD6DE1 /* XCRemoteSwiftPackageReference "ScoreScanner" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6D8D1FC52F8D3F3C00DD6DE1 /* Products */;
 			projectDirPath = "";
@@ -920,6 +931,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6DCA5C022FE0000000DD6DE1 /* XCRemoteSwiftPackageReference "ScoreScanner" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hdi200/ScoreScanner.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6DCA5C032FE0000000DD6DE1 /* ScannerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6DCA5C022FE0000000DD6DE1 /* XCRemoteSwiftPackageReference "ScoreScanner" */;
+			productName = ScannerCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */;
 }

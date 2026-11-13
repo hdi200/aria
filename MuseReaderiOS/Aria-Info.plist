@@ -32,6 +32,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Aria uses the camera to scan printed sheet music into a score you can play and edit.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UTImportedTypeDeclarations</key>

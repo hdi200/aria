@@ -22,6 +22,33 @@ private enum PendingLibraryAction {
     case createScore
     case importScores([ScoreImportCandidate])
     case reopenLegacyDocument(ReaderRecentDocument)
+    case scan(ScoreScanSourceKind)
+}
+
+/// Where a scan's pages come from. Scanning reads printed music into MusicXML on iOS (ScannerCore);
+/// Android has no reader yet, so it never offers it.
+enum ScoreScanSourceKind: String, Identifiable, CaseIterable, Sendable {
+    case camera
+    case photos
+    case files
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .camera: return "Scan with Camera"
+        case .photos: return "Choose Photo"
+        case .files: return "Choose PDF or Image"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .camera: return "camera.viewfinder"
+        case .photos: return "photo.on.rectangle"
+        case .files: return "doc.richtext"
+        }
+    }
 }
 
 private enum LibraryAdmissionError: LocalizedError {
@@ -143,6 +170,9 @@ final class MuseReaderAppModel {
     var errorAlert: ReaderAlert?
     private(set) var managedScoreCount = 0
     var libraryAccessSheet: LibraryAccessSheet?
+    /// The scan source to open next. Set once a library slot is reserved for the scan, so nobody
+    /// waits for a reading and then meets the paywall.
+    var pendingScanSource: ScoreScanSourceKind?
 
     let libraryAccessController: LibraryAccessController
 
@@ -157,6 +187,7 @@ final class MuseReaderAppModel {
     private var didAttemptLaunchRecovery = false
     private var reservedScoreSlots = 0
     private var isCreateScoreSlotReserved = false
+    private var isScanSlotReserved = false
     private var pendingLibraryAction: PendingLibraryAction?
     private var didPresentEarlySupporterMessageThisLaunch = false
 
@@ -230,6 +261,70 @@ final class MuseReaderAppModel {
         releaseCreateScoreReservation()
     }
 
+    /// Scanning printed music is iOS only for now (ScannerCore); see FEATURES_TODO.md for Android.
+    var supportsScanning: Bool {
+        #if os(Android)
+        return false
+        #else
+        return ScoreScanService.isSupported
+        #endif
+    }
+
+    /// Reserves room for the scanned score before its source opens, then asks the library to open it.
+    func startScan(from source: ScoreScanSourceKind) {
+        guard supportsScanning, !isReaderPresented else {
+            return
+        }
+        guard !isScanSlotReserved else {
+            pendingScanSource = source
+            return
+        }
+        synchronizeManagedScoreCount()
+        guard reserveScoreSlots(1) else {
+            pendingLibraryAction = .scan(source)
+            libraryAccessSheet = .paywall(.importScore(count: 1))
+            return
+        }
+        isScanSlotReserved = !libraryAccessController.status.hasUnlimitedScores
+        pendingScanSource = source
+    }
+
+    /// The scan ended without a score (source cancelled, reading cancelled or failed): frees its slot.
+    func scanDidEnd() {
+        pendingScanSource = nil
+        releaseScanReservation()
+    }
+
+    /// Imports a scanned MusicXML file through the normal import path (normalised to .mscz) and
+    /// returns its session. The library opens it once the scan sheet has closed.
+    func importScannedScore(at url: URL) async throws -> ScoreSession {
+        synchronizeManagedScoreCount()
+        defer {
+            releaseScanReservation()
+            synchronizeManagedScoreCount()
+        }
+        if !isScanSlotReserved, !libraryAccessController.status.hasUnlimitedScores {
+            // The slot was released (for example the store status changed meanwhile): take one now.
+            guard reserveScoreSlots(1) else {
+                throw LibraryAdmissionError.missingReservation
+            }
+            isScanSlotReserved = true
+        }
+        return try await importDocument(at: url, setsCurrentSession: true)
+    }
+
+    func openScannedSession(_ session: ScoreSession) {
+        pendingImportedSession = session
+    }
+
+    private func releaseScanReservation() {
+        guard isScanSlotReserved else {
+            return
+        }
+        isScanSlotReserved = false
+        releaseScoreSlots(1)
+    }
+
     func presentUnlimitedScoresFromSettings() {
         pendingLibraryAction = nil
         libraryAccessSheet = .paywall(.settings)
@@ -274,6 +369,8 @@ final class MuseReaderAppModel {
                 await self.beginImportingCandidates(candidates)
             case .reopenLegacyDocument(let recent):
                 self.openRecent(recent)
+            case .scan(let source):
+                self.startScan(from: source)
             case nil:
                 break
             }

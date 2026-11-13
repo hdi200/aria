@@ -34,6 +34,19 @@ struct OpenSourceLegalView: View {
                         LegalNoticeRow(name: "MuseScore General SoundFonts", detail: "MIT according to embedded SoundFont metadata")
                     }
 
+                    #if !os(Android)
+                    LegalSection(title: "Score Scanning") {
+                        Text("Scan reads printed music with copisteria by KobiMusic, run with ONNX Runtime.")
+                        LegalNoticeRow(name: "copisteria and copista-2m", detail: "Apache License 2.0, copyright 2026 KobiMusic")
+                        Link(destination: URL(string: "https://github.com/kobimusic/copisteria")!) {
+                            Label("github.com/kobimusic/copisteria", systemImage: "arrow.up.right.square")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.blue)
+                        }
+                        LegalNoticeRow(name: "ONNX Runtime", detail: "MIT License, copyright Microsoft Corporation")
+                    }
+                    #endif
+
                     LegalSection(title: "Qt Framework Notice") {
                         Text("Aria is built with Qt libraries and tools. The applicable Qt license terms depend on the exact Qt distribution used for the release build.")
                         Text("The release source package includes the corresponding Qt notices and applicable license text.")

@@ -102,6 +102,11 @@ struct LibraryView: View {
         activeSetlistFolder.map(model.orderedScores(in:)) ?? []
     }
 
+    /// Scan printed music (iOS only); nil hides the Scan buttons.
+    private var scanAction: ((ScoreScanSourceKind) -> Void)? {
+        model.supportsScanning ? { model.startScan(from: $0) } : nil
+    }
+
     var body: some View {
         GeometryReader { geometry in
             if isPhoneInterface {
@@ -116,6 +121,7 @@ struct LibraryView: View {
                     folders: model.setlistFolders,
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
+                    scanAction: scanAction,
                     openAction: openScore,
                     editInfoAction: presentScoreInfoEditor,
                     deleteAction: { scorePendingDeletion = $0 },
@@ -204,6 +210,9 @@ struct LibraryView: View {
                     scoreLayout: isShowingSetlist ? $setlistDashboardScoreLayout : $dashboardScoreLayout,
                     createAction: model.startCreateScore,
                     importAction: model.startImport,
+                    scanAction: scanAction,
+                    showsHeaderButtonLabels: geometry.size.width
+                        - min(sidebarWidth, geometry.size.width * 0.34) >= 860,
                     openAction: openScore,
                     editInfoAction: presentScoreInfoEditor,
                     deleteAction: { scorePendingDeletion = $0 },
@@ -240,6 +249,10 @@ struct LibraryView: View {
             allowsMultipleSelection: true,
             onCompletion: model.handleImportSelection
         )
+        #if !os(Android)
+        // Scan: camera, photo or PDF source, the reading's progress sheet, and opening the result.
+        .modifier(LibraryScanFlow(model: model))
+        #endif
         .onDrop(
             of: [.fileURL] + model.supportedContentTypes + [.data],
             isTargeted: $isScoreDropTargeted,
@@ -1433,6 +1446,7 @@ struct PhoneLibraryView: View {
     let folders: [LibrarySetlistFolder]
     let createAction: () -> Void
     let importAction: () -> Void
+    let scanAction: ((ScoreScanSourceKind) -> Void)?
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
@@ -1491,12 +1505,32 @@ struct PhoneLibraryView: View {
 
                     // Small icon buttons
                     HStack(spacing: 6) {
+                        if let scanAction {
+                            ScoreScanMenu(action: scanAction) {
+                                Image(systemName: "doc.viewfinder")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(LibraryPalette.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                            .accessibilityLabel("Scan Score")
+                        }
+
                         Button(action: importAction) {
                             Image(systemName: "doc.badge.plus")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(scanAction == nil ? Color.white : LibraryPalette.accent)
                                 .frame(width: 36, height: 36)
-                                .background(LibraryPalette.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .background(
+                                    scanAction == nil ? LibraryPalette.accent : Color.white,
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                )
+                                .overlay {
+                                    if scanAction != nil {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                                    }
+                                }
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Import Score")
@@ -2311,6 +2345,8 @@ struct LibraryDashboardView: View {
     @Binding var scoreLayout: LibraryScoreLayout
     let createAction: () -> Void
     let importAction: () -> Void
+    let scanAction: ((ScoreScanSourceKind) -> Void)?
+    let showsHeaderButtonLabels: Bool
     let openAction: (ReaderRecentDocument) -> Void
     let editInfoAction: (ReaderRecentDocument) -> Void
     let deleteAction: (ReaderRecentDocument) -> Void
@@ -2336,6 +2372,8 @@ struct LibraryDashboardView: View {
                 searchText: $searchText,
                 createAction: createAction,
                 importAction: importAction,
+                scanAction: scanAction,
+                showsButtonLabels: showsHeaderButtonLabels,
                 activeSetlist: activeSetlist,
                 showAddScoresAction: showAddScoresAction,
                 deleteSetlistAction: deleteSetlistAction,
@@ -2389,7 +2427,12 @@ struct LibraryDashboardView: View {
                     )
                         .padding(34)
                 } else if scores.isEmpty {
-                    LibraryEmptyState(createAction: createAction, importAction: importAction, selectedCategory: selectedCategory)
+                    LibraryEmptyState(
+                        createAction: createAction,
+                        importAction: importAction,
+                        scanAction: scanAction,
+                        selectedCategory: selectedCategory
+                    )
                         .padding(36)
                 } else if scoreLayout == .list {
                     LibraryScoreList(
@@ -2774,6 +2817,9 @@ struct LibraryDashboardHeader: View {
     @Binding var searchText: String
     let createAction: () -> Void
     let importAction: () -> Void
+    let scanAction: ((ScoreScanSourceKind) -> Void)?
+    /// Wide headers name Scan and Import; narrow ones (iPad portrait, split view) show icons.
+    let showsButtonLabels: Bool
     let activeSetlist: LibrarySetlistFolder?
     let showAddScoresAction: (LibrarySetlistFolder) -> Void
     let deleteSetlistAction: (LibrarySetlistFolder) -> Void
@@ -2827,8 +2873,10 @@ struct LibraryDashboardHeader: View {
             titleText
 
             HStack(spacing: 16) {
-                headerControls(searchWidth: activeSetlist == nil ? 320 : 260)
+                headerControls(searchWidth: activeSetlist == nil ? (scanAction == nil || showsButtonLabels ? 320 : 240) : 260)
             }
+            // The buttons keep their labelled width; the title truncates first.
+            .layoutPriority(showsButtonLabels ? 1 : 0)
         }
     }
 
@@ -2899,6 +2947,13 @@ struct LibraryDashboardHeader: View {
             .accessibilityLabel("Share Setlist")
 
             Menu {
+                if let scanAction {
+                    Menu {
+                        ScoreScanMenuItems(action: scanAction)
+                    } label: {
+                        Label("Scan Score", systemImage: "doc.viewfinder")
+                    }
+                }
                 Button(action: importAction) {
                     Label("Import Score", systemImage: "doc.badge.plus")
                 }
@@ -2922,6 +2977,32 @@ struct LibraryDashboardHeader: View {
                     }
             }
             .accessibilityLabel("More Library Actions")
+        } else if let scanAction {
+            // Scan leads (filled); Import and New Score follow as white buttons.
+            ScoreScanMenu(action: scanAction) {
+                LibraryHeaderButtonLabel(
+                    title: showsButtonLabels ? "Scan" : nil,
+                    systemImage: "doc.viewfinder",
+                    isProminent: true
+                )
+            }
+            .accessibilityLabel("Scan Score")
+
+            Button(action: importAction) {
+                LibraryHeaderButtonLabel(
+                    title: showsButtonLabels ? "Import" : nil,
+                    systemImage: "doc.badge.plus",
+                    isProminent: false
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Import Score")
+
+            Button(action: createAction) {
+                LibraryHeaderButtonLabel(title: nil, systemImage: "plus", isProminent: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("New Score")
         } else {
             Button(action: importAction) {
                 Image(systemName: "doc.badge.plus")
@@ -2954,6 +3035,73 @@ struct LibraryDashboardHeader: View {
             }
             .buttonStyle(.plain)
         }
+    }
+}
+
+/// A dashboard header button: filled accent when prominent, white with a border otherwise; a
+/// title next to the icon when the header is wide enough.
+struct LibraryHeaderButtonLabel: View {
+    let title: String?
+    let systemImage: String
+    let isProminent: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+            if let title {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(isProminent ? Color.white : LibraryPalette.accent)
+        .padding(.horizontal, title == nil ? 0 : 20)
+        .frame(minWidth: title == nil ? 52 : nil)
+        .frame(height: 48)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isProminent ? LibraryPalette.accent : Color.white)
+        )
+        .overlay {
+            if !isProminent {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+            }
+        }
+        .shadow(color: isProminent ? LibraryPalette.accent.opacity(0.22) : .clear, radius: 12, y: 4)
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// The Scan button's sources: camera, a photo, or a PDF or image from Files.
+struct ScoreScanMenuItems: View {
+    let action: (ScoreScanSourceKind) -> Void
+
+    var body: some View {
+        ForEach(ScoreScanSourceKind.allCases) { source in
+            Button {
+                action(source)
+            } label: {
+                Label(source.title, systemImage: source.systemImage)
+            }
+        }
+    }
+}
+
+/// A Scan button that opens the source menu.
+struct ScoreScanMenu<MenuLabel: View>: View {
+    let action: (ScoreScanSourceKind) -> Void
+    @ViewBuilder let label: () -> MenuLabel
+
+    var body: some View {
+        Menu {
+            ScoreScanMenuItems(action: action)
+        } label: {
+            label()
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
     }
 }
 
@@ -3319,6 +3467,7 @@ struct LibraryScoreInfoEditorSheet: View {
 struct LibraryEmptyState: View {
     let createAction: () -> Void
     let importAction: () -> Void
+    var scanAction: ((ScoreScanSourceKind) -> Void)? = nil
     let selectedCategory: LibraryCategory
 
     var body: some View {
@@ -3334,7 +3483,9 @@ struct LibraryEmptyState: View {
             Text(
                 isSetlist
                     ? "Use Add Scores above to choose scores from your library."
-                    : "Create a new score or import a MuseScore file. It will appear here, ready to open in the reader."
+                    : scanAction == nil
+                        ? "Create a new score or import a MuseScore file. It will appear here, ready to open in the reader."
+                        : "Create a new score, import a MuseScore file, or scan printed music. It will appear here, ready to open in the reader."
             )
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(LibraryPalette.mutedInk)
@@ -3378,6 +3529,28 @@ struct LibraryEmptyState: View {
                     }
                 }
                 .buttonStyle(.plain)
+
+                if let scanAction {
+                    ScoreScanMenu(action: scanAction) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "doc.viewfinder")
+                            Text("Scan")
+                        }
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(LibraryPalette.accent)
+                        .padding(.horizontal, 24)
+                        .frame(height: 48)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(LibraryPalette.cardBorder, lineWidth: 1)
+                        }
+                    }
+                    .accessibilityLabel("Scan Score")
+                }
                 }
             }
         }

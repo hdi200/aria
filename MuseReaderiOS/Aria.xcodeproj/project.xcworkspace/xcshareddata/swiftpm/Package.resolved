@@ -1,0 +1,15 @@
+{
+  "originHash" : "9e1e34971f34ee274e0f7bb78ed0720eefa53101656efd8ba2e559e9bb56e3e0",
+  "pins" : [
+    {
+      "identity" : "scorescanner",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hdi200/ScoreScanner.git",
+      "state" : {
+        "revision" : "3aa2656dd6975caabaf359cd57cd980adc75f499",
+        "version" : "0.1.0"
+      }
+    }
+  ],
+  "version" : 3
+}

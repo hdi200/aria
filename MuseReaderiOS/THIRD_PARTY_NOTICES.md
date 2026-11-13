@@ -53,3 +53,18 @@ Aria includes code and assets from the MuseScore Studio source tree and several 
 - Component: Qt libraries and tools used to build and run the render core.
 - License: depends on the Qt license used for the release build.
 - Release requirement: preserve and publish the applicable Qt license/commercial notices for the exact Qt distribution used to build the app.
+
+## copisteria and copista-2m (iOS score scanning)
+
+- Component: KobiMusic's copisteria optical music reader and its copista-2m models, ported to Swift in the ScoreScanner package (`ScannerCore`), used by Aria's Scan on iOS.
+- Source: https://github.com/kobimusic/copisteria
+- License: Apache License 2.0. Copyright 2026 KobiMusic.
+- Bundled files: `Resources/Legal/copisteria-Apache-2.0.txt` and `Resources/Legal/copisteria-NOTICE.txt` (the NOTICE asks that KobiMusic be credited and the repository linked).
+
+## ONNX Runtime (iOS score scanning)
+
+- Component: ONNX Runtime 1.27.0 (Microsoft's official iOS binary and Objective-C bindings), which runs the copista-2m models.
+- Source: https://github.com/microsoft/onnxruntime
+- License: MIT License. Copyright (c) Microsoft Corporation.
+- Bundled file: `Resources/Legal/ONNXRuntime-MIT.txt`.
+
