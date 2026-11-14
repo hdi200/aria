@@ -3,6 +3,19 @@
 Remaining device checks. Remove an item once it passes. Confirmed failures are tracked in
 [MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md](MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md).
 
+## Scan progress sheet (iOS 27+)
+
+- [ ] **One image.** Library → Scan → a photo of a lead sheet: the sheet shows one page segment
+  and three stages (in plain words) that tick through in order, a running timer, and Cancel.
+  The finished score opens in View mode.
+- [ ] **Multi-page PDF.** Scan a 4-page PDF from Files: four page segments fill one by one, and
+  progress never steps backwards while the next page's notes are read during this page's
+  chords. A long PDF shows a single bar instead of segments.
+- [ ] **Throttled or failed cloud.** With Apple's model throttling, a passing note appears and
+  the scan carries on; when it fails, the sheet offers Read Notes Only, which finishes with
+  notes and no chords.
+- [ ] **Cancel** mid-scan returns to the library with nothing added and the slot freed.
+
 ## Time signatures
 
 - [ ] **Same time signature again.** In a 4/4 score, select a later bar and add 4/4: it

@@ -30,6 +30,8 @@ struct ScoreScanInput: Sendable {
     /// The name used when the reader finds no printed title: the file's name, or nil for a camera
     /// scan or a photo.
     let sourceName: String?
+    /// Pages to read, shown while reading: 1 for an image, the PDF's page count otherwise.
+    var pageCount: Int = 1
 }
 
 /// A finished reading.
@@ -138,7 +140,7 @@ enum ScoreScanService {
         let name = url.deletingPathExtension().lastPathComponent
         let type = UTType(filenameExtension: url.pathExtension.lowercased())
         if type?.conforms(to: .pdf) == true || data.starts(with: Data("%PDF".utf8)) {
-            return ScoreScanInput(kind: .pdf, data: data, sourceName: name)
+            return ScoreScanInput(kind: .pdf, data: data, sourceName: name, pageCount: pdfPageCount(data))
         }
         guard type?.conforms(to: .image) ?? true else {
             throw ScoreScanError.unsupportedFile
@@ -157,7 +159,16 @@ enum ScoreScanService {
         if pages.count == 1 {
             return ScoreScanInput(kind: .image, data: png(from: pages[0]), sourceName: nil)
         }
-        return ScoreScanInput(kind: .pdf, data: pdf(from: pages), sourceName: nil)
+        return ScoreScanInput(kind: .pdf, data: pdf(from: pages), sourceName: nil, pageCount: pages.count)
+    }
+
+    nonisolated private static func pdfPageCount(_ data: Data) -> Int {
+        guard let provider = CGDataProvider(data: data as CFData),
+              let document = CGPDFDocument(provider)
+        else {
+            return 1
+        }
+        return max(1, document.numberOfPages)
     }
 
     /// JPEG and PNG pass through untouched; other images (HEIC, TIFF) become an oriented PNG.
