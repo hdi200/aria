@@ -14,5 +14,6 @@ Bundled notices:
 - MuseScore General SoundFonts: MIT license according to embedded SoundFont metadata; see `MuseScore_General-License.md` and `MuseScore_General_HQ-License.md`.
 - Score templates: distributed from the MuseScore Studio source tree unless a more specific upstream license applies.
 - copisteria and copista-2m (iOS score scanning): Apache License 2.0, copyright 2026 KobiMusic, https://github.com/kobimusic/copisteria; see `copisteria-Apache-2.0.txt` and `copisteria-NOTICE.txt`.
+- PaddleOCR PP-OCRv6 small, fine-tuned on chord symbols (iOS score scanning, chord names): Apache License 2.0, copyright PaddlePaddle Authors, https://github.com/PaddlePaddle/PaddleOCR; modified; see `copisteria-Apache-2.0.txt` (the license text) and `PaddleOCR-NOTICE.txt`.
 - ONNX Runtime 1.27.0 (iOS score scanning): MIT License, copyright Microsoft Corporation; see `ONNXRuntime-MIT.txt`.
 - Qt Framework: Aria is built with Qt libraries and tools. The applicable Qt license terms depend on the exact Qt distribution used for the release build; see `Qt-NOTICE.txt` and the release source package for the corresponding Qt notices.

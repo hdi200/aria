@@ -61,9 +61,16 @@ Aria includes code and assets from the MuseScore Studio source tree and several 
 - License: Apache License 2.0. Copyright 2026 KobiMusic.
 - Bundled files: `Resources/Legal/copisteria-Apache-2.0.txt` and `Resources/Legal/copisteria-NOTICE.txt` (the NOTICE asks that KobiMusic be credited and the repository linked).
 
+## PaddleOCR PP-OCRv6 (iOS score scanning, chord names)
+
+- Component: PaddleOCR's PP-OCRv6 small text recognition model, fine-tuned on chord symbols and exported to ONNX in the ScoreScanner package (`ScannerCore`, `chord_rec.onnx`), used by Aria's Scan on iOS to read chord names.
+- Source: https://github.com/PaddlePaddle/PaddleOCR
+- License: Apache License 2.0. Copyright PaddlePaddle Authors. The bundled weights are a modified version (trained further on synthetic chord-symbol images).
+- Bundled files: `Resources/Legal/copisteria-Apache-2.0.txt` (the Apache License 2.0 text) and `Resources/Legal/PaddleOCR-NOTICE.txt`.
+
 ## ONNX Runtime (iOS score scanning)
 
-- Component: ONNX Runtime 1.27.0 (Microsoft's official iOS binary and Objective-C bindings), which runs the copista-2m models.
+- Component: ONNX Runtime 1.27.0 (Microsoft's official iOS binary and Objective-C bindings), which runs the copista-2m models and the chord reader.
 - Source: https://github.com/microsoft/onnxruntime
 - License: MIT License. Copyright (c) Microsoft Corporation.
 - Bundled file: `Resources/Legal/ONNXRuntime-MIT.txt`.

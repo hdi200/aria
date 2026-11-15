@@ -1,0 +1,8 @@
+PaddleOCR PP-OCRv6 (chord reader)
+
+Aria's Scan reads chord names with PaddleOCR's PP-OCRv6 small text recognition model, fine-tuned on chord
+symbols by the ScoreScanner project and exported to ONNX (ScannerCore's chord_rec.onnx).
+
+PaddleOCR and its PP-OCRv6 models: Apache License 2.0, copyright PaddlePaddle Authors,
+https://github.com/PaddlePaddle/PaddleOCR. The license text is in copisteria-Apache-2.0.txt (the Apache License
+2.0). The bundled weights are a modified version: they were trained further on synthetic chord-symbol images.

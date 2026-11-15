@@ -36,13 +36,14 @@ struct OpenSourceLegalView: View {
 
                     #if !os(Android)
                     LegalSection(title: "Score Scanning") {
-                        Text("Scan reads printed music with copisteria by KobiMusic, run with ONNX Runtime.")
+                        Text("Scan reads printed music with copisteria by KobiMusic and chord names with a PaddleOCR PP-OCRv6 model fine-tuned on chord symbols, run with ONNX Runtime.")
                         LegalNoticeRow(name: "copisteria and copista-2m", detail: "Apache License 2.0, copyright 2026 KobiMusic")
                         Link(destination: URL(string: "https://github.com/kobimusic/copisteria")!) {
                             Label("github.com/kobimusic/copisteria", systemImage: "arrow.up.right.square")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.blue)
                         }
+                        LegalNoticeRow(name: "PaddleOCR PP-OCRv6 (chord reader)", detail: "Apache License 2.0, copyright PaddlePaddle Authors; modified (fine-tuned)")
                         LegalNoticeRow(name: "ONNX Runtime", detail: "MIT License, copyright Microsoft Corporation")
                     }
                     #endif

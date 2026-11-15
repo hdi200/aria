@@ -99,7 +99,7 @@ final class ScoreScanController {
         }
         self.input = input
         importedSession = nil
-        notesOnly = !ScoreScanService.cloudReadingAvailable
+        notesOnly = !ScoreScanService.chordReadingAvailable
         isPresented = true
         run(model: model)
     }
@@ -633,7 +633,7 @@ struct ScoreScanProgressSheet: View {
         if let notice = controller.notice {
             text = notice
         } else if controller.notesOnly {
-            text = "Chord names and text need Apple Intelligence, so only the notes are read. Your score will open automatically."
+            text = "Only the notes are read. Your score will open automatically."
         } else {
             text = "Your score will open automatically when scanning finishes."
         }
