@@ -44,6 +44,14 @@ Parts and loading:
   laying it out. Without it, header and footer macros that read file info (`$f`, `$F`, `$m`,
   `$M`, `$D`) crashed when Aria set a temporary viewing key (Play Console, Android).
 
+MusicXML import:
+- `importexport/musicxml/internal/import/importmusicxmlpass2.cpp` (+ its tests and reference files): explicit
+  `<sound>` jump and marker attributes (`dacapo`, `dalsegno`, `fine`, `segno`, `coda`, `tocoda`) are imported as
+  jumps and markers whatever the "infer text type" setting (off in Aria), and the words beside a D.C./D.S. refine
+  it ("D.C. al Fine"). Upstream commit `cfddbc801e` (MuseScore #33802, for #33801), applied unchanged. Scanned
+  scores (ScannerCore 0.1.4) write these attributes so their printed D.S. al Coda plays. Files are unaffected:
+  the round trip stayed 890 of 892 (lyrics-15/16 as before).
+
 Rendering hook:
 - `rendering/paintoptions.h`, `dom/engravingitem.cpp`: `PaintOptions::overrideItemColor`
   (ported from MuseScore 5) so Aria can draw its own selection colors. Display only.
