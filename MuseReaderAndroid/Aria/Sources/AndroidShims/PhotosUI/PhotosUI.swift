@@ -34,6 +34,11 @@ public extension View {
                       matching filter: PHPickerFilter? = nil, photoLibrary: PHPhotoLibrary) -> some View {
         modifier(AndroidPhotosPicker(isPresented: isPresented, selection: selection, mimeType: filter?.mimeType ?? "image/*"))
     }
+
+    func photosPicker(isPresented: Binding<Bool>, selection: Binding<PhotosPickerItem?>,
+                      matching filter: PHPickerFilter? = nil) -> some View {
+        photosPicker(isPresented: isPresented, selection: selection, matching: filter, photoLibrary: .shared())
+    }
 }
 
 struct AndroidPhotosPicker: ViewModifier {

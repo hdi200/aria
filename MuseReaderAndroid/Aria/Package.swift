@@ -31,6 +31,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/skiptools/skip.git", from: "1.9.16"),
+        // Score scanning (ScoreScanService), the same package the iOS app uses.
+        .package(url: "https://github.com/hdi200/ScoreScanner.git", from: "0.1.13"),
         .package(path: repoRoot + "/MuseReaderAndroid/Aria/Vendor/skip-fuse-ui"),
         .package(path: repoRoot + "/MuseReaderAndroid/Aria/Vendor/swift-jni"),
         .package(path: patchedSkipUI)
@@ -39,6 +41,7 @@ let package = Package(
         .target(name: "AriaSkip", dependencies: [
             "AriaEngine",
             .product(name: "SwiftJNI", package: "swift-jni"),
+            .product(name: "ScannerCore", package: "ScoreScanner"),
             // Android stand-ins for Apple modules the shared iOS files import.
             .target(name: "UIKit", condition: .when(platforms: [.android])),
             .target(name: "CryptoKit", condition: .when(platforms: [.android])),

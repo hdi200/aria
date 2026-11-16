@@ -25,14 +25,23 @@ private enum PendingLibraryAction {
     case scan(ScoreScanSourceKind, file: URL?)
 }
 
-/// Where a scan's pages come from. Scanning reads printed music into MusicXML on iOS (ScannerCore);
-/// Android has no reader yet, so it never offers it.
+/// Where a scan's pages come from. Scanning reads printed music into MusicXML with ScannerCore on
+/// iOS and Android; Android has no camera scan yet.
 enum ScoreScanSourceKind: String, Identifiable, CaseIterable, Sendable {
     case camera
     case photos
     case files
 
     var id: String { rawValue }
+
+    /// The sources the Scan menu lists here.
+    static var offered: [ScoreScanSourceKind] {
+        #if os(Android)
+        return [.photos, .files]
+        #else
+        return allCases
+        #endif
+    }
 
     var title: String {
         switch self {
@@ -273,13 +282,9 @@ final class MuseReaderAppModel {
         releaseCreateScoreReservation()
     }
 
-    /// Scanning printed music is iOS only for now (ScannerCore); see FEATURES_TODO.md for Android.
+    /// Scanning printed music (ScannerCore), on iOS and Android.
     var supportsScanning: Bool {
-        #if os(Android)
-        return false
-        #else
-        return ScoreScanService.isSupported
-        #endif
+        ScoreScanService.isSupported
     }
 
     /// Reserves room for the scanned score before its source opens, then asks the library to open it.

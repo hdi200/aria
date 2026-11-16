@@ -7,14 +7,15 @@
 //  ScannerCore's chord finder and chord reader, and the title, composer, tempo, rehearsal marks,
 //  navigation and other staff text with its text reader (all ONNX Runtime). Nothing is sent to
 //  Apple's model or any server. Printed D.S./D.C., To Coda and Fine reach the score as playback jumps
-//  when their segno and coda were found. iOS only: Android has no reader yet (see
-//  MuseReaderAndroid/FEATURES_TODO.md).
+//  when their segno and coda were found. On Android the app draws the pages (AriaScanPages.kt) and
+//  ScannerCore reads them the same way; there is no camera scan there yet.
 //
 
-#if !os(Android)
 import Foundation
+#if !os(Android)
 import ImageIO
 import UIKit
+#endif
 import UniformTypeIdentifiers
 #if canImport(ScannerCore)
 import ScannerCore
@@ -25,10 +26,14 @@ struct ScoreScanInput: Sendable {
     enum Kind: Sendable {
         case image
         case pdf
+        /// Android: a PDF or picture in `file`, drawn page by page by the app (AriaScanPages.kt).
+        case pageFile
     }
 
     let kind: Kind
     let data: Data
+    /// The file a `pageFile` input draws its pages from.
+    var file: URL? = nil
     /// The name used when the reader finds no printed title: the file's name, or nil for a camera
     /// scan or a photo.
     let sourceName: String?
@@ -77,7 +82,10 @@ enum ScoreScanService {
     /// Whether this build carries ScannerCore's on-device chord reader. Without it, only the notes
     /// are read.
     static var chordReadingAvailable: Bool {
-        #if canImport(ScannerCore)
+        #if os(Android)
+        // The models ship inside the app (AndroidScanPages), not in ScannerCore's bundle.
+        return true
+        #elseif canImport(ScannerCore)
         return ScoreReader.localChordReadingAvailable()
         #else
         return false
@@ -101,7 +109,25 @@ enum ScoreScanService {
         case .image:
             reading = try await ScoreReader.read(image: input.data, title: "", options: options, progress: progress)
         case .pdf:
+            #if os(Android)
+            throw ScoreScanError.unsupportedFile
+            #else
             reading = try await ScoreReader.read(pdf: input.data, title: "", options: options, progress: progress)
+            #endif
+        case .pageFile:
+            #if os(Android)
+            guard let file = input.file else {
+                throw ScoreScanError.unsupportedFile
+            }
+            reading = try await ScoreReader.read(
+                pageCount: input.pageCount, title: "", models: modelsDirectory(), options: options,
+                progress: progress
+            ) { index in
+                try AndroidScanPages.page(index, of: file)
+            }
+            #else
+            throw ScoreScanError.unsupportedFile
+            #endif
         }
         return ScoreScanResult(
             musicXML: reading.score.xml,
@@ -125,8 +151,45 @@ enum ScoreScanService {
         #endif
     }
 
+    /// Where the reader's models are: in ScannerCore's bundle, or on Android copied out of the app
+    /// (AndroidScanPages).
+    nonisolated private static func modelsDirectory() throws -> URL {
+        #if os(Android)
+        return try AndroidScanPages.modelsDirectory()
+        #elseif canImport(ScannerCore)
+        return Scanner.bundledModels
+        #else
+        throw ScoreScanError.readerUnavailable
+        #endif
+    }
+
     // MARK: - Sources
 
+    #if os(Android)
+    /// A PDF or image file from the document picker (already copied into Aria's cache).
+    nonisolated static func input(fromFileAt url: URL) throws -> ScoreScanInput {
+        let name = url.deletingPathExtension().lastPathComponent
+        let file = try AndroidScanPages.keep(url)
+        let pages = AndroidScanPages.pageCount(of: file)
+        guard pages > 0 else {
+            try? FileManager.default.removeItem(at: file)
+            throw ScoreScanError.unsupportedFile
+        }
+        return ScoreScanInput(kind: .pageFile, data: Data(), file: file, sourceName: name, pageCount: pages)
+    }
+
+    /// A photo from the picker.
+    nonisolated static func input(fromPhotoData data: Data) throws -> ScoreScanInput {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AriaScanPhoto-\(UUID().uuidString)")
+        try data.write(to: file, options: .atomic)
+        guard AndroidScanPages.pageCount(of: file) == 1 else {
+            try? FileManager.default.removeItem(at: file)
+            throw ScoreScanError.invalidImage
+        }
+        return ScoreScanInput(kind: .pageFile, data: Data(), file: file, sourceName: nil, pageCount: 1)
+    }
+    #else
     /// A PDF or image file from Files.
     nonisolated static func input(fromFileAt url: URL) throws -> ScoreScanInput {
         let startedScopedAccess = url.startAccessingSecurityScopedResource()
@@ -212,6 +275,8 @@ enum ScoreScanService {
         }
     }
 
+    #endif
+
     // MARK: - Import
 
     /// Writes the MusicXML to a temporary folder, named after the printed title, the source file,
@@ -239,4 +304,3 @@ enum ScoreScanService {
         return "Scanned Score"
     }
 }
-#endif

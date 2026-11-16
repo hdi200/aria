@@ -41,7 +41,18 @@ val stageBaseResources by tasks.registering(Sync::class) {
     from("ios-assets") { exclude("**/*.sf2", "**/.DS_Store") }
     into(baseResources)
 }
-tasks.named("preBuild") { dependsOn(copyAriaNativeLibs, stageBaseResources) }
+// Score scanning: ScannerCore's models. Skip packages only its own modules' resources, so they
+// are staged from the ScoreScanner package SwiftPM resolved into assets/ScannerModels, which
+// AriaScanPages.kt unpacks.
+val scannerModels = rootProject.file("../.build/checkouts/ScoreScanner/Sources/ScannerCore/Resources/Models")
+    .takeIf { it.isDirectory }
+val scannerAssets = layout.buildDirectory.dir("ariaScannerAssets")
+val stageScannerModels by tasks.registering(Sync::class) {
+    val models = requireNotNull(scannerModels) { "ScannerCore's Models folder was not found; resolve the Swift packages first." }
+    from(models) { exclude("**/.DS_Store") }
+    into(scannerAssets.map { it.dir("ScannerModels") })
+}
+tasks.named("preBuild") { dependsOn(copyAriaNativeLibs, stageBaseResources, stageScannerModels) }
 
 kotlin {
     compilerOptions {
@@ -82,6 +93,7 @@ android {
     // Stage shared resources without the sound bank in the base module. Keep ios/
     // paths identical across the base and install-time pack for AssetManager lookup.
     sourceSets["main"].assets.srcDir(baseResources.get().asFile)
+    sourceSets["main"].assets.srcDir(scannerAssets.get().asFile)
     assetPacks += listOf(":soundbank")
     // A local debug APK doesn't carry install-time asset packs, so debug builds also put
     // the sound bank in the base module (same ios/ paths) to keep playback working.
@@ -165,6 +177,8 @@ dependencies {
     implementation("com.android.billingclient:billing:8.0.0")
     // App review prompt (AriaReview.kt), StoreKit's requestReview on iOS.
     implementation("com.google.android.play:review:2.0.2")
+    // Score scanning: ScannerCore loads libonnxruntime.so from this (the version the iOS app uses).
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.27.0")
 }
 
 // Check at execution time so even aggregate tasks cannot produce a debug-signed release.

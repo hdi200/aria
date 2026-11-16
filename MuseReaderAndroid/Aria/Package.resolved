@@ -1,6 +1,15 @@
 {
-  "originHash" : "f42b00751e0f8f9e1a2d77be7551e33d852e901e7ce6d0d28b798c33258bb60a",
+  "originHash" : "5138ff55f790e7d0d81a805cdfd4f49978580edbb06ea662743facc2602ac12a",
   "pins" : [
+    {
+      "identity" : "scorescanner",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hdi200/ScoreScanner.git",
+      "state" : {
+        "revision" : "945e914b19f69f8ab1d5d6d4c78cf04193d45223",
+        "version" : "0.1.13"
+      }
+    },
     {
       "identity" : "skip",
       "kind" : "remoteSourceControl",
@@ -33,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/skiptools/skip-foundation.git",
       "state" : {
-        "revision" : "c5d74ef694ba21a0d42542ef58b598b638f2b7fc",
-        "version" : "1.4.7"
+        "revision" : "ba10460923b9e495bbd54ad494b8b0cb3dd7ba26",
+        "version" : "1.4.9"
       }
     },
     {
@@ -51,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/skiptools/skip-lib.git",
       "state" : {
-        "revision" : "21a1c7c8f97730b3a3d88058daf8c9d78a9c7c43",
-        "version" : "1.4.3"
+        "revision" : "f85cb3896c84410fb20f9f921a5ccf3254c21843",
+        "version" : "1.4.4"
       }
     },
     {

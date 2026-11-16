@@ -4,15 +4,17 @@
 //
 //  The library's Scan flow: pick a source (camera, photo, PDF or image file), read it with
 //  ScoreScanService while a progress sheet shows the reader's status, then import the MusicXML
-//  through the normal import path and open it in the reader. iOS only.
+//  through the normal import path and open it in the reader. Android has no camera scan yet (no
+//  VisionKit there); photos and files work the same.
 //
 
-#if !os(Android)
 import PhotosUI
 import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
+#if !os(Android)
+import UIKit
 import VisionKit
+#endif
 
 // MARK: - Controller
 
@@ -250,16 +252,16 @@ final class ScoreScanController {
 /// library. Attached to `LibraryView` on iOS.
 struct LibraryScanFlow: ViewModifier {
     @Bindable var model: MuseReaderAppModel
-    @State private var controller = ScoreScanController()
-    @State private var isCameraPresented = false
-    @State private var isPhotoPickerPresented = false
-    @State private var isFilePickerPresented = false
-    @State private var photoItem: PhotosPickerItem?
-    @State private var isPreparingSource = false
-    @State private var sourceError: String?
+    @State var controller = ScoreScanController()
+    @State var isCameraPresented = false
+    @State var isPhotoPickerPresented = false
+    @State var isFilePickerPresented = false
+    @State var photoItem: PhotosPickerItem?
+    @State var isPreparingSource = false
+    @State var sourceError: String?
     /// Unattended checks: `--aria-scan-file <path>` scans that file at launch through the same
     /// reservation, reading and import as the Scan button, skipping only the file picker.
-    @State private var launchScanFile: URL? = Self.launchScanFileArgument()
+    @State var launchScanFile: URL? = Self.launchScanFileArgument()
 
     func body(content: Content) -> some View {
         content
@@ -283,6 +285,7 @@ struct LibraryScanFlow: ViewModifier {
                 }
                 open(source)
             }
+            #if !os(Android)
             .fullScreenCover(isPresented: $isCameraPresented) {
                 DocumentCameraView(
                     onFinish: { pages in
@@ -302,6 +305,7 @@ struct LibraryScanFlow: ViewModifier {
                 )
                 .ignoresSafeArea()
             }
+            #endif
             .photosPicker(isPresented: $isPhotoPickerPresented, selection: $photoItem, matching: .images)
             .onChangeCompatible(of: photoItem) { item in
                 guard let item else {
@@ -385,12 +389,17 @@ struct LibraryScanFlow: ViewModifier {
     private func open(_ source: ScoreScanSourceKind) {
         switch source {
         case .camera:
+            #if os(Android)
+            model.scanDidEnd()
+            sourceError = "Camera scanning isn’t available on Android yet. Take a photo, then choose it."
+            #else
             guard DocumentCameraView.isSupported else {
                 model.scanDidEnd()
                 sourceError = "Camera scanning isn’t available on this device. Choose a photo or a PDF instead."
                 return
             }
             isCameraPresented = true
+            #endif
         case .photos:
             isPhotoPickerPresented = true
         case .files:
@@ -448,6 +457,9 @@ struct LibraryScanFlow: ViewModifier {
 struct ScoreScanProgressSheet: View {
     let controller: ScoreScanController
     let model: MuseReaderAppModel
+    #if os(Android)
+    @State var now = Date()
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -507,11 +519,24 @@ struct ScoreScanProgressSheet: View {
                     .font(.system(size: 21, weight: .bold))
                     .foregroundStyle(LibraryPalette.ink)
                 if !isFailed {
+                    #if os(Android)
+                    // No TimelineView in Skip: the sheet's clock ticks once a second instead.
+                    Text(subtitle(at: now))
+                        .font(.system(size: 15, weight: .medium).monospacedDigit())
+                        .foregroundStyle(LibraryPalette.mutedInk)
+                        .task {
+                            while !Task.isCancelled {
+                                try? await Task.sleep(for: .seconds(1))
+                                now = Date()
+                            }
+                        }
+                    #else
                     TimelineView(.periodic(from: controller.startedAt, by: 1)) { context in
                         Text(subtitle(at: context.date))
                             .font(.system(size: 15, weight: .medium).monospacedDigit())
                             .foregroundStyle(LibraryPalette.mutedInk)
                     }
+                    #endif
                 }
             }
 
@@ -574,7 +599,8 @@ struct ScoreScanProgressSheet: View {
             : controller.currentPage
         if controller.pageCount <= 12 {
             HStack(spacing: 6) {
-                ForEach(1...controller.pageCount, id: \.self) { page in
+                // An array, not a range: Skip's ForEach can't walk a ClosedRange on Android.
+                ForEach(Array(1...controller.pageCount), id: \.self) { page in
                     Capsule()
                         .fill(page <= filled ? LibraryPalette.accent : LibraryPalette.divider)
                         .frame(height: 8)
@@ -703,8 +729,13 @@ struct ScoreScanProgressSheet: View {
 
 /// Phones get a half-height sheet; on iPad (iOS 18+) the form sheet fits its content instead of
 /// standing tall and mostly empty.
-private struct ScoreScanSheetSizing: ViewModifier {
+struct ScoreScanSheetSizing: ViewModifier {
     func body(content: Content) -> some View {
+        #if os(Android)
+        // A bottom sheet just tall enough for its content, as Android shows Aria's other panels
+        // (metronome, export, parts).
+        content.modifier(AndroidCompactPopoverSizing())
+        #else
         if AriaWindowLayout.shared.usesPhoneLayout {
             content.presentationDetents([.medium, .large])
         } else if #available(iOS 18.0, *) {
@@ -712,11 +743,13 @@ private struct ScoreScanSheetSizing: ViewModifier {
         } else {
             content
         }
+        #endif
     }
 }
 
 // MARK: - Document camera
 
+#if !os(Android)
 /// VisionKit's page scanner (edge detection and perspective correction), ported from ScoreScanner.
 struct DocumentCameraView: UIViewControllerRepresentable {
     var onFinish: ([UIImage]) -> Void

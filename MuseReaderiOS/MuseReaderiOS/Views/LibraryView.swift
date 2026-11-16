@@ -249,10 +249,8 @@ struct LibraryView: View {
             allowsMultipleSelection: true,
             onCompletion: model.handleImportSelection
         )
-        #if !os(Android)
         // Scan: camera, photo or PDF source, the reading's progress sheet, and opening the result.
         .modifier(LibraryScanFlow(model: model))
-        #endif
         .onDrop(
             of: [.fileURL] + model.droppableContentTypes + [.data],
             isTargeted: $isScoreDropTargeted,
@@ -3079,7 +3077,7 @@ struct ScoreScanMenuItems: View {
     let action: (ScoreScanSourceKind) -> Void
 
     var body: some View {
-        ForEach(ScoreScanSourceKind.allCases) { source in
+        ForEach(ScoreScanSourceKind.offered) { source in
             Button {
                 action(source)
             } label: {

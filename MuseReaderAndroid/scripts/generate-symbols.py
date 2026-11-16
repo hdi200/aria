@@ -75,6 +75,7 @@ SYMBOLS = {
     "doc.on.clipboard": "content_paste",
     "doc.on.doc": "content_copy",
     "doc.richtext": "article",
+    "doc.viewfinder": "document_scanner",
     "doc.text": "description",
     "doc.text.magnifyingglass": "find_in_page",
     "ellipsis": "more_horiz",
