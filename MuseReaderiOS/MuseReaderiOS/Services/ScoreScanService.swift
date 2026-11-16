@@ -3,10 +3,11 @@
 //  MuseReaderiOS
 //
 //  Reads printed sheet music (a camera scan, a photo or a PDF) into MusicXML with ScoreScanner's
-//  ScannerCore package, entirely on this device: the notes with copisteria and the chord names with
-//  ScannerCore's chord finder and chord reader (both ONNX Runtime). Nothing is sent to Apple's model
-//  or any server: staff text, the title and the composer are not read (`readStaffText` stays off), so
-//  the score is named after its file. iOS only: Android has no reader yet (see
+//  ScannerCore package, entirely on this device: the notes with copisteria, the chord names with
+//  ScannerCore's chord finder and chord reader, and the title, composer, tempo, rehearsal marks,
+//  navigation and other staff text with its text reader (all ONNX Runtime). Nothing is sent to
+//  Apple's model or any server. Printed D.S./D.C., To Coda and Fine reach the score as playback jumps
+//  when their segno and coda were found. iOS only: Android has no reader yet (see
 //  MuseReaderAndroid/FEATURES_TODO.md).
 //
 
@@ -92,8 +93,9 @@ enum ScoreScanService {
     ) async throws -> ScoreScanResult {
         #if canImport(ScannerCore)
         let readsText = !notesOnly
-        // Chords on this device; no staff text, so Apple's model is never asked (`usesAppleModel` is false).
-        let options = ScoreReadOptions(readChordNames: readsText, readStaffText: false, chordReader: .onDevice)
+        // Chords and text on this device, so Apple's model is never asked (`usesAppleModel` is false).
+        let options = ScoreReadOptions(
+            readChordNames: readsText, readStaffText: readsText, chordReader: .onDevice, textReader: .onDevice)
         let reading: ScoreReading
         switch input.kind {
         case .image:

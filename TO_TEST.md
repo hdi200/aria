@@ -3,6 +3,45 @@
 Remaining device checks. Remove an item once it passes. Confirmed failures are tracked in
 [MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md](MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md).
 
+## Share to Aria and ScoreScanner (needs a device build)
+
+- [ ] **Photos → Share → Aria** with a picture of a lead sheet: Aria opens on its own and scans it.
+  If it only says "Saved. Open Aria to scan it.", open Aria: the scan starts. (Passed in the
+  simulator.)
+- [ ] **Files → a PDF → Share → Aria**, and **Mail/Safari PDF → Share → Aria**: the PDF is scanned.
+- [ ] **Files → a PDF → Open in Aria** (long-press → Share, or the app row): scanned, not "Unsupported
+  File". Score files (.mscz, .musicxml) still import as before.
+- [ ] **Score open in Aria, then share a page:** the score closes and the scan starts.
+- [ ] **Free library full:** sharing shows the paywall; after unlocking, the shared file is scanned.
+- [ ] **iPad drag:** drag a PDF or picture from Files onto the library: it scans.
+- [ ] **ScoreScanner:** Photos → Share → ScoreScanner opens its New Scan sheet with the page; a PDF
+  from Files does the same. (Picture passed in the simulator.)
+
+## Slash bars (ScannerCore 0.1.8)
+
+- [ ] **Scan a lead sheet with a slash-filled solo section** and press Play: the bars show as slashes, silent,
+  chords still play. (Checked on a MuseScore lead sheet's solo section, bars 44-57.)
+- [ ] **Scan a lead sheet with melody on the middle line (repeated B's)**: the notes stay notes.
+
+## Scanned parts play with their instruments (ScannerCore 0.1.7)
+
+- [ ] **Scan a string quartet or choir page and press Play:** each part sounds like its instrument or voice, not
+  piano. (Instruments checked in the simulator.)
+- [ ] **A page with "Clarinet in B♭" or "Horn in F":** plays at the right concert pitch.
+
+## Scanned part names and lead-sheet clean-ups (ScannerCore 0.1.6)
+
+- [ ] **Scan a string quartet, choir or voice-and-piano page:** the printed part names appear beside the first
+  line and the short names ("Vln. I") on later lines. (Passed in the simulator with a generated quartet.)
+- [ ] **Scan a lead sheet:** no part name shows, no "pp"/"p" appears under chord names, and no line plays an
+  octave low.
+
+## Scanned 1st/2nd endings (ScannerCore 0.1.5)
+
+- [ ] **Scan a lead sheet with 1st and 2nd endings** and play it: the 1st ending plays once, it
+  jumps back, and the second time through it goes to the 2nd ending. The brackets cover the same
+  bars as on the page. (Passed in the simulator with "Smiles".)
+
 ## Scan progress sheet (iOS 27+)
 
 - [ ] **One image.** Library → Scan → a photo of a lead sheet: the sheet shows one page segment
