@@ -22,7 +22,7 @@ private enum PendingLibraryAction {
     case createScore
     case importScores([ScoreImportCandidate])
     case reopenLegacyDocument(ReaderRecentDocument)
-    case scan(ScoreScanSourceKind)
+    case scan(ScoreScanSourceKind, file: URL?)
 }
 
 /// Where a scan's pages come from. Scanning reads printed music into MusicXML on iOS (ScannerCore);
@@ -173,6 +173,9 @@ final class MuseReaderAppModel {
     /// The scan source to open next. Set once a library slot is reserved for the scan, so nobody
     /// waits for a reading and then meets the paywall.
     var pendingScanSource: ScoreScanSourceKind?
+    /// A PDF or picture handed to Aria (Open in, the share sheet, a drop) that the next scan reads
+    /// instead of asking for a file.
+    var pendingScanFile: URL?
 
     let libraryAccessController: LibraryAccessController
 
@@ -224,6 +227,15 @@ final class MuseReaderAppModel {
         [.museScoreArchive, .museScoreXML, .compressedMusicXML, .musicXML, .xml]
     }
 
+    /// What the library accepts as a drop: scores, plus PDFs and pictures to scan where scanning works.
+    var droppableContentTypes: [UTType] {
+        #if os(Android)
+        return supportedContentTypes
+        #else
+        return supportedContentTypes + (supportsScanning ? [.pdf, .image] : [])
+        #endif
+    }
+
     private var bookmarkResolutionOptions: URL.BookmarkResolutionOptions {
         []
     }
@@ -271,17 +283,18 @@ final class MuseReaderAppModel {
     }
 
     /// Reserves room for the scanned score before its source opens, then asks the library to open it.
-    func startScan(from source: ScoreScanSourceKind) {
+    func startScan(from source: ScoreScanSourceKind, file: URL? = nil) {
         guard supportsScanning, !isReaderPresented else {
             return
         }
+        pendingScanFile = file
         guard !isScanSlotReserved else {
             pendingScanSource = source
             return
         }
         synchronizeManagedScoreCount()
         guard reserveScoreSlots(1) else {
-            pendingLibraryAction = .scan(source)
+            pendingLibraryAction = .scan(source, file: file)
             libraryAccessSheet = .paywall(.importScore(count: 1))
             return
         }
@@ -292,6 +305,7 @@ final class MuseReaderAppModel {
     /// The scan ended without a score (source cancelled, reading cancelled or failed): frees its slot.
     func scanDidEnd() {
         pendingScanSource = nil
+        pendingScanFile = nil
         releaseScanReservation()
     }
 
@@ -369,8 +383,8 @@ final class MuseReaderAppModel {
                 await self.beginImportingCandidates(candidates)
             case .reopenLegacyDocument(let recent):
                 self.openRecent(recent)
-            case .scan(let source):
-                self.startScan(from: source)
+            case .scan(let source, let file):
+                self.startScan(from: source, file: file)
             case nil:
                 break
             }
@@ -490,6 +504,21 @@ final class MuseReaderAppModel {
     }
 
     func handleOpenURL(_ url: URL) {
+        #if !os(Android)
+        if url.scheme == Self.sharedScanURLScheme {
+            collectSharedScan()
+            return
+        }
+        if Self.isScannableURL(url), supportsScanning {
+            if isReaderPresented {
+                heldOpenURL = url
+                readerCloseRequest += 1
+                return
+            }
+            scanFile(at: url)
+            return
+        }
+        #endif
         // Android offers Aria for zip and octet-stream files, which need not be scores.
         guard Self.isSupportedScoreURL(url) else {
             presentError(
@@ -521,6 +550,12 @@ final class MuseReaderAppModel {
     @discardableResult
     func handleDroppedDocuments(_ urls: [URL]) -> Bool {
         let compatibleURLs = urls.filter(Self.isSupportedScoreURL)
+        #if !os(Android)
+        if compatibleURLs.isEmpty, supportsScanning, let page = urls.first(where: Self.isScannableURL) {
+            scanFile(at: page)
+            return true
+        }
+        #endif
         guard !compatibleURLs.isEmpty else {
             presentError(
                 title: "Unsupported File",
@@ -532,6 +567,95 @@ final class MuseReaderAppModel {
         handleImportSelection(result: .success(compatibleURLs))
         return true
     }
+
+    #if !os(Android)
+    /// The share extension opens Aria with this scheme after leaving a file in the app group.
+    nonisolated static let sharedScanURLScheme = "ariascore-scan"
+    nonisolated static let appGroupIdentifier = "group.com.hdi200.ariascore"
+
+    /// PDFs and pictures of printed music, which Aria scans rather than imports.
+    nonisolated static func isScannableURL(_ url: URL) -> Bool {
+        guard url.isFileURL else { return false }
+        return ["pdf", "png", "jpg", "jpeg", "heic", "heif", "tif", "tiff", "gif", "bmp", "webp"]
+            .contains(url.pathExtension.lowercased())
+    }
+
+    /// Scans a PDF or picture handed to Aria. The file is copied first, since an opened or dropped
+    /// file may not stay readable.
+    func scanFile(at url: URL) {
+        let copy = Self.scanInboxCopy(of: url) ?? url
+        startScan(from: .files, file: copy)
+    }
+
+    /// Scans the oldest file the share extension left in the app group, if no scan is under way.
+    /// Called when the extension opens Aria and whenever Aria comes to the front.
+    func collectSharedScan() {
+        guard supportsScanning, pendingScanFile == nil, !isScanSlotReserved, pendingScanSource == nil,
+              let file = Self.takeSharedScan()
+        else {
+            return
+        }
+        handleOpenURL(file)
+    }
+
+    nonisolated private static func scanInboxFolder() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("AriaScanInbox", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    }
+
+    nonisolated private static func scanInboxCopy(of url: URL) -> URL? {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        let folder = scanInboxFolder()
+        let target = folder.appendingPathComponent(url.lastPathComponent)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: url, to: target)
+            return target
+        } catch {
+            return nil
+        }
+    }
+
+    /// Moves the oldest shared file out of the app group into Aria's own temporary folder.
+    nonisolated private static func takeSharedScan() -> URL? {
+        let fileManager = FileManager.default
+        guard let container = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
+        else {
+            return nil
+        }
+        let shared = container.appendingPathComponent("Shared Scans", isDirectory: true)
+        let folders = (try? fileManager.contentsOfDirectory(
+            at: shared, includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles])) ?? []
+        let byAge = folders.sorted {
+            let a = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            let b = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            return a < b
+        }
+        for folder in byAge {
+            defer { try? fileManager.removeItem(at: folder) }
+            let files = (try? fileManager.contentsOfDirectory(
+                at: folder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+            guard let file = files.first(where: isScannableURL) else {
+                continue
+            }
+            let inbox = scanInboxFolder()
+            let target = inbox.appendingPathComponent(file.lastPathComponent)
+            do {
+                try fileManager.createDirectory(at: inbox, withIntermediateDirectories: true)
+                try fileManager.moveItem(at: file, to: target)
+                return target
+            } catch {
+                continue
+            }
+        }
+        return nil
+    }
+    #endif
 
     nonisolated static func isSupportedScoreURL(_ url: URL) -> Bool {
         guard url.isFileURL else { return false }

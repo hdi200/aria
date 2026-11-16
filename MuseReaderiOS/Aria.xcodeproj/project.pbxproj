@@ -7,10 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6DAB5E0E2FF0000000DD6DE1 /* AriaShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6DAB5E012FF0000000DD6DE1 /* AriaShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6DCA5C012FE0000000DD6DE1 /* ScannerCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6DCA5C032FE0000000DD6DE1 /* ScannerCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		6DAB5E0B2FF0000000DD6DE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6DAB5E042FF0000000DD6DE1;
+			remoteInfo = AriaShare;
+		};
 		6D8D1FD22F8D3F3E00DD6DE1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 6D8D1FBC2F8D3F3C00DD6DE1 /* Project object */;
@@ -27,7 +35,24 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		6DAB5E0D2FF0000000DD6DE1 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				6DAB5E0E2FF0000000DD6DE1 /* AriaShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		6DAB5E012FF0000000DD6DE1 /* AriaShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AriaShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6DAB5E022FF0000000DD6DE1 /* AriaShare-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AriaShare-Info.plist"; sourceTree = "<group>"; };
+		6DAB5E032FF0000000DD6DE1 /* AriaShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AriaShare.entitlements; sourceTree = "<group>"; };
 		6D60B4BF2FC4F69B007C2FEE /* Aria-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Aria-Info.plist"; sourceTree = "<group>"; };
 		6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Aria.xcconfig; sourceTree = "<group>"; };
 		6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
@@ -39,6 +64,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		6DAB5E002FF0000000DD6DE1 /* AriaShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AriaShare;
+			sourceTree = "<group>";
+		};
 		6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MuseReaderiOS;
@@ -57,6 +87,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		6DAB5E062FF0000000DD6DE1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6D8D1FC12F8D3F3C00DD6DE1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -90,6 +127,9 @@
 				6D60B4C12FC4F69B007C2FEE /* Local.example.xcconfig */,
 				6D60B4C22FC4F69B007C2FEE /* Products.storekit */,
 				6DAA000F2FD0A10000DD6DE1 /* Aria.entitlements */,
+				6DAB5E022FF0000000DD6DE1 /* AriaShare-Info.plist */,
+				6DAB5E032FF0000000DD6DE1 /* AriaShare.entitlements */,
+				6DAB5E002FF0000000DD6DE1 /* AriaShare */,
 				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
 				6D8D1FD42F8D3F3E00DD6DE1 /* MuseReaderiOSTests */,
 				6D8D1FDE2F8D3F3E00DD6DE1 /* MuseReaderiOSUITests */,
@@ -101,6 +141,7 @@
 			isa = PBXGroup;
 			children = (
 				6D8D1FC42F8D3F3C00DD6DE1 /* Aria.app */,
+				6DAB5E012FF0000000DD6DE1 /* AriaShare.appex */,
 				6D8D1FD12F8D3F3E00DD6DE1 /* AriaTests.xctest */,
 				6D8D1FDB2F8D3F3E00DD6DE1 /* AriaUITests.xctest */,
 			);
@@ -110,6 +151,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		6DAB5E042FF0000000DD6DE1 /* AriaShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6DAB5E082FF0000000DD6DE1 /* Build configuration list for PBXNativeTarget "AriaShare" */;
+			buildPhases = (
+				6DAB5E052FF0000000DD6DE1 /* Sources */,
+				6DAB5E062FF0000000DD6DE1 /* Frameworks */,
+				6DAB5E072FF0000000DD6DE1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6DAB5E002FF0000000DD6DE1 /* AriaShare */,
+			);
+			name = AriaShare;
+			productName = AriaShare;
+			productReference = 6DAB5E012FF0000000DD6DE1 /* AriaShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		6D8D1FC32F8D3F3C00DD6DE1 /* Aria */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 6D8D1FE52F8D3F3E00DD6DE1 /* Build configuration list for PBXNativeTarget "Aria" */;
@@ -118,10 +179,12 @@
 				6D8D1FC02F8D3F3C00DD6DE1 /* Sources */,
 				6D8D1FC12F8D3F3C00DD6DE1 /* Frameworks */,
 				6D8D1FC22F8D3F3C00DD6DE1 /* Resources */,
+				6DAB5E0D2FF0000000DD6DE1 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				6DAB5E0C2FF0000000DD6DE1 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6D8D1FC62F8D3F3C00DD6DE1 /* MuseReaderiOS */,
@@ -186,6 +249,9 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					6DAB5E042FF0000000DD6DE1 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					6D8D1FC32F8D3F3C00DD6DE1 = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -219,11 +285,19 @@
 				6D8D1FC32F8D3F3C00DD6DE1 /* Aria */,
 				6D8D1FD02F8D3F3E00DD6DE1 /* AriaTests */,
 				6D8D1FDA2F8D3F3E00DD6DE1 /* AriaUITests */,
+				6DAB5E042FF0000000DD6DE1 /* AriaShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		6DAB5E072FF0000000DD6DE1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6D8D1FC22F8D3F3C00DD6DE1 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -278,6 +352,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		6DAB5E052FF0000000DD6DE1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6D8D1FC02F8D3F3C00DD6DE1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -302,6 +383,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		6DAB5E0C2FF0000000DD6DE1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6DAB5E042FF0000000DD6DE1 /* AriaShare */;
+			targetProxy = 6DAB5E0B2FF0000000DD6DE1 /* PBXContainerItemProxy */;
+		};
 		6D8D1FD32F8D3F3E00DD6DE1 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 6D8D1FC32F8D3F3C00DD6DE1 /* Aria */;
@@ -315,6 +401,61 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		6DAB5E092FF0000000DD6DE1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AriaShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "AriaShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Aria;
+				IPHONEOS_DEPLOYMENT_TARGET = 17;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 7.4.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6DAB5E0A2FF0000000DD6DE1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = AriaShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "AriaShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Aria;
+				IPHONEOS_DEPLOYMENT_TARGET = 17;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 7.4.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		6D8D1FE32F8D3F3E00DD6DE1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 6D60B4C02FC4F69B007C2FEE /* Config/Aria.xcconfig */;
@@ -894,6 +1035,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		6DAB5E082FF0000000DD6DE1 /* Build configuration list for PBXNativeTarget "AriaShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6DAB5E092FF0000000DD6DE1 /* Debug */,
+				6DAB5E0A2FF0000000DD6DE1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		6D8D1FBF2F8D3F3C00DD6DE1 /* Build configuration list for PBXProject "Aria" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

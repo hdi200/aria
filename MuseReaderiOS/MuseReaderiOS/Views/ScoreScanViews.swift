@@ -275,8 +275,9 @@ struct LibraryScanFlow: ViewModifier {
                     return
                 }
                 model.pendingScanSource = nil
-                if let file = launchScanFile {
+                if let file = launchScanFile ?? model.pendingScanFile {
                     launchScanFile = nil
+                    model.pendingScanFile = nil
                     prepare { try ScoreScanService.input(fromFileAt: file) }
                     return
                 }

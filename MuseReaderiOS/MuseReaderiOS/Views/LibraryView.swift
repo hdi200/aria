@@ -254,7 +254,7 @@ struct LibraryView: View {
         .modifier(LibraryScanFlow(model: model))
         #endif
         .onDrop(
-            of: [.fileURL] + model.supportedContentTypes + [.data],
+            of: [.fileURL] + model.droppableContentTypes + [.data],
             isTargeted: $isScoreDropTargeted,
             perform: receiveScoreDrop
         )
@@ -591,7 +591,7 @@ struct LibraryView: View {
     }
 
     private func receiveScoreDrop(_ providers: [NSItemProvider]) -> Bool {
-        let supportedTypes = model.supportedContentTypes
+        let supportedTypes = model.droppableContentTypes
         let compatibleProviders = providers.filter { provider in
             provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
                 || provider.hasItemConformingToTypeIdentifier(UTType.data.identifier)

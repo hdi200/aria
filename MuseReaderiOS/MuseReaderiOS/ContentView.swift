@@ -30,6 +30,10 @@ struct ContentView: View {
                 }
 
                 reviewRequestTracker.recordActiveSession()
+                #if !os(Android)
+                // A file shared to Aria while it could not be opened waits in the app group.
+                appModel.collectSharedScan()
+                #endif
             }
             .onChangeCompatible(of: appModel.currentSession?.id) { _ in
                 guard appModel.currentSession != nil else {
