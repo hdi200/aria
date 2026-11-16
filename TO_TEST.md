@@ -17,6 +17,13 @@ Remaining device checks. Remove an item once it passes. Confirmed failures are t
 - [ ] **ScoreScanner:** Photos → Share → ScoreScanner opens its New Scan sheet with the page; a PDF
   from Files does the same. (Picture passed in the simulator.)
 
+## Lyrics and "DM" chords (ScannerCore 0.1.9)
+
+- [ ] **Scan a song with lyrics** (one verse and two verses): each syllable under its note, hyphens and extender
+  lines as printed. (Checked on Smiles, "Let It Be" and Real Book ballads with the scanner on the Mac.)
+- [ ] **Scan an instrumental lead sheet:** no lyrics appear.
+- [ ] **A chart with "DM" or "DM6"** plays them as major chords.
+
 ## Slash bars (ScannerCore 0.1.8)
 
 - [ ] **Scan a lead sheet with a slash-filled solo section** and press Play: the bars show as slashes, silent,
