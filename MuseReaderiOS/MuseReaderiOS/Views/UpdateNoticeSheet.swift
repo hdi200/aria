@@ -9,14 +9,14 @@ import SwiftUI
 /// Versioned so a later release can show a new notice by bumping `currentVersion`
 /// and `releaseDate`.
 struct UpdateNoticeStore {
-    static let currentVersion = 5
+    static let currentVersion = 6
 
-    // Anyone who got the app before November 12, 2026 (12:00 AM Eastern) sees the
+    // Anyone who got the app before November 18, 2026 (12:00 AM Eastern) sees the
     // notice once, as soon as they have this update.
     // AppTransaction supplies Apple's signed date for when this customer first
     // acquired the app, which survives the update itself (on Android, the first install
     // time on the device).
-    static let releaseDate = Date(timeIntervalSince1970: 1_794_459_600)
+    static let releaseDate = Date(timeIntervalSince1970: 1_794_978_000)
 
     private let defaultsKey = "UpdateNotice.seenVersion"
     private var audienceKey: String {
@@ -111,73 +111,88 @@ struct UpdateNoticeSheet: View {
         var isPadOnly = false
     }
 
+    // Android shows only the SF Symbols Skip maps to Material icons (anything else is a "missing icon" warning):
+    // camera.viewfinder, lock, list.bullet, square.and.arrow.up, play and checkmark.circle are on its list;
+    // chords use a text glyph.
     private static let fixes: [Item] = {
-        var fixes = [
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Bottom of the page",
-                detail: "The last line no longer gets stuck behind the editing keyboard, "
-                    + "and the page no longer jumps when you switch tools."
-            ),
-        ]
+        var fixes: [Item] = []
         #if !os(Android)
         fixes.append(Item(
             systemImage: "checkmark.circle",
-            title: "Lyrics",
-            detail: "The bottom line stays in view while you type."
+            title: "Stylus input",
+            detail: "Third-party styluses now enter notes instead of getting stuck in Select."
         ))
         #endif
         fixes += [
             Item(
                 systemImage: "checkmark.circle",
-                title: "Page turns",
-                detail: "In landscape, tap beside the page to turn it."
+                title: "Screen lock",
+                detail: "The screen no longer locks during playback or the count-in."
             ),
             Item(
                 systemImage: "checkmark.circle",
-                title: "Chord mode",
-                detail: "It no longer turns off when you select another note."
+                title: "Replacing instruments",
+                detail: "Sound, name and transposition now update in the score and its parts."
             ),
             Item(
                 systemImage: "checkmark.circle",
-                title: "Score names",
-                detail: "Editing a score no longer renames it in your library."
+                title: "Imported parts",
+                detail: "Each part of an imported score opens with its own music."
             ),
             Item(
                 systemImage: "checkmark.circle",
-                title: "View mode key",
-                detail: "A key you chose is kept after you edit."
+                title: "Reordering instruments",
+                detail: "The new order now reaches the score."
             ),
         ]
         return fixes
     }()
 
     private static var items: [Item] {
-        [
+        var items = [
             Item(
-                systemImage: "metronome",
-                title: "Playback & Practice",
-                detail: "Tapping the metronome opens a new panel where you can turn the metronome on or off, "
-                    + "set a practice speed and choose a count-in."
+                systemImage: "camera.viewfinder",
+                title: "Scan sheet music (Beta)",
+                detail: "Tap Scan in your library to turn a PDF, an image or a photo into a score you can play, "
+                    + "transpose and edit."
             ),
             Item(
-                systemImage: "speedometer",
-                title: "Practice speed",
-                detail: "Play at 25% to 150% of the written tempo. "
-                    + "Aria remembers the speed for each score."
+                systemImage: "music.note",
+                textSymbol: "♫",
+                title: "Chords and lyrics too",
+                detail: "Scanning reads chord symbols, lyrics, the title and composer, and repeats and endings, "
+                    + "not just the notes."
             ),
             Item(
-                systemImage: "chart.line.uptrend.xyaxis",
-                title: "Tempo ramp",
-                detail: "Tap and drag to select a range of bars, then choose Tempo ramp. "
-                    + "Aria plays the loop a little faster each time until you reach your target."
+                systemImage: "list.bullet",
+                title: "Multi-page PDFs",
+                detail: "Every page is read into one score, keeping the printed line breaks."
             ),
             Item(
-                systemImage: "timer",
-                title: "Two-bar count-in",
-                detail: "Choose a one- or two-bar count-in. It follows your practice speed."
+                systemImage: "lock",
+                title: "Private and offline",
+                detail: "Scanning runs entirely on your device. Nothing is uploaded."
             ),
         ]
+        #if !os(Android)
+        items.append(Item(
+            systemImage: "square.and.arrow.up",
+            title: "Share to Aria",
+            detail: "Share a PDF or picture from Files, Photos or another app to scan it."
+        ))
+        #endif
+        items.append(Item(
+            systemImage: "music.note",
+            textSymbol: "♪♪",
+            title: "Voices on phones",
+            detail: "Choose a voice when entering notes on your phone, not just on a tablet."
+        ))
+        items.append(Item(
+            systemImage: "play",
+            title: "D.S. and Coda play",
+            detail: "D.S., D.C., To Coda and Fine now play as jumps in imported MusicXML files."
+        ))
+        return items
     }
 
     private var pages: [Page] {

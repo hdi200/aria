@@ -34,12 +34,12 @@ enum ScoreScanSourceKind: String, Identifiable, CaseIterable, Sendable {
 
     var id: String { rawValue }
 
-    /// The sources the Scan menu lists here.
+    /// The sources the Scan menu lists here, in its order: a document first, then a photo, then the camera.
     static var offered: [ScoreScanSourceKind] {
         #if os(Android)
-        return [.photos, .files]
+        return [.files, .photos]
         #else
-        return allCases
+        return [.files, .photos, .camera]
         #endif
     }
 

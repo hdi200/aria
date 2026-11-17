@@ -3,6 +3,15 @@
 Remaining device checks. Remove an item once it passes. Confirmed failures are tracked in
 [MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md](MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md).
 
+## Scanned tuplets (ScannerCore 0.1.17)
+
+- [ ] **Fresh scan of Indian Summer:** bars 4 and 18 retain their triplets; a missed note's time is an invisible rest.
+- [ ] **Fresh scan of sheet026:** bar 28 stays plain eighths E E.
+- [ ] **Fresh scan of Chopin Fantaisie-Impromptu:** playback improves without missing recognised notes. Desktop validation: 17 to 5 stretched bars out of 70; five problem bars remain.
+- [ ] **Open and play another scanned lead sheet:** no new import or playback regression.
+
+ScannerCore validation: 116 tests pass; 720 outputs compared, no notes/bars lost and no file worse on stretched bars. Bridge's misread duplets remain unresolved. These phone checks are still pending.
+
 ## Share to Aria and ScoreScanner (needs a device build)
 
 - [ ] **Photos → Share → Aria** with a picture of a lead sheet: Aria opens on its own and scans it.

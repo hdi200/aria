@@ -119,11 +119,17 @@ enum ScoreScanService {
             guard let file = input.file else {
                 throw ScoreScanError.unsupportedFile
             }
+            print("Aria scan begin: pages=\(input.pageCount)")
             reading = try await ScoreReader.read(
                 pageCount: input.pageCount, title: "", models: modelsDirectory(), options: options,
-                progress: progress
+                progress: { line in
+                    // Keep page boundaries in release logcat for physical-device scan measurements.
+                    print("Aria scan progress: \(line)")
+                    progress(line)
+                }
             ) { index in
-                try AndroidScanPages.page(index, of: file)
+                print("Aria scan page start: \(index + 1)")
+                return try AndroidScanPages.page(index, of: file)
             }
             #else
             throw ScoreScanError.unsupportedFile

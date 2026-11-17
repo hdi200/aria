@@ -262,6 +262,12 @@ struct LibraryScanFlow: ViewModifier {
     /// Unattended checks: `--aria-scan-file <path>` scans that file at launch through the same
     /// reservation, reading and import as the Scan button, skipping only the file picker.
     @State var launchScanFile: URL? = Self.launchScanFileArgument()
+    /// Shown once, before the first scan: what scanning reads well, and that mistakes can be fixed.
+    @AppStorage("Aria.Scan.BetaNoticeSeen") var betaNoticeSeen = false
+    @State var isBetaNoticePresented = false
+    @State var betaNoticeSource: ScoreScanSourceKind?
+    /// "Got it, start scanning" was tapped: the scan goes on once the notice has gone.
+    @State var betaNoticeAccepted = false
 
     func body(content: Content) -> some View {
         content
@@ -277,13 +283,12 @@ struct LibraryScanFlow: ViewModifier {
                     return
                 }
                 model.pendingScanSource = nil
-                if let file = launchScanFile ?? model.pendingScanFile {
-                    launchScanFile = nil
-                    model.pendingScanFile = nil
-                    prepare { try ScoreScanService.input(fromFileAt: file) }
+                if !betaNoticeSeen && launchScanFile == nil {
+                    betaNoticeSource = source
+                    isBetaNoticePresented = true
                     return
                 }
-                open(source)
+                proceed(source)
             }
             #if !os(Android)
             .fullScreenCover(isPresented: $isCameraPresented) {
@@ -326,6 +331,17 @@ struct LibraryScanFlow: ViewModifier {
                     }
                 }
             }
+            // The first-scan notice, on its own view so it does not share one with the progress sheet.
+            .background(
+                Color.clear
+                    .sheet(isPresented: $isBetaNoticePresented, onDismiss: betaNoticeDidDismiss) {
+                        ScanBetaNoticeSheet {
+                            betaNoticeAccepted = true
+                            isBetaNoticePresented = false
+                        }
+                        .onAppear { betaNoticeSeen = true }
+                    }
+            )
             // On its own view: two file importers on one view conflict.
             .background(
                 Color.clear
@@ -384,6 +400,30 @@ struct LibraryScanFlow: ViewModifier {
             get: { sourceError != nil },
             set: { if !$0 { sourceError = nil } }
         )
+    }
+
+    /// After the first-scan notice: on to the chosen source, or (swiped away) the scan ends.
+    private func betaNoticeDidDismiss() {
+        let source = betaNoticeSource
+        betaNoticeSource = nil
+        if betaNoticeAccepted, let source {
+            betaNoticeAccepted = false
+            proceed(source)
+        } else {
+            model.pendingScanFile = nil
+            model.scanDidEnd()
+        }
+    }
+
+    /// A file handed to Aria (a launch argument or Share) is scanned as it is; otherwise the source opens.
+    private func proceed(_ source: ScoreScanSourceKind) {
+        if let file = launchScanFile ?? model.pendingScanFile {
+            launchScanFile = nil
+            model.pendingScanFile = nil
+            prepare { try ScoreScanService.input(fromFileAt: file) }
+            return
+        }
+        open(source)
     }
 
     private func open(_ source: ScoreScanSourceKind) {
@@ -727,9 +767,97 @@ struct ScoreScanProgressSheet: View {
     }
 }
 
-/// Phones get a half-height sheet; on iPad (iOS 18+) the form sheet fits its content instead of
-/// standing tall and mostly empty.
+/// Shown once, before the first scan: scanning is in beta, what it reads best, and that the score opens in the
+/// editor. Styled like the What's New notice.
+struct ScanBetaNoticeSheet: View {
+    let onContinue: () -> Void
+    @State var contentHeight: CGFloat = 560
+
+    private struct Row: Identifiable {
+        var id: String { systemImage }
+        let systemImage: String
+        let text: String
+    }
+
+    private let rows = [
+        Row(systemImage: "doc.text",
+            text: "Music scanning is still improving. It works best with printed sheet music and PDFs."),
+        Row(systemImage: "camera", text: "For photos, place the page flat in good lighting."),
+        Row(systemImage: "pencil",
+            text: "Review, fine-tune, and fix your score in the editor after scanning."),
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                Image(systemName: "doc.viewfinder")
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(LibraryPalette.accent)
+                    .frame(width: 72, height: 72)
+                    .background(LibraryPalette.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .accessibilityHidden(true)
+                    .padding(.top, 8)
+
+                Text("Scanning is in beta")
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(rows) { row in
+                        HStack(alignment: .top, spacing: 14) {
+                            Image(systemName: row.systemImage)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(LibraryPalette.accent)
+                                .frame(width: 40, height: 40)
+                                .background(LibraryPalette.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .accessibilityHidden(true)
+                            Text(row.text)
+                                .font(.body)
+                                .foregroundStyle(LibraryPalette.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+
+                Text("Thanks for helping us improve Aria!")
+                    .font(.body)
+                    .foregroundStyle(LibraryPalette.ink)
+                    .multilineTextAlignment(.center)
+
+                Button(action: onContinue) {
+                    Text("Got it, start scanning")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(LibraryPalette.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("scanBetaNoticeContinue")
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+            .frame(maxWidth: 520)
+            .frame(maxWidth: .infinity)
+            #if !os(Android)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                contentHeight = max(1, height.rounded(.up))
+            }
+            #endif
+        }
+        .background(LibraryPalette.background.ignoresSafeArea())
+        .modifier(ScoreScanSheetSizing(phoneContentHeight: contentHeight))
+    }
+}
+
+/// Phones get a half-height sheet unless a content height is provided; on iPad (iOS 18+)
+/// the form sheet fits its content instead of standing tall and mostly empty.
 struct ScoreScanSheetSizing: ViewModifier {
+    var phoneContentHeight: CGFloat? = nil
+
     func body(content: Content) -> some View {
         #if os(Android)
         // A bottom sheet just tall enough for its content, as Android shows Aria's other panels
@@ -737,14 +865,30 @@ struct ScoreScanSheetSizing: ViewModifier {
         content.modifier(AndroidCompactPopoverSizing())
         #else
         if AriaWindowLayout.shared.usesPhoneLayout {
-            content.presentationDetents([.medium, .large])
+            if let phoneContentHeight {
+                solid(content.presentationDetents([.height(phoneContentHeight)]))
+            } else {
+                solid(content.presentationDetents([.medium, .large]))
+            }
         } else if #available(iOS 18.0, *) {
-            content.presentationSizing(.form.fitted(horizontal: false, vertical: true))
+            solid(content.presentationSizing(.form.fitted(horizontal: false, vertical: true)))
         } else {
-            content
+            solid(content)
         }
         #endif
     }
+
+    #if !os(Android)
+    /// A solid sheet: the default glass shows through above and below the content otherwise.
+    @ViewBuilder
+    private func solid(_ view: some View) -> some View {
+        if #available(iOS 16.4, *) {
+            view.presentationBackground(LibraryPalette.background)
+        } else {
+            view
+        }
+    }
+    #endif
 }
 
 // MARK: - Document camera

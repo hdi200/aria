@@ -1505,11 +1505,17 @@ struct PhoneLibraryView: View {
                     HStack(spacing: 6) {
                         if let scanAction {
                             ScoreScanMenu(action: scanAction) {
-                                Image(systemName: "doc.viewfinder")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 36, height: 36)
-                                    .background(LibraryPalette.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                HStack(spacing: 6) {
+                                    Image(systemName: "doc.viewfinder")
+                                        .font(.system(size: 15, weight: .semibold))
+                                    Text("Scan")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .fixedSize()
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .frame(height: 36)
+                                .background(LibraryPalette.accent, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             }
                             .accessibilityLabel("Scan Score")
                         }
@@ -2979,7 +2985,7 @@ struct LibraryDashboardHeader: View {
             // Scan leads (filled); Import and New Score follow as white buttons.
             ScoreScanMenu(action: scanAction) {
                 LibraryHeaderButtonLabel(
-                    title: showsButtonLabels ? "Scan" : nil,
+                    title: "Scan",
                     systemImage: "doc.viewfinder",
                     isProminent: true
                 )
@@ -3051,6 +3057,7 @@ struct LibraryHeaderButtonLabel: View {
                 Text(title)
                     .font(.system(size: 16, weight: .semibold))
                     .lineLimit(1)
+                    .fixedSize()
             }
         }
         .foregroundStyle(isProminent ? Color.white : LibraryPalette.accent)
@@ -3072,7 +3079,7 @@ struct LibraryHeaderButtonLabel: View {
     }
 }
 
-/// The Scan button's sources: camera, a photo, or a PDF or image from Files.
+/// The Scan button's sources: a PDF or image from Files, a photo, or the camera.
 struct ScoreScanMenuItems: View {
     let action: (ScoreScanSourceKind) -> Void
 
