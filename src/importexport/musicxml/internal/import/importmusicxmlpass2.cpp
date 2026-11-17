@@ -2352,7 +2352,9 @@ void MusicXmlParserPass2::part()
     // Find ties between different voices which may have been missed
     for (Note* startNote : m_unendedTieNotes) {
         Tie* unendedTie = startNote->tieFor();
-        if (!unendedTie) {
+        // A repeated cleanup entry may already have replaced this note's unfinished tie
+        // with laissez vibrer. It has no end note and must never acquire a tieBack link.
+        if (!unendedTie || unendedTie->isLaissezVib()) {
             continue;
         }
         const Chord* startChord = startNote->chord();

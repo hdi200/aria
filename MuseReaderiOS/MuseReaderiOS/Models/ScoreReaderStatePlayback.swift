@@ -3,6 +3,21 @@ import Foundation
 import CoreGraphics
 #endif
 
+/// One request per visible reader; ending an export must not release another reader's playback.
+struct ScoreScreenAwakeRequests {
+    private var owners: Set<UUID> = []
+    var isRequested: Bool { !owners.isEmpty }
+
+    mutating func setRequested(_ requested: Bool, owner: UUID) {
+        if requested { owners.insert(owner) } else { owners.remove(owner) }
+    }
+
+    static func needsScreen(playbackIsPlaying: Bool, isCountingIn: Bool, isExportingVideo: Bool,
+                            isVisible: Bool, isForeground: Bool) -> Bool {
+        isVisible && isForeground && (playbackIsPlaying || isCountingIn || isExportingVideo)
+    }
+}
+
 private let playbackPreparationStartingMessage = "Preparing playback..."
 private let playbackVisualSyncTrimSeconds: TimeInterval = 0.05
 

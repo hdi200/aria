@@ -1431,7 +1431,7 @@ struct ScoreReaderInstrumentLayoutSheet: View {
     @Binding var parts: [ScorePart]
     let isBusy: Bool
     let setVisibilityAction: (Int, Bool) -> Void
-    let moveAction: (Int, Int) -> Void
+    let moveAction: (ScoreInstrumentMove) -> Void
     @State var draggedPartID: String?
     @State var draggedOriginalIndex: Int?
 
@@ -1458,7 +1458,7 @@ struct ScoreReaderInstrumentLayoutSheet: View {
                                         parts: $parts,
                                         draggedPartID: $draggedPartID,
                                         draggedOriginalIndex: $draggedOriginalIndex,
-                                        didDrop: isBusy ? nil : moveAction
+                                        didDrop: moveAction
                                     )
                                 )
 
@@ -1600,35 +1600,27 @@ struct ScorePartLayoutDropDelegate: DropDelegate {
     @Binding var parts: [ScorePart]
     @Binding var draggedPartID: String?
     @Binding var draggedOriginalIndex: Int?
-    let didDrop: ((Int, Int) -> Void)?
+    let didDrop: ((ScoreInstrumentMove) -> Void)?
 
-    func dropEntered(info: DropInfo) {
-        guard
-            let draggedPartID,
-            draggedPartID != part.id,
-            let sourceIndex = parts.firstIndex(where: { $0.id == draggedPartID }),
-            let destinationIndex = parts.firstIndex(where: { $0.id == part.id })
-        else {
-            return
-        }
+    func performDrop(info: DropInfo) -> Bool { commitMove() }
 
-        let proposedDestination = destinationIndex > sourceIndex ? destinationIndex + 1 : destinationIndex
-        withAnimation(.snappy(duration: 0.16)) {
-            parts.move(fromOffsets: IndexSet(integer: sourceIndex), toOffset: proposedDestination)
+    func commitMove() -> Bool {
+        defer {
+            draggedPartID = nil
+            draggedOriginalIndex = nil
         }
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        if
-            let draggedPartID,
-            let originalIndex = draggedOriginalIndex,
-            let finalIndex = parts.firstIndex(where: { $0.id == draggedPartID })
-        {
-            let destination = finalIndex > originalIndex ? finalIndex + 1 : finalIndex
-            didDrop?(originalIndex, destination)
+        guard let draggedPartID, draggedPartID != part.id,
+              let source = parts.firstIndex(where: { $0.id == draggedPartID }),
+              let target = parts.firstIndex(where: { $0.id == part.id }) else { return false }
+        let destination = target > source ? target + 1 : target
+        if let didDrop {
+            // The score refresh publishes the accepted order, including any failure recovery.
+            guard let move = ScoreInstrumentMove(partIDs: parts.map(\.id),
+                                                  sourceIndex: source, destinationIndex: destination) else { return false }
+            didDrop(move)
+        } else {
+            return false
         }
-        draggedPartID = nil
-        draggedOriginalIndex = nil
         return true
     }
 

@@ -231,6 +231,17 @@ struct ScoreReaderTwoPageViewIcon: View {
     }
 }
 
+@MainActor
+private final class ScoreReaderScreenAwakeCoordinator {
+    static let shared = ScoreReaderScreenAwakeCoordinator()
+    private var requests = ScoreScreenAwakeRequests()
+
+    func setRequested(_ requested: Bool, owner: UUID) {
+        requests.setRequested(requested, owner: owner)
+        UIApplication.shared.isIdleTimerDisabled = requests.isRequested
+    }
+}
+
 struct ScoreReaderView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) var scenePhase
@@ -279,6 +290,8 @@ struct ScoreReaderView: View {
     }
 
     private func handleReaderAppear() {
+        readerIsVisible = true
+        updateScreenAwakeRequest()
         updatePhoneOrientation(for: readerState.interactionMode)
     }
 
@@ -292,6 +305,18 @@ struct ScoreReaderView: View {
     @State var isVideoSheetPresented = false
     @State var exportErrorMessage: String?
     @State var isPreparingExport = false
+    @State var isExportingVideo = false
+    @State var readerIsVisible = false
+    @State var screenAwakeOwner = UUID()
+
+    private func updateScreenAwakeRequest() {
+        let requested = ScoreScreenAwakeRequests.needsScreen(
+            playbackIsPlaying: readerState.playbackState.status == .playing,
+            isCountingIn: readerState.isCountingIn, isExportingVideo: isExportingVideo,
+            isVisible: readerIsVisible, isForeground: scenePhase == .active
+        )
+        ScoreReaderScreenAwakeCoordinator.shared.setRequested(requested, owner: screenAwakeOwner)
+    }
     @State var exportProgress: Double?
     @State var selectedPartID = "full-score"
     @State var isTempoEditorPresented = false
@@ -1041,6 +1066,8 @@ struct ScoreReaderView: View {
             }
         }
         .onDisappear {
+            readerIsVisible = false
+            updateScreenAwakeRequest()
             unlockPhoneOrientation()
             saveRememberedReaderState()
             annotationController.flushSave()
@@ -1050,7 +1077,12 @@ struct ScoreReaderView: View {
         .onChangeCompatible(of: closeRequest) { _ in
             closeReader()
         }
+        #if !os(Android)
+        .onChangeCompatible(of: readerState.playbackState.status) { _ in updateScreenAwakeRequest() }
+        .onChangeCompatible(of: readerState.isCountingIn) { _ in updateScreenAwakeRequest() }
+        #endif
         .onChangeCompatible(of: scenePhase) { phase in
+            updateScreenAwakeRequest()
             switch phase {
             case .inactive, .background:
                 readerState.saveRecoverySnapshotForBackground()
@@ -1286,9 +1318,7 @@ struct ScoreReaderView: View {
                 setVisibilityAction: { partIndex, visible in
                     readerState.setInstrumentVisible(at: partIndex, visible: visible)
                 },
-                moveAction: { source, destination in
-                    readerState.moveInstrument(from: source, to: destination)
-                }
+                moveAction: readerState.moveInstrument
             )
         }
         .scoreReaderSheet(item: $instrumentReplacementContext) { context in
@@ -1346,9 +1376,7 @@ struct ScoreReaderView: View {
                 removeCurrentInstrumentAction: { index, _ in
                     readerState.removeInstrument(at: index)
                 },
-                moveCurrentInstrumentAction: { source, destination in
-                    readerState.moveInstrument(from: source, to: destination)
-                }
+                moveCurrentInstrumentAction: readerState.moveInstrument
             )
         }
     }
@@ -3290,9 +3318,8 @@ struct ScoreReaderView: View {
         completedVideoURLs = []
         // Video renders can take minutes; keep the screen on so iOS does not suspend Aria.
         let keepsScreenAwake = exportDraft.format == .video
-        if keepsScreenAwake {
-            UIApplication.shared.isIdleTimerDisabled = true
-        }
+        isExportingVideo = keepsScreenAwake
+        updateScreenAwakeRequest()
         let videoMixerSnapshot = readerState.mixerSettings
 
         exportTask = Task {
@@ -3306,9 +3333,8 @@ struct ScoreReaderView: View {
             defer {
                 Task { @MainActor in
                     exportProgress = nil
-                    if keepsScreenAwake {
-                        UIApplication.shared.isIdleTimerDisabled = false
-                    }
+                    isExportingVideo = false
+                    updateScreenAwakeRequest()
                 }
             }
             do {
@@ -3892,7 +3918,7 @@ struct ScoreReaderView: View {
     private func noteInputModeFromToolbar() {
         pencilAutoNoteEntryAllowed = ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .chooseNoteInput)
         readerState.noteInputWasActivatedByPencil = false
-        readerState.setNoteInputEnabled(true)
+        readerState.setNoteInputEnabled(true, acceptsDirectTaps: true)
         exitTextEntryFocusIfNeeded()
     }
 

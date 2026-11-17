@@ -1396,12 +1396,21 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func moveInstrument(_ move: ScoreInstrumentMove) throws -> ScoreEditingState {
+        let currentParts = Self.makeScoreParts(from: bridgeSession.scoreParts)
+        guard let indices = move.indices(in: currentParts.map(\.id)) else {
+            throw ScoreDocumentServiceError.bridgeFailure("The instruments changed before the move could be applied.")
+        }
+        return try moveInstrument(from: indices.source, to: indices.destination)
+    }
+
     func moveInstrument(from sourceIndex: Int, to destinationIndex: Int) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
         }
 
         let editState = try makeEditingState(from: bridgeSession.moveInstrument(from: sourceIndex, to: destinationIndex), refreshScope: .all)
+        parts = editState.scoreParts
         invalidateCachedPlaybackArtifacts()
         return editState
     }

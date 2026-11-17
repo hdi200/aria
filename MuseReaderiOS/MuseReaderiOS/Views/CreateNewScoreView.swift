@@ -798,7 +798,7 @@ struct AddInstrumentSheet: View {
     var commitAction: ([NewScoreInstrument]) -> Void
     var addCurrentInstrumentAction: (NewScoreInstrument) -> Void
     var removeCurrentInstrumentAction: (Int, NewScoreInstrument) -> Void
-    var moveCurrentInstrumentAction: (Int, Int) -> Void
+    var moveCurrentInstrumentAction: (ScoreInstrumentMove) -> Void
     @State var selectedGenre: NewScoreInstrumentGenre = .common
     @State var selectedCategory: NewScoreInstrumentCategory = .all
     @State var searchText = ""
@@ -813,7 +813,7 @@ struct AddInstrumentSheet: View {
          commitAction: @escaping ([NewScoreInstrument]) -> Void = { _ in },
          addCurrentInstrumentAction: @escaping (NewScoreInstrument) -> Void = { _ in },
          removeCurrentInstrumentAction: @escaping (Int, NewScoreInstrument) -> Void = { _, _ in },
-         moveCurrentInstrumentAction: @escaping (Int, Int) -> Void = { _, _ in })
+         moveCurrentInstrumentAction: @escaping (ScoreInstrumentMove) -> Void = { _ in })
     {
         _selectedInstruments = selectedInstruments
         _currentInstruments = currentInstruments
@@ -1551,35 +1551,29 @@ struct InstrumentReorderDropDelegate: DropDelegate {
     @Binding var instruments: [NewScoreInstrument]
     @Binding var draggedInstrumentID: String?
     @Binding var draggedOriginalIndex: Int?
-    let didDrop: ((Int, Int) -> Void)?
+    let didDrop: ((ScoreInstrumentMove) -> Void)?
 
-    func dropEntered(info: DropInfo) {
-        guard
-            let draggedInstrumentID,
-            draggedInstrumentID != instrument.id,
-            let sourceIndex = instruments.firstIndex(where: { $0.id == draggedInstrumentID }),
-            let destinationIndex = instruments.firstIndex(where: { $0.id == instrument.id })
-        else {
-            return
-        }
+    func performDrop(info: DropInfo) -> Bool { commitMove() }
 
-        let proposedDestination = destinationIndex > sourceIndex ? destinationIndex + 1 : destinationIndex
-        withAnimation(.snappy(duration: 0.16)) {
-            instruments.move(fromOffsets: IndexSet(integer: sourceIndex), toOffset: proposedDestination)
+    func commitMove() -> Bool {
+        defer {
+            draggedInstrumentID = nil
+            draggedOriginalIndex = nil
         }
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        if
-            let draggedInstrumentID,
-            let originalIndex = draggedOriginalIndex,
-            let finalIndex = instruments.firstIndex(where: { $0.id == draggedInstrumentID })
-        {
-            let destination = finalIndex > originalIndex ? finalIndex + 1 : finalIndex
-            didDrop?(originalIndex, destination)
+        guard let draggedInstrumentID, draggedInstrumentID != instrument.id,
+              let source = instruments.firstIndex(where: { $0.id == draggedInstrumentID }),
+              let target = instruments.firstIndex(where: { $0.id == instrument.id }) else { return false }
+        let destination = target > source ? target + 1 : target
+        if let didDrop {
+            // The score refresh publishes the accepted order, including any failure recovery.
+            guard let move = ScoreInstrumentMove(partIDs: instruments.map(\.id),
+                                                  sourceIndex: source, destinationIndex: destination) else { return false }
+            didDrop(move)
+        } else {
+            withAnimation(.snappy(duration: 0.16)) {
+                instruments.move(fromOffsets: IndexSet(integer: source), toOffset: destination)
+            }
         }
-        draggedInstrumentID = nil
-        draggedOriginalIndex = nil
         return true
     }
 

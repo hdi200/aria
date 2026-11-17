@@ -19,6 +19,13 @@
 #include <vector>
 
 #include "score_render_core.h"
+#include "engraving/compat/scoreaccess.h"
+#include "engraving/dom/chord.h"
+#include "engraving/dom/measure.h"
+#include "engraving/dom/note.h"
+#include "engraving/dom/segment.h"
+#include "engraving/dom/tie.h"
+#include "importexport/musicxml/internal/import/importmusicxml.h"
 
 namespace {
 
@@ -2241,6 +2248,59 @@ void testLegacyStaffTextCompatibility(const std::filesystem::path& root, const s
     }
 }
 
+void testMusicXmlLetRingIsNotAnIncomingTie(const std::filesystem::path& root, bool letRing)
+{
+    // Initialize the same runtime as the app, then inspect the importer result before layout can
+    // dereference an incoming tie. Repeated starts can queue the same note for tie cleanup twice.
+    auto runtime = openSession(root, "tie-import-runtime", scoreXml(0, { { 60, 14 } }, 0));
+    const std::string name = letRing ? "let-ring-import" : "ordinary-tie-import";
+    const std::string starts = letRing
+        ? "<tied type=\"start\"/><tied type=\"start\"/><tied type=\"let-ring\"/>"
+        : "<tied type=\"start\"/>";
+    const std::string stop = letRing ? "" : "<notations><tied type=\"stop\"/></notations>";
+    const std::string xml = R"XML(<?xml version="1.0"?>
+<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+<part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><notations>)XML"
+        + starts + R"XML(</notations></note>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type>)XML"
+        + stop + R"XML(</note><note><rest/><duration>2</duration><voice>1</voice><type>half</type></note></measure></part></score-partwise>)XML";
+    const auto input = root / (name + ".musicxml");
+    writeFile(input, xml);
+    std::unique_ptr<mu::engraving::MasterScore> score(
+        mu::engraving::compat::ScoreAccess::createMasterScoreWithBaseStyle(nullptr));
+    const auto result = mu::iex::musicxml::importMusicXml(score.get(), muse::String::fromStdString(input.string()), false);
+    expect(result == mu::engraving::Err::NoError, "Could not import tie regression fixture");
+    std::vector<mu::engraving::Note*> notes;
+    for (auto* m = score->firstMeasure(); m; m = m->nextMeasure()) {
+        for (auto* seg = m->first(); seg && seg->measure() == m; seg = seg->next()) {
+            auto* item = seg->element(0);
+            if (item && item->isChord()) {
+                for (auto* note : mu::engraving::toChord(item)->notes()) { notes.push_back(note); }
+            }
+        }
+    }
+    expect(notes.size() == 2, "Tie import lost a recognized note");
+    if (letRing) {
+        expect(notes[0]->tieFor() && notes[0]->tieFor()->isLaissezVib(), "Let-ring notation was lost");
+        expect(notes[1]->tieBack() == nullptr, "Let-ring tie acquired an incoming backlink");
+    } else {
+        expect(notes[0]->tieFor() && !notes[0]->tieFor()->isLaissezVib(), "Ordinary tie was replaced");
+        expect(notes[1]->tieBack() == notes[0]->tieFor(), "Ordinary tie did not retain both endpoints");
+    }
+    score->doLayout();
+    std::string error;
+    auto session = msr::render::ScoreRenderSession::open(input.string(), error);
+    expect(session != nullptr, "Aria could not open tie fixture: " + error);
+    msr::render::RenderedPage page;
+    expect(session->renderPage(0, 144, page, error), "Could not render tie fixture: " + error);
+    const auto saved = root / (name + ".mscz");
+    expect(session->saveToPath(saved.string(), error), "Could not save tie fixture: " + error);
+    auto reopened = msr::render::ScoreRenderSession::open(saved.string(), error);
+    expect(reopened != nullptr, "Could not reopen tie fixture: " + error);
+    expect(reopened->renderPage(0, 144, page, error), "Could not render reopened tie fixture: " + error);
+}
+
 std::string savedPartTrackName(const std::string& xml)
 {
     // The part's own <trackName> precedes <Instrument>; the instrument's is inside it.
@@ -2285,6 +2345,118 @@ std::string savedExcerptXml(const std::filesystem::path& root)
         }
     }
     fail("Saved score has no part (excerpt) file");
+}
+
+std::filesystem::path instrumentFixture(const std::string& name)
+{
+    return std::filesystem::path(__FILE__).parent_path() / "data" / name;
+}
+
+void expectInstrumentTrack(msr::render::ScoreRenderSession& session, const std::string& id, const std::string& setup)
+{
+    std::vector<msr::render::PlaybackTrackSummary> tracks;
+    std::string error;
+    expect(session.playbackTrackSummary(tracks, error), "Could not inspect playback: " + error);
+    const auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& t) {
+        return t.instrumentId == id && t.noteEventCount > 0;
+    });
+    expect(track != tracks.end() && track->setupData.find(setup) != std::string::npos,
+           "Missing pitched " + id + " track with setup " + setup);
+}
+
+void testInstrumentReplacementReachesLinkedParts(const std::filesystem::path& testRoot)
+{
+    const auto root = testRoot / "linked-instrument-replacement";
+    std::filesystem::create_directories(root);
+    auto session = openSession(root, "source", scoreXml(0, { { 60, 14 } }, 1));
+    const std::string partId = session->partInfoList().front().partId;
+    int pages = 0;
+    std::string error;
+    msr::render::ScoreEditState state;
+    expect(session->setActivePartIndex(0, pages, error), error);
+    expect(session->replacePartInstrument(partId, "flute", state, error), error);
+    expect(session->partInfoList().front().name == "Flute", "The linked part title stayed stale");
+    expectInstrumentTrack(*session, "flute", "winds.flute");
+    const std::string saved = saveSnapshot(*session, root, "flute");
+    expect(saved.find("<Instrument id=\"flute\">") != std::string::npos, "Master did not save flute");
+    expect(savedExcerptXml(root).find("<Instrument id=\"flute\">") != std::string::npos,
+           "Linked part did not save flute");
+    expect(session->undo(state, error), error);
+    expect(session->partInfoList().front().name == "Violin", "Undo did not restore the part title");
+    expectInstrumentTrack(*session, "violin", "strings.violin");
+    expect(session->redo(state, error), error);
+    expectInstrumentTrack(*session, "flute", "winds.flute");
+    // The desktop replacement also updates the linked part's written transposition.
+    expect(session->replacePartInstrument(partId, "bb-clarinet", state, error), error);
+    expectInstrumentTrack(*session, "bb-clarinet", "winds.clarinet");
+    const std::string clarinet = saveSnapshot(*session, root, "clarinet");
+    const std::string part = savedExcerptXml(root);
+    expect(part.find("<Instrument id=\"bb-clarinet\">") != std::string::npos, "Linked part did not save clarinet");
+    expect(clarinet.find("<pitch>60</pitch>") != std::string::npos && part.find("<pitch>60</pitch>") != std::string::npos,
+           "Replacing with a transposing instrument changed the sounding pitch");
+    auto reopened = msr::render::ScoreRenderSession::open((root / "clarinet.mscx").string(), error);
+    expect(reopened != nullptr, error);
+    expect(reopened->setActivePartIndex(0, pages, error), error);
+    expectInstrumentTrack(*reopened, "bb-clarinet", "winds.clarinet");
+}
+
+void testGroupedExcerptsAreNotIndividualParts(const std::filesystem::path& testRoot)
+{
+    std::string error;
+    auto session = msr::render::ScoreRenderSession::open(instrumentFixture("grouped_excerpt.mscz").string(), error);
+    expect(session != nullptr, error);
+    const auto parts = session->partInfoList();
+    const std::vector<std::string> names = { "Komp section", "Gtr", "Piano", "Drms", "Flute" };
+    expect(parts.size() == names.size(), "Expected five individual source parts");
+    int pages = 0;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        expect(parts[i].name == names[i], "An individual part borrowed the grouped excerpt's title");
+        expect(session->setActivePartIndex(static_cast<int>(i), pages, error), error);
+        std::vector<msr::render::PlaybackTrackSummary> tracks;
+        expect(session->playbackTrackSummary(tracks, error), error);
+        for (const auto& track : tracks) {
+            expect(track.instrumentId == "metronome" || track.partId == parts[i].partId,
+                   "Individual part view includes another source part");
+        }
+    }
+    const auto individualParts = session->partInfoList();
+    const auto root = testRoot / "grouped-excerpts";
+    std::filesystem::create_directories(root);
+    expect(session->saveToPath((root / "parts.mscz").string(), error), error);
+    auto reopened = msr::render::ScoreRenderSession::open((root / "parts.mscz").string(), error);
+    expect(reopened != nullptr, error);
+    for (size_t i = 0; i < names.size(); ++i) {
+        expect(reopened->partInfoList()[i].name == individualParts[i].name,
+               "Individual names changed on reopen");
+    }
+    // All five generated individual parts coexist with the original grouped excerpt.
+    saveSnapshot(*reopened, root, "parts");
+    size_t excerptFiles = 0;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Excerpts")) {
+        if (entry.path().extension() == ".mscx") { ++excerptFiles; }
+    }
+    expect(excerptFiles == 6, "Saving lost the custom group or an individual excerpt");
+}
+
+void testChoirToFluteImportKeepsBothPlaybackSetups(const std::filesystem::path& testRoot)
+{
+    std::string error;
+    auto session = msr::render::ScoreRenderSession::open(instrumentFixture("choir_to_flute.mscz").string(), error);
+    expect(session != nullptr, error);
+    expectInstrumentTrack(*session, "voice", "voices.choir");
+    expectInstrumentTrack(*session, "flute", "winds.flute");
+    int pages = 0;
+    expect(session->setActivePartIndex(0, pages, error), error);
+    expectInstrumentTrack(*session, "voice", "voices.choir");
+    expectInstrumentTrack(*session, "flute", "winds.flute");
+    const auto root = testRoot / "choir-flute-import";
+    std::filesystem::create_directories(root);
+    const auto saved = root / "saved.mscz";
+    expect(session->saveToPath(saved.string(), error), error);
+    auto reopened = msr::render::ScoreRenderSession::open(saved.string(), error);
+    expect(reopened != nullptr, error);
+    expectInstrumentTrack(*reopened, "voice", "voices.choir");
+    expectInstrumentTrack(*reopened, "flute", "winds.flute");
 }
 
 void testNewDynamicsAndTextReachLinkedParts(const std::filesystem::path& testRoot)
@@ -3027,7 +3199,15 @@ void testPracticeSpeedScalesPlaybackOnly(const std::filesystem::path& root)
 int main()
 {
     TestDirectory testDirectory;
+    bool tieOnly = std::getenv("ARIA_TIE_IMPORT_TEST_ONLY") != nullptr;
+    if (tieOnly) {
+        bool passed = runTest("MusicXML let-ring ties never acquire an incoming backlink", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, true); });
+        passed &= runTest("ordinary MusicXML ties keep both endpoints", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, false); });
+        return passed ? 0 : 1;
+    }
     bool passed = true;
+    passed &= runTest("MusicXML let-ring ties never acquire an incoming backlink", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, true); });
+    passed &= runTest("ordinary MusicXML ties keep both endpoints", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, false); });
     for (const std::string version : { "3.02", "4.60", "4.70" }) {
         passed &= runTest("staff-text import compatibility " + version,
                           [&] { testLegacyStaffTextCompatibility(testDirectory.path, version); });
@@ -3087,6 +3267,9 @@ int main()
                       [&] { testTransposeToKeyMovesEachSelectedStaffByTheSameAmount(testDirectory.path); });
     passed &= runTest("measure selections carry instrument context", [&] { testMeasureSelectionCarriesInstrumentContext(testDirectory.path); });
     passed &= runTest("part names survive save and follow instrument replacement", [&] { testPartNamesSurviveSave(testDirectory.path); });
+    passed &= runTest("instrument replacement reaches linked parts", [&] { testInstrumentReplacementReachesLinkedParts(testDirectory.path); });
+    passed &= runTest("grouped excerpts are not individual parts", [&] { testGroupedExcerptsAreNotIndividualParts(testDirectory.path); });
+    passed &= runTest("choir to flute import keeps both playback setups", [&] { testChoirToFluteImportKeepsBothPlaybackSetups(testDirectory.path); });
     passed &= runTest("new dynamics and text reach linked parts", [&] { testNewDynamicsAndTextReachLinkedParts(testDirectory.path); });
     passed &= runTest("fingering edits, undo and linked parts", [&] { testFingeringEditsAndLinkedParts(testDirectory.path); });
     passed &= runTest("fingering targets individual chord notes and rejects non-notes", [&] { testFingeringRejectsNonNotesAndPreservesChordPitch(testDirectory.path); });

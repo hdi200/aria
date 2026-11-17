@@ -826,7 +826,8 @@ struct ScoreReaderNoteEntrySurface: View {
                 prepareAccidentalAction: prepareAccidentalAction,
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
-                moreNoteToolAction: moreNoteToolAction
+                moreNoteToolAction: moreNoteToolAction,
+                setCurrentVoiceAction: setCurrentVoiceAction
             )
             .padding(.horizontal, 52)
         }
@@ -902,7 +903,8 @@ struct ScoreReaderNoteEntrySurface: View {
                 prepareAccidentalAction: prepareAccidentalAction,
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
-                moreNoteToolAction: moreNoteToolAction
+                moreNoteToolAction: moreNoteToolAction,
+                setCurrentVoiceAction: setCurrentVoiceAction
             )
         default:
             // detailToolbar bakes in .padding(.horizontal, 52) — cancel it so
@@ -935,7 +937,8 @@ struct ScoreReaderNoteEntrySurface: View {
                 prepareAccidentalAction: prepareAccidentalAction,
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
-                moreNoteToolAction: moreNoteToolAction
+                moreNoteToolAction: moreNoteToolAction,
+                setCurrentVoiceAction: setCurrentVoiceAction
             )
 
         case .repeats:
@@ -1056,7 +1059,8 @@ struct ScoreReaderNoteEntrySurface: View {
             prepareAccidentalAction: prepareAccidentalAction,
             changeAccidentalAction: changeAccidentalAction,
             preferFlats: $preferFlats,
-            moreNoteToolAction: moreNoteToolAction
+            moreNoteToolAction: moreNoteToolAction,
+            setCurrentVoiceAction: setCurrentVoiceAction
         )
     }
 

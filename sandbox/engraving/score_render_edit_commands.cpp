@@ -4472,10 +4472,32 @@
         const mu::engraving::StaffType* staffType = instrumentTemplate->staffTypePreset
             ? instrumentTemplate->staffTypePreset
             : mu::engraving::StaffType::getDefaultPreset(instrumentTemplate->staffGroup);
+        const mu::engraving::Interval oldTranspose = part->instrument()->transpose();
+        const muse::String newPartName = instrumentTitle(replacement.trackName(), replacement.trait());
         m_masterScore->startCmd(muse::TranslatableString::untranslatable("Aria change instrument"));
-        mu::engraving::EditPart::replacePartInstrument(m_masterScore.get(), part, replacement, staffType,
-                                                       instrumentTitle(replacement.trackName(), replacement.trait()));
+        // MasterNotationParts::replaceInstrument applies this undoable edit to the master
+        // and every existing excerpt, then updates transposition and the individual part title.
+        mu::engraving::EditPart::replacePartInstrument(m_masterScore.get(), part, replacement, staffType, newPartName);
+        for (mu::engraving::Excerpt* excerpt : m_masterScore->excerpts()) {
+            mu::engraving::Score* partScore = excerpt ? excerpt->excerptScore() : nullptr;
+            mu::engraving::Part* linkedPart = partScore ? partScore->partById(part->id()) : nullptr;
+            if (linkedPart) {
+                mu::engraving::EditPart::replacePartInstrument(partScore, linkedPart, replacement, staffType, newPartName);
+            }
+        }
+        mu::engraving::Transpose::transpositionChanged(m_masterScore.get(), part,
+                                                      mu::engraving::Part::MAIN_INSTRUMENT_TICK, oldTranspose);
+        if (mu::engraving::Excerpt* excerpt = excerptForPart(part)) {
+            muse::StringList existingNames;
+            for (const mu::engraving::Excerpt* other : m_masterScore->excerpts()) {
+                existingNames.push_back(other->name().toLower());
+            }
+            const muse::String name = mu::engraving::formatUniqueExcerptName(part->partName(), existingNames);
+            excerpt->excerptScore()->undo(new mu::engraving::ChangeExcerptTitle(excerpt, name));
+        }
         m_masterScore->endCmd();
+        markLinkedScoresForLayout(m_masterScore.get());
+        if (activeScore() != m_masterScore.get()) { relayoutActiveScore(); }
 
         refreshAfterEdit();
         output = makeEditState(activeScore());

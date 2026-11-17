@@ -45,6 +45,11 @@ Parts and loading:
   `$M`, `$D`) crashed when Aria set a temporary viewing key (Play Console, Android).
 
 MusicXML import:
+- `importexport/musicxml/internal/import/importmusicxmlpass2.cpp`: unfinished-tie cleanup skips
+  laissez-vibrer ties. A repeated cleanup entry could otherwise attach an end-note backlink to
+  a let-ring tie, then delete that tie and leave layout reading freed memory. The scan-result
+  regression and ordinary-tie control cover import, layout, save and reopen in
+  `sandbox/engraving/tests/score_render_accidental_tests.cpp`.
 - `importexport/musicxml/internal/import/importmusicxmlpass2.cpp` (+ its tests and reference files): explicit
   `<sound>` jump and marker attributes (`dacapo`, `dalsegno`, `fine`, `segno`, `coda`, `tocoda`) are imported as
   jumps and markers whatever the "infer text type" setting (off in Aria), and the words beside a D.C./D.S. refine

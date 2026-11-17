@@ -414,6 +414,51 @@ struct MuseReaderiOSTests {
     }
 
     @Test
+    func explicitNoteEntryAcceptsDirectStylusTapsAndPencilEntryKeepsFingerSelection() {
+        #expect(ScoreReaderToolModePolicy.insertsNoteAtPoint(enabled: true, inputKind: .direct, acceptsDirectTaps: true))
+        #expect(!ScoreReaderToolModePolicy.insertsNoteAtPoint(enabled: true, inputKind: .direct, acceptsDirectTaps: false))
+        #expect(ScoreReaderToolModePolicy.insertsNoteAtPoint(enabled: true, inputKind: .pencil, acceptsDirectTaps: false))
+        #expect(!ScoreReaderToolModePolicy.insertsNoteAtPoint(enabled: false, inputKind: .pencil, acceptsDirectTaps: true))
+    }
+
+    @Test
+    func screenAwakeRequestsSurviveOverlappingReadersAndExport() {
+        let first = UUID(), second = UUID()
+        var requests = ScoreScreenAwakeRequests()
+        requests.setRequested(true, owner: first)
+        requests.setRequested(true, owner: second)
+        requests.setRequested(false, owner: first)
+        #expect(requests.isRequested)
+        requests.setRequested(false, owner: second)
+        #expect(!requests.isRequested)
+        #expect(ScoreScreenAwakeRequests.needsScreen(playbackIsPlaying: true, isCountingIn: false,
+            isExportingVideo: true, isVisible: true, isForeground: true))
+        #expect(ScoreScreenAwakeRequests.needsScreen(playbackIsPlaying: true, isCountingIn: false,
+            isExportingVideo: false, isVisible: true, isForeground: true)) // export finishes during playback
+        #expect(ScoreScreenAwakeRequests.needsScreen(playbackIsPlaying: false, isCountingIn: true,
+            isExportingVideo: false, isVisible: true, isForeground: true))
+        #expect(!ScoreScreenAwakeRequests.needsScreen(playbackIsPlaying: true, isCountingIn: false,
+            isExportingVideo: true, isVisible: true, isForeground: false))
+        #expect(!ScoreScreenAwakeRequests.needsScreen(playbackIsPlaying: true, isCountingIn: true,
+            isExportingVideo: true, isVisible: false, isForeground: true))
+        #expect(!ScoreScreenAwakeRequests.needsScreen(playbackIsPlaying: false, isCountingIn: false,
+            isExportingVideo: false, isVisible: true, isForeground: true))
+    }
+
+    @Test
+    func queuedInstrumentMovesFollowIdentitiesAndRejectMissingParts() throws {
+        let move = try #require(ScoreInstrumentMove(partIDs: ["a", "b", "c", "d"], sourceIndex: 1, destinationIndex: 4))
+        let indices = try #require(move.indices(in: ["c", "a", "b", "d"]))
+        #expect(indices.source == 2 && indices.destination == 4)
+        #expect(move.indices(in: ["a", "c", "d"]) == nil)
+        let up = try #require(ScoreInstrumentMove(partIDs: ["a", "b", "c"], sourceIndex: 2, destinationIndex: 0))
+        let movedIndices = try #require(up.indices(in: ["b", "a", "c"]))
+        #expect(movedIndices.source == 2 && movedIndices.destination == 1)
+        #expect(up.indices(in: ["b", "c"]) == nil)
+        #expect(ScoreInstrumentMove(partIDs: ["a", "b"], sourceIndex: 0, destinationIndex: 1) == nil)
+    }
+
+    @Test
     func pencilApproachCanActivateNoteEntryImmediatelyAfterEnteringEditMode() {
         #expect(
             ScoreReaderToolModePolicy.allowsAutomaticPencilNoteEntry(after: .enterEditMode)

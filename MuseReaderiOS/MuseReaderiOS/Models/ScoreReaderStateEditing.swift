@@ -24,6 +24,31 @@ struct ScoreNoteInputIntent: Sendable {
     }
 }
 
+/// A queued reorder follows part identities even when a previous edit changes their indices.
+struct ScoreInstrumentMove: Sendable {
+    let partID: String
+    let beforePartID: String?
+
+    nonisolated init?(partIDs: [String], sourceIndex: Int, destinationIndex: Int) {
+        guard partIDs.indices.contains(sourceIndex), (0...partIDs.count).contains(destinationIndex),
+              destinationIndex != sourceIndex, destinationIndex != sourceIndex + 1 else { return nil }
+        partID = partIDs[sourceIndex]
+        var remaining = partIDs
+        remaining.remove(at: sourceIndex)
+        let insertion = destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
+        beforePartID = insertion < remaining.count ? remaining[insertion] : nil
+    }
+
+    nonisolated func indices(in partIDs: [String]) -> (source: Int, destination: Int)? {
+        guard let source = partIDs.firstIndex(of: partID) else { return nil }
+        if let beforePartID {
+            guard let destination = partIDs.firstIndex(of: beforePartID) else { return nil }
+            return (source, destination)
+        }
+        return (source, partIDs.count)
+    }
+}
+
 struct ScoreQueuedEditingCommand {
     let mutatesScore: Bool
     let auditionNote: Bool
@@ -68,6 +93,13 @@ struct ScoreReaderToolModePolicy {
 
     static func allowsAutomaticPencilNoteEntry(after action: PencilAction) -> Bool {
         action != .chooseSelect
+    }
+
+    /// An explicit Note Entry choice also supports styluses reported as ordinary touches.
+    /// Automatic Pencil entry keeps finger taps available for selection.
+    static func insertsNoteAtPoint(enabled: Bool, inputKind: ScorePageTapInputKind,
+                                   acceptsDirectTaps: Bool) -> Bool {
+        enabled && (inputKind == .pencil || acceptsDirectTaps)
     }
 
     static func selectionLeavesNoteInput(_ selectionKind: ScoreSelectedElementKind?) -> Bool {
@@ -523,6 +555,9 @@ extension ScoreReaderState {
         }
 
         let shouldInsert = editingState.noteInputEnabled
+        let insertsAtPoint = ScoreReaderToolModePolicy.insertsNoteAtPoint(
+            enabled: shouldInsert, inputKind: inputKind, acceptsDirectTaps: noteInputAcceptsDirectTaps
+        )
         if !shouldInsert {
             // Set before the page change below, so moving to another page doesn't
             // re-center the list on the tapped bar.
@@ -558,7 +593,7 @@ extension ScoreReaderState {
 
             do {
                 let newState: ScoreEditingState
-                if shouldInsert && inputKind == .pencil {
+                if insertsAtPoint {
                     newState = try await liveRenderSession.insertNote(
                         pageIndex: pageIndex,
                         normalizedPoint: pencilInsertionPoint,
@@ -847,10 +882,11 @@ extension ScoreReaderState {
         setNoteInputEnabled(!noteInputIntent.enabled)
     }
 
-    func setNoteInputEnabled(_ enabled: Bool) {
+    func setNoteInputEnabled(_ enabled: Bool, acceptsDirectTaps: Bool = false) {
         guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
         var intent = noteInputIntent
         intent.enabled = enabled
+        noteInputAcceptsDirectTaps = enabled && acceptsDirectTaps
         queuedNoteInputIntent = intent
         hasContinuousNoteInputCursor = enabled
         if !enabled {
@@ -885,7 +921,7 @@ extension ScoreReaderState {
         guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
         var intent = noteInputIntent
         if !intent.rests { stackedChordInputEnabled = false; stackedChordInputChosen = false; intent.chord = false }
-        let shouldEnterRestAtCursor = intent.enabled && !noteInputWasActivatedByPencil
+        let shouldEnterRestAtCursor = intent.enabled && !noteInputWasActivatedByPencil && !noteInputAcceptsDirectTaps
         if shouldEnterRestAtCursor { intent.rests = true }
         else { intent.rests.toggle() }
         queuedNoteInputIntent = intent
@@ -1282,9 +1318,9 @@ extension ScoreReaderState {
         }
     }
 
-    func moveInstrument(from sourceIndex: Int, to destinationIndex: Int) {
+    func moveInstrument(_ move: ScoreInstrumentMove) {
         performEditingAction(mutatesScore: true) { liveRenderSession in
-            try await liveRenderSession.moveInstrument(from: sourceIndex, to: destinationIndex)
+            try await liveRenderSession.moveInstrument(move)
         }
     }
 
@@ -2318,6 +2354,7 @@ extension ScoreReaderState {
             stackedChordInputEnabled = stackedChordInputChosen || selectedChordPitchCount > 1
         }
         if !editingState.noteInputEnabled {
+            noteInputAcceptsDirectTaps = false
             noteEntryPreviewTask?.cancel()
             noteEntryPreview = nil
             lastKeyboardInputCanReceiveAccidental = false

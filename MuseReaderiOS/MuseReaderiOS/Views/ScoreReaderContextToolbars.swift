@@ -188,8 +188,9 @@ struct ScoreReaderKeyboardContextToolbar: View {
     let prepareAccidentalAction: (ScoreAccidentalKind) -> Void
     let changeAccidentalAction: (ScoreAccidentalKind) -> Void
     @Binding var preferFlats: Bool
-    /// Shows the up arrow that opens the More Notes row (iPad toolbar only for now).
+    /// Shows the up arrow that opens the More Notes row.
     var moreNoteToolAction: ((ScoreReaderMoreNoteTool) -> Void)? = nil
+    var setCurrentVoiceAction: ((Int) -> Void)? = nil
     /// Stays open until the player closes it, across scores and launches.
     @AppStorage("Aria.NoteEntry.MoreNotesExpanded") var moreNotesExpanded = false
 
@@ -301,6 +302,9 @@ struct ScoreReaderKeyboardContextToolbar: View {
     private var compactMoreNotesStrip: some View {
         MobileHintingHorizontalScrollView(hintHeight: 52) {
             HStack(spacing: 2) {
+                if let setCurrentVoiceAction {
+                    compactVoiceMenu(action: setCurrentVoiceAction)
+                }
                 ForEach(moreNotesItems) { item in
                     ScoreReaderMoreNotesButton(item: item, isCompact: true, action: performMoreNotesTool)
                 }
@@ -313,6 +317,50 @@ struct ScoreReaderKeyboardContextToolbar: View {
                     .allowsHitTesting(false)
             }
         }
+    }
+
+    private func compactVoiceMenu(action: @escaping (Int) -> Void) -> some View {
+        Menu {
+            ForEach(0..<4, id: \.self) { voice in
+                Button {
+                    action(voice)
+                } label: {
+                    if voice == editingState.currentVoice {
+                        Label("Voice \(voice + 1)", systemImage: "checkmark")
+                    } else {
+                        Text("Voice \(voice + 1)")
+                    }
+                }
+                .accessibilityIdentifier("note-entry-voice-\(voice + 1)")
+            }
+        } label: {
+            VStack(spacing: 2) {
+                Text("V\(editingState.currentVoice + 1)")
+                    .font(.system(size: 17, weight: .semibold))
+                    .monospacedDigit()
+                    .frame(width: 28, height: 24)
+                    .overlay(alignment: .trailing) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .medium))
+                            .foregroundStyle(Color.black.opacity(0.45))
+                            .frame(width: 7, height: 10)
+                            .offset(x: 10)
+                            .allowsHitTesting(false)
+                    }
+                Text("Voice")
+                    .font(.system(size: 8, weight: .medium))
+            }
+            .foregroundStyle(Color.black.opacity(0.82))
+            .frame(width: 60, height: 50)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .disabled(!canUseRhythmTools)
+        .opacity(canUseRhythmTools ? 1 : 0.42)
+        .accessibilityIdentifier("note-entry-voice-picker")
+        .accessibilityLabel("Voice \(editingState.currentVoice + 1)")
+        .accessibilityHint("Choose the voice for note entry")
     }
 
     private func performMoreNotesTool(_ tool: ScoreReaderMoreNoteTool) {

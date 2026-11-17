@@ -22,7 +22,7 @@ private:
         }
 
         for (mu::engraving::Excerpt* excerpt : m_masterScore->excerpts()) {
-            if (!excerpt) {
+            if (!excerpt || excerpt->parts().size() != 1 || !excerpt->containsPart(part)) {
                 continue;
             }
 
@@ -32,7 +32,7 @@ private:
         }
 
         for (mu::engraving::Excerpt* excerpt : m_masterScore->excerpts()) {
-            if (!excerpt || excerpt->initialPartId().isValid()) {
+            if (!excerpt || excerpt->parts().size() != 1 || excerpt->initialPartId().isValid()) {
                 continue;
             }
 

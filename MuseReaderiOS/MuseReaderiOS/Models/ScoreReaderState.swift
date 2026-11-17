@@ -280,6 +280,7 @@ final class ScoreReaderState {
     var partSelectionErrorMessage: String?
     var hasContinuousNoteInputCursor = false
     var noteInputWasActivatedByPencil = false
+    var noteInputAcceptsDirectTaps = false
     var shouldEditSelectedPitchBeforeContinuingKeyboardInput = false
     var lastKeyboardInputCanReceiveAccidental = false
     var activeMIDIPitches: Set<Int> = []
