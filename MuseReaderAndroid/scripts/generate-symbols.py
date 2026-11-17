@@ -179,7 +179,7 @@ CUSTOM = {
 # The iOS app's own images the shared views name with Image("..."), linked from its asset
 # catalog so they stay the same.
 IOS_ASSETS = os.path.join(os.path.dirname(__file__), "..", "..", "MuseReaderiOS", "MuseReaderiOS", "Assets.xcassets")
-IMAGESETS = ["AriaLogoMark", "ScoreReaderStackedChord"]
+IMAGESETS = ["AriaLogoMark", "ScoreReaderStackedChord", "ScanUpdateOriginal", "ScanUpdateResult"]
 
 
 def link_imagesets():

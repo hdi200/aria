@@ -99,6 +99,7 @@ struct UpdateNoticeSheet: View {
         var items: [Item] = []
         /// Shown under `items`, headed "Fixes".
         var fixes: [Item] = []
+        var isScannerFeature = false
     }
 
     struct Item: Identifiable {
@@ -149,50 +150,19 @@ struct UpdateNoticeSheet: View {
     }()
 
     private static var items: [Item] {
-        var items = [
-            Item(
-                systemImage: "camera.viewfinder",
-                title: "Scan sheet music (Beta)",
-                detail: "Tap Scan in your library to turn a PDF, an image or a photo into a score you can play, "
-                    + "transpose and edit."
-            ),
+        [
             Item(
                 systemImage: "music.note",
-                textSymbol: "♫",
-                title: "Chords and lyrics too",
-                detail: "Scanning reads chord symbols, lyrics, the title and composer, and repeats and endings, "
-                    + "not just the notes."
+                textSymbol: "♪♪",
+                title: "Voices on phones",
+                detail: "Choose a voice when entering notes on your phone, not just on a tablet."
             ),
             Item(
-                systemImage: "list.bullet",
-                title: "Multi-page PDFs",
-                detail: "Every page is read into one score, keeping the printed line breaks."
-            ),
-            Item(
-                systemImage: "lock",
-                title: "Private and offline",
-                detail: "Scanning runs entirely on your device. Nothing is uploaded."
+                systemImage: "play",
+                title: "D.S. and Coda play",
+                detail: "D.S., D.C., To Coda and Fine now play as jumps in imported MusicXML files."
             ),
         ]
-        #if !os(Android)
-        items.append(Item(
-            systemImage: "square.and.arrow.up",
-            title: "Share to Aria",
-            detail: "Share a PDF or picture from Files, Photos or another app to scan it."
-        ))
-        #endif
-        items.append(Item(
-            systemImage: "music.note",
-            textSymbol: "♪♪",
-            title: "Voices on phones",
-            detail: "Choose a voice when entering notes on your phone, not just on a tablet."
-        ))
-        items.append(Item(
-            systemImage: "play",
-            title: "D.S. and Coda play",
-            detail: "D.S., D.C., To Coda and Fine now play as jumps in imported MusicXML files."
-        ))
-        return items
     }
 
     private var pages: [Page] {
@@ -200,7 +170,14 @@ struct UpdateNoticeSheet: View {
             Page(
                 clip: nil,
                 systemImage: "sparkles",
-                title: "New in this update",
+                title: "Scan sheet music",
+                message: "",
+                isScannerFeature: true
+            ),
+            Page(
+                clip: nil,
+                systemImage: "checkmark.circle",
+                title: "Also in this update",
                 message: "",
                 items: Self.items,
                 fixes: Self.fixes
@@ -277,7 +254,13 @@ struct UpdateNoticeSheet: View {
 
     @ViewBuilder
     private func pageView(_ page: Page) -> some View {
-        if page.items.isEmpty {
+        if page.isScannerFeature {
+            ScrollView {
+                ScannerUpdateFeature()
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 20)
+            }
+        } else if page.items.isEmpty {
             mediaPageView(page)
         } else {
             listPageView(page)
@@ -378,6 +361,143 @@ struct UpdateNoticeSheet: View {
             }
             .padding()
         }
+    }
+}
+
+/// The featured opening page of the existing versioned What's New notice.
+/// Artwork is the cleared public-domain Mutopia Maple Leaf Rag and its actual Aria scan.
+struct ScannerUpdateFeature: View {
+    var original: Image = Image("ScanUpdateOriginal")
+    var result: Image = Image("ScanUpdateResult")
+    private let blue = Color(red: 0.0, green: 0.478, blue: 1.0)
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("SCANNING · BETA")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(blue)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background(blue.opacity(0.08), in: Capsule())
+
+            VStack(spacing: 12) {
+                Text("Scan your\nsheet music.")
+                    .font(.system(size: 36, weight: .bold))
+                    .tracking(-1.1)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                Text("Turn a PDF or photo into a score you can play, transpose and edit.")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            illustration
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("A printed Maple Leaf Rag page becomes an editable score in Aria")
+
+            HStack(alignment: .top, spacing: 8) {
+                benefit("Multi-page PDFs", symbol: "list.bullet")
+                benefit("Chords & lyrics", textSymbol: "♫")
+                benefit("Works offline", symbol: "lock")
+            }
+
+            VStack(spacing: 7) {
+                Text("Find Scan in your library.")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Scanning is in beta. Review and fine-tune your score in the editor.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var illustration: some View {
+        GeometryReader { geometry in
+            let width = min(geometry.size.width, 380)
+            let origin = (geometry.size.width - width) / 2
+            let cardWidth = width * 0.72
+            ZStack {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(LinearGradient(colors: [blue.opacity(0.11), blue.opacity(0.025)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+
+                original.resizable()
+                    .frame(width: width * 0.42, height: width * 0.55)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
+                    .rotationEffect(.degrees(-9))
+                    .position(x: origin + width * 0.25, y: 112)
+
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("IN ARIA")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(1)
+                        Spacer()
+                        Text("EDITABLE")
+                            .font(.system(size: 8, weight: .semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(blue.opacity(0.07), in: Capsule())
+                    }
+                    .foregroundStyle(blue)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
+
+                    result.resizable()
+                        .frame(width: cardWidth, height: cardWidth * 4 / 3)
+                        .offset(y: -cardWidth * 0.06)
+                        .frame(width: cardWidth, height: cardWidth * 0.58, alignment: .top)
+                        .clipped()
+
+                    Text("Ready to play & edit")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(blue)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(blue.opacity(0.055))
+                }
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 15))
+                .shadow(color: blue.opacity(0.14), radius: 15, x: 0, y: 10)
+                .frame(width: cardWidth)
+                .position(x: origin + width * 0.61, y: 124)
+
+                Text("PDF / PHOTO")
+                    .font(.system(size: 8, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(blue.opacity(0.8))
+                    .position(x: origin + width * 0.16, y: 229)
+            }
+        }
+        .frame(height: 250)
+    }
+
+    private func benefit(_ title: String, symbol: String? = nil, textSymbol: String? = nil) -> some View {
+        VStack(spacing: 8) {
+            Group {
+                if let textSymbol {
+                    Text(textSymbol)
+                } else if let symbol {
+                    Image(systemName: symbol)
+                }
+            }
+            .font(.system(size: 19, weight: .medium))
+            .foregroundStyle(blue)
+            .frame(height: 23)
+            .accessibilityHidden(true)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
