@@ -34,7 +34,6 @@ struct OpenSourceLegalView: View {
                         LegalNoticeRow(name: "MuseScore General SoundFonts", detail: "MIT according to embedded SoundFont metadata")
                     }
 
-                    #if !os(Android)
                     LegalSection(title: "Score Scanning") {
                         LegalNoticeRow(name: "ScoreScanner / ScannerCore 0.1.19", detail: "GPLv3, copyright 2026 Jack Gruber")
                         Link(destination: URL(string: "https://github.com/hdi200/ScoreScanner/tree/0.1.19")!) {
@@ -52,8 +51,6 @@ struct OpenSourceLegalView: View {
                         LegalNoticeRow(name: "PaddleOCR PP-OCRv6 (chord and text readers)", detail: "Apache License 2.0, copyright PaddlePaddle Authors; the chord reader modified (fine-tuned)")
                         LegalNoticeRow(name: "ONNX Runtime", detail: "MIT License, copyright Microsoft Corporation")
                     }
-                    #endif
-
                     LegalSection(title: "Qt Framework Notice") {
                         Text("Aria is built with Qt libraries and tools. The applicable Qt license terms depend on the exact Qt distribution used for the release build.")
                         Text("The release source package includes the corresponding Qt notices and applicable license text.")

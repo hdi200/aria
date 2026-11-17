@@ -62,22 +62,22 @@ Aria includes code and assets from the MuseScore Studio source tree and several 
 - Source release includes the Swift reader, ONNX model assets, tests, package manifest, model training/export scripts and vendor provenance. Keep the tag publicly available for the shipped build.
 - Bundled notice: `Resources/Legal/ScoreScanner-NOTICE.txt`; license text: `Resources/Legal/GPL-3.0.txt`.
 
-## copisteria and copista-2m (iOS score scanning)
+## copisteria and copista-2m (score scanning)
 
-- Component: KobiMusic's copisteria optical music reader and its copista-2m models, ported to Swift in the ScoreScanner package (`ScannerCore`), used by Aria's Scan on iOS.
+- Component: KobiMusic's copisteria optical music reader and its copista-2m models, ported to Swift in the ScoreScanner package (`ScannerCore`), used by Aria's Scan.
 - Source: https://github.com/kobimusic/copisteria
 - License: Apache License 2.0. Copyright 2026 KobiMusic.
 - Bundled files: `Resources/Legal/copisteria-Apache-2.0.txt` and `Resources/Legal/copisteria-NOTICE.txt` (the NOTICE asks that KobiMusic be credited and the repository linked).
 
-## PaddleOCR PP-OCRv6 (iOS score scanning, chord names and page text)
+## PaddleOCR PP-OCRv6 (score scanning, chord names and page text)
 
-- Component: PaddleOCR's PP-OCRv6 small text recognition model, fine-tuned on chord symbols and exported to ONNX in the ScoreScanner package (`ScannerCore`, `chord_rec.onnx`), used by Aria's Scan on iOS to read chord names.
+- Component: PaddleOCR's PP-OCRv6 small text recognition model, fine-tuned on chord symbols and exported to ONNX in the ScoreScanner package (`ScannerCore`, `chord_rec.onnx`), used by Aria's Scan to read chord names.
 - Source: https://github.com/PaddlePaddle/PaddleOCR
 - Component, text: the same model as released (unmodified weights), exported to ONNX (`text_rec.onnx`), reads the title, composer, tempo and staff text.
 - License: Apache License 2.0. Copyright PaddlePaddle Authors. The chord reader's weights are a modified version (trained further on synthetic chord-symbol images).
 - Bundled files: `Resources/Legal/copisteria-Apache-2.0.txt` (the Apache License 2.0 text) and `Resources/Legal/PaddleOCR-NOTICE.txt`.
 
-## ONNX Runtime (iOS score scanning)
+## ONNX Runtime (score scanning)
 
 - Component: ONNX Runtime 1.27.0 (Microsoft's official iOS binary and Objective-C bindings), which runs the copista-2m models and the chord reader.
 - Source: https://github.com/microsoft/onnxruntime
