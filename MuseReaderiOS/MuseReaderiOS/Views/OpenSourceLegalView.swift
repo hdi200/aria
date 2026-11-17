@@ -36,6 +36,12 @@ struct OpenSourceLegalView: View {
 
                     #if !os(Android)
                     LegalSection(title: "Score Scanning") {
+                        LegalNoticeRow(name: "ScoreScanner / ScannerCore 0.1.19", detail: "GPLv3, copyright 2026 Jack Gruber")
+                        Link(destination: URL(string: "https://github.com/hdi200/ScoreScanner/tree/0.1.19")!) {
+                            Label("Scanner source code", systemImage: "arrow.up.right.square")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.blue)
+                        }
                         Text("Scan reads printed music with copisteria by KobiMusic, and chord names and page text with PaddleOCR PP-OCRv6 models (one fine-tuned on chord symbols), run with ONNX Runtime.")
                         LegalNoticeRow(name: "copisteria and copista-2m", detail: "Apache License 2.0, copyright 2026 KobiMusic")
                         Link(destination: URL(string: "https://github.com/kobimusic/copisteria")!) {

@@ -54,6 +54,14 @@ Aria includes code and assets from the MuseScore Studio source tree and several 
 - License: depends on the Qt license used for the release build.
 - Release requirement: preserve and publish the applicable Qt license/commercial notices for the exact Qt distribution used to build the app.
 
+## ScoreScanner / ScannerCore
+
+- Component: ScoreScanner's ScannerCore Swift package, version 0.1.19, used for sheet-music scanning.
+- Source and exact release: https://github.com/hdi200/ScoreScanner/tree/0.1.19
+- License: GNU General Public License version 3 for original code, copyright 2026 Jack Gruber. Third-party code and model assets retain their original licenses below.
+- Source release includes the Swift reader, ONNX model assets, tests, package manifest, model training/export scripts and vendor provenance. Keep the tag publicly available for the shipped build.
+- Bundled notice: `Resources/Legal/ScoreScanner-NOTICE.txt`; license text: `Resources/Legal/GPL-3.0.txt`.
+
 ## copisteria and copista-2m (iOS score scanning)
 
 - Component: KobiMusic's copisteria optical music reader and its copista-2m models, ported to Swift in the ScoreScanner package (`ScannerCore`), used by Aria's Scan on iOS.
