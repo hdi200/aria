@@ -1187,7 +1187,10 @@ struct ScoreReaderView: View {
             }
         }
         .scoreReaderSheet(isPresented: $isUpdateNoticePresented) {
-            UpdateNoticeSheet()
+            UpdateNoticeSheet(openLibraryAction: {
+                isUpdateNoticePresented = false
+                closeReader()
+            })
                 .onAppear { updateNoticeStore.markNoticeSeen() }
         }
         .scoreReaderSheet(isPresented: Binding(

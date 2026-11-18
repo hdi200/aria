@@ -77,6 +77,7 @@ struct UpdateNoticeStore {
 struct UpdateNoticeSheet: View {
     @Environment(\.dismiss) var dismiss
     @State var page = 0
+    var openLibraryAction: (() -> Void)? = nil
 
     /// iOS's system blue. Android's accent colour is the Material theme's slate.
     #if os(Android)
@@ -115,52 +116,26 @@ struct UpdateNoticeSheet: View {
     // Android shows only the SF Symbols Skip maps to Material icons (anything else is a "missing icon" warning):
     // camera.viewfinder, lock, list.bullet, square.and.arrow.up, play and checkmark.circle are on its list;
     // chords use a text glyph.
-    private static let fixes: [Item] = {
-        var fixes: [Item] = []
-        #if !os(Android)
-        fixes.append(Item(
+    private static let fixes: [Item] = [
+        Item(
             systemImage: "checkmark.circle",
-            title: "Stylus input",
-            detail: "Third-party styluses now enter notes instead of getting stuck in Select."
-        ))
-        #endif
-        fixes += [
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Screen lock",
-                detail: "The screen no longer locks during playback or the count-in."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Replacing instruments",
-                detail: "Sound, name and transposition now update in the score and its parts."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Imported parts",
-                detail: "Each part of an imported score opens with its own music."
-            ),
-            Item(
-                systemImage: "checkmark.circle",
-                title: "Reordering instruments",
-                detail: "The new order now reaches the score."
-            ),
-        ]
-        return fixes
-    }()
+            title: "Screen lock",
+            detail: "The screen no longer locks during playback or the count-in."
+        ),
+        Item(
+            systemImage: "checkmark.circle",
+            title: "Reordering instruments",
+            detail: "The new order now reaches the score."
+        ),
+    ]
 
     private static var items: [Item] {
         [
             Item(
                 systemImage: "music.note",
-                textSymbol: "♪♪",
+                textSymbol: "V1",
                 title: "Voices on phones",
                 detail: "Choose a voice when entering notes on your phone, not just on a tablet."
-            ),
-            Item(
-                systemImage: "play",
-                title: "D.S. and Coda play",
-                detail: "D.S., D.C., To Coda and Fine now play as jumps in imported MusicXML files."
             ),
         ]
     }
@@ -255,10 +230,13 @@ struct UpdateNoticeSheet: View {
     @ViewBuilder
     private func pageView(_ page: Page) -> some View {
         if page.isScannerFeature {
-            ScrollView {
-                ScannerUpdateFeature()
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 20)
+            GeometryReader { geometry in
+                ScrollView {
+                    ScannerUpdateFeature(contentWidth: max(1, geometry.size.width - 48),
+                                         openLibraryAction: openLibraryAction)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 20)
+                }
             }
         } else if page.items.isEmpty {
             mediaPageView(page)
@@ -278,6 +256,8 @@ struct UpdateNoticeSheet: View {
                         Group {
                             if let textSymbol = item.textSymbol {
                                 Text(textSymbol)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .monospacedDigit()
                             } else {
                                 Image(systemName: item.systemImage)
                             }
@@ -365,14 +345,16 @@ struct UpdateNoticeSheet: View {
 }
 
 /// The featured opening page of the existing versioned What's New notice.
-/// Artwork is the cleared public-domain Mutopia Maple Leaf Rag and its actual Aria scan.
+/// Artwork is the owner's selected Ain't Misbehavin' sheet and its actual Aria scan.
 struct ScannerUpdateFeature: View {
     var original: Image = Image("ScanUpdateOriginal")
     var result: Image = Image("ScanUpdateResult")
+    var contentWidth: CGFloat = 342
+    var openLibraryAction: (() -> Void)? = nil
     private let blue = Color(red: 0.0, green: 0.478, blue: 1.0)
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 8) {
             Text("SCANNING · BETA")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.5)
@@ -397,87 +379,105 @@ struct ScannerUpdateFeature: View {
 
             illustration
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("A printed Maple Leaf Rag page becomes an editable score in Aria")
+                .accessibilityLabel("A printed Ain’t Misbehavin’ page becomes an editable score in Aria")
+
+            Divider()
 
             HStack(alignment: .top, spacing: 8) {
-                benefit("Multi-page PDFs", symbol: "list.bullet")
+                benefit("Multi-page PDFs", symbol: "doc.text")
                 benefit("Chords & lyrics", textSymbol: "♫")
-                benefit("Works offline", symbol: "lock")
+                benefit("On-device\nscanning", symbol: "cpu")
             }
+            .padding(.vertical, 3)
 
-            VStack(spacing: 7) {
-                Text("Find Scan in your library.")
-                    .font(.system(size: 15, weight: .semibold))
-                Text("Scanning is in beta. Review and fine-tune your score in the editor.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            Divider()
+
+            Group {
+                if let openLibraryAction {
+                    Button(action: openLibraryAction) { libraryRow }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Returns to your library, where you can choose Scan")
+                        .accessibilityIdentifier("updateNoticeOpenLibrary")
+                } else {
+                    libraryRow
+                }
             }
+            .padding(.horizontal, 16)
+
+            Text("Scanning is in beta.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
     }
 
     private var illustration: some View {
-        GeometryReader { geometry in
-            let width = min(geometry.size.width, 380)
-            let origin = (geometry.size.width - width) / 2
-            let cardWidth = width * 0.72
+        let width = min(contentWidth, 480)
+        let paperWidth = width * 0.39
+        let tabletWidth = width * 0.47
+        let tabletHeight = (tabletWidth - 10) * 4 / 3 + 10
+        let height = tabletHeight + 24
+        return VStack(spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(LinearGradient(colors: [blue.opacity(0.11), blue.opacity(0.025)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-
                 original.resizable()
-                    .frame(width: width * 0.42, height: width * 0.55)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                    .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 8)
-                    .rotationEffect(.degrees(-9))
-                    .position(x: origin + width * 0.25, y: 112)
-
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("IN ARIA")
-                            .font(.system(size: 9, weight: .bold))
-                            .tracking(1)
-                        Spacer()
-                        Text("EDITABLE")
-                            .font(.system(size: 8, weight: .semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(blue.opacity(0.07), in: Capsule())
+                    .scaledToFit()
+                    .frame(width: paperWidth, height: paperWidth * 1724 / 1324)
+                    .background(Color.white)
+                    .overlay {
+                        ScanUpdateCorners().stroke(blue, lineWidth: 2).padding(-4)
                     }
+                    .shadow(color: .black.opacity(0.14), radius: 14, x: 0, y: 10)
+                    .rotationEffect(.degrees(-5))
+                    .position(x: width * 0.205, y: height / 2)
+
+                Text("→")
+                    .font(.system(size: width * 0.08, weight: .medium))
                     .foregroundStyle(blue)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 11)
+                    .position(x: width * 0.46, y: height / 2)
 
-                    result.resizable()
-                        .frame(width: cardWidth, height: cardWidth * 4 / 3)
-                        .offset(y: -cardWidth * 0.06)
-                        .frame(width: cardWidth, height: cardWidth * 0.58, alignment: .top)
-                        .clipped()
-
-                    Text("Ready to play & edit")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(blue)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(blue.opacity(0.055))
-                }
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 15))
-                .shadow(color: blue.opacity(0.14), radius: 15, x: 0, y: 10)
-                .frame(width: cardWidth)
-                .position(x: origin + width * 0.61, y: 124)
-
-                Text("PDF / PHOTO")
-                    .font(.system(size: 8, weight: .bold))
-                    .tracking(0.5)
-                    .foregroundStyle(blue.opacity(0.8))
-                    .position(x: origin + width * 0.16, y: 229)
+                result.resizable()
+                    .scaledToFit()
+                    .frame(width: tabletWidth - 10, height: tabletHeight - 10)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(5)
+                    .background(Color(white: 0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 15))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 15)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.20), radius: 12, x: 0, y: 10)
+                    .frame(width: tabletWidth, height: tabletHeight)
+                    .position(x: width * 0.755, y: height / 2)
             }
+            .frame(width: width, height: height)
+
         }
-        .frame(height: 250)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var libraryRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "folder")
+                .font(.system(size: 19))
+                .accessibilityHidden(true)
+            Text("Find Scan in your library.")
+                .font(.system(size: 14, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .accessibilityHidden(true)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(Color.gray.opacity(0.07), in: RoundedRectangle(cornerRadius: 15))
+        .contentShape(RoundedRectangle(cornerRadius: 15))
     }
 
     private func benefit(_ title: String, symbol: String? = nil, textSymbol: String? = nil) -> some View {
@@ -489,15 +489,40 @@ struct ScannerUpdateFeature: View {
                     Image(systemName: symbol)
                 }
             }
-            .font(.system(size: 19, weight: .medium))
+            .font(.system(size: 22, weight: .medium))
             .foregroundStyle(blue)
-            .frame(height: 23)
+            .frame(height: 26)
             .accessibilityHidden(true)
             Text(title)
                 .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 28, alignment: .top)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// Scan brackets around the printed sheet, drawn natively on both platforms.
+struct ScanUpdateCorners: Shape {
+    func path(in rect: CGRect) -> Path {
+        let length: CGFloat = 10
+        return Path { path in
+            path.move(to: CGPoint(x: 0, y: length))
+            path.addLine(to: .zero)
+            path.addLine(to: CGPoint(x: length, y: 0))
+            path.move(to: CGPoint(x: rect.width - length, y: 0))
+            path.addLine(to: CGPoint(x: rect.width, y: 0))
+            path.addLine(to: CGPoint(x: rect.width, y: length))
+            path.move(to: CGPoint(x: rect.width, y: rect.height - length))
+            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+            path.addLine(to: CGPoint(x: rect.width - length, y: rect.height))
+            path.move(to: CGPoint(x: length, y: rect.height))
+            path.addLine(to: CGPoint(x: 0, y: rect.height))
+            path.addLine(to: CGPoint(x: 0, y: rect.height - length))
+        }
     }
 }
 

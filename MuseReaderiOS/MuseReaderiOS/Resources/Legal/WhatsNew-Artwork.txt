@@ -1,7 +1,6 @@
 What’s New scanning illustration
 
-Original sheet: Maple Leaf Rag by Scott Joplin, typeset by Chris Sawer.
-Mutopia reference: Mutopia-2011/11/13-23, https://www.mutopiaproject.org/.
-The typesetter placed this edition in the public domain, as stated in the PDF.
-The result image is Aria’s scan of that sheet. Both images are used in the static
-What’s New feature illustration. No user-owned score is included.
+Ain’t Misbehavin’, music by Fats Waller and Harry Brooks, lyrics by Andy Razaf.
+Original sheet from freedjazz.org; the sheet carries its U.S. public-domain notice.
+The original and its actual Aria scan were selected by the owner for this in-app
+feature presentation. The source image retains the printed attribution.

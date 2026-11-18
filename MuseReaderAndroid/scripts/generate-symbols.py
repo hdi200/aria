@@ -24,6 +24,8 @@ OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "Aria", "Android", "app"
 # SF Symbol name -> Material icon name. ".fill" names use the filled style; the rest
 # the outlined style, like SF Symbols' outline/fill pairs.
 SYMBOLS = {
+    "cpu": "memory",
+    "folder": "folder",
     # Returned from code (instrument families, sort orders, annotation tools, ...).
     "accordion": "piano",
     "circle": "radio_button_unchecked",
