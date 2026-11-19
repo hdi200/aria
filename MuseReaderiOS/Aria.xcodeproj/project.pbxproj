@@ -180,6 +180,7 @@
 				6D8D1FC12F8D3F3C00DD6DE1 /* Frameworks */,
 				6D8D1FC22F8D3F3C00DD6DE1 /* Resources */,
 				6DAB5E0D2FF0000000DD6DE1 /* Embed Foundation Extensions */,
+				6DCA5C042FE0000000DD6DE1 /* Fix ONNX Runtime Minimum OS */,
 			);
 			buildRules = (
 			);
@@ -322,6 +323,21 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		6DCA5C042FE0000000DD6DE1 /* Fix ONNX Runtime Minimum OS */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/onnxruntime.framework/Info.plist",
+				"$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/onnxruntime.framework/onnxruntime",
+			);
+			name = "Fix ONNX Runtime Minimum OS";
+			outputPaths = ();
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\nif [ \"$PLATFORM_NAME\" != \"iphoneos\" ] || [ \"$ACTION\" = \"indexbuild\" ]; then\n  exit 0\nfi\nset -- --fix-framework \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/onnxruntime.framework\" --app-minimum \"$IPHONEOS_DEPLOYMENT_TARGET\"\nif [ \"${CODE_SIGNING_ALLOWED:-NO}\" = \"YES\" ]; then\n  set -- \"$@\" --sign-identity \"$EXPANDED_CODE_SIGN_IDENTITY\"\nfi\n/usr/bin/python3 \"$SRCROOT/scripts/check-framework-minimum-os.py\" \"$@\"\n";
+		};
 		6D8D20012F8D4F7E00DD6DE1 /* Build MuseScore Render Artifacts */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -408,7 +424,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AriaShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "AriaShare-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Aria;
@@ -418,7 +434,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 7.5.0;
+				MARKETING_VERSION = 7.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -436,7 +452,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = AriaShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "AriaShare-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Aria;
@@ -446,7 +462,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 7.5.0;
+				MARKETING_VERSION = 7.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hdi200.ariascore.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -588,7 +604,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Aria.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -624,7 +640,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 7.5.0;
+				MARKETING_VERSION = 7.7.0;
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";
@@ -771,7 +787,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Aria.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
@@ -807,7 +823,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 7.5.0;
+				MARKETING_VERSION = 7.7.0;
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphoneos*]" = "/tmp/musescore-score-render-core-ios";
 				"MUSEREADER_RENDER_BUILD_DIR[sdk=iphonesimulator*]" = "/tmp/musescore-score-render-core-simulator";
 				OTHER_LDFLAGS = "$(inherited)";
@@ -1088,7 +1104,7 @@
 			repositoryURL = "https://github.com/hdi200/ScoreScanner.git";
 			requirement = {
 				kind = upToNextMinorVersion;
-				minimumVersion = 0.1.0;
+				minimumVersion = 0.1.23;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

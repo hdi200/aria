@@ -3107,6 +3107,32 @@ struct ScoreScanMenu<MenuLabel: View>: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        // Keep the badge outside the native label's clipped menu-transition snapshot.
+        .overlay(alignment: .topTrailing) {
+            ScoreScanBetaBadge()
+                .offset(x: 4, y: -7)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .accessibilityValue("Beta")
+    }
+}
+
+/// An overlay so the beta label does not change the Scan button's size or hit target.
+struct ScoreScanBetaBadge: View {
+    var body: some View {
+        Text("BETA")
+            .font(.system(size: 8, weight: .semibold))
+            .tracking(0.25)
+            .foregroundStyle(LibraryPalette.accent)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.white, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(LibraryPalette.accent, lineWidth: 0.8)
+            }
+            .fixedSize()
     }
 }
 

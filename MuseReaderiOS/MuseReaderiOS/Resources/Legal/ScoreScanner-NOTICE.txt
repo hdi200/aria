@@ -1,11 +1,11 @@
-ScoreScanner / ScannerCore 0.1.19
+ScoreScanner / ScannerCore 0.1.23
 Copyright 2026 Jack Gruber
 
 Original code is licensed under the GNU General Public License version 3, without
 warranty. See the bundled GPL-3.0.txt for the full license.
 
 Corresponding source, including model assets and build scripts:
-https://github.com/hdi200/ScoreScanner/tree/0.1.19
+https://github.com/hdi200/ScoreScanner/tree/0.1.23
 
 Third-party code and models retain their original licenses. See the bundled
 THIRD_PARTY_NOTICES.md, copisteria-Apache-2.0.txt, copisteria-NOTICE.txt,

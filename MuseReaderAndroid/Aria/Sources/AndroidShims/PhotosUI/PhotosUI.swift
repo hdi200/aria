@@ -1,5 +1,5 @@
-// Android stand-in for the PhotosUI the video export sheet uses: picking one image for a
-// video background. Opens Android's document picker for images (AriaDocumentPicker.kt),
+// Android stand-in for PhotosUI, used by scanning and video backgrounds.
+// Opens Android's document picker for images (AriaDocumentPicker.kt),
 // which also lists the photo apps, and hands back the copied file.
 #if os(Android)
 @_exported import Foundation
@@ -32,7 +32,14 @@ public struct PhotosPickerItem: Equatable, Hashable, Sendable {
 public extension View {
     func photosPicker(isPresented: Binding<Bool>, selection: Binding<PhotosPickerItem?>,
                       matching filter: PHPickerFilter? = nil, photoLibrary: PHPhotoLibrary) -> some View {
-        modifier(AndroidPhotosPicker(isPresented: isPresented, selection: selection, mimeType: filter?.mimeType ?? "image/*"))
+        // This shim has no skipstone plugin to generate a custom ViewModifier's
+        // Java peer. Attach the bridged task directly; modifier(...) would use
+        // Skip's default EmptyModifier and never run the picker.
+        task(id: isPresented.wrappedValue) { @MainActor in
+            guard isPresented.wrappedValue else { return }
+            defer { isPresented.wrappedValue = false }
+            await AndroidPhotosPicker(selection: selection, mimeType: filter?.mimeType ?? "image/*").pick()
+        }
     }
 
     func photosPicker(isPresented: Binding<Bool>, selection: Binding<PhotosPickerItem?>,
@@ -41,20 +48,11 @@ public extension View {
     }
 }
 
-struct AndroidPhotosPicker: ViewModifier {
-    @Binding var isPresented: Bool
+private struct AndroidPhotosPicker {
     @Binding var selection: PhotosPickerItem?
     let mimeType: String
 
-    func body(content: Content) -> some View {
-        content.task(id: isPresented) {
-            guard isPresented else { return }
-            await pick()
-            isPresented = false
-        }
-    }
-
-    private func pick() async {
+    @MainActor func pick() async {
         guard let picker = try? AnyDynamicObject(className: "aria.skip.AriaDocumentPicker") else { return }
         let started: Bool? = try? picker.pick(mimeType, false)
         guard started == true else { return }

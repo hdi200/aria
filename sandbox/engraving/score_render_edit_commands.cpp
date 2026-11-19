@@ -352,13 +352,17 @@
 
             mu::engraving::Fraction ratio(tupletCount, 2);
             ratio.setDenominator(mu::engraving::Tuplet::computeTupletDenominator(tupletCount, chordRest->ticks()));
-            score->addTuplet(chordRest, ratio, numberType, bracketType);
+            if (!score->addTuplet(chordRest, ratio, numberType, bracketType)) {
+                score->endCmd(true);
+                errorMessage = "Could not add a tuplet at the current selection.";
+                return false;
+            }
             added = true;
         }
 
         if (!added) {
             score->endCmd(true);
-            errorMessage = "MuseScore could not add a tuplet at the current selection.";
+            errorMessage = "Could not add a tuplet at the current selection.";
             return false;
         }
 
@@ -4221,16 +4225,18 @@
         }
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader keyboard pitch"));
+        configureInputCursorForChordRest(score, selectedChordRestItem, selectedNote != nullptr);
+        mu::engraving::NoteVal noteValue = score->noteVal(midiPitch, selectedChordRestItem->staffIdx(), true);
+        // A valid written MIDI pitch can transpose outside 0...127; -1 is
+        // NoteVal's rest sentinel, so reject it before any rest replacement.
+        if (!mu::engraving::pitchIsValid(midiPitch) || !mu::engraving::pitchIsValid(noteValue.pitch)
+            || !normalizeNoteValueTpcs(noteValue, staff, selectedChordRestItem->tick(), preferFlats)) {
+            score->endCmd(true);
+            errorMessage = "MuseReader could not resolve that MIDI pitch for the current selection.";
+            return false;
+        }
         if (selectedNote) {
-            configureInputCursorForChordRest(score, selectedNote->chord(), true);
             score->inputState().setRest(false);
-            mu::engraving::NoteVal noteValue = score->noteVal(midiPitch, selectedNote->staffIdx(), true);
-            if (!mu::engraving::pitchIsValid(noteValue.pitch)
-                || !normalizeNoteValueTpcs(noteValue, selectedNote->staff(), selectedNote->tick(), preferFlats)) {
-                score->endCmd(true);
-                errorMessage = "MuseReader could not resolve that MIDI pitch for the selected note.";
-                return false;
-            }
             score->undoChangePitch(selectedNote, noteValue.pitch, noteValue.tpc1, noteValue.tpc2);
         } else if (selectionState.isMeasure
                    && selectedSingleOrMMRestMeasureRange(score, nullptr, nullptr, nullptr, nullptr)) {

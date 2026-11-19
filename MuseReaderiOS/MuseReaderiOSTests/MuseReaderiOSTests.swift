@@ -381,10 +381,18 @@ struct MuseReaderiOSTests {
 
     @Test
     func pageTurnSwipePolicySupportsHorizontalNavigationOnly() {
-        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: -80, height: 4)) == .next)
-        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 80, height: -4)) == .previous)
-        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 20, height: 0)) == nil)
-        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 60, height: 90)) == nil)
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: -80, height: 4), hasPlaybackSelection: false) == .next)
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 80, height: -4), hasPlaybackSelection: false) == .previous)
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 20, height: 0), hasPlaybackSelection: false) == nil)
+        #expect(ScoreReaderPageSwipePolicy.direction(for: CGSize(width: 60, height: 90), hasPlaybackSelection: false) == nil)
+    }
+
+    @Test func releasingPlaybackHighlightDoesNotTurnPages() {
+        for width in [CGFloat(-300), -48, 48, 300] {
+            #expect(ScoreReaderPageSwipePolicy.direction(
+                for: CGSize(width: width, height: 8), hasPlaybackSelection: true
+            ) == nil)
+        }
     }
 
     @Test

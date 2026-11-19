@@ -4,8 +4,8 @@
 //
 //  The library's Scan flow: pick a source (camera, photo, PDF or image file), read it with
 //  ScoreScanService while a progress sheet shows the reader's status, then import the MusicXML
-//  through the normal import path and open it in the reader. Android has no camera scan yet (no
-//  VisionKit there); photos and files work the same.
+//  through the normal import path and open it in the reader. Android uses Play services for
+//  multi-page camera capture; photos and files use the same recognition pipeline.
 //
 
 import PhotosUI
@@ -290,7 +290,28 @@ struct LibraryScanFlow: ViewModifier {
                 }
                 proceed(source)
             }
-            #if !os(Android)
+            #if os(Android)
+            .task(id: isCameraPresented) {
+                guard isCameraPresented else { return }
+                do {
+                    let file = try await AndroidDocumentCamera.capture()
+                    isCameraPresented = false
+                    isPreparingSource = false
+                    if let file {
+                        prepare { try ScoreScanService.input(fromFileAt: file) }
+                    } else {
+                        model.scanDidEnd()
+                    }
+                } catch {
+                    isCameraPresented = false
+                    isPreparingSource = false
+                    model.scanDidEnd()
+                    if !(error is CancellationError) {
+                        sourceError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    }
+                }
+            }
+            #else
             .fullScreenCover(isPresented: $isCameraPresented) {
                 DocumentCameraView(
                     onFinish: { pages in
@@ -430,8 +451,8 @@ struct LibraryScanFlow: ViewModifier {
         switch source {
         case .camera:
             #if os(Android)
-            model.scanDidEnd()
-            sourceError = "Camera scanning isn’t available on Android yet. Take a photo, then choose it."
+            isPreparingSource = true
+            isCameraPresented = true
             #else
             guard DocumentCameraView.isSupported else {
                 model.scanDidEnd()
@@ -527,6 +548,9 @@ struct ScoreScanProgressSheet: View {
         .padding(.horizontal, 24)
         .padding(.top, 24)
         .padding(.bottom, 20)
+        // Android: size the sheet to this content's natural height, like the metronome/parts
+        // panels and the beta notice. Measuring the whole sheet makes it jitter up and down.
+        .popoverPanelScrollContent()
         .frame(maxWidth: .infinity, alignment: .top)
         .background(LibraryPalette.background.ignoresSafeArea())
         .presentationDragIndicator(.hidden)
@@ -842,6 +866,11 @@ struct ScanBetaNoticeSheet: View {
             .padding(.bottom, 20)
             .frame(maxWidth: 520)
             .frame(maxWidth: .infinity)
+            #if os(Android)
+            // Measure the natural content, like the metronome/parts panels. Measuring
+            // the outer ScrollView feeds the sheet's detent back into its own height.
+            .popoverPanelScrollContent()
+            #endif
             #if !os(Android)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                 contentHeight = max(1, height.rounded(.up))

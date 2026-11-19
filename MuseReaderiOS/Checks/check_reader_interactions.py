@@ -21,6 +21,8 @@ sources = [declaration('Models/ScoreReaderStateEditing.swift', kind, name) for k
     ('enum', 'ScorePageTapInputKind'), ('enum', 'ScoreReaderToolCategory'),
     ('struct', 'ScoreReaderToolModePolicy'), ('struct', 'ScoreInstrumentMove')]]
 sources += [declaration('Models/ScoreReaderStatePlayback.swift', 'struct', 'ScoreScreenAwakeRequests'),
+            declaration('Views/ScoreReaderView.swift', 'enum', 'ScoreReaderSequenceDirection'),
+            declaration('Views/ScoreReaderView.swift', 'struct', 'ScoreReaderPageSwipePolicy'),
             declaration('Views/CreateNewScoreView.swift', 'struct', 'InstrumentReorderDropDelegate'),
             declaration('Views/ScoreReaderMoreEditors.swift', 'struct', 'ScorePartLayoutDropDelegate')]
 # Minimal data records let the production delegates run against test bindings.
@@ -34,6 +36,18 @@ struct ScorePart: Identifiable { let id: String }
 checks = r'''
 @main struct Checks {
     @MainActor static func main() {
+        // A held range drag can cross the page-swipe threshold before lift-off.
+        // The pending selection claims it even before measure geometry arrives.
+        for width in [CGFloat(-300), -48, 48, 300] {
+            let drag = CGSize(width: width, height: 8)
+            assert(ScoreReaderPageSwipePolicy.direction(for: drag, hasPlaybackSelection: true) == nil)
+            assert(ScoreReaderPageSwipePolicy.direction(for: drag, hasPlaybackSelection: false)
+                == (width < 0 ? .next : .previous))
+        }
+        for drag in [CGSize(width: 47, height: 0), CGSize(width: 90, height: 120),
+                     CGSize(width: -90, height: -90)] {
+            assert(ScoreReaderPageSwipePolicy.direction(for: drag, hasPlaybackSelection: false) == nil)
+        }
         for enabled in [false, true] {
             for explicit in [false, true] {
                 assert(ScoreReaderToolModePolicy.insertsNoteAtPoint(enabled: enabled, inputKind: .direct,
@@ -97,7 +111,7 @@ checks = r'''
             draggedOriginalIndex: originalBinding, didDrop: { callbacks.append($0) })
         assert(layout.commitMove() && callbacks.last!.partID == "c" && callbacks.last!.beforePartID == "a")
         assert(parts.map(\.id) == ["a", "b", "c"])
-        print("PASS reader input, screen-awake ownership, queued reorders, and drop delegates")
+        print("PASS page-swipe selection priority, reader input, screen-awake ownership, queued reorders, and drop delegates")
     }
 }
 '''

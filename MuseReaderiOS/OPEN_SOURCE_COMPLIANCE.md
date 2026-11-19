@@ -25,6 +25,21 @@ Use this checklist for every public build of Aria.
 - Do not move `sandbox/engraving` immediately before release; document it as the render-core source location instead.
 - Verify create, edit, save, reopen, import, export, playback, and legal screen access on a device before tagging.
 
+## Current prepared update — November 19, 2026
+
+- Versions: iOS **7.7.0 (17)** and Android **1.4.0 (28)**.
+- [x] Both apps pin public ScannerCore **0.1.23**, revision `d14c2a2dbbda5c1e4aad98c1ba20dc51be5b5ce0`; anonymous tag resolution verified.
+- [x] Normal remote package resolution succeeds for both platforms; no local scanner override.
+- [x] ScannerCore unit tests: **167 tests in 19 suites pass**.
+- [x] Bundled scanner notices and legal-screen source links point to 0.1.23.
+- [ ] New release artifacts and device legal-screen/smoke checks verified.
+- [ ] Matching Aria source tags published before distribution.
+
+The owner authorized local commits, release builds, installation on their iPhone/iPad,
+and store metadata drafts. **No pushes, binary/screenshot uploads, review submission
+or publishing** are authorized in this preparation step. Earlier versioned evidence
+below is historical and does not verify these new binaries.
+
 ## ScoreScanner / ScannerCore release
 
 Keep the app and ScannerCore package together in the existing
@@ -35,14 +50,22 @@ Keep the app and ScannerCore package together in the existing
 - [x] Aria pins 0.1.19, revision `bdfb8cda1e604525ee139a9423ed2edc81390ecd`.
 - [x] Aria's legal screen and bundled notices link to that exact scanner source tag.
 - [x] Push the prepared scanner source and 0.1.19 tag after owner approval.
-- [ ] Make the existing repository publicly readable and verify the tag without authentication.
+- [x] Existing repository is public; anonymous tag check resolves 0.1.19 to `bdfb8cda1e604525ee139a9423ed2edc81390ecd`.
 - [x] Resolve Aria's normal remote package without a local override.
-- [ ] Build the release and verify scanning and legal screen access on a device.
+- [x] Build local iOS 7.6.0 (16) and Android 1.3.0 (25) candidates; bundled notices/model checks pass.
+- [x] Record scanning evidence: owner-reported iPhone smoke/first use; build-24 physical cloud Moto PDF open/save/reopen; final build-25 phone/tablet emulator checks.
+- [ ] Verify legal screen access on the release device; bundle checks do not establish this UI check.
 - [ ] Publish the matching Aria source tag for the app version/build being distributed.
 
 Preserve Package.swift, ScannerCore and ONNX bridge sources, model files, tests,
 model export/training scripts, dependency checksums, license texts and Vendor notices
 at the exact source tag. Local scan data and private benchmark outputs stay excluded.
 Do not ship until the remaining release gates above are complete.
+
+November 18 handoff: the exported iOS 7.6.0 (16) IPA has the ONNX packaging correction
+but does not contain the later native editing crash fixes rebuilt into Android 25.
+Matching Aria source publication remains pending. Owner-handled Play state was not
+rechecked after the instruction to stop Chrome. Local detailed evidence and remaining
+checks are in `promo/scan-import/RELEASE_STATUS.md` at the repository root.
 
 Reference: [GPLv3 sections 1 and 6](https://www.gnu.org/licenses/gpl-3.0.html).

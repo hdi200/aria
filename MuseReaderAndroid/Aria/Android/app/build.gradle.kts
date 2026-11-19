@@ -179,6 +179,8 @@ dependencies {
     implementation("com.google.android.play:review:2.0.2")
     // Score scanning: ScannerCore loads libonnxruntime.so from this (the version the iOS app uses).
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.27.0")
+    // Multi-page document capture. Play services returns one PDF for the existing score reader.
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 }
 
 // Check at execution time so even aggregate tasks cannot produce a debug-signed release.

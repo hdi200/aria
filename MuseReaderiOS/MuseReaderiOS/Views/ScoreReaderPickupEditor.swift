@@ -90,6 +90,7 @@ struct ScoreReaderPickupEditorSheet: View {
                 .padding(.horizontal, isPhoneLandscape ? 20 : 24)
                 .padding(.top, isPhoneLandscape ? 10 : 20)
                 .padding(.bottom, isPhoneLandscape ? 12 : 24)
+                .popoverPanelScrollContent(isPhoneLandscape)
             }
 
             HStack(spacing: 12) {
@@ -124,6 +125,7 @@ struct ScoreReaderPickupEditorSheet: View {
             }
             .padding(.horizontal, isPhoneLandscape ? 20 : 24)
             .padding(.bottom, isPhoneLandscape ? 12 : 22)
+            .popoverPanelFixedFooter(isPhoneLandscape)
         }
         .presentationDetents(pickupDetents)
         .presentationCompactPopoverWhenAvailable(isPhoneLandscape)

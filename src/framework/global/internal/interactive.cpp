@@ -165,8 +165,15 @@ IInteractive::Result Interactive::openStandardSync(const std::string& type, cons
                                                    const ButtonDatas& buttons, int defBtn,
                                                    const Options& options, const std::string& dialogTitle)
 {
+    const auto interactiveProvider = provider();
+    if (!interactiveProvider) {
+        // The render core registers IInteractive without a UI module. A missing
+        // dialog must never imply consent to a destructive operation.
+        LOGW() << "Cannot show " << type << " without an interactive provider: " << contentTitle;
+        return IInteractive::Result((int)IInteractive::Button::Cancel);
+    }
     UriQuery q = makeQuery(type, contentTitle, text, buttons, defBtn, options, dialogTitle);
-    RetVal<Val> rv = provider()->openSync(q);
+    RetVal<Val> rv = interactiveProvider->openSync(q);
 
     if (rv.ret) {
         return makeResult(rv.val);

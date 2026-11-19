@@ -21,11 +21,13 @@
 #include "score_render_core.h"
 #include "engraving/compat/scoreaccess.h"
 #include "engraving/dom/chord.h"
+#include "engraving/dom/input.h"
 #include "engraving/dom/measure.h"
 #include "engraving/dom/note.h"
 #include "engraving/dom/segment.h"
 #include "engraving/dom/tie.h"
 #include "importexport/musicxml/internal/import/importmusicxml.h"
+#include "iinteractive.h"
 
 namespace {
 
@@ -3052,6 +3054,116 @@ void testOldAriaPartNamesRequireApproval(const std::filesystem::path& testRoot)
     expect(savedPartTrackName(part) == "Keys &amp; Synth", "The part kept the double-escaped name: " + savedPartTrackName(part));
 }
 
+// Play Console build 23: the invalid-ratio warning has no UI provider in Aria.
+void testRejectedTupletKeepsScore(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 0);
+    const std::string whole = "<durationType>whole</durationType>";
+    xml.replace(xml.find(whole), whole.size(), "<durationType>512th</durationType>");
+    auto session = openSession(root, "rejected-tuplet", xml);
+    auto interactive = muse::modularity::fixmeIoc()->resolve<muse::IInteractive>("headless-dialog-regression");
+    expect(interactive != nullptr, "Headless runtime did not register IInteractive");
+    const auto answer = interactive->warningSync("Replace measure contents?", "headless cancellation regression",
+                                                 { muse::IInteractive::Button::Cancel, muse::IInteractive::Button::Ok },
+                                                 muse::IInteractive::Button::Ok);
+    expect(answer.standardButton() == muse::IInteractive::Button::Cancel,
+           "A missing UI provider silently approved replacing measure contents");
+    auto state = selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    const auto before = saveSnapshot(*session, root, "rejected-tuplet-before");
+    const bool couldUndo = state.canUndo;
+    std::string error;
+    expect(!session->addTuplet(5, state, error), "An unrepresentable 512th-note quintuplet reported success");
+    expect(!error.empty(), "Rejected tuplet did not provide an error");
+    const auto music = [](const std::string& value) {
+        return std::regex_replace(value, std::regex("\\s*<eid>[^<]*</eid>"), "");
+    };
+    expect(music(before) == music(saveSnapshot(*session, root, "rejected-tuplet-after")),
+           "Rejected tuplet changed the score");
+    msr::render::RenderedPage page;
+    expect(session->renderPage(0, 144, page, error), "Rejected tuplet left an unrenderable score: " + error);
+    state = selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(state.canUndo == couldUndo, "Rejected tuplet added an undo command");
+    auto reopened = msr::render::ScoreRenderSession::open((root / "rejected-tuplet-after.mscx").string(), error);
+    expect(reopened && reopened->renderPage(0, 144, page, error), "Rejected tuplet did not save and reopen: " + error);
+    expect(session->applyDuration(4, state, error), "Could not select a valid tuplet duration: " + error);
+    const auto validBefore = music(saveSnapshot(*session, root, "valid-tuplet-before"));
+    expect(session->addTuplet(3, state, error), "Valid triplet was rejected: " + error);
+    const auto added = music(saveSnapshot(*session, root, "valid-tuplet-added"));
+    expect(added.find("<Tuplet") != std::string::npos, "Valid triplet was not saved");
+    expect(session->undo(state, error), "Could not undo valid triplet: " + error);
+    expect(validBefore == music(saveSnapshot(*session, root, "valid-tuplet-undone")), "Triplet undo changed the original music");
+    expect(session->redo(state, error), "Could not redo valid triplet: " + error);
+    expect(added == music(saveSnapshot(*session, root, "valid-tuplet-redone")), "Triplet redo changed the music");
+
+    std::string mixedXml = scoreXml(0, { { 60, 14 } }, 1);
+    const std::string rest = "<Rest><durationType>measure</durationType><duration>4/4</duration></Rest>";
+    mixedXml.replace(mixedXml.find(rest), rest.size(),
+                     "<Chord><durationType>512th</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>");
+    auto mixed = openSession(root, "mixed-rejected-tuplet", mixedXml);
+    const auto notes = scanScore(*mixed, { 60, 62 }, 0);
+    const auto first = noteWithPitch(notes, 60);
+    const auto last = noteWithPitch(notes, 62);
+    expect(mixed->selectMeasureRange(0, first.x, first.y, last.x, last.y, state, error), "Could not select mixed tuplet range: " + error);
+    const auto mixedBefore = music(saveSnapshot(*mixed, root, "mixed-tuplet-before"));
+    expect(!mixed->addTuplet(5, state, error), "Mixed valid/invalid tuplets reported success");
+    expect(mixedBefore == music(saveSnapshot(*mixed, root, "mixed-tuplet-after")), "A rejected range left a partial tuplet edit");
+}
+
+// A written MIDI pitch of 1 on a B-flat instrument becomes sounding pitch -1,
+// NoteVal's rest sentinel. addPitch must not cast that rest to a Chord.
+void testKeyboardRejectsOutOfRangeTransposedPitch(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 1);
+    const std::string instrument = "<instrumentId>strings.violin</instrumentId>";
+    xml.replace(xml.find(instrument), instrument.size(), instrument + "<transposeDiatonic>-1</transposeDiatonic><transposeChromatic>-2</transposeChromatic>");
+    auto session = openSession(root, "keyboard-transposed-boundary", xml);
+    int pages = 0;
+    std::string error;
+    expect(session->setConcertPitchEnabled(false, pages, error), "Could not enable written pitch: " + error);
+    const auto rests = restsByX(scanScore(*session, {}, 1));
+    expect(!rests.empty(), "Keyboard boundary fixture has no rest");
+    auto state = selectAt(*session, rests.front());
+    const auto before = saveSnapshot(*session, root, "keyboard-boundary-before");
+    for (const int pitch : { 1, 0, -1, 128 }) {
+        error.clear();
+        expect(!session->setSelectionMIDIPitch(pitch, false, state, error), "Out-of-range keyboard pitch reported success");
+        expect(!error.empty(), "Invalid keyboard pitch did not provide an error");
+    }
+    const auto music = [](const std::string& value) {
+        return std::regex_replace(value, std::regex("\\s*<eid>[^<]*</eid>"), "");
+    };
+    expect(music(before) == music(saveSnapshot(*session, root, "keyboard-boundary-after")), "Invalid keyboard pitch changed the score");
+    expect(session->setSelectionMIDIPitch(62, false, state, error), "Valid transposed keyboard pitch was rejected: " + error);
+    expect(state.selection.isNote && state.selection.midiPitch == 60, "Written D did not create sounding C");
+    expect(session->undo(state, error), "Could not undo keyboard insertion: " + error);
+    expect(music(before) == music(saveSnapshot(*session, root, "keyboard-boundary-undone")), "Keyboard undo changed the original rest");
+}
+
+void testNoteEntryDoesNotCastRestToChord(const std::filesystem::path& root)
+{
+    // Initialize the headless runtime before creating an engine-only control.
+    auto runtime = openSession(root, "rest-result-runtime", scoreXml(0, { { 60, 14 } }, 0));
+    const auto input = root / "rest-result.musicxml";
+    writeFile(input, R"XML(<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+<part id="P1"><measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+<note><rest/><duration>4</duration><type>whole</type></note></measure></part></score-partwise>)XML");
+    std::unique_ptr<mu::engraving::MasterScore> score(
+        mu::engraving::compat::ScoreAccess::createMasterScoreWithBaseStyle(nullptr));
+    expect(mu::iex::musicxml::importMusicXml(score.get(), muse::String::fromStdString(input.string()), false)
+           == mu::engraving::Err::NoError, "Could not import note-entry control");
+    auto* segment = score->firstMeasure()->findSegment(mu::engraving::SegmentType::ChordRest, mu::engraving::Fraction(0, 1));
+    expect(segment && segment->element(0) && segment->element(0)->isRest(), "Note-entry control has no rest");
+    score->inputState().setTrack(0);
+    score->inputState().moveInputPos(mu::engraving::toChordRest(segment->element(0)));
+    score->inputState().setDuration(mu::engraving::TDuration(mu::engraving::DurationType::V_QUARTER));
+    score->startCmd(muse::TranslatableString::untranslatable("rest result regression"));
+    mu::engraving::NoteVal restValue(-1);
+    expect(score->addPitch(restValue, false) == nullptr, "Rest-valued input returned a note");
+    score->endCmd(true);
+    score->doLayout();
+    expect(segment->element(0) && segment->element(0)->isRest(), "Rejected note entry did not roll back to its rest");
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -3206,6 +3318,9 @@ int main()
         return passed ? 0 : 1;
     }
     bool passed = true;
+    passed &= runTest("rejected tuplet keeps the score", [&] { testRejectedTupletKeepsScore(testDirectory.path); });
+    passed &= runTest("keyboard rejects out-of-range transposed pitch", [&] { testKeyboardRejectsOutOfRangeTransposedPitch(testDirectory.path); });
+    passed &= runTest("note entry does not cast a rest to chord", [&] { testNoteEntryDoesNotCastRestToChord(testDirectory.path); });
     passed &= runTest("MusicXML let-ring ties never acquire an incoming backlink", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, true); });
     passed &= runTest("ordinary MusicXML ties keep both endpoints", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, false); });
     for (const std::string version : { "3.02", "4.60", "4.70" }) {

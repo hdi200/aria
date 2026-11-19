@@ -233,7 +233,15 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
             is.segment(), track, nval, duration, stemDirection, /* forceAccidental */ false, is.articulationIds(), /* rhythmic */ false,
             externalInputState);
         if (seg) {
-            note = toChord(seg->element(track))->upNote();
+            EngravingItem* inserted = seg->element(track);
+            // setNoteRest may return its original segment when no note can be
+            // inserted, or insert a rest for NoteVal's -1 sentinel. Neither is
+            // a Chord, and must not be read as one by upNote().
+            if (!inserted || !inserted->isChord() || toChord(inserted)->notes().empty()) {
+                LOGW() << "Note entry did not produce a nonempty chord";
+                return nullptr;
+            }
+            note = toChord(inserted)->upNote();
         }
     }
 

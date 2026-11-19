@@ -7,6 +7,9 @@
 
     <!-- permissions needed for using the internet or an embedded WebKit browser -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ML Kit's document scanner activity is portrait-only, which makes Play infer a
+         required portrait screen and exclude landscape-only devices. Aria itself rotates. -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
     <!-- <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> -->
 
     <application

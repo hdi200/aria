@@ -17,6 +17,18 @@ Before September 2026 the engine was an April 2026 snapshot of upstream `main`
 They were first made on a branch `aria-475` (based on `v4.7.5`) in a separate MuseScore
 clone. To see the current patch set, diff these folders against a checkout of `v4.7.6`.
 
+Headless editing (Play Console build 23 regressions):
+- `framework/global/internal/interactive.cpp`: synchronous standard dialogs with no UI
+  provider log a diagnostic and return Cancel. Desktop dialogs retain their provider path;
+  missing UI never silently approves replacing score content.
+- `dom/noteentry.cpp`: after `setNoteRest`, `addPitch` checks that the returned segment
+  contains a nonempty chord before calling `upNote`. A rest-valued `NoteVal` or failed
+  insertion must not be cast to `Chord`.
+- Bridge `score_render_edit_commands.cpp` rolls back a rejected tuplet instead of reporting
+  success, and rejects keyboard pitches outside MIDI range after instrument transposition
+  before replacing notes or rests. Tests cover 512th-note quintuplet rejection and valid
+  triplet undo/redo, plus transposing keyboard boundaries and the rest-result engine path.
+
 Crash guards for measures that are not laid out on a system (`measure->system()` null):
 - `dom/measure.cpp`, `dom/score.cpp`, `rendering/score/horizontalspacing.cpp`,
   `markerlayout.cpp`, `masklayout.cpp`, `slurtielayout.cpp`, `systemlayout.cpp`

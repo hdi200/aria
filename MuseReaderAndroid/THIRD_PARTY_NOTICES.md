@@ -30,8 +30,11 @@ upstream binaries.
   information is available from [Qt's source repositories](https://code.qt.io/cgit/)
   and [Qt licensing](https://www.qt.io/licensing). Use the matching 6.11.1 sources
   and the applicable module licenses when obtaining or redistributing Qt.
-- Google Play Billing 8.0.0 and Play In-App Review 2.0.2, AndroidX/Compose and Kotlin
+- Google Play Billing 8.0.0, Play In-App Review 2.0.2 and ML Kit Document Scanner
+  (`play-services-mlkit-document-scanner` 16.0.0), AndroidX/Compose and Kotlin
   dependencies are resolved by Gradle from their declared public repositories.
+  Google Play services supplies the document-capture UI and processing components;
+  Aria receives the selected multi-page PDF for its existing on-device score reader.
 - Generated Material icon assets use Google's Material Design icons. The
   generator records their upstream location; the icons use Apache-2.0.
 - Android SDK/NDK, Swift, JDK, Gradle, CMake, Ninja and Skip's compiler/plugin tools

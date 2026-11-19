@@ -1,5 +1,7 @@
 # Video export: handoff brief (updated 2026-09-29)
 
+> Dated video-export design/checkpoint, not a current release-source or store-status record. This scanning follow-up did not re-audit the video pipeline or establish a new physical-iPad video pass. Current source/release status is in local `../promo/scan-import/RELEASE_STATUS.md`; do not infer current uncommitted changes from this September snapshot.
+
 Export → **Video** renders a scrolling-score MP4 of the displayed score, either the full
 score or each selected part, with its playback audio. The approved scrolling
 appearance, score fonts, photo background, and tapered cursor are committed.

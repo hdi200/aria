@@ -26,7 +26,7 @@ private enum PendingLibraryAction {
 }
 
 /// Where a scan's pages come from. Scanning reads printed music into MusicXML with ScannerCore on
-/// iOS and Android; Android has no camera scan yet.
+/// iOS and Android, with each platform's document camera.
 enum ScoreScanSourceKind: String, Identifiable, CaseIterable, Sendable {
     case camera
     case photos
@@ -36,11 +36,7 @@ enum ScoreScanSourceKind: String, Identifiable, CaseIterable, Sendable {
 
     /// The sources the Scan menu lists here, in its order: a document first, then a photo, then the camera.
     static var offered: [ScoreScanSourceKind] {
-        #if os(Android)
-        return [.files, .photos]
-        #else
         return [.files, .photos, .camera]
-        #endif
     }
 
     var title: String {

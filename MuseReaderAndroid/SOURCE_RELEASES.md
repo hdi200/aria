@@ -18,9 +18,18 @@ Source snapshots exclude the same local/marketing material as iOS; see README.md
 | `android-1.0.0-11` | 1.0.0 (11), prepared October 28, 2026 | `d4f6050515` | `dd4d1c80108d9e49e789593733de074370afc692e596fafd268f6a92701bef07` |
 | `android-1.0.0-12` | 1.0.0 (12), prepared October 28, 2026 | `a2d17e9cff` | `f5d5f92c765c05fe6d7cf397cce0b4ac70cd3cb4d2b88503e940a566654894b6` |
 | `android-1.0.0-13` | 1.0.0 (13), prepared November 2, 2026 | `cff63670ec` | `22bcb7feab1eb0ca3f00d296f6e2686259fe46ef4e5d8efc1e32697326c9f46d` |
-| Pending: `android-1.3.0-24` | 1.3.0 (24), prepared locally; not uploaded | `995261f439de4d3c678e18ebb4475faf7c3c4c6e` | `1804490fcd7e1006a8d81a67990a634e0ffb97f2df6e87ff14e4336e5c5aad1b` |
+| Pending: `android-1.3.0-24` | 1.3.0 (24), historical local candidate; hash does not identify the owner-uploaded artifact | `995261f439de4d3c678e18ebb4475faf7c3c4c6e` | `1804490fcd7e1006a8d81a67990a634e0ffb97f2df6e87ff14e4336e5c5aad1b` |
+| Pending: `android-1.3.0-25` | 1.3.0 (25), prepared locally with document camera and editing crash fixes | `230d1091b06aaedbedde058da3eeff9d846fec16` plus recorded local source delta; matching release commit pending | `6ce7bdda7552a2148f007f4ae96927bee00ce925c60559f6367a1f77c853cc7e` |
 
-Both use the same Android production implementation and pinned dependencies;
+November 18 handoff: production 24 was independently observed live. The owner then
+handled Play and asked us to stop Chrome; build-25 submission/rollout was not
+independently rechecked. The final local build-25 hash is recorded above, not a
+claim that this artifact was uploaded. ScannerCore 0.1.19 is publicly available at
+revision `bdfb8cda1e604525ee139a9423ed2edc81390ecd`. Pending Aria tags above have
+not been published; a baseline alone omits the local release changes. Exact source
+patches and artifact provenance are retained in the local scanning release record.
+
+Historical builds 5 and 6 use the same Android production implementation and pinned dependencies;
 version 6 adds the shared instrument-catalog and library-confirmation fixes and
 increments the Android build number. Version 7 adds crash fixes in the shared engine
 (FluidSynth locking, cloned-score file info), the vendored skip-ui padding patch and the

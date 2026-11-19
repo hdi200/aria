@@ -21,8 +21,13 @@ struct ScoreReaderSetlistNavigation {
 }
 
 struct ScoreReaderPageSwipePolicy {
-    static func direction(for translation: CGSize, threshold: CGFloat = 48) -> ScoreReaderSequenceDirection? {
-        guard abs(translation.width) >= threshold,
+    static func direction(
+        for translation: CGSize,
+        hasPlaybackSelection: Bool,
+        threshold: CGFloat = 48
+    ) -> ScoreReaderSequenceDirection? {
+        guard !hasPlaybackSelection,
+              abs(translation.width) >= threshold,
               abs(translation.width) > abs(translation.height)
         else {
             return nil
@@ -2153,15 +2158,18 @@ struct ScoreReaderView: View {
         .padding(.top, max(duoBookTopReserve - 12, 0))
         #if !os(Android)
         // Android's page-local pointer detector arbitrates held selection versus
-        // page swipes. An ancestor simultaneous observer ignores consumed moves
-        // and would turn the page even after the child owns a held range drag.
+        // page swipes. iOS's simultaneous observer must discard a drag claimed
+        // by a playback selection, including one still loading its measure regions.
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
                 .onEnded { value in
                     guard !isAnnotationModeActive else {
                         return
                     }
-                    guard let direction = ScoreReaderPageSwipePolicy.direction(for: value.translation) else {
+                    guard let direction = ScoreReaderPageSwipePolicy.direction(
+                        for: value.translation,
+                        hasPlaybackSelection: readerState.pendingPlaybackSelectionStartPoint != nil
+                    ) else {
                         return
                     }
                     switch direction {

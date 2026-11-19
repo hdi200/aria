@@ -550,6 +550,7 @@ struct ScoreReaderTimeSignatureSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, isPhoneLandscape ? 10 : 20)
                 .padding(.bottom, isPhoneLandscape ? 12 : 24)
+                .popoverPanelScrollContent(isPhoneLandscape)
             }
 
             HStack(spacing: 12) {
@@ -583,6 +584,7 @@ struct ScoreReaderTimeSignatureSheet: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, isPhoneLandscape ? 12 : 22)
+            .popoverPanelFixedFooter(isPhoneLandscape)
         }
         .presentationDetents(timeSignatureDetents)
         .presentationCompactPopoverWhenAvailable(isPhoneLandscape)
@@ -894,6 +896,7 @@ struct ScoreReaderKeySignatureSheet: View {
                 .padding(.horizontal, isPhoneLandscape ? 20 : 24)
                 .padding(.top, isPhoneLandscape ? 10 : 14)
                 .padding(.bottom, isPhoneLandscape ? 12 : 28)
+                .popoverPanelScrollContent(isPhoneLandscape)
             }
 
             Divider()
@@ -928,6 +931,7 @@ struct ScoreReaderKeySignatureSheet: View {
                 .opacity(canCommit ? 1 : 0.78)
             }
             .padding(isPhoneLandscape ? 16 : 24)
+            .popoverPanelFixedFooter(isPhoneLandscape)
         }
         .presentationDetents(keySignatureDetents)
         .presentationCompactPopoverWhenAvailable(isPhoneLandscape)

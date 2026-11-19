@@ -3,6 +3,27 @@
 Remaining device checks. Remove an item once it passes. Confirmed failures are tracked in
 [MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md](MuseReaderiOS/FEATURE_REQUESTS_AND_BUGS.md).
 
+November 18 release handoff: [current results](promo/scan-import/RELEASE_STATUS.md).
+Both platforms pin ScannerCore 0.1.19. Version labels below identify when a fixture
+was added, not the current pin. Owner-reported general iPhone scanning/first use,
+iPhone Simulator editing/playback, build-24 cloud 12-page open/save/reopen and
+build-25 phone/tablet emulator tests passed. Those passes do not establish every
+individual fixture below. Physical Android camera quality, physical iPad/stylus,
+release legal-screen access and billing/account checks remain unverified.
+
+
+## iOS loop-highlight release (November 19, BUG-031)
+
+- [ ] In View mode, hold a bar at either outer edge, drag across bars and lift off.
+  The highlighted range stays on the same page; no queued page turn is released.
+- [ ] Repeat in two-page spread and release outside the score after highlighting.
+- [ ] Repeat immediately after opening, before playback/measure geometry is prepared.
+- [ ] Tap to dismiss the selection, then verify normal left/right page swipes work.
+
+Production gesture-policy checks and iOS typecheck pass (0 errors, unchanged 72
+warnings). Physical iOS gesture verification is pending. Existing exported release
+binaries do not include this source-only fix. Android's page-local gesture path is unchanged.
+
 ## Scanned tuplets (ScannerCore 0.1.17)
 
 - [ ] **Fresh scan of Indian Summer:** bars 4 and 18 retain their triplets; a missed note's time is an invisible rest.
@@ -10,7 +31,7 @@ Remaining device checks. Remove an item once it passes. Confirmed failures are t
 - [ ] **Fresh scan of Chopin Fantaisie-Impromptu:** playback improves without missing recognised notes. Desktop validation: 17 to 5 stretched bars out of 70; five problem bars remain.
 - [ ] **Open and play another scanned lead sheet:** no new import or playback regression.
 
-ScannerCore validation: 116 tests pass; 720 outputs compared, no notes/bars lost and no file worse on stretched bars. Bridge's misread duplets remain unresolved. These phone checks are still pending.
+Historical 0.1.17 validation: 116 tests passed; 720 outputs compared, no notes/bars lost and no file worse on stretched bars. Release 0.1.19 later passed 157 unit tests. Bridge's misread duplets remain unresolved. These specific phone fixtures are still pending.
 
 ## Share to Aria and ScoreScanner (needs a device build)
 
@@ -66,9 +87,9 @@ ScannerCore validation: 116 tests pass; 720 outputs compared, no notes/bars lost
 - [ ] **Multi-page PDF.** Scan a 4-page PDF from Files: four page segments fill one by one, and
   progress never steps backwards while the next page's notes are read during this page's
   chords. A long PDF shows a single bar instead of segments.
-- [ ] **Throttled or failed cloud.** With Apple's model throttling, a passing note appears and
-  the scan carries on; when it fails, the sheet offers Read Notes Only, which finishes with
-  notes and no chords.
+- [ ] **Local recognition failure.** An unreadable/blank image gives a useful error;
+  dismissing it releases the free-library slot and another scan can start. Aria uses
+  bundled local readers; the former Apple cloud-throttling scenario is obsolete.
 - [ ] **Cancel** mid-scan returns to the library with nothing added and the slot freed.
 
 ## Time signatures

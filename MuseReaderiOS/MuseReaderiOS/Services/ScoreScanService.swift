@@ -8,7 +8,7 @@
 //  navigation and other staff text with its text reader (all ONNX Runtime). Nothing is sent to
 //  Apple's model or any server. Printed D.S./D.C., To Coda and Fine reach the score as playback jumps
 //  when their segno and coda were found. On Android the app draws the pages (AriaScanPages.kt) and
-//  ScannerCore reads them the same way; there is no camera scan there yet.
+//  ScannerCore reads them the same way, including PDFs from Android's document camera.
 //
 
 import Foundation

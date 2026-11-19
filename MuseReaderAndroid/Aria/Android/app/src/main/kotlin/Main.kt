@@ -59,6 +59,16 @@ open class AndroidAppMain: Application {
 
 /// AndroidAppMain is initial `androidx.appcompat.app.AppCompatActivity`, and must match `activity android:name` in the AndroidMainfest.xml file.
 open class MainActivity: AppCompatActivity {
+    private val documentCameraLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        AriaDocumentCameraFlow.handleResult(this, result.resultCode, result.data)
+    }
+
+    fun launchDocumentCamera(sender: android.content.IntentSender) {
+        documentCameraLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(sender).build())
+    }
+
     constructor() {
     }
 

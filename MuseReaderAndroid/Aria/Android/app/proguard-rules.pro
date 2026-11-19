@@ -13,5 +13,9 @@
 # Aria: Kotlin helpers Swift calls through reflection (AnyDynamicObject).
 -keep class aria.skip.Aria** { *; }
 
+# ML Kit discovers these registrars by their manifest names and invokes their
+# no-argument constructors reflectively. Keep the constructors in release builds.
+-keep class * implements com.google.firebase.components.ComponentRegistrar { public <init>(); }
+
 # Qt Core JNI_OnLoad and native plugin calls resolve these names/members directly.
 -keep class org.qtproject.qt.android.** { *; }

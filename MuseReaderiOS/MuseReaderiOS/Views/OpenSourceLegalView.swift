@@ -35,8 +35,8 @@ struct OpenSourceLegalView: View {
                     }
 
                     LegalSection(title: "Score Scanning") {
-                        LegalNoticeRow(name: "ScoreScanner / ScannerCore 0.1.19", detail: "GPLv3, copyright 2026 Jack Gruber")
-                        Link(destination: URL(string: "https://github.com/hdi200/ScoreScanner/tree/0.1.19")!) {
+                        LegalNoticeRow(name: "ScoreScanner / ScannerCore 0.1.23", detail: "GPLv3, copyright 2026 Jack Gruber")
+                        Link(destination: URL(string: "https://github.com/hdi200/ScoreScanner/tree/0.1.23")!) {
                             Label("Scanner source code", systemImage: "arrow.up.right.square")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.blue)

@@ -54,6 +54,8 @@ SYMBOLS = {
     "arrowtriangle.down.fill": "arrow_drop_down",
     "arrowtriangle.up.fill": "arrow_drop_up",
     "book.pages": "menu_book",
+    "camera": "photo_camera",
+    "camera.viewfinder": "document_scanner",
     "checkmark": "check",
     "checkmark.circle": "check_circle",
     "checkmark.circle.fill": "check_circle",

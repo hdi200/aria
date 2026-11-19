@@ -216,4 +216,25 @@ extension View {
         self
         #endif
     }
+
+    /// For a sheet that is a compact popover only sometimes
+    /// (`presentationCompactPopoverWhenAvailable(enabled)`): measure only then, so a stale
+    /// height is never left for the next panel.
+    @ViewBuilder
+    func popoverPanelScrollContent(_ enabled: Bool) -> some View {
+        if enabled {
+            popoverPanelScrollContent()
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func popoverPanelFixedFooter(_ enabled: Bool) -> some View {
+        if enabled {
+            popoverPanelFixedFooter()
+        } else {
+            self
+        }
+    }
 }
