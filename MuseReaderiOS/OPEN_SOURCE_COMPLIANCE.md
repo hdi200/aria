@@ -32,7 +32,9 @@ Use this checklist for every public build of Aria.
 - [x] Normal remote package resolution succeeds for both platforms; no local scanner override.
 - [x] ScannerCore unit tests: **167 tests in 19 suites pass**.
 - [x] Bundled scanner notices and legal-screen source links point to 0.1.23.
-- [ ] New release artifacts and device legal-screen/smoke checks verified.
+- [x] New iOS archive/IPA and Android AAB built and structurally validated; model hashes and notices match 0.1.23.
+- [x] iOS 7.7.0 (17) installed over existing iPhone/iPad apps, installed version queried and launch succeeded on both.
+- [ ] Device legal-screen and full scanning/editing smoke checks on the new binaries; installation/launch is not that check.
 - [ ] Matching Aria source tags published before distribution.
 
 The owner authorized local commits, release builds, installation on their iPhone/iPad,

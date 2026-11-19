@@ -20,6 +20,13 @@ Source snapshots exclude the same local/marketing material as iOS; see README.md
 | `android-1.0.0-13` | 1.0.0 (13), prepared November 2, 2026 | `cff63670ec` | `22bcb7feab1eb0ca3f00d296f6e2686259fe46ef4e5d8efc1e32697326c9f46d` |
 | Pending: `android-1.3.0-24` | 1.3.0 (24), historical local candidate; hash does not identify the owner-uploaded artifact | `995261f439de4d3c678e18ebb4475faf7c3c4c6e` | `1804490fcd7e1006a8d81a67990a634e0ffb97f2df6e87ff14e4336e5c5aad1b` |
 | Pending: `android-1.3.0-25` | 1.3.0 (25), prepared locally with document camera and editing crash fixes | `230d1091b06aaedbedde058da3eeff9d846fec16` plus recorded local source delta; matching release commit pending | `6ce7bdda7552a2148f007f4ae96927bee00ce925c60559f6367a1f77c853cc7e` |
+| Pending: `android-1.4.0-28` | 1.4.0 (28), built November 19, 2026; metadata draft only, no binary upload | `ce89f6c4678daa67142c21d6466a6d4151d76707` | `3185f1fb64c03eeb294a9eed78718facedd00b58f57bd2eca9e83328719838b2` |
+
+November 19 handoff: the new local 1.4.0 (28) bundle uses public ScannerCore 0.1.23,
+revision `d14c2a2dbbda5c1e4aad98c1ba20dc51be5b5ce0`. Signed bundle/model/native checks
+pass. Production draft 22 has the new name and notes, but no binary attached. The
+owner authorized local commits/builds and metadata drafts only; no push, upload or
+submission was performed. The pending source tag is not a published tag.
 
 November 18 handoff: production 24 was independently observed live. The owner then
 handled Play and asked us to stop Chrome; build-25 submission/rollout was not
