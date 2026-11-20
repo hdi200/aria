@@ -1104,7 +1104,7 @@
 			repositoryURL = "https://github.com/hdi200/ScoreScanner.git";
 			requirement = {
 				kind = upToNextMinorVersion;
-				minimumVersion = 0.1.23;
+				minimumVersion = 0.1.24;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

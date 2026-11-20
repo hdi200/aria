@@ -56,8 +56,8 @@ Aria includes code and assets from the MuseScore Studio source tree and several 
 
 ## ScoreScanner / ScannerCore
 
-- Component: ScoreScanner's ScannerCore Swift package, version 0.1.23, used for sheet-music scanning.
-- Source and exact release: https://github.com/hdi200/ScoreScanner/tree/0.1.23
+- Component: ScoreScanner's ScannerCore Swift package, version 0.1.24, used for sheet-music scanning.
+- Source and exact release: https://github.com/hdi200/ScoreScanner/tree/0.1.24
 - License: GNU General Public License version 3 for original code, copyright 2026 Jack Gruber. Third-party code and model assets retain their original licenses below.
 - Source release includes the Swift reader, ONNX model assets, tests, package manifest, model training/export scripts and vendor provenance. Keep the tag publicly available for the shipped build.
 - Bundled notice: `Resources/Legal/ScoreScanner-NOTICE.txt`; license text: `Resources/Legal/GPL-3.0.txt`.

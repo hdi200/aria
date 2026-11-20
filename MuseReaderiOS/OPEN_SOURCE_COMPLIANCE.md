@@ -28,6 +28,10 @@ Use this checklist for every public build of Aria.
 ## Current prepared update — November 19, 2026
 
 - Versions: iOS **7.7.0 (17)** and Android **1.4.0 (28)**.
+- November 20: ScoreScanner's history was rewritten to move its standalone app out; every tag kept the same
+  ScannerCore source under a new commit ID (0.1.23 is now `d22855b`; `d14c2a2` no longer exists). Source now pins
+  **0.1.24** (`c474e9659ab9bdda51775cb647e58cb441c69a43`) with notices and legal links to match. The 7.7.0 (17) and
+  1.4.0 (28) binaries below were built with 0.1.23 and show 0.1.23 links; build again before shipping 0.1.24.
 - [x] Both apps pin public ScannerCore **0.1.23**, revision `d14c2a2dbbda5c1e4aad98c1ba20dc51be5b5ce0`; anonymous tag resolution verified.
 - [x] Normal remote package resolution succeeds for both platforms; no local scanner override.
 - [x] ScannerCore unit tests: **167 tests in 19 suites pass**.
