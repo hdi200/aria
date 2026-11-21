@@ -12,17 +12,23 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## MuseScore 4.7.7 engine (November 21)
+
+- [ ] **New Score → Big Band** (and Jazz Combo, Bluegrass Band): enter bass notes and play.
+  The bass is a plucked double bass, not silent and not a piano.
+- [ ] **Add instrument:** Double Bass (plucked) and Acoustic Bass Guitar are in the list and play.
+- [ ] **Euphonium:** B♭1 is not marked out of range.
+- [ ] **Save** a score and open it in desktop MuseScore 4.7.6: no warning.
+- [ ] **Android:** launch the build with the new `libaria_engine.so`, open a score, play and save.
+
+Host checks against desktop 4.7.6 are unchanged on every score (IOS_CHANGES #134).
+
 ## iOS loop-highlight release (November 19, BUG-031)
 
-- [ ] In View mode, hold a bar at either outer edge, drag across bars and lift off.
-  The highlighted range stays on the same page; no queued page turn is released.
-- [ ] Repeat in two-page spread and release outside the score after highlighting.
-- [ ] Repeat immediately after opening, before playback/measure geometry is prepared.
-- [ ] Tap to dismiss the selection, then verify normal left/right page swipes work.
+Owner confirmed the fix on iPad (November 21). One check remains:
 
-Production gesture-policy checks and iOS typecheck pass (0 errors, unchanged 72
-warnings). Physical iOS gesture verification is pending. Existing exported release
-binaries do not include this source-only fix. Android's page-local gesture path is unchanged.
+- [ ] On iPhone, in View mode, hold a bar at a page edge, drag across bars and lift off:
+  the page doesn't turn, and normal page swipes still work after dismissing the selection.
 
 ## Scanned tuplets (ScannerCore 0.1.17)
 

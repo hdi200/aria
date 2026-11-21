@@ -8,7 +8,7 @@ and the rules the owner works by. It links to the detailed docs rather than repe
 
 Aria reads, plays and edits MuseScore (`.mscz`, `.mscx`) and MusicXML scores on iPhone,
 iPad, iPhone Duo and Android phones and tablets. Notation, playback, saving and export all
-come from MuseScore Studio's own engine (4.7.6), so a score saved in Aria opens unchanged
+come from MuseScore Studio's own engine (4.7.7), so a score saved in Aria opens unchanged
 in desktop MuseScore Studio. The UI is touch-first SwiftUI, and Android runs the same
 Swift.
 
@@ -34,7 +34,7 @@ of duplicating it, and keep iOS and Android the same.
 
 | Path | What's there |
 | --- | --- |
-| `src/`, `thirdparty/`, other upstream folders | MuseScore Studio 4.7.6 source with a few Aria patches. Treat as upstream: change only through the steps in `ENGINE.md`. |
+| `src/`, `thirdparty/`, other upstream folders | MuseScore Studio 4.7.7 source with a few Aria patches. Treat as upstream: change only through the steps in `ENGINE.md`. |
 | `sandbox/engraving/` | Aria's **render core**: a C++ layer over the engine that opens, renders, edits, plays, saves and exports scores. One class, `msr::render::ScoreRenderSession`. |
 | `sandbox/engraving/compat/` | Compatibility checks against desktop MuseScore, and engine-update notes. |
 | `sandbox/engraving/tests/` | Native tests for the render core. |
@@ -154,7 +154,7 @@ run together. Commands, emulators and Play Console rules are in
 
 ## File compatibility (non-negotiable)
 
-- Scores Aria saves must open unchanged in the current desktop MuseScore Studio (4.7.6, file format 4.70).
+- Scores Aria saves must open unchanged in the current desktop MuseScore Studio (4.7.7, file format 4.70), and in 4.7.6.
 - Never merge upstream MuseScore `main` into `src/`. It's MuseScore 5 development and writes format 5.00, which desktop 4.7 rejects. Move only between release tags, following `ENGINE.md`.
 - Newer files are opened anyway (like desktop's "Open anyway") and saved back as 4.70.
 

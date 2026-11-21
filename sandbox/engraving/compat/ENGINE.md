@@ -1,21 +1,29 @@
 # Aria's MuseScore engine
 
 `src/`, `share/`, `buildscripts/`, `thirdparty/`, `fonts/` and the root CMake files are
-MuseScore Studio **4.7.6** (tag `v4.7.6`, commit `96480d5`) plus a small set of Aria
-patches listed below. Aria saves genuine 4.70 files that 4.7.5 and 4.7.6 open without warnings
-(4.7.6 kept file format 4.70).
+MuseScore Studio **4.7.7** (tag `v4.7.7`, commit `b750c43`) plus a small set of Aria
+patches listed below. Aria saves genuine 4.70 files that 4.7.5, 4.7.6 and 4.7.7 open without
+warnings (4.7.7 kept file format 4.70).
+
+November 21, 2026: moved from 4.7.6 to 4.7.7 the same way as the 4.7.6 move below. The patch
+(249 files) applied with no conflicts and no binary changes. What matters to Aria: new
+instruments Double Bass (plucked) and Acoustic Bass Guitar (`double-bass-plucked`,
+`acoustic-bass-guitar`) with their playback sounds, a lower euphonium range (B♭1), and the
+Big Band, Jazz Combo and Bluegrass Band templates using the plucked double bass. The rest is
+desktop-only: FFmpeg 9, the convert-to-score dialog, cloud fixes, a macOS CoreMIDI fix and
+translations. 4.7.7 contains none of the patches below.
 
 November 2026: moved from 4.7.5 to 4.7.6 by applying the `v4.7.5`..`v4.7.6` difference of
 the engine folders to this tree. It applied with no conflicts, so every patch below carried
-over unchanged. 4.7.6 itself contains none of them.
+over unchanged.
 
 Before September 2026 the engine was an April 2026 snapshot of upstream `main`
 (commit `e280c3b6`, format 5.00) that relabeled its saves as 4.70. That relabel is gone.
 
-## Aria patches on top of 4.7.6
+## Aria patches on top of 4.7.7
 
 They were first made on a branch `aria-475` (based on `v4.7.5`) in a separate MuseScore
-clone. To see the current patch set, diff these folders against a checkout of `v4.7.6`.
+clone. To see the current patch set, diff these folders against a checkout of `v4.7.7`.
 
 Headless editing (Play Console build 23 regressions):
 - `framework/global/internal/interactive.cpp`: synchronous standard dialogs with no UI
@@ -97,7 +105,7 @@ Compiler fixes: `global/api/interactiveapi.cpp` (Qt 6.11 needs `<QMetaEnum>`),
 `fluidsynth_priv.h`, `playback/renderers/bendsrenderer.cpp`.
 
 Bridge-side adaptations (in `sandbox/engraving/`, not the engine):
-- `score_render_application_stub.h` reports version 4.7.6 / revision 96480d5, which the
+- `score_render_application_stub.h` reports version 4.7.7 / revision b750c43, which the
   engine writes into `<programVersion>`/`<programRevision>`.
 - Files newer than 4.70 (MuseScore 5) are opened anyway, like desktop's "Open anyway",
   and saved back as 4.70 (`loadScoreForRenderCore`).
@@ -108,14 +116,15 @@ Bridge-side adaptations (in `sandbox/engraving/`, not the engine):
 - Opened scores start from the default style, as desktop does, so files that store no
   page size get Letter or A4 from the device region (`score_render_open_save.cpp`).
 - The bundled templates in `ScoreTemplates.bundle` are MuseScore 4.7.5's own templates
-  (4.7.6 did not change them).
+  (4.7.6 did not change them), except Big Band, Jazz Combo and Bluegrass Band, which are
+  4.7.7's.
 
 ## Updating to a newer MuseScore release
 
-How the move to 4.7.6 was done (no patch branch needed):
+How the moves to 4.7.6 and 4.7.7 were done (no patch branch needed):
 
 1. Download the new release's source (`codeload.github.com/musescore/MuseScore/tar.gz/refs/tags/<tag>`)
-   and extract the current tag from git (`git archive v4.7.6`).
+   and extract the current tag from git (`git archive <tag>`; the 4.7.7 move downloaded both tags instead).
 2. Diff the engine folders (`src share buildscripts thirdparty fonts` and the root CMake files)
    between the two and apply that patch here with `patch -p1`; resolve any conflict with an
    Aria patch by hand and copy changed binary files. The GitHub source archive leaves out

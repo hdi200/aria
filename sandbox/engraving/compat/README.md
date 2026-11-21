@@ -1,8 +1,8 @@
 # MuseScore 4.7.x round-trip check
 
 Aria users move scores between the iPad and desktop MuseScore Studio. The current
-stable desktop release is 4.7.6, which uses file format 4.70 (as 4.7.5 does). Aria's engine is
-MuseScore 4.7.6 plus a few Aria patches (see ENGINE.md), and every save has to come
+stable desktop release is 4.7.7, which uses file format 4.70 (as 4.7.5 and 4.7.6 do). Aria's engine is
+MuseScore 4.7.7 plus a few Aria patches (see ENGINE.md), and every save has to come
 back to 4.7.5 intact. This check proves that on a corpus of scores. Run it after any
 engine change or upstream merge.
 
@@ -41,6 +41,14 @@ and the exit code is non-zero if any score changed.
 
 `fixtures/` holds scores that each exercise a known 4.7-only feature, such as the
 "pitch names, no accidentals" notehead schemes added in MuseScore 4.7.
+
+## Results with the 4.7.7 engine (November 21, 2026, desktop 4.7.6)
+
+Every per-score result is the same as with the 4.7.6 engine (after the November 17 crash
+fixes): round trip 890/892 default and `--direct`, playback 874/892, layout 842/842
+pixel-identical, MusicXML 891/892 (`timesig-3` fails on desktop's reference path). 4.7.7's
+Big Band, Jazz Combo and Bluegrass Band templates, which use the new
+`double-bass-plucked` instrument, round-trip unchanged through desktop 4.7.6.
 
 ## Results with the 4.7.6 engine (November 3, 2026, desktop 4.7.6)
 
