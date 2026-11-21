@@ -21,6 +21,12 @@ Source snapshots exclude the same local/marketing material as iOS; see README.md
 | Pending: `android-1.3.0-24` | 1.3.0 (24), historical local candidate; hash does not identify the owner-uploaded artifact | `995261f439de4d3c678e18ebb4475faf7c3c4c6e` | `1804490fcd7e1006a8d81a67990a634e0ffb97f2df6e87ff14e4336e5c5aad1b` |
 | Pending: `android-1.3.0-25` | 1.3.0 (25), prepared locally with document camera and editing crash fixes | `230d1091b06aaedbedde058da3eeff9d846fec16` plus recorded local source delta; matching release commit pending | `6ce7bdda7552a2148f007f4ae96927bee00ce925c60559f6367a1f77c853cc7e` |
 | Pending: `android-1.4.0-28` | 1.4.0 (28), built November 19, 2026; metadata draft only, no binary upload | `ce89f6c4678daa67142c21d6466a6d4151d76707` | `3185f1fb64c03eeb294a9eed78718facedd00b58f57bd2eca9e83328719838b2` |
+| Pending: `android-1.4.1-29` | 1.4.1 (29), built November 21, 2026; uploaded by the owner to the Play library, production draft 23 | `bb308fd622a99fed00bb73dcdd15b8614cb4e57c` | `99b21ed3f264629c49c6a9ca160328861f0c49737e6440021aba00f324cf0055` |
+
+November 21 handoff: 1.4.1 (29) carries the MuseScore 4.7.7 engine and ScannerCore 0.1.26
+(`28b7315be0b4b0ca6a21356b2edd2a01dab28c3d`). 1.4.0 (28) was live in production by then.
+Draft 23 has the release name and notes; the bundle is in the library and still needs
+attaching to the draft. Not run on an emulator or device.
 
 November 19 handoff: the new local 1.4.0 (28) bundle uses public ScannerCore 0.1.23,
 revision `d14c2a2dbbda5c1e4aad98c1ba20dc51be5b5ce0`. Signed bundle/model/native checks

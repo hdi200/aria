@@ -25,7 +25,23 @@ Use this checklist for every public build of Aria.
 - Do not move `sandbox/engraving` immediately before release; document it as the render-core source location instead.
 - Verify create, edit, save, reopen, import, export, playback, and legal screen access on a device before tagging.
 
-## Current prepared update — November 19, 2026
+## Current prepared update — November 21, 2026
+
+- Versions: iOS **7.7.1 (18)** and Android **1.4.1 (29)**, from source `bb308fd622` (MuseScore 4.7.7 engine,
+  ScannerCore **0.1.26**, `28b7315be0b4b0ca6a21356b2edd2a01dab28c3d`). 7.7.0 (17) and 1.4.0 (28) were live by then.
+- ONNX Runtime 1.27.0: Microsoft's `download.onnxruntime.ai` stopped serving the pinned pod archive on November 21
+  (wrong certificate, then 404). The iOS build used a public GitHub copy whose SHA-256 equals the pin
+  (`8c74edd600eafc3055de9e8f7a9602afee44ed516913cb5e132bca02cc34622c`), placed in SwiftPM's cache under the original
+  URL; SwiftPM verified the checksum again. Its contents match the copy SwiftPM verified on November 16. No source change.
+- [x] Scanner smoke check with that archive: ScannerCheck reads two Real Book pages identically to the previous build
+  (notes, bars, 20 chord symbols, title and composer).
+- [x] iOS archive 0 errors / 88 warnings; IPA zip, deep strict signature, 7.7.1 (18) app and share extension,
+  iPhone/iPad, framework minimum OS 17 and the five model hashes pass. Engine revision `b750c43` (4.7.7) present.
+- [x] Android AAB passes `inspect-play-bundle.py`; version 1.4.1 (29); engine 4.7.7; notice 0.1.26.
+- [ ] Device legal-screen and scanning/editing smoke checks on these binaries.
+- [ ] Aria source pushed before distribution (`bb308fd622` is local only at the time of writing).
+
+## Prepared update — November 19, 2026 (released as 7.7.0 (17) and 1.4.0 (28))
 
 - Versions: iOS **7.7.0 (17)** and Android **1.4.0 (28)**.
 - November 20: ScoreScanner's history was rewritten to move its standalone app out; every tag kept the same
