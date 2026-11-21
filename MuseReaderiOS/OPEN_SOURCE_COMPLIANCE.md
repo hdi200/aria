@@ -34,6 +34,10 @@ Use this checklist for every public build of Aria.
   1.4.0 (28) binaries below were built with 0.1.23 and show 0.1.23 links; build again before shipping 0.1.24.
 - Later on November 20: source pins **0.1.25** (`fcf29bc3de4508adbd42b6b6412cd5ff31d0c31b`; a voice staff stays with
   its piano on tight-cropped and curled photos), with notices and legal links to match. Build again before shipping.
+- November 21: source pins **0.1.26** (`28b7315be0b4b0ca6a21356b2edd2a01dab28c3d`; curled phone photos straightened,
+  chord names on guitar diagrams read, voice/piano systems found on edge-traced songbook photos, written note values
+  follow bar-fit, slurs on dangling cue grace notes dropped so they no longer crash, `ScoreBar` bar positions), with
+  notices and legal links to match. Build again before shipping.
 - [x] Both apps pin public ScannerCore **0.1.23**, revision `d14c2a2dbbda5c1e4aad98c1ba20dc51be5b5ce0`; anonymous tag resolution verified.
 - [x] Normal remote package resolution succeeds for both platforms; no local scanner override.
 - [x] ScannerCore unit tests: **167 tests in 19 suites pass**.
