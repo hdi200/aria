@@ -69,6 +69,17 @@ open class MainActivity: AppCompatActivity {
         documentCameraLauncher.launch(androidx.activity.result.IntentSenderRequest.Builder(sender).build())
     }
 
+    // Aria: the device's camera app, when Play services' document scanner can't open.
+    private val cameraAppLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.TakePicture()
+    ) { saved ->
+        AriaDocumentCameraFlow.handleCameraAppResult(saved)
+    }
+
+    fun launchCameraApp(output: android.net.Uri) {
+        cameraAppLauncher.launch(output)
+    }
+
     constructor() {
     }
 

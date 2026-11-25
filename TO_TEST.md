@@ -12,6 +12,17 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Galaxy Tab S7 (November 25, BUG-035 to BUG-037)
+
+Checked on the Tab S7-sized emulator; these need the real Samsung tablet (One UI).
+
+- [ ] **Import:** Import opens Android's file picker (not only My Files). Pick an .mscz from Downloads and from Internal storage: it imports and opens.
+- [ ] **My Files:** in My Files, open an .mscz with Aria, and Share › Aria: both import. If Import still opens My Files, pick a score there: it imports, or an "Import Failed" message says why (never nothing).
+- [ ] **Instruments sheet, landscape and portrait:** Edit › More › Add/Remove Instrument with 8+ instruments, keyboard up (tap Search) and down, with Samsung's taskbar showing: Close and Done stay visible, the In Score list scrolls to the last Remove button, and the Remove confirmation's buttons are fully on screen.
+- [ ] **Larger screen zoom** (Settings › Display › Screen zoom, highest): repeat the instruments check.
+- [ ] **Library header in landscape (BUG-038):** Scan, Import and + are full width with their labels; a long setlist name truncates before the buttons.
+- [ ] **Scan with Camera:** the document scanner opens. If it doesn't within 15 s, the Samsung Camera app opens instead, and the photo is scanned. Note the Google Play services version if the scanner never opens.
+
 ## Stand-in fonts (November 25, IOS-044)
 
 - [ ] **Android:** open a score in Arial, Times New Roman or Calibri: text keeps its width and line breaks.

@@ -468,7 +468,7 @@ struct TemplateBrowserSheet: View {
         GeometryReader { geometry in
             let isPhone = AriaWindowLayout.shared.usesPhoneLayout
             let modalWidth = min(max(geometry.size.width - 64, 720), 940)
-            let modalHeight = min(max(geometry.size.height - 170, 560), 760)
+            let modalHeight = AddInstrumentSheetLayout.modalHeight(available: geometry.size.height)
 
             ZStack {
                 Color.black.opacity(0.24)
@@ -841,7 +841,7 @@ struct AddInstrumentSheet: View {
         GeometryReader { geometry in
             let isPhone = AriaWindowLayout.shared.usesPhoneLayout
             let modalWidth = min(max(geometry.size.width - 64, 680), 940)
-            let modalHeight = min(max(geometry.size.height - 170, 560), 760)
+            let modalHeight = AddInstrumentSheetLayout.modalHeight(available: geometry.size.height)
             let layout = AddInstrumentSheetLayout(width: modalWidth)
 
             ZStack {
@@ -1583,6 +1583,20 @@ struct InstrumentReorderDropDelegate: DropDelegate {
 }
 
 struct AddInstrumentSheetLayout {
+    /// The tablet modal's height (instrument and template pickers): 170 pt of room, at least
+    /// 560 and at most 760. Android shrinks the window for the keyboard, and Samsung tablets
+    /// add a taskbar, so on a Galaxy Tab in landscape the 560 minimum pushed Close/Done off
+    /// the top and the instrument list off the bottom (BUG-036). There it never grows taller
+    /// than the space. iOS is unchanged.
+    static func modalHeight(available: CGFloat) -> CGFloat {
+        let height = min(max(available - 170, 560), 760)
+        #if os(Android)
+        return min(height, max(available - 16, 240))
+        #else
+        return height
+        #endif
+    }
+
     let outerPadding: CGFloat
     let genreWidth: CGFloat
     let categoryWidth: CGFloat

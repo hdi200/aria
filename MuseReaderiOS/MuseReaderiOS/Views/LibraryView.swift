@@ -2830,6 +2830,10 @@ struct LibraryDashboardHeader: View {
     let shareSetlistAction: (LibrarySetlistFolder) -> Void
     let canEditSetlist: Bool
     @Binding var isEditingSetlist: Bool
+    #if os(Android)
+    /// The side-by-side controls' width, which the title leaves free (BUG-038).
+    @State var androidControlsWidth: CGFloat = 0
+    #endif
 
     var body: some View {
         headerLayout
@@ -2872,16 +2876,38 @@ struct LibraryDashboardHeader: View {
         #endif
     }
 
+    private var sideBySideSearchWidth: CGFloat {
+        activeSetlist == nil ? (scanAction == nil || showsButtonLabels ? 320 : 240) : 260
+    }
+
     private var sideBySideHeader: some View {
+        #if os(Android)
+        // Skip has no layoutPriority, and the search field makes the controls a filling
+        // view like the title, so Skip split the row in half between them: on a tablet in
+        // landscape Scan and Import were squeezed to "Sca" and "Impor" (BUG-038). The
+        // controls sit over the title's trailing edge at their own width instead, and the
+        // title gives way by that width, truncating first as on iOS.
+        ZStack(alignment: .trailing) {
+            titleText
+                .padding(.trailing, androidControlsWidth + 20)
+
+            HStack(spacing: 16) {
+                headerControls(searchWidth: sideBySideSearchWidth)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { androidControlsWidth = $0 }
+        }
+        #else
         HStack(alignment: .center, spacing: 20) {
             titleText
 
             HStack(spacing: 16) {
-                headerControls(searchWidth: activeSetlist == nil ? (scanAction == nil || showsButtonLabels ? 320 : 240) : 260)
+                headerControls(searchWidth: sideBySideSearchWidth)
             }
             // The buttons keep their labelled width; the title truncates first.
             .layoutPriority(showsButtonLabels ? 1 : 0)
         }
+        #endif
     }
 
     /// `searchWidth` nil: the search field takes the row's spare width.

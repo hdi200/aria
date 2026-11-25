@@ -12,6 +12,20 @@
     <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
     <!-- <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> -->
 
+    <!-- Aria: lets the document picker find Android's own picker when another file manager
+         is the default (AriaDocumentPicker.kt), and the camera app for scanning
+         (AriaDocumentCamera.kt). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+            <category android:name="android.intent.category.OPENABLE" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <application
         android:label="Aria"
         android:name=".AndroidAppMain"

@@ -3,9 +3,9 @@ package aria.skip
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.core.content.IntentCompat
 import java.io.File
-import java.util.zip.ZipFile
 
 /// "Open with" and "Share" from other apps (the intent filters in AndroidManifest.xml).
 /// They hand Aria a content:// link, but the shared import code (ContentView's onOpenURL ->
@@ -22,36 +22,13 @@ object AriaOpenWith {
         } ?: return intent
         if (uri.scheme != "content") return intent
         val folder = File(activity.cacheDir, "opened-${System.currentTimeMillis()}").apply { mkdirs() }
-        val path = AriaDocumentPickerImpl.copy(activity, uri, folder) ?: return null
-        return Intent(Intent.ACTION_VIEW, Uri.fromFile(File(withScoreExtension(path, intent.type))))
-    }
-
-    /// Some apps name the file without its extension; the import code goes by the extension.
-    private fun withScoreExtension(path: String, mimeType: String?): String {
-        val known = listOf("mscz", "mscx", "mxl", "musicxml", "xml")
-        if (path.substringAfterLast('.', "").lowercase() in known) return path
-        val extension = when (mimeType) {
-            "application/x-musescore" -> "mscz"
-            "application/x-musescore+xml" -> "mscx"
-            "application/vnd.recordare.musicxml" -> "mxl"
-            "application/vnd.recordare.musicxml+xml" -> "musicxml"
-            else -> zippedScoreExtension(path) ?: return path
+        val copy = AriaDocumentPickerImpl.copyDocument(activity, uri, folder, intent.type)
+        val path = copy.path
+        if (path == null) {
+            // Say why, rather than handing Skip a link the import code can't read (BUG-035).
+            Toast.makeText(activity, copy.error ?: "Aria couldn’t read that file.", Toast.LENGTH_LONG).show()
+            return Intent(Intent.ACTION_MAIN)
         }
-        val renamed = "$path.$extension"
-        return if (File(path).renameTo(File(renamed))) renamed else path
-    }
-
-    /// Files labelled zip or octet-stream: .mscz holds a .mscx, .mxl holds META-INF/container.xml.
-    private fun zippedScoreExtension(path: String): String? = try {
-        ZipFile(path).use { zip ->
-            val names = zip.entries().asSequence().map { it.name }.toList()
-            when {
-                names.any { it.endsWith(".mscx", ignoreCase = true) } -> "mscz"
-                "META-INF/container.xml" in names -> "mxl"
-                else -> null
-            }
-        }
-    } catch (e: Exception) {
-        null
+        return Intent(Intent.ACTION_VIEW, Uri.fromFile(File(path)))
     }
 }

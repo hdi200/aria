@@ -24,6 +24,11 @@ extension View {
     }
 }
 
+struct AndroidDocumentPickerFailure: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
 struct AndroidFileImporter: ViewModifier {
     @Binding var isPresented: Bool
     let allowedContentTypes: [UTType]
@@ -48,8 +53,13 @@ struct AndroidFileImporter: ViewModifier {
             try? await Task.sleep(for: .milliseconds(150))
             guard let result: String = try? picker.takeResult() else { continue }
             let urls = result.split(separator: "\n").map { URL(fileURLWithPath: String($0)) }
+            // A pick that returned documents Aria couldn't read must say so, not look like
+            // a cancel (BUG-035). Documents that did copy are imported as usual.
+            let failure: String? = try? picker.takeFailure()
             if !urls.isEmpty {
                 onCompletion(.success(urls))
+            } else if let failure, !failure.isEmpty {
+                onCompletion(.failure(AndroidDocumentPickerFailure(message: failure)))
             }
             return
         }

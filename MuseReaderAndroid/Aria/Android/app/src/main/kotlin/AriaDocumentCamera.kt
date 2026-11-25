@@ -2,7 +2,12 @@ package aria.skip
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
+import androidx.core.content.FileProvider
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -12,7 +17,8 @@ import org.json.JSONObject
 import skip.ui.UIApplication
 
 /** One camera session, polled by Swift. No camera permission is needed by Aria:
- * Play services owns capture and grants access only to the resulting document. */
+ * Play services owns capture and grants access only to the resulting document, and the
+ * fallback hands capture to the device's camera app, which writes one photo for Aria. */
 class AriaDocumentCamera {
     private val lock = Any()
     private var result: String? = null
@@ -54,25 +60,52 @@ class AriaDocumentCamera {
 }
 
 /** Keeps the activity-result callback associated with its original Swift request.
- * A cancelled/download-delayed request must not launch over a newer request. */
+ * A cancelled/download-delayed request must not launch over a newer request.
+ *
+ * Play services' document scanner downloads its module on first use and needs a current
+ * Play services. Where it fails or never answers (BUG-037: a Galaxy Tab S7's camera never
+ * started; the request waited with no time limit), Aria opens the device's camera app
+ * instead and scans the photo, like Choose Photo. */
 internal object AriaDocumentCameraFlow {
+    private const val SCANNER_TIMEOUT_MS = 15_000L
     private var active: AriaDocumentCamera? = null
+    /** Which capture the active request handed off to: none yet, the scanner, or the camera app. */
+    private var handoff: String? = null
+    private var photo: File? = null
 
     @Synchronized private fun claim(camera: AriaDocumentCamera): Boolean {
         if (active != null) return false
         active = camera
+        handoff = null
+        photo = null
         return true
     }
 
     @Synchronized private fun isActive(camera: AriaDocumentCamera): Boolean = active === camera
 
+    /** Claims the hand-off for `kind`; false when the request already went to the other one. */
+    @Synchronized private fun handOff(camera: AriaDocumentCamera, kind: String): Boolean {
+        if (active !== camera || handoff != null) return false
+        handoff = kind
+        return true
+    }
+
     @Synchronized fun release(camera: AriaDocumentCamera) {
-        if (active === camera) active = null
+        if (active === camera) {
+            active = null
+            handoff = null
+        }
     }
 
     fun start(camera: AriaDocumentCamera, activity: MainActivity): Boolean {
         if (!claim(camera)) return false
         activity.runOnUiThread {
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (isActive(camera) && handoff == null) {
+                    Log.w("Aria", "Document scanner didn’t answer in ${SCANNER_TIMEOUT_MS / 1000} s; using the camera app")
+                    launchCameraApp(camera, activity)
+                }
+            }, SCANNER_TIMEOUT_MS)
             try {
                 // Crop/rotate/reorder without ML stain removal, which could erase musical marks.
                 val options = GmsDocumentScannerOptions.Builder()
@@ -83,23 +116,68 @@ internal object AriaDocumentCameraFlow {
                     .build()
                 GmsDocumentScanning.getClient(options).getStartScanIntent(activity)
                     .addOnSuccessListener { sender ->
-                        if (!isActive(camera)) return@addOnSuccessListener
+                        if (activity.isFinishing || activity.isDestroyed) {
+                            if (isActive(camera)) camera.complete("cancelled")
+                            return@addOnSuccessListener
+                        }
+                        if (!handOff(camera, "scanner")) return@addOnSuccessListener
                         try {
-                            if (activity.isFinishing || activity.isDestroyed) {
-                                camera.complete("cancelled")
-                            } else {
-                                activity.launchDocumentCamera(sender)
-                            }
+                            activity.launchDocumentCamera(sender)
                         } catch (error: Exception) {
-                            fail(camera, error)
+                            Log.w("Aria", "Document scanner couldn’t open", error)
+                            synchronized(this) { handoff = null }
+                            launchCameraApp(camera, activity)
                         }
                     }
-                    .addOnFailureListener { error -> if (isActive(camera)) fail(camera, error) }
+                    .addOnFailureListener { error ->
+                        Log.w("Aria", "Document scanner unavailable; using the camera app", error)
+                        if (isActive(camera)) launchCameraApp(camera, activity)
+                    }
             } catch (error: Exception) {
-                fail(camera, error)
+                Log.w("Aria", "Document scanner unavailable; using the camera app", error)
+                launchCameraApp(camera, activity)
             }
         }
         return true
+    }
+
+    /** The device's camera app, through MediaStore.ACTION_IMAGE_CAPTURE: works with any
+     * camera layout (rear, front only, external) and needs no camera permission. */
+    private fun launchCameraApp(camera: AriaDocumentCamera, activity: MainActivity) {
+        if (!handOff(camera, "camera app")) return
+        if (activity.isFinishing || activity.isDestroyed) {
+            camera.complete("cancelled")
+            return
+        }
+        try {
+            val folder = File(activity.cacheDir, "camera-${UUID.randomUUID()}")
+            check(folder.mkdirs())
+            val file = File(folder, "Camera Photo.jpg")
+            val uri: Uri = FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
+            if (Intent(MediaStore.ACTION_IMAGE_CAPTURE).resolveActivity(activity.packageManager) == null) {
+                folder.delete()
+                camera.complete("error", message = "This device has no camera app Aria can use. Choose a photo or PDF instead.")
+                return
+            }
+            synchronized(this) { photo = file }
+            activity.launchCameraApp(uri)
+        } catch (error: Exception) {
+            fail(camera, error)
+        }
+    }
+
+    fun handleCameraAppResult(saved: Boolean) {
+        val (camera, file) = synchronized(this) { active to photo }
+        if (camera == null) return
+        if (file == null) return
+        if (!saved || file.length() == 0L) {
+            file.delete()
+            file.parentFile?.delete()
+            camera.complete("cancelled")
+            return
+        }
+        Log.i("Aria", "Camera app photo ready: bytes=${file.length()}")
+        camera.complete("completed", file = file, pages = 1)
     }
 
     fun handleResult(activity: Activity, resultCode: Int, data: Intent?) {
