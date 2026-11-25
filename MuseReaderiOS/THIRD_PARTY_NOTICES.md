@@ -35,6 +35,20 @@ Aria includes code and assets from the MuseScore Studio source tree and several 
 - License: SIL Open Font License 1.1.
 - Reserved font name: Bravura.
 
+## Stand-in text fonts
+
+- Component: open-licensed fonts drawn when a score names a desktop font the device lacks
+  (Arial, Times New Roman, Courier New, Calibri, Cambria, Arial Black). The score keeps its
+  font name. Compiled into the render core from `sandbox/engraving/fonts/` (see its README).
+- Liberation Sans, Liberation Serif, Liberation Mono 2.1.5: copyright 2010 Google Corporation
+  (reserved font names Arimo, Tinos and Cousine) and 2012 Red Hat, Inc. (reserved font name
+  Liberation).
+- Carlito: copyright 2013 The Carlito Project Authors; reserved font name Carlito.
+- Caladea: copyright 2012 The Caladea Project Authors.
+- Archivo Black: copyright 2017 The Archivo Black Project Authors.
+- License: SIL Open Font License 1.1 for all; the fonts are unmodified. License texts are in
+  each font's folder and in `MuseReaderiOS/MuseReaderiOS/Resources/Legal/`.
+
 ## MuseScore General SoundFonts
 
 - Component: `MuseScore_General.sf2` (MuseScore_General v0.2).

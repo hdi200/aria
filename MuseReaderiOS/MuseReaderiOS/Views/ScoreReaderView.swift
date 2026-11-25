@@ -278,6 +278,7 @@ struct ScoreReaderView: View {
     @State var selectedToolCategory: ScoreReaderToolCategory
     @State var textEditorDraft: ScoreReaderTextEditorDraft?
     @State var legacyRepairPrompt: ScoreLegacyRepairPrompt?
+    @State var presentedLegacyRepairKinds: Set<String> = []
     @State var isPartsPanelPresented = false
     @State var isMixerPresented = false
     @State var isUpdateNoticePresented = false
@@ -1056,9 +1057,12 @@ struct ScoreReaderView: View {
             await reportReaderReadyWhenAvailable()
             if readerState.supportsEditing, let liveRenderSession = session.liveRenderSession {
                 do {
+                    let dismissedKinds = ScoreLegacyRepairDismissals().dismissedKinds(for: session.id)
                     let issues = try await liveRenderSession.legacyRepairIssues()
+                        .filter { !dismissedKinds.contains($0.kind) }
                     if !issues.isEmpty {
                         legacyRepairPrompt = ScoreLegacyRepairPrompt(issues: issues)
+                        presentedLegacyRepairKinds = Set(issues.map(\.kind))
                     } else {
                         await presentReaderIntroductionIfNeeded()
                     }
@@ -1185,7 +1189,10 @@ struct ScoreReaderView: View {
     private var readerSheetsBody: some View {
         readerLifecycleBody
         .scoreReaderSheet(item: $legacyRepairPrompt, onDismiss: {
-            Task { await presentReaderIntroductionIfNeeded() }
+            Task {
+                await rememberUnfixedLegacyRepairs()
+                await presentReaderIntroductionIfNeeded()
+            }
         }) { prompt in
             ScoreLegacyRepairSheet(issues: prompt.issues) { selectedIndexes in
                 try await applyLegacyRepairs(selectedIndexes, from: prompt)
@@ -1430,6 +1437,23 @@ struct ScoreReaderView: View {
         )
     }
 
+    /// Closing the fix sheet with issues left unfixed is a decision: those kinds are not
+    /// offered again for this score.
+    @MainActor
+    private func rememberUnfixedLegacyRepairs() async {
+        let shownKinds = presentedLegacyRepairKinds
+        presentedLegacyRepairKinds = []
+        guard !shownKinds.isEmpty else {
+            return
+        }
+        var unfixedKinds = shownKinds
+        if let liveRenderSession = session.liveRenderSession,
+           let remaining = try? await liveRenderSession.legacyRepairIssues() {
+            unfixedKinds = shownKinds.intersection(remaining.map(\.kind))
+        }
+        ScoreLegacyRepairDismissals().dismiss(unfixedKinds, for: session.id)
+    }
+
     @MainActor
     private func applyLegacyRepairs(_ indexes: [Int], from prompt: ScoreLegacyRepairPrompt) async throws {
         guard let liveRenderSession = session.liveRenderSession, !indexes.isEmpty else {
@@ -1439,7 +1463,9 @@ struct ScoreReaderView: View {
             throw ScoreDocumentServiceError.bridgeFailure(readerState.editingErrorMessage ?? "Aria could not save current edits before making a backup.")
         }
         let currentIssues = try await liveRenderSession.legacyRepairIssues()
-        guard currentIssues == prompt.issues else {
+        // The sheet may show fewer issues than the score has (kinds skipped before); each
+        // shown issue must still be there, unchanged, so its index still selects it.
+        guard prompt.issues.allSatisfy(currentIssues.contains) else {
             throw ScoreDocumentServiceError.bridgeFailure("The score changed. Close and reopen it to review the fixes again.")
         }
 

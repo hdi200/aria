@@ -1,0 +1,25 @@
+<RCC>
+    <qresource prefix="/aria-fonts">
+        <file alias="ArchivoBlack-Regular.ttf">archivoblack/ArchivoBlack-Regular.ttf</file>
+        <file alias="Caladea-Bold.ttf">caladea/Caladea-Bold.ttf</file>
+        <file alias="Caladea-BoldItalic.ttf">caladea/Caladea-BoldItalic.ttf</file>
+        <file alias="Caladea-Italic.ttf">caladea/Caladea-Italic.ttf</file>
+        <file alias="Caladea-Regular.ttf">caladea/Caladea-Regular.ttf</file>
+        <file alias="Carlito-Bold.ttf">carlito/Carlito-Bold.ttf</file>
+        <file alias="Carlito-BoldItalic.ttf">carlito/Carlito-BoldItalic.ttf</file>
+        <file alias="Carlito-Italic.ttf">carlito/Carlito-Italic.ttf</file>
+        <file alias="Carlito-Regular.ttf">carlito/Carlito-Regular.ttf</file>
+        <file alias="LiberationMono-Bold.ttf">liberation/LiberationMono-Bold.ttf</file>
+        <file alias="LiberationMono-BoldItalic.ttf">liberation/LiberationMono-BoldItalic.ttf</file>
+        <file alias="LiberationMono-Italic.ttf">liberation/LiberationMono-Italic.ttf</file>
+        <file alias="LiberationMono-Regular.ttf">liberation/LiberationMono-Regular.ttf</file>
+        <file alias="LiberationSans-Bold.ttf">liberation/LiberationSans-Bold.ttf</file>
+        <file alias="LiberationSans-BoldItalic.ttf">liberation/LiberationSans-BoldItalic.ttf</file>
+        <file alias="LiberationSans-Italic.ttf">liberation/LiberationSans-Italic.ttf</file>
+        <file alias="LiberationSans-Regular.ttf">liberation/LiberationSans-Regular.ttf</file>
+        <file alias="LiberationSerif-Bold.ttf">liberation/LiberationSerif-Bold.ttf</file>
+        <file alias="LiberationSerif-BoldItalic.ttf">liberation/LiberationSerif-BoldItalic.ttf</file>
+        <file alias="LiberationSerif-Italic.ttf">liberation/LiberationSerif-Italic.ttf</file>
+        <file alias="LiberationSerif-Regular.ttf">liberation/LiberationSerif-Regular.ttf</file>
+    </qresource>
+</RCC>

@@ -31,6 +31,7 @@ struct OpenSourceLegalView: View {
                         LegalNoticeRow(name: "FreeType", detail: "FreeType License or GPL-compatible option")
                         LegalNoticeRow(name: "Opus", detail: "BSD-style license")
                         LegalNoticeRow(name: "BravuraText", detail: "SIL Open Font License 1.1")
+                        LegalNoticeRow(name: "Liberation, Carlito, Caladea and Archivo Black fonts", detail: "SIL Open Font License 1.1; stand-ins for fonts not on this device")
                         LegalNoticeRow(name: "MuseScore General SoundFonts", detail: "MIT according to embedded SoundFont metadata")
                     }
 

@@ -42,6 +42,12 @@ and the exit code is non-zero if any score changed.
 `fixtures/` holds scores that each exercise a known 4.7-only feature, such as the
 "pitch names, no accidentals" notehead schemes added in MuseScore 4.7.
 
+## Stand-in fonts (November 25, 2026, desktop 4.7.6)
+
+After bundling the stand-in text fonts (`sandbox/engraving/fonts/`): round trip 890/892
+(the same `lyrics-15`/`lyrics-16`) and layout 842/842 pixel-identical, as before. The build
+Mac has Arial, Times New Roman and Arial Black, so stand-ins only apply to fonts it lacks.
+
 ## Results with the 4.7.7 engine (November 21, 2026, desktop 4.7.6)
 
 Every per-score result is the same as with the 4.7.6 engine (after the November 17 crash

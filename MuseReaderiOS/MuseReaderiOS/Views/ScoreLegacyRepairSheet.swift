@@ -5,6 +5,38 @@ struct ScoreLegacyRepairPrompt: Identifiable {
     let issues: [ScoreLegacyRepairIssue]
 }
 
+/// Kinds of score fixes the person left unfixed when closing the sheet, per score. Those
+/// kinds are not offered again for that score; a kind found later still is.
+struct ScoreLegacyRepairDismissals {
+    private let userDefaults: UserDefaults
+    private let keyPrefix = "ScoreLegacyRepairDismissedKinds."
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func dismissedKinds(for scoreID: String) -> Set<String> {
+        guard
+            let data = userDefaults.data(forKey: keyPrefix + scoreID),
+            let kinds = try? JSONDecoder().decode([String].self, from: data)
+        else {
+            return []
+        }
+        return Set(kinds)
+    }
+
+    func dismiss(_ kinds: Set<String>, for scoreID: String) {
+        guard !kinds.isEmpty else {
+            return
+        }
+        let all = dismissedKinds(for: scoreID).union(kinds)
+        guard let data = try? JSONEncoder().encode(all.sorted()) else {
+            return
+        }
+        userDefaults.set(data, forKey: keyPrefix + scoreID)
+    }
+}
+
 struct ScoreLegacyRepairSheet: View {
     @Environment(\.dismiss) var dismiss
     @State var selectedIndexes: Set<Int>
@@ -65,7 +97,7 @@ struct ScoreLegacyRepairSheet: View {
                 }
 
                 VStack(spacing: 12) {
-                    Text("Aria saves an untouched copy in Files → Aria Backups before changing the score.")
+                    Text("Aria saves an untouched copy in Files → Aria Backups before changing the score. Anything you leave unfixed won't be suggested again for this score.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)

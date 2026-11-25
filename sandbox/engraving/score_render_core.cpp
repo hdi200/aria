@@ -28,6 +28,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFont>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QImage>
 #include <QJsonArray>
@@ -174,6 +176,13 @@ void yieldFluidSynthLockToRealtime()
         std::this_thread::yield();
     }
 }
+}
+
+// Q_INIT_RESOURCE has to run from the global namespace. The stand-in fonts
+// (fonts/aria_standin_fonts.qrc) are compiled into this static library.
+static void initAriaStandInFontResources()
+{
+    Q_INIT_RESOURCE(aria_standin_fonts);
 }
 
 #include "score_render_runtime.cpp"

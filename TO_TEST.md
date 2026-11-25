@@ -12,6 +12,20 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Stand-in fonts (November 25, IOS-044)
+
+- [ ] **Android:** open a score in Arial, Times New Roman or Calibri: text keeps its width and line breaks.
+- [ ] **iPhone/iPad and Android:** a title in Arial Black is drawn heavy (Archivo Black), not in the thin system font. *iPhone simulator passed November 25 (Calibri, Cambria and Times New Roman stand-ins also looked right); iPad and Android still to check.*
+- [ ] **Save and open on desktop MuseScore:** the original font names and look are unchanged.
+- [ ] **Open Source screen** lists the Liberation, Carlito, Caladea and Archivo Black fonts. *iPhone simulator passed November 25; Android still to check.*
+
+## Score fixes (November 25, BUG-032)
+
+- [ ] **Desktop score with a hyphen typed into a lyric** ("glo-"): opening it shows no Review Score Fixes sheet.
+- [ ] **Older Aria score with empty lyrics:** the sheet appears; tap Not Now, close and reopen: it does not appear again.
+- [ ] **Fix some, skip some:** with two issues, fix one and uncheck the other; reopen: no sheet.
+- [ ] **Android:** same three checks after rebuilding `libaria_engine.so`.
+
 ## MuseScore 4.7.7 engine (November 21)
 
 - [ ] **New Score → Big Band** (and Jazz Combo, Bluegrass Band): enter bass notes and play.

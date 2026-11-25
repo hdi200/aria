@@ -122,7 +122,12 @@ endforeach()
 string(APPEND _mpe_embed "    };\n    return data;\n}\n\n}} // namespace msr::render\n")
 file(WRITE "${MPE_PROFILES_GENERATED_CPP}" "${_mpe_embed}")
 
+# Open-licensed stand-ins for desktop fonts phones lack (Arial, Times New Roman, Calibri...);
+# see fonts/README.md. Compiled in like MuseScore's own fonts, so iOS and Android both get them.
+qt_add_big_resources(ARIA_STANDIN_FONT_SOURCES fonts/aria_standin_fonts.qrc)
+
 set(score_render_core_common_sources
+    ${ARIA_STANDIN_FONT_SOURCES}
     score_render_core.cpp
     score_render_core.h
     score_render_reverb.cpp

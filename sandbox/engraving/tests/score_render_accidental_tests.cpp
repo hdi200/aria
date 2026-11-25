@@ -18,6 +18,11 @@
 #include <system_error>
 #include <vector>
 
+#include <QFont>
+#include <QFontDatabase>
+#include <QFontInfo>
+#include <QStringList>
+
 #include "score_render_core.h"
 #include "engraving/compat/scoreaccess.h"
 #include "engraving/dom/chord.h"
@@ -1424,7 +1429,8 @@ void testStrayStartClefIsOfferedAsARepair(const std::filesystem::path& root)
 
 // Lyrics as earlier versions of Aria saved them: "_" left an empty lyric on every note (each with
 // its own one-note line) instead of extending the word's line; space left empty lyrics on
-// skipped notes; "-" was typed into the text. The repair sheet offers to fix both.
+// skipped notes. The repair sheet offers to fix those. A "-" in the text ("glo-") is left alone:
+// desktop scores have it on purpose too.
 void testOldAriaLyricsAreOfferedAsRepairs(const std::filesystem::path& root)
 {
     const auto lyric = [](const std::string& text, const std::string& extra = "") {
@@ -1461,28 +1467,89 @@ void testOldAriaLyricsAreOfferedAsRepairs(const std::filesystem::path& root)
     expect(session->legacyRepairIssues(issues, error), "Scanning failed: " + error);
     std::vector<int> indexes;
     for (const auto& issue : issues) {
-        if (issue.kind == "emptyLyrics" || issue.kind == "lyricHyphen") {
+        if (issue.kind == "emptyLyrics") {
             indexes.push_back(issue.index);
         }
     }
-    expect(indexes.size() == 2, "Both lyric repairs should be offered");
+    expect(indexes.size() == 1, "The empty-lyrics repair should be offered once");
+    expect(issues.size() == indexes.size(), "Only the empty-lyrics repair should be offered; \"glo-\" is left alone");
     msr::render::ScoreEditState state;
-    expect(session->applyLegacyRepairs(indexes, state, error), "Applying the lyric repairs failed: " + error);
+    expect(session->applyLegacyRepairs(indexes, state, error), "Applying the lyric repair failed: " + error);
     const std::string saved = saveSnapshot(*session, root, "old-lyrics-repaired");
-    expect(countOccurrences(saved, "<Lyrics>") == 4, "Only ah, glo, ry and end should remain");
+    expect(countOccurrences(saved, "<Lyrics>") == 4, "Only ah, glo-, ry and end should remain");
     expect(saved.find("<ticks_f>1/2</ticks_f>") != std::string::npos, "ah's line should run over the notes _ was typed on");
-    expect(saved.find("glo-") == std::string::npos && saved.find("<syllabic>begin</syllabic>") != std::string::npos
-               && saved.find("<syllabic>end</syllabic>") != std::string::npos,
-           "glo- ry should become glo-ry with a real hyphen");
-    expect(session->legacyRepairIssues(issues, error)
-               && std::none_of(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "emptyLyrics" || issue.kind == "lyricHyphen"; }),
-           "The lyric repairs should not be offered again");
+    expect(saved.find("glo-") != std::string::npos, "A hyphen typed into a lyric's text should be kept as it is");
+    expect(session->legacyRepairIssues(issues, error) && issues.empty(), "No lyric repair should be offered again");
 
-    // A clean score with lyrics, including a real hyphen and extension line, is left alone.
+    // A clean score with lyrics, including a hyphen in the text and an extension line, is left alone.
     auto clean = openSession(root, "clean-lyrics", saved);
-    expect(clean->legacyRepairIssues(issues, error)
-               && std::none_of(issues.begin(), issues.end(), [](const auto& issue) { return issue.kind == "emptyLyrics" || issue.kind == "lyricHyphen"; }),
-           "Correct lyrics should not be offered a repair");
+    expect(clean->legacyRepairIssues(issues, error) && issues.empty(), "Correct lyrics should not be offered a repair");
+}
+
+// Desktop fonts phones lack are drawn with bundled stand-ins, but the score keeps the
+// original font name, so desktop still shows the original.
+void testStandInFontsKeepTheScoresFontNames(const std::filesystem::path& root)
+{
+    const std::string xml = R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Style>
+      <titleFontFace>Arial Black</titleFontFace>
+      <subTitleFontFace>Calibri</subTitleFontFace>
+      <lyricsOddFontFace>Times New Roman</lyricsOddFontFace>
+    </Style>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="voice"><trackName>Voice</trackName><instrumentId>voice.vocals</instrumentId><Channel><program value="52"/></Channel></Instrument>
+    </Part>
+    <Staff id="1">
+      <VBox><height>10</height><Text><style>title</style><text>Stand-in Title</text></Text><Text><style>subtitle</style><text>Subtitle</text></Text></VBox>
+      <Measure><voice><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig><Chord><durationType>whole</durationType><Lyrics><text>la</text></Lyrics><Note><pitch>67</pitch></Note></Chord></voice></Measure>
+    </Staff>
+  </Score>
+</museScore>
+)MSCX";
+    auto session = openSession(root, "stand-in-fonts", xml);
+
+    // The stand-ins are registered once the engine is running.
+    const QStringList families = QFontDatabase::families();
+    for (const char* standIn : { "Liberation Sans", "Liberation Serif", "Liberation Mono", "Carlito", "Caladea", "Archivo Black" }) {
+        expect(families.contains(QString::fromUtf8(standIn)), std::string("Stand-in font not registered: ") + standIn);
+    }
+    expect(QFont::substitutes(QStringLiteral("Calibri")).contains(QStringLiteral("Carlito"), Qt::CaseInsensitive), "Calibri should fall back to Carlito");
+    expect(QFont::substitutes(QStringLiteral("Arial Black")).contains(QStringLiteral("Archivo Black"), Qt::CaseInsensitive),
+           "Arial Black should fall back to Archivo Black");
+    // A font this computer lacks resolves to its stand-in; one it has is used as it is.
+    if (!families.contains(QStringLiteral("Calibri"))) {
+        expect(QFontInfo(QFont(QStringLiteral("Calibri"))).family() == QStringLiteral("Carlito"),
+               "Calibri is not installed here, so text in it should be drawn with Carlito, got "
+                   + QFontInfo(QFont(QStringLiteral("Calibri"))).family().toStdString());
+    }
+    if (families.contains(QStringLiteral("Arial"))) {
+        expect(QFontInfo(QFont(QStringLiteral("Arial"))).family() == QStringLiteral("Arial"),
+               "An installed Arial should be used as it is, not its stand-in");
+    }
+
+    // Saving .mscx writes the style, fonts included, to score_style.mss beside it.
+    std::filesystem::remove(root / "score_style.mss");
+    std::string saved = saveSnapshot(*session, root, "stand-in-fonts-saved");
+    if (std::filesystem::exists(root / "score_style.mss")) {
+        saved += readFile(root / "score_style.mss");
+    }
+    std::string savedFonts;
+    const std::regex fontTag("<[A-Za-z]*FontFace>[^<]*</[A-Za-z]*FontFace>");
+    for (auto it = std::sregex_iterator(saved.begin(), saved.end(), fontTag); it != std::sregex_iterator(); ++it) {
+        savedFonts += it->str() + " ";
+    }
+    expect(saved.find("<titleFontFace>Arial Black</titleFontFace>") != std::string::npos,
+           "The title font name should stay Arial Black; saved fonts: " + (savedFonts.empty() ? std::string("none") : savedFonts));
+    expect(saved.find("<subTitleFontFace>Calibri</subTitleFontFace>") != std::string::npos, "The subtitle font name should stay Calibri");
+    expect(saved.find("<lyricsOddFontFace>Times New Roman</lyricsOddFontFace>") != std::string::npos,
+           "The lyrics font name should stay Times New Roman");
+    for (const char* standIn : { "Liberation", "Carlito", "Caladea", "Archivo" }) {
+        expect(saved.find(standIn) == std::string::npos, std::string("A stand-in name was written into the score: ") + standIn);
+    }
 }
 
 // A drum kit on a pitched staff, as earlier versions of Aria added it.
@@ -3164,6 +3231,39 @@ void testNoteEntryDoesNotCastRestToChord(const std::filesystem::path& root)
     expect(segment->element(0) && segment->element(0)->isRest(), "Rejected note entry did not roll back to its rest");
 }
 
+// Play build 29 crash (Score::endCmd from updateMetadata): Score details on a score that opens
+// with a text frame. Score::addText() put the title into that frame, and TBox::add() deleted
+// the frame's own text, then the subtitle deleted the title the undo macro still held.
+void testScoreDetailsKeepOpeningTextFrame(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 1);
+    const std::string staffStart = "    <Staff id=\"1\">\n";
+    const size_t body = xml.find(staffStart);
+    expect(body != std::string::npos, "Generated score has no staff body");
+    xml.insert(body + staffStart.size(),
+               "      <TBox>\n        <height>4</height>\n        <Text>\n          <text>Program note</text>\n"
+               "          </Text>\n        </TBox>\n");
+    auto session = openSession(root, "score-details-text-frame", xml);
+    msr::render::ScoreMetadata metadata = session->metadata();
+    metadata.title = "New Title";
+    metadata.subtitle = "New Subtitle";
+    metadata.composer = "New Composer";
+    metadata.lyricist = "New Lyricist";
+    std::string error;
+    expect(session->updateMetadata(metadata, error), "Could not update score details: " + error);
+    const msr::render::ScoreMetadata after = session->metadata();
+    expect(after.title == "New Title" && after.subtitle == "New Subtitle" && after.composer == "New Composer",
+           "Score details were not applied");
+    const std::string saved = saveSnapshot(*session, root, "score-details-text-frame-after");
+    expect(saved.find("Program note") != std::string::npos, "Score details deleted the opening text frame's text");
+    expect(countOccurrences(saved, "<TBox>") == 1, "Score details changed the opening text frame");
+    msr::render::ScoreEditState state;
+    expect(session->undo(state, error), "Could not undo score details: " + error);
+    const std::string undone = saveSnapshot(*session, root, "score-details-text-frame-undone");
+    expect(undone.find("Program note") != std::string::npos, "Undo lost the opening text frame's text");
+    expect(undone.find("New Title") == std::string::npos, "Undo kept the new title");
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -3308,8 +3408,43 @@ void testPracticeSpeedScalesPlaybackOnly(const std::filesystem::path& root)
            "Resetting to 100% did not restore the written timing");
 }
 
+// Temporary probe for the build-29 Score::endCmd crash in updateMetadata (Play, Nov 2026).
+// ARIA_METADATA_PROBE=<file listing score paths> runs each scenario on a fresh session.
+int runMetadataProbe(const char* listPath)
+{
+    std::ifstream list(listPath);
+    std::string line;
+    const std::vector<std::string> scenarios = { "change", "clearAll", "clearTitle", "clearSubtitle", "clearComposer", "fillAll" };
+    while (std::getline(list, line)) {
+        if (line.empty()) {
+            continue;
+        }
+        for (const std::string& scenario : scenarios) {
+            std::cout << "PROBE " << scenario << " " << line << std::endl;
+            std::string error;
+            auto session = msr::render::ScoreRenderSession::open(line, error);
+            if (!session || !session->supportsEditing()) {
+                break;
+            }
+            msr::render::ScoreMetadata m = session->metadata();
+            if (scenario == "change") { m.title += " x"; m.composer += " y"; }
+            if (scenario == "clearAll") { m.title.clear(); m.subtitle.clear(); m.composer.clear(); m.lyricist.clear(); m.arranger.clear(); }
+            if (scenario == "clearTitle") { m.title.clear(); }
+            if (scenario == "clearSubtitle") { m.subtitle.clear(); }
+            if (scenario == "clearComposer") { m.composer.clear(); }
+            if (scenario == "fillAll") { m.title = "T"; m.subtitle = "S"; m.composer = "C"; m.lyricist = "L"; m.arranger = "A"; }
+            session->updateMetadata(m, error);
+        }
+    }
+    std::cout << "PROBE DONE" << std::endl;
+    return 0;
+}
+
 int main()
 {
+    if (const char* probe = std::getenv("ARIA_METADATA_PROBE")) {
+        return runMetadataProbe(probe);
+    }
     TestDirectory testDirectory;
     bool tieOnly = std::getenv("ARIA_TIE_IMPORT_TEST_ONLY") != nullptr;
     if (tieOnly) {
@@ -3321,6 +3456,7 @@ int main()
     passed &= runTest("rejected tuplet keeps the score", [&] { testRejectedTupletKeepsScore(testDirectory.path); });
     passed &= runTest("keyboard rejects out-of-range transposed pitch", [&] { testKeyboardRejectsOutOfRangeTransposedPitch(testDirectory.path); });
     passed &= runTest("note entry does not cast a rest to chord", [&] { testNoteEntryDoesNotCastRestToChord(testDirectory.path); });
+    passed &= runTest("score details keep an opening text frame", [&] { testScoreDetailsKeepOpeningTextFrame(testDirectory.path); });
     passed &= runTest("MusicXML let-ring ties never acquire an incoming backlink", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, true); });
     passed &= runTest("ordinary MusicXML ties keep both endpoints", [&] { testMusicXmlLetRingIsNotAnIncomingTie(testDirectory.path, false); });
     for (const std::string version : { "3.02", "4.60", "4.70" }) {
@@ -3375,6 +3511,7 @@ int main()
                       [&] { testDraggingFretDiagramChordMovesTheDiagram(testDirectory.path); });
     passed &= runTest("added instruments match desktop", [&] { testAddedInstrumentsMatchDesktop(testDirectory.path); });
     passed &= runTest("old Aria lyrics are offered as repairs", [&] { testOldAriaLyricsAreOfferedAsRepairs(testDirectory.path); });
+    passed &= runTest("stand-in fonts keep the score's font names", [&] { testStandInFontsKeepTheScoresFontNames(testDirectory.path); });
     passed &= runTest("drum kit on a pitched staff is offered as a repair",
                       [&] { testDrumKitOnPitchedStaffIsOfferedAsARepair(testDirectory.path); });
     passed &= runTest("lyrics entry matches desktop", [&] { testLyricsEntryMatchesDesktop(testDirectory.path); });

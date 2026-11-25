@@ -74,7 +74,7 @@ struct LegacyRepairCandidate {
     // partName repairs
     std::vector<mu::engraving::Part*> parts;
     muse::String newPartName;
-    // lyrics, lyricHyphen and drumStaff repairs
+    // emptyLyrics and drumStaff repairs
     std::vector<mu::engraving::Lyrics*> lyrics;
     std::vector<std::pair<mu::engraving::Lyrics*, mu::engraving::Fraction>> lyricExtensions;
     mu::engraving::Staff* staff = nullptr;
@@ -331,15 +331,14 @@ mu::engraving::Lyrics* nextLyricsInVoice(const mu::engraving::Lyrics* lyrics)
     return nullptr;
 }
 
-// Lyrics left by earlier versions of Aria's lyric entry, which desktop never saves: empty lyrics
-// (space on a note to skip it, or "_" repeated, left one on every note), whose extension lines
-// stopped at the first note; and "-" typed into the text ("glo-") instead of a syllable hyphen.
+// Empty lyrics left by earlier versions of Aria's lyric entry, which desktop never saves (space on
+// a note to skip it, or "_" repeated, left one on every note), whose extension lines stopped at
+// the first note. A "-" in the text ("glo-") is not offered: desktop scores have it too (imported
+// MusicXML or karaoke lyrics, pasted text, older versions), and it is harmless.
 void scanAriaLyrics(mu::engraving::MasterScore* masterScore, std::vector<LegacyRepairCandidate>& candidates)
 {
     LegacyRepairCandidate empty;
-    LegacyRepairCandidate hyphens;
     int emptyMeasure = 0;
-    int hyphenMeasure = 0;
     for (mu::engraving::Segment* segment = masterScore->firstSegment(mu::engraving::SegmentType::ChordRest); segment;
          segment = segment->next1(mu::engraving::SegmentType::ChordRest)) {
         for (mu::engraving::EngravingItem* item : segment->elist()) {
@@ -368,14 +367,6 @@ void scanAriaLyrics(mu::engraving::MasterScore* masterScore, std::vector<LegacyR
                         empty.lyricExtensions.emplace_back(lyrics, ticks);
                     }
                 }
-                const bool joinsNext = lyrics->syllabic() == mu::engraving::LyricsSyllabic::SINGLE
-                                       || lyrics->syllabic() == mu::engraving::LyricsSyllabic::END;
-                if (text.size() > 1 && text.endsWith(u'-') && !text.endsWith(u"--") && joinsNext && nextLyricsInVoice(lyrics)) {
-                    if (hyphens.lyrics.empty()) {
-                        hyphenMeasure = segment->measure()->no() + 1;
-                    }
-                    hyphens.lyrics.push_back(lyrics);
-                }
             }
         }
     }
@@ -394,17 +385,6 @@ void scanAriaLyrics(mu::engraving::MasterScore* masterScore, std::vector<LegacyR
         empty.issue.location = "Full score and parts";
         empty.issue.message = message + ".";
         candidates.push_back(std::move(empty));
-    }
-    if (!hyphens.lyrics.empty()) {
-        const size_t count = hyphens.lyrics.size();
-        hyphens.issue.index = static_cast<int>(candidates.size());
-        hyphens.issue.measureNumber = hyphenMeasure;
-        hyphens.issue.kind = "lyricHyphen";
-        hyphens.issue.location = "Full score and parts";
-        hyphens.issue.message = "Turn " + std::to_string(count) + " hyphen" + (count == 1 ? "" : "s")
-                                + " typed into lyrics (like \u201Cglo-\u201D) into syllable hyphens between the notes, as earlier versions "
-                                  "of Aria should have made.";
-        candidates.push_back(std::move(hyphens));
     }
 }
 
@@ -435,29 +415,11 @@ void scanDrumsOnPitchedStaves(mu::engraving::MasterScore* masterScore, std::vect
 // Must run inside an undo command.
 void repairAriaLyrics(mu::engraving::MasterScore* masterScore, const LegacyRepairCandidate& candidate)
 {
-    if (candidate.issue.kind == "emptyLyrics") {
-        for (const auto& [lyrics, ticks] : candidate.lyricExtensions) {
-            lyrics->undoChangeProperty(mu::engraving::Pid::LYRIC_TICKS, ticks);
-        }
-        for (mu::engraving::Lyrics* lyrics : candidate.lyrics) {
-            masterScore->undoRemoveElement(lyrics);
-        }
-        return;
+    for (const auto& [lyrics, ticks] : candidate.lyricExtensions) {
+        lyrics->undoChangeProperty(mu::engraving::Pid::LYRIC_TICKS, ticks);
     }
     for (mu::engraving::Lyrics* lyrics : candidate.lyrics) {
-        muse::String text = lyrics->plainText().trimmed();
-        text.chop(1);
-        lyrics->undoChangeProperty(mu::engraving::Pid::TEXT, mu::engraving::TextBase::plainToXmlText(text));
-        lyrics->undoChangeProperty(mu::engraving::Pid::SYLLABIC,
-                                   int(lyrics->syllabic() == mu::engraving::LyricsSyllabic::END ? mu::engraving::LyricsSyllabic::MIDDLE
-                                                                                                  : mu::engraving::LyricsSyllabic::BEGIN));
-        if (mu::engraving::Lyrics* next = nextLyricsInVoice(lyrics)) {
-            if (next->syllabic() == mu::engraving::LyricsSyllabic::SINGLE) {
-                next->undoChangeProperty(mu::engraving::Pid::SYLLABIC, int(mu::engraving::LyricsSyllabic::END));
-            } else if (next->syllabic() == mu::engraving::LyricsSyllabic::BEGIN) {
-                next->undoChangeProperty(mu::engraving::Pid::SYLLABIC, int(mu::engraving::LyricsSyllabic::MIDDLE));
-            }
-        }
+        masterScore->undoRemoveElement(lyrics);
     }
 }
 
@@ -8075,6 +8037,52 @@ private:
     std::vector<std::unique_ptr<muse::modularity::IContextSetup>> m_setups;
 };
 
+// Desktop MuseScore draws text in whatever fonts the computer has; phones lack many of them.
+// Registers the bundled open-licensed stand-ins (fonts/README.md) and tells Qt to use them only
+// when a score's font is not on the device. The font name saved in the score is never changed.
+struct StandInFont {
+    const char* family;
+    const char* standIn;
+};
+
+const std::vector<StandInFont>& standInFonts()
+{
+    static const std::vector<StandInFont> fonts = {
+        { "Arial", "Liberation Sans" },           // same measurements
+        { "Arial MT", "Liberation Sans" },
+        { "Arimo", "Liberation Sans" },
+        { "Helvetica", "Liberation Sans" },
+        { "Times New Roman", "Liberation Serif" }, // same measurements
+        { "Times", "Liberation Serif" },
+        { "Tinos", "Liberation Serif" },
+        { "Courier New", "Liberation Mono" },      // same measurements
+        { "Courier", "Liberation Mono" },
+        { "Cousine", "Liberation Mono" },
+        { "Calibri", "Carlito" },                  // same measurements
+        { "Cambria", "Caladea" },                  // same measurements
+        { "Arial Black", "Archivo Black" },        // similar look only
+    };
+    return fonts;
+}
+
+void registerStandInFonts()
+{
+    initAriaStandInFontResources();
+    const QStringList files = QDir(QStringLiteral(":/aria-fonts")).entryList({ QStringLiteral("*.ttf") }, QDir::Files);
+    int registered = 0;
+    for (const QString& file : files) {
+        if (QFontDatabase::addApplicationFont(QStringLiteral(":/aria-fonts/") + file) >= 0) {
+            ++registered;
+        } else {
+            std::cerr << "Aria stand-in font failed to load: " << file.toStdString() << std::endl;
+        }
+    }
+    for (const StandInFont& font : standInFonts()) {
+        QFont::insertSubstitution(QString::fromUtf8(font.family), QString::fromUtf8(font.standIn));
+    }
+    std::cout << "MuseReader render runtime stand-in fonts: " << registered << "/" << files.size() << " registered" << std::endl;
+}
+
 class RenderRuntime
 {
 public:
@@ -8146,6 +8154,8 @@ private:
         for (const auto& module : m_modules) {
             module->onInit(kRuntimeMode);
         }
+
+        registerStandInFonts();
 
         const bool loadedInstrumentTemplates = mu::engraving::loadInstrumentTemplates(":/engraving/instruments/instruments.xml");
         const bool loadedScoreOrders = mu::engraving::loadInstrumentTemplates(":/engraving/instruments/orders.xml");

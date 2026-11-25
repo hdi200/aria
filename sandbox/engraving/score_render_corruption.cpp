@@ -49,7 +49,7 @@
         for (int index : issueIndexes) {
             const LegacyRepairCandidate& candidate = candidates.at(static_cast<size_t>(index));
             static const std::unordered_set<std::string> structural = {
-                "missingRepeat", "missingTempo", "partName", "strayClef", "emptyLyrics", "lyricHyphen", "drumStaff"
+                "missingRepeat", "missingTempo", "partName", "strayClef", "emptyLyrics", "drumStaff"
             };
             if (!structural.count(candidate.issue.kind)) {
                 continue;
@@ -69,7 +69,7 @@
                 repairStrayStartClef(m_masterScore.get(), candidate.target);
                 continue;
             }
-            if (candidate.issue.kind == "emptyLyrics" || candidate.issue.kind == "lyricHyphen") {
+            if (candidate.issue.kind == "emptyLyrics") {
                 repairAriaLyrics(m_masterScore.get(), candidate);
                 continue;
             }

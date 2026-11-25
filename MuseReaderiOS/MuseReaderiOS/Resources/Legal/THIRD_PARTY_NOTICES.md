@@ -11,6 +11,7 @@ Bundled notices:
 - FreeType: FreeType License or GPL-compatible option.
 - Opus: BSD-style Opus license.
 - BravuraText: SIL Open Font License 1.1, reserved font name Bravura.
+- Stand-in text fonts, used only when a score's font is not on the device (unmodified): Liberation Sans, Serif and Mono 2.1.5 (copyright Google Corporation and Red Hat, Inc.; reserved font names Arimo, Tinos, Cousine and Liberation), Carlito (copyright The Carlito Project Authors; reserved font name Carlito), Caladea (copyright The Caladea Project Authors) and Archivo Black (copyright The Archivo Black Project Authors): SIL Open Font License 1.1; see `Liberation-OFL-1.1.txt`, `Carlito-OFL-1.1.txt`, `Caladea-OFL-1.1.txt` and `ArchivoBlack-OFL-1.1.txt`.
 - MuseScore General SoundFonts: MIT license according to embedded SoundFont metadata; see `MuseScore_General-License.md` and `MuseScore_General_HQ-License.md`.
 - Score templates: distributed from the MuseScore Studio source tree unless a more specific upstream license applies.
 - ScoreScanner / ScannerCore 0.1.26: GPLv3 for original code, copyright 2026 Jack Gruber; source https://github.com/hdi200/ScoreScanner/tree/0.1.26; see `ScoreScanner-NOTICE.txt` and `GPL-3.0.txt`. Third-party components retain their own licenses.
