@@ -17,6 +17,11 @@ release legal-screen access and billing/account checks remain unverified.
 - [ ] **iPad with Pencil hover (M2 or later):** hold the Pencil just above the score and switch Edit → Annotate → reading several times: no crash.
 - [ ] **Pencil double tap** still works in Edit and Annotate, and does nothing while reading.
 
+## Time signature over a tuplet (November 25, BUG-034)
+
+- [ ] **iPhone/iPad and Android:** in 4/4, end a bar with an eighth triplet of an eighth and a quarter (F, G). Change that bar to 7/8: the G is split by the barline, in a triplet in each bar, tied. Then change it to 3/4 and back to 4/4: no freeze, and the app stays open.
+- [ ] **Desktop MuseScore 4.7.6/4.7.7:** the saved 7/8 file opens with the same triplets and ties.
+
 ## Galaxy Tab S7 (November 25, BUG-035 to BUG-037)
 
 Checked on the Tab S7-sized emulator; these need the real Samsung tablet (One UI).

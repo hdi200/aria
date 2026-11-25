@@ -236,6 +236,19 @@ public:
                     std::cout << "FIRST-CORRUPTION after step " << m_step << " " << action.name << ": " << report.details.substr(0, 200) << std::endl;
                 }
             }
+            if (m_renderPages) {
+                // Draw every page, as the reader does. Taps only query the page near a point;
+                // drawing walks every item on the page (Play build 29 StaffLines::pagePos crash).
+                const int pages = pageCount();
+                for (int page = 0; page < pages; ++page) {
+                    msr::render::RenderedPage rendered;
+                    std::string renderError;
+                    if (!m_session->renderPage(page, 24, rendered, renderError)) {
+                        fail("render", "page " + std::to_string(page) + " after " + action.name + ": " + renderError);
+                    }
+                }
+                std::cout << "RENDER " << m_step << " pages=" << pages << std::endl;
+            }
             checkState(action.name);
             if (m_step % m_options.checkEvery == 0 || m_step == m_options.steps) {
                 checkpoint(m_step == m_options.steps);
@@ -448,6 +461,37 @@ private:
             return ok;
         });
 
+        if (m_renderPages) {
+            // Reader view modes. Only with ARIA_FUZZ_RENDER, so existing seeds replay unchanged.
+            add("view-transpose", 1, [&](auto&, auto& e) {
+                int pages = 0;
+                const bool ok = s.setViewTransposeKey(randomInt(-7, 7), pages, e);
+                refreshTargets();
+                return ok;
+            });
+            add("concert-pitch", 1, [&](auto&, auto& e) {
+                int pages = 0;
+                const bool ok = s.setConcertPitchEnabled(chance(0.5), pages, e);
+                refreshTargets();
+                return ok;
+            });
+            add("continuous-view", 1, [&](auto&, auto& e) {
+                int pages = 0;
+                const bool ok = s.setContinuousLayout(chance(0.5), pages, e);
+                refreshTargets();
+                return ok;
+            });
+            add("score-details", 1, [&](auto&, auto& e) {
+                msr::render::ScoreMetadata metadata = s.metadata();
+                metadata.title = chance(0.2) ? std::string() : "Fuzz title " + std::to_string(randomInt(0, 99));
+                metadata.composer = chance(0.3) ? std::string() : "Fuzz composer";
+                metadata.subtitle = chance(0.5) ? std::string() : "Fuzz subtitle";
+                const bool ok = s.updateMetadata(metadata, e);
+                refreshTargets();
+                return ok;
+            });
+        }
+
         // History
         add("undo", 5, [&](auto& st, auto& e) { return s.undo(st, e); });
         add("redo", 2, [&](auto& st, auto& e) { return s.redo(st, e); });
@@ -627,6 +671,7 @@ private:
     std::vector<Target> m_targets;
     int m_step = 0;
     int m_failures = 0;
+    const bool m_renderPages = std::getenv("ARIA_FUZZ_RENDER") != nullptr;
     bool m_corruptionSeen = false;
 };
 } // namespace

@@ -21,6 +21,7 @@ import random
 import re
 import subprocess
 import sys
+import threading
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -51,12 +52,32 @@ def run_one(score, seed, args, out):
                "--check-every", str(args.check_every), "--out", str(out)]
     env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
     started = time.time()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
+    peak = []
+
+    def watch_memory():
+        # A runaway edit can allocate until swap fills the disk (tuplets-7, November 2026), so
+        # stop the score at --max-memory instead.
+        while process.poll() is None:
+            rss = subprocess.run(["ps", "-o", "rss=", "-p", str(process.pid)], capture_output=True, text=True).stdout.strip()
+            if rss.isdigit() and int(rss) // 1024 > args.max_memory:
+                peak.append(int(rss) // 1024)
+                process.kill()
+                return
+            time.sleep(0.5)
+
+    watcher = threading.Thread(target=watch_memory, daemon=True)
+    watcher.start()
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=args.timeout, env=env)
-        output, code = result.stdout, result.returncode
-    except subprocess.TimeoutExpired as expired:
-        output = expired.stdout.decode() if isinstance(expired.stdout, bytes) else (expired.stdout or "")
+        output, _ = process.communicate(timeout=args.timeout)
+        code = process.returncode
+    except subprocess.TimeoutExpired:
+        process.kill()
+        output, _ = process.communicate()
         code = "timeout"
+    watcher.join()
+    if peak:
+        code = "memory"
     lines = [line for line in output.splitlines() if re.match(r"(STEP|PROBE|FAIL|REPRO|DONE|SKIP|NOTE)\b", line)]
     failures = []
     for index, line in enumerate(lines):
@@ -64,9 +85,11 @@ def run_one(score, seed, args, out):
             repro = lines[index + 1] if index + 1 < len(lines) and lines[index + 1].startswith("REPRO") else ""
             kind = line.split()[3].rstrip(":") if len(line.split()) > 3 else "?"
             failures.append((kind, line, repro))
-    if code == "timeout" or (isinstance(code, int) and code < 0):
+    if code in ("timeout", "memory") or (isinstance(code, int) and code < 0):
         last_step = next((line for line in reversed(lines) if line.startswith(("STEP", "PROBE"))), "before the first step")
-        kind = "hang" if code == "timeout" else "crash"
+        kind = {"timeout": "hang", "memory": "memory"}.get(code, "crash")
+        if code == "memory":
+            code = f"over {args.max_memory} MB"
         repro = (f"REPRO score_render_fuzz --score '{score}' --seed {seed} --steps {args.steps} "
                  f"--check-every {args.check_every} --out <dir>")
         failures.append((kind, f"{kind.upper()} ({code}) last: {last_step}", repro))
@@ -97,6 +120,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     parser.add_argument("--timeout", type=int, default=600, help="seconds per score before it counts as a hang")
+    parser.add_argument("--max-memory", type=int, default=4096, help="MB per score before it is stopped as a memory failure")
     parser.add_argument("--out", default=str(REPO / "build-aria-475-host" / "fuzz"))
     parser.add_argument("--no-desktop", action="store_true", help="skip the desktop 4.7.5 check of final files")
     args = parser.parse_args()
@@ -133,7 +157,7 @@ def main():
     report = [f"# Random-edit stress test", "",
               f"{len(results)} scores, {total_steps} edits ({total_refused} refused by the command, which is normal), seed {args.seed}", ""]
     report.append("| failure | count |\n|---|---|")
-    for kind in ("crash", "hang", "state", "corruption", "save", "reopen", "stale", "roundtrip", "undo"):
+    for kind in ("crash", "hang", "memory", "state", "corruption", "save", "reopen", "stale", "roundtrip", "undo"):
         report.append(f"| {kind} | {by_kind.get(kind, 0)} |")
     if counts is not None:
         report += ["", "Desktop 4.7.5 on the final scores: " + ", ".join(f"{k} {v}" for k, v in counts.items())]

@@ -128,7 +128,8 @@ its clef after the time signature; the same edits on normally ordered scores dra
 `compat/fuzz_edits.py` runs `score_render_fuzz` (tests/score_render_fuzz.cpp): seeded random
 edits on many scores, checking for crashes, corruption, failed saves or reopens, stale layout
 (live vs reopened `layoutFingerprint`), round-trip and undo differences, then desktop 4.7.5 on
-the final files. Every failure prints a REPRO command. For crashes, build the AddressSanitizer
+the final files. A score that grows past `--max-memory` (4096 MB) is stopped and reported as a
+`memory` failure, so a runaway edit cannot fill the disk through swap. Every failure prints a REPRO command. For crashes, build the AddressSanitizer
 variant and replay with `ARIA_FUZZ_PARANOID=1` (full relayout after every edit, so a crash shows
 up right after the edit that caused it); `ARIA_FUZZ_TRACE_CORRUPTION=1` names the first edit
 that damages a bar.

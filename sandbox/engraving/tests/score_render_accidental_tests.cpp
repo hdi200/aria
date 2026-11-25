@@ -3176,6 +3176,59 @@ void testRejectedTupletKeepsScore(const std::filesystem::path& root)
     expect(mixedBefore == music(saveSnapshot(*mixed, root, "mixed-tuplet-after")), "A rejected range left a partial tuplet edit");
 }
 
+// A time signature change that moves a barline into the last note of a tuplet splits that note
+// across the barline. Its second half must go into a new tuplet in the next bar, not stay in the
+// tuplet of the previous bar: a tuplet spread over two bars sends the next time signature change
+// into an endless copy loop (fuzz tuplets-7, seed 29010: memory grew until the system killed it).
+void testTimeSignatureSplitsLastTupletNote(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 1);
+    const std::string whole = "<Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>";
+    xml.replace(xml.find(whole), whole.size(),
+                "<Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>"
+                "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes><baseNote>eighth</baseNote>"
+                "<Number><style>tuplet</style><text>3</text></Number></Tuplet>"
+                "<Chord><durationType>eighth</durationType><Note><pitch>65</pitch><tpc>13</tpc></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>67</pitch><tpc>15</tpc></Note></Chord>"
+                "<endTuplet/>");
+    auto session = openSession(root, "time-signature-tuplet-split", xml);
+    msr::render::ScoreEditState state;
+    std::string error;
+    expect(session->updateTimeSignature(7, 8, false, false, true, state, error), "Could not change to 7/8: " + error);
+
+    // Every tuplet must open and close inside one bar.
+    const std::string saved = saveSnapshot(*session, root, "time-signature-tuplet-split-7-8");
+    size_t measureStart = 0;
+    int measureNumber = 0;
+    while ((measureStart = saved.find("<Measure", measureStart)) != std::string::npos) {
+        ++measureNumber;
+        const size_t measureEnd = saved.find("</Measure>", measureStart);
+        const std::string measure = saved.substr(measureStart, measureEnd - measureStart);
+        size_t opened = 0;
+        size_t closed = 0;
+        for (size_t at = 0; (at = measure.find("<Tuplet", at)) != std::string::npos; ++at) {
+            ++opened;
+        }
+        for (size_t at = 0; (at = measure.find("<endTuplet/>", at)) != std::string::npos; ++at) {
+            ++closed;
+        }
+        expect(opened == closed, "Bar " + std::to_string(measureNumber) + " has " + std::to_string(opened) + " tuplet(s) but "
+               + std::to_string(closed) + " tuplet end(s) after the 7/8 change");
+        measureStart = measureEnd;
+    }
+    expect(measureNumber >= 3, "The 7/8 change did not move the music into new bars");
+
+    // The next change reads every tuplet back; with a tuplet spread over two bars it never finished.
+    expect(session->updateTimeSignature(4, 4, false, false, true, state, error), "Could not change back to 4/4: " + error);
+    msr::render::RenderedPage page;
+    expect(session->renderPage(0, 72, page, error), "The score did not render after both changes: " + error);
+    auto reopened = msr::render::ScoreRenderSession::open(
+        (root / "time-signature-tuplet-split-7-8.mscx").string(), error);
+    expect(reopened && reopened->renderPage(0, 72, page, error), "The 7/8 file did not reopen: " + error);
+}
+
 // A written MIDI pitch of 1 on a B-flat instrument becomes sounding pitch -1,
 // NoteVal's rest sentinel. addPitch must not cast that rest to a Chord.
 void testKeyboardRejectsOutOfRangeTransposedPitch(const std::filesystem::path& root)
@@ -3408,43 +3461,8 @@ void testPracticeSpeedScalesPlaybackOnly(const std::filesystem::path& root)
            "Resetting to 100% did not restore the written timing");
 }
 
-// Temporary probe for the build-29 Score::endCmd crash in updateMetadata (Play, Nov 2026).
-// ARIA_METADATA_PROBE=<file listing score paths> runs each scenario on a fresh session.
-int runMetadataProbe(const char* listPath)
-{
-    std::ifstream list(listPath);
-    std::string line;
-    const std::vector<std::string> scenarios = { "change", "clearAll", "clearTitle", "clearSubtitle", "clearComposer", "fillAll" };
-    while (std::getline(list, line)) {
-        if (line.empty()) {
-            continue;
-        }
-        for (const std::string& scenario : scenarios) {
-            std::cout << "PROBE " << scenario << " " << line << std::endl;
-            std::string error;
-            auto session = msr::render::ScoreRenderSession::open(line, error);
-            if (!session || !session->supportsEditing()) {
-                break;
-            }
-            msr::render::ScoreMetadata m = session->metadata();
-            if (scenario == "change") { m.title += " x"; m.composer += " y"; }
-            if (scenario == "clearAll") { m.title.clear(); m.subtitle.clear(); m.composer.clear(); m.lyricist.clear(); m.arranger.clear(); }
-            if (scenario == "clearTitle") { m.title.clear(); }
-            if (scenario == "clearSubtitle") { m.subtitle.clear(); }
-            if (scenario == "clearComposer") { m.composer.clear(); }
-            if (scenario == "fillAll") { m.title = "T"; m.subtitle = "S"; m.composer = "C"; m.lyricist = "L"; m.arranger = "A"; }
-            session->updateMetadata(m, error);
-        }
-    }
-    std::cout << "PROBE DONE" << std::endl;
-    return 0;
-}
-
 int main()
 {
-    if (const char* probe = std::getenv("ARIA_METADATA_PROBE")) {
-        return runMetadataProbe(probe);
-    }
     TestDirectory testDirectory;
     bool tieOnly = std::getenv("ARIA_TIE_IMPORT_TEST_ONLY") != nullptr;
     if (tieOnly) {
@@ -3454,6 +3472,7 @@ int main()
     }
     bool passed = true;
     passed &= runTest("rejected tuplet keeps the score", [&] { testRejectedTupletKeepsScore(testDirectory.path); });
+    passed &= runTest("time signature splits the last tuplet note into a new tuplet", [&] { testTimeSignatureSplitsLastTupletNote(testDirectory.path); });
     passed &= runTest("keyboard rejects out-of-range transposed pitch", [&] { testKeyboardRejectsOutOfRangeTransposedPitch(testDirectory.path); });
     passed &= runTest("note entry does not cast a rest to chord", [&] { testNoteEntryDoesNotCastRestToChord(testDirectory.path); });
     passed &= runTest("score details keep an opening text frame", [&] { testScoreDetailsKeepOpeningTextFrame(testDirectory.path); });

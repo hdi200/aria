@@ -537,7 +537,11 @@ Tuplet* TrackList::writeTuplet(Tuplet* parent, Tuplet* tuplet, Measure*& measure
                 if (measure->nextMeasure()) {
                     measure = measure->nextMeasure();
                     rest    = measure->ticks();
-                    if (e != tuplet->elements().back()) {
+                    // Aria: also when e is the tuplet's last element. Whatever of e is left goes
+                    // into this bar, so it needs this bar's tuplet; upstream skipped that case and
+                    // left the rest of the last note in the previous bar's tuplet, which the next
+                    // ScoreRange::read then copied without end (see compat/ENGINE.md).
+                    {
                         // create second part of split tuplet
                         dt = dt->clone();
                         dt->setGenerated(true);

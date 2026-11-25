@@ -1240,8 +1240,19 @@ void setStyledMetadataText(mu::engraving::MasterScore* score,
         if (newXmlText.empty()) {
             return;
         }
-        // Score::addText() routes through undoAddElement(), so it joins the active macro.
-        textItem = score->addText(textStyleType);
+        // Score::getText() reads only a vertical frame at the top. Left to itself, addText() puts
+        // the text into whatever frame is first: a text frame then deletes its own text (and the
+        // next field deletes this one while the undo macro still holds it: Play build 29
+        // Score::endCmd crash), and a fretboard frame drops it. Give it a vertical frame, adding
+        // one above the first frame as desktop's Add > Frames does. Both join the active macro.
+        mu::engraving::MeasureBase* frame = score->first();
+        if (!frame || !frame->isVBox()) {
+            frame = score->insertBox(mu::engraving::ElementType::VBOX, frame);
+        }
+        if (!frame) {
+            return;
+        }
+        textItem = score->addText(textStyleType, frame);
     }
 
     if (!textItem || textItem->xmlText() == newXmlText) {

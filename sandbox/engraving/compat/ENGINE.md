@@ -56,6 +56,12 @@ Parts and loading:
   stress test, e.g. creating a tuplet over a note with a guitar bend.
 - `editing/edit.cpp`: `undoRemoveMeasures` removes each crossing spanner once, not again through
   its linked copy (a staff linked to tablature), which freed it twice when the score closed.
+- `dom/range.cpp`: `TrackList::writeTuplet` opens the next bar's part of a split tuplet also when
+  the barline falls inside the tuplet's last note. Upstream left the rest of that note in the
+  previous bar's tuplet, so one tuplet spanned two bars with its notes out of order; the next time
+  signature change (`ScoreRange::read` → `skipTuplet`) then went back to it and copied it without
+  end until the system killed the app for memory. Found by the random-edit stress test
+  (`vtest/scores/tuplets-7.mscz`, seed 29010: 6/8 then another change).
 - `infrastructure/mscreader.cpp`: `excerptFileNames` sorts parts by their `<index>_` file-name
   prefix, so a score saved as a folder (not a zip) reopens with its parts in order rather than
   in directory order. Zipped files are already in that order.
