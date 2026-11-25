@@ -1,17 +1,27 @@
 package aria.skip
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import java.io.File
+import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
 import skip.foundation.ProcessInfo
 
 /// The iOS app's bundled files, packaged as assets under ios/ (see build.gradle.kts).
 /// The shared code asks for them through AppResources (AndroidResourceFiles.swift); each
 /// is copied to app storage on first use because the engine and FileManager need file
-/// paths. Copies are refreshed when the app is updated.
+/// paths. After an app update only the files whose contents changed are copied again
+/// (ios-manifest.txt, written by the build, lists each file's size and SHA-256).
 object AriaAssetsImpl {
     private const val ROOT = "ios"
+    private const val MANIFEST = "ios-manifest.txt"
+    private const val TAG = "AriaAssets"
     private val lock = Any()
     private var files: List<String>? = null
+    private var refreshed = false
+    // One lock per file, so copying the 215 MB sound bank doesn't hold up lookups of other files.
+    private val fileLocks = ConcurrentHashMap<String, Any>()
 
     private val context: Context
         get() = ProcessInfo.processInfo.androidContext
@@ -19,22 +29,35 @@ object AriaAssetsImpl {
     /// Copies the resource (a file, or a folder such as ScoreTemplates.bundle) out of the
     /// base APK or install-time soundbank pack and returns its path, or null when there is none. Finds it like Bundle.url:
     /// in `subdirectory`, else at the top, else anywhere (Xcode flattens folders).
-    fun path(name: String, subdirectory: String?): String? = synchronized(lock) {
-        val assetPath = locate(name, subdirectory) ?: return null
-        refreshIfUpdated()
-        val target = File(storageRoot(), assetPath)
-        val assetFiles = allFiles().filter { it == assetPath || it.startsWith("$assetPath/") }
+    fun path(name: String, subdirectory: String?): String? {
+        val assetPath: String
+        val assetFiles: List<String>
+        synchronized(lock) {
+            assetPath = locate(name, subdirectory) ?: return null
+            refreshIfUpdated()
+            assetFiles = allFiles().filter { it == assetPath || it.startsWith("$assetPath/") }
+        }
         for (file in assetFiles) {
+            extract(file)
+        }
+        return File(storageRoot(), assetPath).path
+    }
+
+    private fun extract(file: String) {
+        synchronized(fileLocks.getOrPut(file) { Any() }) {
             val destination = File(storageRoot(), file)
-            if (destination.exists()) continue
+            if (destination.exists()) return
+            val started = SystemClock.elapsedRealtime()
             destination.parentFile?.mkdirs()
             val partial = File(destination.path + ".partial")
             context.assets.open("$ROOT/$file").use { input ->
                 partial.outputStream().use { output -> input.copyTo(output, 1 shl 20) }
             }
             check(partial.renameTo(destination)) { "Could not finish extracting $file" }
+            if (destination.length() >= (1L shl 20)) {
+                Log.i(TAG, "extracted $file (${destination.length() shr 20} MB) in ${SystemClock.elapsedRealtime() - started} ms")
+            }
         }
-        target.path
     }
 
     private fun locate(name: String, subdirectory: String?): String? {
@@ -67,14 +90,60 @@ object AriaAssetsImpl {
 
     private fun storageRoot(): File = File(context.filesDir, "ios-resources")
 
+    /// Once per process, before the first copy: after an app update, delete the copies whose
+    /// file changed in the update (or that can't be checked) and keep the rest.
     private fun refreshIfUpdated() {
+        if (refreshed) return
+        refreshed = true
+        val root = storageRoot()
         val installed = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime.toString()
-        val marker = File(storageRoot(), ".installed")
+        val marker = File(root, ".installed")
         if (marker.exists() && marker.readText() == installed) return
-        storageRoot().deleteRecursively()
-        storageRoot().mkdirs()
+
+        val current = try {
+            context.assets.open(MANIFEST).use(::readManifest)
+        } catch (error: Exception) {
+            null
+        }
+        val savedManifest = File(root, ".manifest")
+        val previous = if (savedManifest.isFile) savedManifest.inputStream().use(::readManifest) else null
+        var kept = 0
+        if (current == null || previous == null) {
+            root.deleteRecursively()
+        } else {
+            root.walkBottomUp().forEach { file ->
+                val relative = file.relativeTo(root).invariantSeparatorsPath
+                if (file == root || relative.startsWith(".")) return@forEach
+                if (file.isDirectory) {
+                    if (file.list().isNullOrEmpty()) file.delete()
+                    return@forEach
+                }
+                val entry = current[relative]
+                if (entry != null && previous[relative] == entry && file.length() == entry.size) {
+                    kept++
+                } else {
+                    file.delete()
+                }
+            }
+        }
+        root.mkdirs()
+        if (current != null) {
+            context.assets.open(MANIFEST).use { input -> savedManifest.outputStream().use { input.copyTo(it) } }
+        } else {
+            savedManifest.delete()
+        }
         marker.writeText(installed)
+        Log.i(TAG, "app updated: kept $kept unchanged resource copies")
     }
+
+    private data class Entry(val size: Long, val sha256: String)
+
+    private fun readManifest(input: InputStream): Map<String, Entry> =
+        input.bufferedReader().readLines().mapNotNull { line ->
+            val parts = line.split('\t')
+            val size = parts.getOrNull(1)?.toLongOrNull()
+            if (parts.size == 3 && size != null) parts[0] to Entry(size, parts[2]) else null
+        }.toMap()
 }
 
 /// What Swift calls (AnyDynamicObject reflects on class instances, not on objects).

@@ -1,3 +1,4 @@
+import java.security.MessageDigest
 import java.util.Properties
 
 // Local standalone benchmark only. Both switches must agree; never build a bundle.
@@ -52,7 +53,36 @@ val stageScannerModels by tasks.registering(Sync::class) {
     from(models) { exclude("**/.DS_Store") }
     into(scannerAssets.map { it.dir("ScannerModels") })
 }
-tasks.named("preBuild") { dependsOn(copyAriaNativeLibs, stageBaseResources, stageScannerModels) }
+// Size and SHA-256 of every shared resource (sound bank included), so that after an app update
+// AriaAssets.kt keeps the copies it already made of unchanged files instead of copying them all again.
+val resourceManifest = layout.buildDirectory.dir("ariaResourceManifest")
+val writeResourceManifest by tasks.registering {
+    val sourceRoot = file("ios-assets/ios")
+    val output = resourceManifest.map { it.file("ios-manifest.txt") }
+    inputs.dir(sourceRoot).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(output)
+    doLast {
+        fun sha256(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(1 shl 20)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+        val lines = sourceRoot.walkTopDown()
+            .filter { it.isFile && it.name != ".DS_Store" }
+            .map { "${it.relativeTo(sourceRoot).invariantSeparatorsPath}\t${it.length()}\t${sha256(it)}" }
+            .sorted()
+            .toList()
+        output.get().asFile.writeText(lines.joinToString("\n", postfix = "\n"))
+    }
+}
+tasks.named("preBuild") { dependsOn(copyAriaNativeLibs, stageBaseResources, stageScannerModels, writeResourceManifest) }
 
 kotlin {
     compilerOptions {
@@ -94,6 +124,7 @@ android {
     // paths identical across the base and install-time pack for AssetManager lookup.
     sourceSets["main"].assets.srcDir(baseResources.get().asFile)
     sourceSets["main"].assets.srcDir(scannerAssets.get().asFile)
+    sourceSets["main"].assets.srcDir(resourceManifest.get().asFile)
     assetPacks += listOf(":soundbank")
     // A local debug APK doesn't carry install-time asset packs, so debug builds also put
     // the sound bank in the base module (same ios/ paths) to keep playback working.
