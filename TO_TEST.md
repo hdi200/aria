@@ -12,6 +12,11 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Pencil crash (November 25, BUG-033)
+
+- [ ] **iPad with Pencil hover (M2 or later):** hold the Pencil just above the score and switch Edit → Annotate → reading several times: no crash.
+- [ ] **Pencil double tap** still works in Edit and Annotate, and does nothing while reading.
+
 ## Galaxy Tab S7 (November 25, BUG-035 to BUG-037)
 
 Checked on the Tab S7-sized emulator; these need the real Samsung tablet (One UI).

@@ -267,7 +267,9 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.allowsPlaybackFollow = allowsPlaybackFollow
         context.coordinator.noteDragGestureRecognizer?.isEnabled = allowsEditingInteractions
         context.coordinator.pencilHoverGestureRecognizer?.isEnabled = allowsEditingInteractions
-        context.coordinator.pencilInteraction?.isEnabled = allowsEditingInteractions || annotationModeActive
+        // Leave the Pencil interaction enabled: enabling it installs a hover gesture that
+        // hit-tests SwiftUI mid-update and crashes (BUG-033). Gate the double tap instead.
+        context.coordinator.allowsPencilDoubleTap = allowsEditingInteractions || annotationModeActive
         context.coordinator.annotationGestureRecognizer?.isEnabled = allowsAnnotationInteraction
         context.coordinator.annotationGestureRecognizer?.allowedTouchTypes = annotationModeActive
             ? [NSNumber(value: UITouch.TouchType.direct.rawValue), NSNumber(value: UITouch.TouchType.pencil.rawValue)]
@@ -362,6 +364,7 @@ struct ZoomableImageView: UIViewRepresentable {
         var annotationWidth: Double = 4
         var allowsPlaybackFollow = true
         var allowsPencilInsertionFineTune = false
+        var allowsPencilDoubleTap = false
         var activeNotationAutoScrollRevision = 0
         var activeNotationTopInset: CGFloat = 0
         var activeNotationBottomInset: CGFloat = 0
@@ -1281,6 +1284,7 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
+            guard allowsPencilDoubleTap else { return }
             onPencilDoubleTap?()
         }
     }
