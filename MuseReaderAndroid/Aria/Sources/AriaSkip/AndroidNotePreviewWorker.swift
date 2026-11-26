@@ -12,6 +12,7 @@ actor AndroidNotePreviewWorker {
     private var engine: AVAudioEngine?
     private var sampler: AVAudioUnitSampler?
     private var loadedProgram: UInt8?
+    private var loadedBankMSB: UInt8?
     private var stops: [UInt8: Task<Void, Never>] = [:]
     private var generation = 0
 
@@ -26,7 +27,11 @@ actor AndroidNotePreviewWorker {
         guard !pitches.isEmpty else { return }
         do {
             let program = UInt8(clamping: program ?? 0)
-            try prepare(program: program)
+            // MuseScore puts drum kits in bank 128, the SoundFont's percussion bank (as on iOS).
+            let bankMSB = (bank ?? 0) >= 128
+                ? UInt8(kAUSampler_DefaultPercussionBankMSB)
+                : UInt8(kAUSampler_DefaultMelodicBankMSB)
+            try prepare(program: program, bankMSB: bankMSB)
             if let engine, !engine.isRunning { try engine.start() }
             let currentGeneration = generation
             for pitch in pitches {
@@ -48,6 +53,7 @@ actor AndroidNotePreviewWorker {
         engine = nil
         sampler = nil
         loadedProgram = nil
+        loadedBankMSB = nil
     }
 
     private func stop(_ note: UInt8, generation expected: Int) {
@@ -63,8 +69,8 @@ actor AndroidNotePreviewWorker {
         stops.removeAll()
     }
 
-    private func prepare(program: UInt8) throws {
-        guard loadedProgram != program || engine == nil else { return }
+    private func prepare(program: UInt8, bankMSB: UInt8 = UInt8(kAUSampler_DefaultMelodicBankMSB)) throws {
+        guard loadedProgram != program || loadedBankMSB != bankMSB || engine == nil else { return }
         guard let url = AppResources.url(forResource: "MuseScore_General", withExtension: "sf2") else {
             throw NSError(domain: "AriaNotePreview", code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "MuseScore_General.sf2 is unavailable."])
@@ -76,12 +82,13 @@ actor AndroidNotePreviewWorker {
             outputEngine.connect(instrument, to: outputEngine.mainMixerNode, format: nil)
         }
         try instrument.loadSoundBankInstrument(at: url, program: program,
-            bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+            bankMSB: bankMSB, bankLSB: UInt8(kAUSampler_DefaultBankLSB))
         // A prepared preview must not take over the score playback latency clock.
         try outputEngine.prewarmSamplers()
         engine = outputEngine
         sampler = instrument
         loadedProgram = program
+        loadedBankMSB = bankMSB
         print("MuseReader note preview ready: soundbank=\(url.lastPathComponent) program=\(program)")
     }
 }

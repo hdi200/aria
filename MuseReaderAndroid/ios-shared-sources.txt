@@ -72,6 +72,7 @@ Views/ScoreReaderPracticePanel.swift
 Views/ScoreReaderTempoRampSheet.swift
 Views/ScoreReaderChromeBar.swift
 Views/ScoreReaderContextToolbars.swift
+Views/ScoreReaderDrumPad.swift
 Views/ScoreReaderEditingDeck.swift
 Views/ScoreReaderExportPanel.swift
 Views/ScoreReaderFloatingPalette.swift

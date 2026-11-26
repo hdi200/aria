@@ -606,6 +606,29 @@ open class MSRRenderSession: NSObject, @unchecked Sendable {
         }
     }
 
+    /// Enters drums struck together, split into one chord per drum-set voice at the same beat.
+    open func insertDrumNotesAtCursor(_ drumPitches: [NSNumber], addToCurrentChord: Bool) throws -> MSREditState {
+        var pitches = aria.Ints()
+        for pitch in drumPitches {
+            pitches.push_back(Int32(pitch.intValue))
+        }
+        return try edit("The MuseScore render core could not enter that drum at the current cursor.") {
+            $0.pointee.insertDrumNotesAtCursor(pitches, addToCurrentChord, &$1, &$2)
+        }
+    }
+
+    /// Select mode: changes the selected drum note, or puts the drum on its beat in its own voice,
+    /// then continues note input after that beat.
+    open func enterDrumsAtSelectedNote(_ drumPitches: [NSNumber]) throws -> MSREditState {
+        var pitches = aria.Ints()
+        for pitch in drumPitches {
+            pitches.push_back(Int32(pitch.intValue))
+        }
+        return try edit("The MuseScore render core could not put that drum on the selected beat.") {
+            $0.pointee.enterDrumsAtSelectedNote(pitches, &$1, &$2)
+        }
+    }
+
     open func removeMIDIPitchFromCurrentChord(_ midiPitch: Int) throws -> MSREditState {
         try edit("The MuseScore render core could not remove that note from the chord.") {
             $0.pointee.removeMIDIPitchFromCurrentChord(Int32(midiPitch), &$1, &$2)

@@ -407,17 +407,19 @@ public final class AVAudioPlayerNode: AVAudioNode, @unchecked Sendable {
 /// A SoundFont instrument played live (NativeNotePreviewController), with the engine's
 /// FluidSynth.
 public final class AVAudioUnitSampler: AVAudioNode, @unchecked Sendable {
-    private var soundBank: (path: String, program: Int)?
+    private var soundBank: (path: String, bank: Int, program: Int)?
 
     public func loadSoundBankInstrument(at bankURL: URL, program: UInt8, bankMSB: UInt8, bankLSB: UInt8) throws {
-        // Apple's melodic bank (MSB 121) is the SoundFont's bank 0.
-        soundBank = (bankURL.path, Int(program))
+        // Apple's melodic bank (MSB 121) is the SoundFont's bank 0, and its percussion bank
+        // (MSB 120) is the SoundFont's drum kits in bank 128.
+        let bank = bankMSB == 0x78 ? 128 : 0
+        soundBank = (bankURL.path, bank, Int(program))
         try loadIfRunning()
     }
 
     func loadIfRunning() throws {
         guard let output = engine?.output, let soundBank else { return }
-        try output.loadSampler(soundFontPath: soundBank.path, bank: 0, program: soundBank.program)
+        try output.loadSampler(soundFontPath: soundBank.path, bank: soundBank.bank, program: soundBank.program)
     }
 
     public func startNote(_ note: UInt8, withVelocity velocity: UInt8, onChannel channel: UInt8) {

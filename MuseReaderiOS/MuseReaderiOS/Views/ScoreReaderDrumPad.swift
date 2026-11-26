@@ -121,7 +121,7 @@ private struct PadLayout {
 /// One pad: a Button, so the strip scrolls when a finger drags across it. A press held for
 /// half a second adds the drum to the current beat instead (like Shift-click in desktop
 /// MuseScore); the long press gives way as soon as the finger moves, so dragging still scrolls.
-private struct ScoreReaderDrumPadKey: View {
+struct ScoreReaderDrumPadKey: View {
     let pad: ScoreDrumPad
     let isActive: Bool
     let isTall: Bool
@@ -131,11 +131,38 @@ private struct ScoreReaderDrumPadKey: View {
     let action: (Int) -> Void
     let addAction: (Int) -> Void
 
+    #if !os(Android)
     /// Set when a long press added the drum, so the Button's release doesn't enter it again.
     @State private var longPressFired = false
+    #endif
     private let longPressDuration: Double = 0.45
 
+    private var cell: some View {
+        ScoreReaderDrumPadCell(
+            pad: pad,
+            isActive: isActive,
+            isTall: isTall,
+            showsShortcut: showsShortcut,
+            glyphHeight: glyphHeight
+        )
+    }
+
     var body: some View {
+        let style = ScoreReaderDrumPadButtonStyle(isActive: isActive, addsToBeat: addsToBeat)
+        #if os(Android)
+        // Construct the traits directly to avoid Skip's recursive OptionSet initializer
+        // and keep the gesture target stable when the active pad changes.
+        let button = AccessibilityTraits.isButton.rawValue
+        let selected = isActive ? AccessibilityTraits.isSelected.rawValue : 0
+        let traits = AccessibilityTraits(rawValue: button | selected)
+        // Skip combines both callbacks in one tap detector, so scrolling cancels both.
+        style.surface(cell, isPressed: false)
+            .onTapGesture { action(pad.pitch) }
+            .onLongPressGesture(minimumDuration: longPressDuration) { addAction(pad.pitch) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(pad.name)
+            .accessibilityAddTraits(traits)
+        #else
         Button {
             if longPressFired {
                 longPressFired = false
@@ -143,15 +170,9 @@ private struct ScoreReaderDrumPadKey: View {
             }
             action(pad.pitch)
         } label: {
-            ScoreReaderDrumPadCell(
-                pad: pad,
-                isActive: isActive,
-                isTall: isTall,
-                showsShortcut: showsShortcut,
-                glyphHeight: glyphHeight
-            )
+            cell
         }
-        .buttonStyle(ScoreReaderDrumPadButtonStyle(isActive: isActive, addsToBeat: addsToBeat))
+        .buttonStyle(style)
         .simultaneousGesture(
             LongPressGesture(minimumDuration: longPressDuration, maximumDistance: 10)
                 .onEnded { _ in
@@ -164,6 +185,7 @@ private struct ScoreReaderDrumPadKey: View {
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { action(pad.pitch) }
         .accessibilityAction(named: "Add to beat") { addAction(pad.pitch) }
+        #endif
     }
 }
 
@@ -172,11 +194,15 @@ private struct ScoreReaderDrumPadButtonStyle: ButtonStyle {
     let addsToBeat: Bool
 
     func makeBody(configuration: Configuration) -> some View {
+        surface(configuration.label, isPressed: configuration.isPressed)
+    }
+
+    func surface<Label: View>(_ label: Label, isPressed: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
-        let fill: Color = configuration.isPressed
+        let fill: Color = isPressed
             ? Color(red: 0.80, green: 0.87, blue: 0.99)
             : (isActive ? Color(red: 0.88, green: 0.93, blue: 1.0) : Color.white)
-        configuration.label
+        return label
             .background { shape.fill(fill) }
             .overlay {
                 shape.strokeBorder(
@@ -195,13 +221,13 @@ private struct ScoreReaderDrumPadButtonStyle: ButtonStyle {
                         .allowsHitTesting(false)
                 }
             }
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .scaleEffect(isPressed ? 0.95 : 1)
+            .animation(.easeOut(duration: 0.08), value: isPressed)
             .contentShape(shape)
     }
 }
 
-private struct ScoreReaderDrumPadCell: View {
+struct ScoreReaderDrumPadCell: View {
     let pad: ScoreDrumPad
     let isActive: Bool
     let isTall: Bool
@@ -239,11 +265,14 @@ private struct ScoreReaderDrumPadCell: View {
     }
 
     private var nameText: some View {
-        Text(pad.name)
+        let name = Text(pad.name)
             .font(.system(size: isTall ? 13 : 11.5, weight: .medium))
             .lineLimit(2)
-            .allowsTightening(true)
-            .minimumScaleFactor(0.8)
+        #if os(Android)
+        return name.minimumScaleFactor(0.8)
+        #else
+        return name.allowsTightening(true).minimumScaleFactor(0.8)
+        #endif
     }
 
     @ViewBuilder
@@ -261,90 +290,125 @@ private struct ScoreReaderDrumPadCell: View {
 struct ScoreReaderDrumNoteGlyph: View {
     let pad: ScoreDrumPad
 
+    private enum GlyphPart {
+        case staff(Path, width: CGFloat)
+        case stroke(Path, width: CGFloat)
+        case fill(Path)
+    }
+
+    private let staffColor = Color.black.opacity(0.24)
+
     var body: some View {
-        Canvas { context, size in
-            let lineGap = size.height / 7
-            let staffTop = size.height / 2 - 2 * lineGap
-            let lineColor = GraphicsContext.Shading.color(.black.opacity(0.24))
-            for index in 0..<5 {
-                let y = staffTop + CGFloat(index) * lineGap
-                var line = Path()
-                line.move(to: CGPoint(x: 0, y: y))
-                line.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(line, with: lineColor, lineWidth: 0.6)
-            }
-
-            // Drum-set lines count half spaces down from the top line; clamp to the glyph.
-            let clampedLine = min(max(CGFloat(pad.line), -3), 11)
-            let center = CGPoint(x: size.width / 2, y: staffTop + clampedLine * lineGap / 2)
-            let headWidth = lineGap * 1.5
-            let headHeight = lineGap * 1.05
-            let ink = GraphicsContext.Shading.style(.foreground)
-
-            // Ledger lines above and below the staff.
-            if clampedLine <= -2 || clampedLine >= 10 {
-                var ledgers = Path()
-                let step: CGFloat = clampedLine < 0 ? -2 : 2
-                var ledgerLine: CGFloat = clampedLine < 0 ? -2 : 10
-                while clampedLine < 0 ? ledgerLine >= clampedLine : ledgerLine <= clampedLine {
-                    let y = staffTop + ledgerLine * lineGap / 2
-                    ledgers.move(to: CGPoint(x: center.x - headWidth, y: y))
-                    ledgers.addLine(to: CGPoint(x: center.x + headWidth, y: y))
-                    ledgerLine += step
+        #if os(Android)
+        GeometryReader { geometry in
+            let parts = glyphParts(in: geometry.size)
+            ZStack {
+                ForEach(parts.indices, id: \.self) { index in
+                    switch parts[index] {
+                    case let .staff(path, width):
+                        path.stroke(staffColor, lineWidth: width)
+                    case let .stroke(path, width):
+                        path.stroke(.foreground, lineWidth: width)
+                    case let .fill(path):
+                        path.fill(.foreground)
+                    }
                 }
-                context.stroke(ledgers, with: lineColor, lineWidth: 0.8)
             }
-
-            let headRect = CGRect(
-                x: center.x - headWidth / 2,
-                y: center.y - headHeight / 2,
-                width: headWidth,
-                height: headHeight
-            )
-            switch pad.notehead {
-            case .cross:
-                context.stroke(crossPath(in: headRect.insetBy(dx: 0, dy: -0.5)), with: ink, lineWidth: 1.6)
-            case .circleCross:
-                context.stroke(Path(ellipseIn: headRect.insetBy(dx: -1, dy: -1)), with: ink, lineWidth: 1)
-                context.stroke(crossPath(in: headRect.insetBy(dx: 1, dy: 1)), with: ink, lineWidth: 1)
-            case .diamond:
-                context.fill(diamondPath(in: headRect), with: ink)
-            case .triangle:
-                var triangle = Path()
-                triangle.move(to: CGPoint(x: headRect.midX, y: headRect.minY - 1))
-                triangle.addLine(to: CGPoint(x: headRect.maxX, y: headRect.maxY))
-                triangle.addLine(to: CGPoint(x: headRect.minX, y: headRect.maxY))
-                triangle.closeSubpath()
-                context.fill(triangle, with: ink)
-            case .slash:
-                var slash = Path()
-                slash.move(to: CGPoint(x: headRect.minX, y: headRect.maxY))
-                slash.addLine(to: CGPoint(x: headRect.maxX, y: headRect.minY))
-                context.stroke(slash, with: ink, lineWidth: 2.2)
-            case .normal, .other:
-                var head = context
-                head.translateBy(x: center.x, y: center.y)
-                head.rotate(by: .degrees(-20))
-                head.fill(
-                    Path(ellipseIn: CGRect(x: -headWidth / 2, y: -headHeight / 2, width: headWidth, height: headHeight)),
-                    with: ink
-                )
-            }
-
-            var stem = Path()
-            let stemLength = lineGap * 3.2
-            if pad.stemUp {
-                let x = headRect.maxX - 0.4
-                stem.move(to: CGPoint(x: x, y: center.y))
-                stem.addLine(to: CGPoint(x: x, y: center.y - stemLength))
-            } else {
-                let x = headRect.minX + 0.4
-                stem.move(to: CGPoint(x: x, y: center.y))
-                stem.addLine(to: CGPoint(x: x, y: center.y + stemLength))
-            }
-            context.stroke(stem, with: ink, lineWidth: 1.1)
         }
         .accessibilityHidden(true)
+        #else
+        Canvas { context, size in
+            for part in glyphParts(in: size) {
+                switch part {
+                case let .staff(path, width):
+                    context.stroke(path, with: .color(staffColor), lineWidth: width)
+                case let .stroke(path, width):
+                    context.stroke(path, with: .style(.foreground), lineWidth: width)
+                case let .fill(path):
+                    context.fill(path, with: .style(.foreground))
+                }
+            }
+        }
+        .accessibilityHidden(true)
+        #endif
+    }
+
+    private func glyphParts(in size: CGSize) -> [GlyphPart] {
+        let lineGap = size.height / 7
+        let staffTop = size.height / 2 - 2 * lineGap
+        var staffLines = Path()
+        for index in 0..<5 {
+            let y = staffTop + CGFloat(index) * lineGap
+            staffLines.move(to: CGPoint(x: 0, y: y))
+            staffLines.addLine(to: CGPoint(x: size.width, y: y))
+        }
+        var parts: [GlyphPart] = [.staff(staffLines, width: 0.6)]
+
+        // Drum-set lines count half spaces down from the top line; clamp to the glyph.
+        let clampedLine = min(max(CGFloat(pad.line), -3), 11)
+        let center = CGPoint(x: size.width / 2, y: staffTop + clampedLine * lineGap / 2)
+        let headWidth = lineGap * 1.5
+        let headHeight = lineGap * 1.05
+
+        // Ledger lines above and below the staff.
+        if clampedLine <= -2 || clampedLine >= 10 {
+            var ledgers = Path()
+            let step: CGFloat = clampedLine < 0 ? -2 : 2
+            var ledgerLine: CGFloat = clampedLine < 0 ? -2 : 10
+            while clampedLine < 0 ? ledgerLine >= clampedLine : ledgerLine <= clampedLine {
+                let y = staffTop + ledgerLine * lineGap / 2
+                ledgers.move(to: CGPoint(x: center.x - headWidth, y: y))
+                ledgers.addLine(to: CGPoint(x: center.x + headWidth, y: y))
+                ledgerLine += step
+            }
+            parts.append(.staff(ledgers, width: 0.8))
+        }
+
+        let headRect = CGRect(
+            x: center.x - headWidth / 2,
+            y: center.y - headHeight / 2,
+            width: headWidth,
+            height: headHeight
+        )
+        switch pad.notehead {
+        case .cross:
+            parts.append(.stroke(crossPath(in: headRect.insetBy(dx: 0, dy: -0.5)), width: 1.6))
+        case .circleCross:
+            parts.append(.stroke(Path(ellipseIn: headRect.insetBy(dx: -1, dy: -1)), width: 1))
+            parts.append(.stroke(crossPath(in: headRect.insetBy(dx: 1, dy: 1)), width: 1))
+        case .diamond:
+            parts.append(.fill(diamondPath(in: headRect)))
+        case .triangle:
+            var triangle = Path()
+            triangle.move(to: CGPoint(x: headRect.midX, y: headRect.minY - 1))
+            triangle.addLine(to: CGPoint(x: headRect.maxX, y: headRect.maxY))
+            triangle.addLine(to: CGPoint(x: headRect.minX, y: headRect.maxY))
+            triangle.closeSubpath()
+            parts.append(.fill(triangle))
+        case .slash:
+            var slash = Path()
+            slash.move(to: CGPoint(x: headRect.minX, y: headRect.maxY))
+            slash.addLine(to: CGPoint(x: headRect.maxX, y: headRect.minY))
+            parts.append(.stroke(slash, width: 2.2))
+        case .normal, .other:
+            let head = Path(ellipseIn: CGRect(x: -headWidth / 2, y: -headHeight / 2, width: headWidth, height: headHeight))
+            let transform = CGAffineTransform(translationX: center.x, y: center.y).rotated(by: -.pi / 9)
+            parts.append(.fill(head.applying(transform)))
+        }
+
+        var stem = Path()
+        let stemLength = lineGap * 3.2
+        if pad.stemUp {
+            let x = headRect.maxX - 0.4
+            stem.move(to: CGPoint(x: x, y: center.y))
+            stem.addLine(to: CGPoint(x: x, y: center.y - stemLength))
+        } else {
+            let x = headRect.minX + 0.4
+            stem.move(to: CGPoint(x: x, y: center.y))
+            stem.addLine(to: CGPoint(x: x, y: center.y + stemLength))
+        }
+        parts.append(.stroke(stem, width: 1.1))
+        return parts
     }
 
     private func crossPath(in rect: CGRect) -> Path {
