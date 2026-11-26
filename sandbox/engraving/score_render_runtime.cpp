@@ -3736,7 +3736,21 @@ mu::engraving::ChordRest* activeChordRest(mu::engraving::Score* score)
         return chordRest;
     }
 
-    return score->inputState().cr();
+    // The note input position isn't moved when its bar is removed (remove measure), so it can
+    // still point into a bar that is only kept for undo. Using it there crashed the next edit,
+    // e.g. adding text (fuzz tuplets-7, seed 29000).
+    mu::engraving::ChordRest* inputChordRest = score->inputState().cr();
+    mu::engraving::Segment* inputSegment = inputChordRest ? inputChordRest->segment() : nullptr;
+    mu::engraving::Measure* inputMeasure = inputSegment ? inputSegment->measure() : nullptr;
+    if (inputMeasure && inputMeasure->isMMRest()) {
+        inputMeasure = inputMeasure->mmRestFirst();
+    }
+    for (mu::engraving::Measure* measure = score->firstMeasure(); inputMeasure && measure; measure = measure->nextMeasure()) {
+        if (measure == inputMeasure) {
+            return inputChordRest;
+        }
+    }
+    return nullptr;
 }
 
 mu::engraving::staff_idx_t activeStaffIndex(mu::engraving::Score* score)

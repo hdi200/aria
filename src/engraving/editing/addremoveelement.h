@@ -61,6 +61,7 @@ public:
     void redo(EditData*) override;
     void cleanup(bool) override;
     const char* name() const override;
+    EngravingItem* removedElement() const { return element; } // Aria: see Score::endCmd
 
     bool isFiltered(UndoCommand::Filter f, const EngravingItem* target) const override;
 

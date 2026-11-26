@@ -12,6 +12,11 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Undo after opening a part (November 26, BUG-045)
+
+- [ ] **iPhone/iPad and Android:** edit a score, then open one of its parts for the first time: Undo is greyed out, and the edit is still there in the full score and the part. Make a new edit: Undo works again. Switch to the full score and back to that part: Undo stays available.
+- [ ] **Exporting parts** to PDF also turns off Undo for the edits made before the export; edits made afterwards can be undone.
+
 ## Drum pad entry (November 25, branch `percussion-entry`)
 
 Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New Score › Rock Band). The steps below apply on iOS and Android unless marked.

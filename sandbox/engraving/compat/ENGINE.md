@@ -62,6 +62,42 @@ Parts and loading:
   signature change (`ScoreRange::read` → `skipTuplet`) then went back to it and copied it without
   end until the system killed the app for memory. Found by the random-edit stress test
   (`vtest/scores/tuplets-7.mscz`, seed 29010: 6/8 then another change).
+- `editing/cmd.cpp`, `editing/undo.h`, `editing/addremoveelement.h`: `Score::endCmd` drops a
+  command's `RemoveElement` of a tuplet that chords still use when the command ends. Entering a
+  note over a tuplet's only chord removes the chord, which also removed the emptied tuplet, and
+  then `makeGap`/`setNoteRest` put the new note and the refilled rest back into it. For a tuplet
+  `RemoveElement` only makes the undo stack its owner, so the next removal owned it again and
+  closing the score freed it twice (`RemoveElement::cleanup`). Found by the stress test
+  (tuplets-7, articulation-11, beams-21); test `a note over a tuplet's only chord keeps the
+  tuplet` fails under AddressSanitizer without it.
+- `editing/edit.cpp`: `deleteMeasures` deselects in every score of the master, not only its own.
+  Removing bars while a part is shown runs on the full score, and the part's selection kept
+  pointing into the removed bars, so the next edit there (adding text) used a removed measure.
+- `editing/edit.cpp`: `deleteRangeAtTrack` skips an anchored element it already removed with a
+  grace note. `collectElementsAnchoredToChordRest` lists a grace note's articulations as well as
+  the grace note, whose own anchored elements are removed first; depending on the order of that
+  pointer set the articulation was removed again, and closing the score freed it twice. Found by
+  the Goldberg paste replay (`compat/README.md`); test `deleting grace note articulations removes
+  each once` fails under AddressSanitizer without it.
+- `dom/range.cpp`: `ScoreRange::read` unlinks an incoming tie (undoably) before removing it.
+  Only this score's tie is removed there and an unlinked clone is added back, so a part's linked
+  tie kept the removed tie in its link list; removing the part's tie later removed it a second
+  time, and closing the score freed it twice. Found by the stress test (articulation-11, seed
+  29002: a duration change made the tie, two time signature changes followed). No native test
+  reaches it (a short time signature test doesn't remove the incoming tie); the replay is the
+  proof.
+- `dom/score.cpp`: `changeSelectedElementsVoice` moves articulations from a copy of the list;
+  moving one removes it from the list being walked, so every second articulation was left on
+  the removed chord (AddressSanitizer: container overflow).
+- `dom/stafflines.cpp`: `StaffLines::pagePos` falls back to the measure's position when the
+  measure has no system or the system lacks the staff, instead of dereferencing null (Play build
+  29 crash while drawing a page; not reproduced).
+- `editing/undo.h`: `UndoStack::clearHistory()` drops every undo and redo step and keeps whether
+  the score counts as modified. The bridge calls it when it builds a part score
+  (`setActivePartIndex` in `score_render_open_save.cpp`, also reached by exporting parts): Aria
+  builds parts outside undo, so undoing an edit made before that changed only the full score and
+  left the part linked to deleted elements (stress test mmrest-25-systemLock, seed 29001: note
+  entry then undo read freed memory). Desktop records part creation as an undoable step instead.
 - `infrastructure/mscreader.cpp`: `excerptFileNames` sorts parts by their `<index>_` file-name
   prefix, so a score saved as a folder (not a zip) reopens with its parts in order rather than
   in directory order. Zipped files are already in that order.

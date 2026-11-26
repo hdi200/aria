@@ -178,6 +178,8 @@ public:
     virtual void redo(EditData*);
     void appendChild(UndoCommand* cmd) { m_childCommands.push_back(cmd); }
     UndoCommand* removeChild() { return muse::takeLast(m_childCommands); }
+    // Aria: take one child out without running it; the caller deletes it (Score::endCmd).
+    bool takeChild(UndoCommand* cmd) { return muse::remove(m_childCommands, cmd); }
     size_t childCount() const { return m_childCommands.size(); }
     void unwind();
     const std::vector<UndoCommand*>& commands() const { return m_childCommands; }
@@ -305,6 +307,14 @@ public:
 
     void mergeCommands(size_t startIdx);
     void cleanRedoStack() { remove(m_currentIndex); }
+    // Aria: drop every undo and redo step, keeping whether the score counts as modified. Used when
+    // a part score is built from the score as it is now (see compat/ENGINE.md).
+    void clearHistory()
+    {
+        const bool clean = isClean();
+        remove(0);
+        m_cleanState = clean ? m_stateList[m_currentIndex] : -1;
+    }
 
 private:
     void remove(size_t idx);

@@ -862,6 +862,11 @@ void ScoreRange::read(Segment* first, Segment* last, bool readSpanner)
                 continue;
             }
             m_startTies.push_back(tie->clone());
+            // Aria: unlink the tie before removing it. Only this score's tie is removed here (and
+            // replaced by an unlinked clone in write()), so a linked tie in a part kept it in its
+            // link list; removing that part tie later removed this tie a second time, and closing
+            // the score freed it twice (see compat/ENGINE.md).
+            tie->undoUnlink();
             score->doUndoRemoveElement(tie);
         }
     }

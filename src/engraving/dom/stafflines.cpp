@@ -60,8 +60,15 @@ StaffLines::StaffLines(Measure* parent)
 
 PointF StaffLines::pagePos() const
 {
+    // Aria: a measure that isn't on a system yet, or a staff index the system doesn't have,
+    // left null here and crashed the reader drawing a page (Play build 29). Fall back to the
+    // measure's own position (see compat/ENGINE.md).
     System* system = measure()->system();
-    return PointF(measure()->x() + system->x(), system->staff(staffIdx())->y() + system->y());
+    if (!system) {
+        return PointF(measure()->x(), 0.0);
+    }
+    const SysStaff* sysStaff = system->staff(staffIdx());
+    return PointF(measure()->x() + system->x(), (sysStaff ? sysStaff->y() : 0.0) + system->y());
 }
 
 //---------------------------------------------------------

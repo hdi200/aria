@@ -84,6 +84,7 @@
 #include "../dom/tuplet.h"
 #include "../dom/utils.h"
 
+#include "addremoveelement.h"
 #include "editchord.h"
 #include "editnote.h"
 #include "editproperty.h"
@@ -397,6 +398,31 @@ void Score::undoRedo(bool undo, EditData* ed)
     changesChannel().send(result);
 }
 
+// Aria: a command can remove a tuplet and then put chords back into it. Entering a note over a
+// tuplet's only chord does: makeGap removes the chord, which also removes the emptied tuplet
+// (RemoveElement), then makeGap and setNoteRest fill the gap inside that tuplet again. For a
+// tuplet, RemoveElement changes nothing in the score; it only makes the undo stack its owner,
+// which deletes it when the stack goes. Left in place, the next removal of the tuplet owned it
+// a second time and closing the score freed it twice. Drop the ownership of every tuplet that
+// is still in use when the command ends (see compat/ENGINE.md).
+static void keepTupletsStillInUse(UndoCommand* macro)
+{
+    std::vector<UndoCommand*> stale;
+    for (UndoCommand* command : macro->commands()) {
+        if (command->type() != CommandType::RemoveElement) {
+            continue;
+        }
+        EngravingItem* element = static_cast<RemoveElement*>(command)->removedElement();
+        if (element && element->isTuplet() && !toTuplet(element)->elements().empty()) {
+            stale.push_back(command);
+        }
+    }
+    for (UndoCommand* command : stale) {
+        macro->takeChild(command);
+        delete command;
+    }
+}
+
 //---------------------------------------------------------
 //   endCmd
 ///   End a GUI command by (if \a undo) ending a user-visible undo
@@ -421,6 +447,8 @@ void Score::endCmd(bool rollback, bool layoutAllParts)
 
     if (rollback) {
         undoStack()->activeCommand()->unwind();
+    } else {
+        keepTupletsStillInUse(undoStack()->activeCommand());
     }
 
     update(false, layoutAllParts);

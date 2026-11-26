@@ -142,7 +142,10 @@ cmake -S sandbox/engraving -B build-aria-475-asan -G Ninja -DCMAKE_BUILD_TYPE=Re
 python3 sandbox/engraving/compat/fuzz_edits.py --scores 40 --steps 150 --seed 1
 ```
 
-Open finding (October 2026): pasting over tuplet notes in the Goldberg demo (2.06 file) can leave
-a chord pointing at a removed tuplet; the next edit removes it again and closing the score frees
-it twice (engine `cmdPaste`). Replay: `score_render_fuzz --score "demos/Demos Pre IOS Export/goldberg.mscz"
---seed 1039 --steps 150 --check-every 25` in the ASan build (steps 38 paste, 39 rest).
+Goldberg paste finding (October 2026, fixed November 2026): the replay
+`score_render_fuzz --score "demos/Demos Pre IOS Export/goldberg.mscz" --seed 1039 --steps 150 --check-every 25`
+in the ASan build crashed on close by freeing something twice. First a tuplet (fixed in
+`Score::endCmd`, BUG-040), then a grace note's articulation removed twice by one range delete at
+step 102 (fixed in `deleteRangeAtTrack`, BUG-042); both are in `ENGINE.md`. The replay now closes
+cleanly. Its checkpoints still report stale-drawing and round-trip differences after the step 100
+paste, unchanged by these fixes.
