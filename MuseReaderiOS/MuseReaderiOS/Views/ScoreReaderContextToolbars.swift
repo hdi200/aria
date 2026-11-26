@@ -676,18 +676,19 @@ struct ScoreReaderKeyboardContextToolbar: View {
             }
 
             if let drumAddMode {
-                // Drum staves: the Add key spans the four slots of the accidentals and Chord.
+                // Drum staves: the Add key spans four slots at the right end, next to the drum
+                // pad's thumb side; tie, rest, tuplet and delete keep their slots on the left.
                 GeometryReader { geometry in
                     let spacing: CGFloat = 4
                     let trailingCount: CGFloat = moreNoteToolAction != nil ? 4 : 3
                     let slot = (geometry.size.width - spacing * (3 + trailingCount)) / (4 + trailingCount)
                     HStack(spacing: spacing) {
-                        ScoreReaderDrumAddKey(mode: drumAddMode, action: tapDrumAddAction)
-                            .frame(width: slot * 4 + spacing * 3)
                         HStack(spacing: spacing) {
                             compactGridTrailingButtons
                         }
                         .frame(width: slot * trailingCount + spacing * (trailingCount - 1))
+                        ScoreReaderDrumAddKey(mode: drumAddMode, action: tapDrumAddAction)
+                            .frame(width: slot * 4 + spacing * 3)
                     }
                 }
                 .frame(height: 46)

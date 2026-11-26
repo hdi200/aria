@@ -454,8 +454,10 @@ struct ScoreReaderNoteEntrySurface: View {
             compactUndoRedoColumn
 
             if showsDrumPad {
+                // Taller than the keyboard so a standard kit gets the iPad's headings and one
+                // row of tall pads, with Show more for the extras.
                 drumPad(targetPadWidth: 84, showsShortcuts: false)
-                    .frame(height: 86)
+                    .frame(height: 136)
                     .frame(maxWidth: .infinity)
             } else {
                 ScoreReaderWidePitchKeyboard(

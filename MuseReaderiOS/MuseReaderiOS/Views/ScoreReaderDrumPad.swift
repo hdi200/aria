@@ -5,9 +5,10 @@ import SwiftUI
 ///
 /// A standard drum kit is shown as two rows that each scroll sideways: Essential Drums on top,
 /// Additional Percussion underneath, folded away until the player opens it. With room for them
-/// (the iPad) the rows have headings; on a phone the rows are bare, the folded essentials fill
-/// both rows, and a small chip at the end of the second row folds or unfolds the extras. Other percussion keeps desktop's order: one row of tall pads for
-/// a small kit, or two rows filled column by column.
+/// (the iPad, and a portrait phone) the rows have headings with Show more/Show less; in a short
+/// strip (a landscape phone) the rows are bare, the folded essentials fill both rows, and a small
+/// chip at the end of the second row folds or unfolds the extras. Other percussion keeps desktop's
+/// order: one row of tall pads for a small kit, or two rows filled column by column.
 struct ScoreReaderDrumPad: View {
     let pads: [ScoreDrumPad]
     let activePitch: Int?
@@ -25,8 +26,13 @@ struct ScoreReaderDrumPad: View {
     @AppStorage("drumPadShowsAdditional") private var showsAdditional = false
 
     private let spacing: CGFloat = 6
-    /// Headings need this much height; below it (a phone) the rows are bare.
+    /// Headings need this much height; below it (a landscape phone) the rows are bare.
     private let headingMinimumHeight: CGFloat = 130
+    /// Rows shorter than this (both sections open on a phone) use the compact pads, with the
+    /// glyph beside the name.
+    private let tallPadMinimumHeight: CGFloat = 64
+    /// Narrower than this (a phone), headings drop their description to keep Show more in view.
+    private let headingDetailMinimumWidth: CGFloat = 520
     private let headingHeight: CGFloat = 16
     private let headingGap: CGFloat = 4
     private let sectionGap: CGFloat = 8
@@ -55,18 +61,21 @@ struct ScoreReaderDrumPad: View {
             // Heading, row, gap, heading, row (or just the heading while the extras are folded).
             let headings = 2 * headingHeight + sectionGap + (showsExtras ? 2 * headingGap : headingGap)
             let rowHeight = showsExtras ? (size.height - headings) / 2 : size.height - headings
+            let isTall = rowHeight >= tallPadMinimumHeight
+            let showsDetail = size.width >= headingDetailMinimumWidth
             VStack(alignment: .leading, spacing: 0) {
-                sectionHeading("Essential Drums", detail: "Most used in rock, pop and modern styles")
+                sectionHeading("Essential Drums",
+                               detail: showsDetail ? "Most used in rock, pop and modern styles" : nil)
                     .padding(.bottom, headingGap)
-                drumRow(arrangement.essentials, width: size.width, height: rowHeight, isTall: true)
+                drumRow(arrangement.essentials, width: size.width, height: rowHeight, isTall: isTall)
                 sectionHeading(
                     "Additional Percussion",
-                    detail: "Cymbals, toms, cowbell and other drums",
+                    detail: showsDetail ? "Cymbals, toms, cowbell and other drums" : nil,
                     toggle: arrangement.extras.isEmpty ? nil : showsExtras
                 )
                 .padding(.top, sectionGap)
                 if showsExtras {
-                    drumRow(arrangement.extras, width: size.width, height: rowHeight, isTall: true)
+                    drumRow(arrangement.extras, width: size.width, height: rowHeight, isTall: isTall)
                         .padding(.top, headingGap)
                 }
             }
@@ -78,8 +87,8 @@ struct ScoreReaderDrumPad: View {
                 drumRow(arrangement.extras, width: size.width, height: rowHeight, isTall: false, foldChip: true)
             }
         } else {
-            // Folded on a phone: the essentials fill both rows in order, so more drums show at
-            // once than one row of tall pads would allow.
+            // Folded in a short strip (a landscape phone): the essentials fill both rows in
+            // order, so more drums show at once than one row of tall pads would allow.
             let rowHeight = (size.height - spacing) / 2
             let split = (arrangement.essentials.count + 1) / 2
             VStack(spacing: spacing) {
@@ -90,15 +99,18 @@ struct ScoreReaderDrumPad: View {
         }
     }
 
-    private func sectionHeading(_ title: String, detail: String, toggle isOpen: Bool? = nil) -> some View {
+    private func sectionHeading(_ title: String, detail: String?, toggle isOpen: Bool? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.black.opacity(0.78))
-            Text(detail)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.black.opacity(0.42))
                 .lineLimit(1)
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.black.opacity(0.42))
+                    .lineLimit(1)
+            }
             Spacer(minLength: 8)
             if let isOpen {
                 Button {
