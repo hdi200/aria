@@ -806,7 +806,8 @@ struct ScoreReaderView: View {
                 changeAccidentalAction: readerState.changeSelectedAccidental,
                 removeChordPitchAction: readerState.removeMIDIPitchFromCurrentChord,
                 semitoneShiftAction: readerState.shiftPitchBySemitones,
-                octaveShiftAction: readerState.shiftPitchByOctaves
+                octaveShiftAction: readerState.shiftPitchByOctaves,
+                enterDrumAction: { pitch in readerState.enterDrums([pitch]) }
             )
             .padding(.bottom, 0)
             .transition(.move(edge: .bottom).combined(with: .opacity))

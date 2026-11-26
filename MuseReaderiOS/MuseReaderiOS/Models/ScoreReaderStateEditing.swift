@@ -2047,6 +2047,39 @@ extension ScoreReaderState {
         }
     }
 
+    /// Enters drums from the drum pad, all struck together. The engine splits them into one chord
+    /// per drum-set voice at the same beat; chord mode adds them to the current beat instead.
+    func enterDrums(_ drumPitches: [Int]) {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        let pitches = drumPitches.filter { (0...127).contains($0) }
+        guard !pitches.isEmpty else { return }
+        var intent = noteInputIntent
+        let selection = editingState.selection
+        if !intent.enabled, let selection, selection.kind == .note || selection.kind == .rest {
+            // Starting from a selected note or rest enters drums with its value, as the
+            // duration toolbar shows it (and as the keyboard does, BUG-008).
+            intent.duration = selection.duration
+            intent.dotted = selection.isDotted
+            intent.doubleDotted = selection.isDoubleDotted
+        }
+        var nextIntent = intent
+        nextIntent.enabled = true
+        nextIntent.rests = false
+        nextIntent.chord = intent.chord && !intent.rests
+        queuedNoteInputIntent = nextIntent
+        let submittedIntent = nextIntent
+        // Chord mode adds to the selected note's beat, or to the last entered beat.
+        let addToCurrentChord = submittedIntent.chord
+            && (editingState.noteInputEnabled || selection?.kind == .note)
+        pendingAccidentalKind = nil
+        hasContinuousNoteInputCursor = true
+        lastKeyboardInputCanReceiveAccidental = false
+        performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { session in
+            _ = try await Self.prepareNoteInput(submittedIntent, in: session)
+            return try await session.insertDrumNotesAtCursor(pitches, addToCurrentChord: addToCurrentChord)
+        }
+    }
+
     func removeMIDIPitchFromCurrentChord(_ midiPitch: Int) {
         performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { liveRenderSession in
             try await liveRenderSession.removeMIDIPitchFromCurrentChord(midiPitch)

@@ -595,6 +595,14 @@ bool msr::render::ScoreRenderSession::insertMIDIChordAtCursor(const std::vector<
     return m_impl->insertMIDIChordAtCursor(midiPitches, preferFlats, output, errorMessage);
 }
 
+bool msr::render::ScoreRenderSession::insertDrumNotesAtCursor(const std::vector<int>& drumPitches,
+                                                              const bool addToCurrentChord,
+                                                              ScoreEditState& output,
+                                                              std::string& errorMessage)
+{
+    return m_impl->insertDrumNotesAtCursor(drumPitches, addToCurrentChord, output, errorMessage);
+}
+
 bool msr::render::ScoreRenderSession::removeMIDIPitchFromCurrentChord(const int midiPitch,
                                                                       ScoreEditState& output,
                                                                       std::string& errorMessage)

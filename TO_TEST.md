@@ -12,6 +12,21 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Drum pad entry (November 25, branch `percussion-entry`, first pass)
+
+Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New Score › Rock Band). Not yet on Android: the Android session needs the new engine call first.
+
+- [ ] **iPhone, portrait and landscape:** Edit, tap a rest in the drum staff: the piano keyboard is replaced by the drum pad at the same height. A full kit shows two rows that scroll sideways, fading at the right edge.
+- [ ] **iPad:** the same, with taller pads and shortcut letters; the Half step/Octave controls are gone on drum staves.
+- [ ] **Entering drums:** tap Snare, Kick, Closed Hi-Hat in turn: each enters at the cursor on its own line, with the right notehead. Kick and pedal hi-hat go to voice 2 (stems down), the others to voice 1. The cursor moves on after each.
+- [ ] **Chord mode:** turn on the chord toggle, tap Closed Hi-Hat then Kick: both land on the same beat, hi-hat stem up in voice 1 and kick stem down in voice 2. One Undo removes the kick only.
+- [ ] **Staff taps:** in note input, tap a drum's line on the staff: the preview shows that drum's notehead, and the note enters on that line (the chosen pad's drum if it sits on that line, otherwise the line's first drum).
+- [ ] **Rests and durations:** rest entry, dots and duration changes work on the drum staff.
+- [ ] **Small kits:** a snare-drum or triangle staff shows one row of tall pads instead.
+- [ ] **Pitched staves are unchanged:** the piano keyboard, Half step and Octave still show and work on a treble staff in the same score.
+- [ ] **Desktop MuseScore 4.7.6/4.7.7:** a score saved after drum entry opens with the same drums, voices and noteheads.
+- Known gaps: pressing several pads at once isn't supported yet (use chord mode), hearing a chord plays only the voice-1 drums, and pads can't yet change an existing note's drum.
+
 ## Pencil crash (November 25, BUG-033)
 
 - [ ] **iPad with Pencil hover (M2 or later):** hold the Pencil just above the score and switch Edit → Annotate → reading several times: no crash.
