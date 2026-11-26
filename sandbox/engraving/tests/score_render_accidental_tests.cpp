@@ -3229,6 +3229,130 @@ void testTimeSignatureSplitsLastTupletNote(const std::filesystem::path& root)
     expect(reopened && reopened->renderPage(0, 72, page, error), "The 7/8 file did not reopen: " + error);
 }
 
+// Removing bars from a part goes through the full score. The part's own selection must not keep
+// pointing into the removed bars: the next edit there (adding text) crashed (fuzz tuplets-7, seed
+// 29000 with --check-every 1000, step 60; and grace-11). This short version doesn't reach that
+// state, so it passes without the fix too; it checks the removal and the edit after it.
+void testRemovingPartMeasuresClearsPartSelection(const std::filesystem::path& root)
+{
+    // Remove the last bar: the stale selection then points past the end of the score.
+    std::string xml = scoreXml(0, { { 60, 14 }, { 62, 16 }, { 64, 18 }, { 65, 13 } }, 1);
+    const std::string rest = "<Rest><durationType>measure</durationType><duration>4/4</duration></Rest>";
+    xml.replace(xml.find(rest), rest.size(), "<Chord><durationType>whole</durationType><Note><pitch>67</pitch><tpc>15</tpc></Note></Chord>");
+    auto session = openSession(root, "part-remove-measure", xml);
+    int pages = 0;
+    std::string error;
+    expect(session->setActivePartIndex(0, pages, error), "Could not open the part: " + error);
+    const LocatedItem last = noteWithPitch(scanScore(*session, { 67 }, 0), 67);
+    msr::render::ScoreEditState state;
+    expect(session->selectMeasureRange(0, last.x, last.y, last.x, last.y, state, error),
+           "Could not select the last bar: " + error);
+    saveSnapshot(*session, root, "part-remove-measure-before");
+    const size_t partBars = countOccurrences(savedExcerptXml(root), "<Measure>");
+    expect(session->removeSelectedMeasure(state, error), "Could not remove the bar: " + error);
+    expect(!state.selection.hasSelection, "The part kept a selection in the removed bar");
+    error.clear();
+    session->addText("staff", state, error); // refused (nothing selected) or added; must not crash
+    saveSnapshot(*session, root, "part-remove-measure-after");
+    expect(countOccurrences(savedExcerptXml(root), "<Measure>") + 1 == partBars, "The part did not lose the removed bar");
+}
+
+// Entering a note over a tuplet's only chord removes that chord, which also marked the emptied
+// tuplet as removed, and then put the new note back into it. The next removal of the tuplet
+// marked it again, and closing the score freed it twice (fuzz tuplets-7, seed 29000).
+void testNoteOverOnlyTupletChordKeepsTuplet(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 1);
+    const std::string whole = "<Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>";
+    xml.replace(xml.find(whole), whole.size(),
+                "<Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>64</pitch><tpc>18</tpc></Note></Chord>"
+                "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes><baseNote>eighth</baseNote>"
+                "<Number><style>tuplet</style><text>3</text></Number></Tuplet>"
+                "<Chord><dots>1</dots><durationType>quarter</durationType><Note><pitch>65</pitch><tpc>13</tpc></Note></Chord>"
+                "<endTuplet/>");
+    std::string error;
+    {
+        auto session = openSession(root, "note-over-tuplet-chord", xml);
+        const auto notes = scanScore(*session, { 60, 65 }, 0);
+        const LocatedItem only = noteWithPitch(notes, 65);
+        msr::render::ScoreEditState state = selectAt(*session, only);
+        expect(session->setNoteInputEnabled(true, state, error), "Could not enable note input: " + error);
+        // A quarter, shorter than the dotted-quarter chord, so the chord is replaced and the rest refilled.
+        expect(session->applyDuration(4, state, error), "Could not choose a quarter note: " + error);
+        expect(session->insertNote(only.pageIndex, only.x, only.y, state, error), "Could not enter a note over the tuplet: " + error);
+        expect(session->setNoteInputEnabled(false, state, error), "Could not leave note input: " + error);
+        const std::string saved = saveSnapshot(*session, root, "note-over-tuplet-chord-entered");
+        expect(countOccurrences(saved, "<Tuplet") == countOccurrences(saved, "<endTuplet/>"), "The tuplet was not saved whole");
+
+        // Remove everything in the bar, the tuplet's notes included, then close the score.
+        const LocatedItem first = noteWithPitch(scanScore(*session, { 60 }, 0), 60);
+        expect(session->selectMeasureRange(0, first.x, first.y, first.x, first.y, state, error), "Could not select the bar: " + error);
+        expect(session->clearSelectedMeasure(state, error), "Could not clear the bar: " + error);
+    } // closing freed the tuplet twice
+    auto reopened = msr::render::ScoreRenderSession::open((root / "note-over-tuplet-chord-entered.mscx").string(), error);
+    expect(reopened != nullptr, "The saved score did not reopen: " + error);
+}
+
+// Moving a chord to another voice moves its articulations. The loop moved them out of the list
+// it was walking, so every second one was left behind on the removed chord.
+void testVoiceChangeMovesEveryArticulation(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 0);
+    const std::string note = "<Note><pitch>60</pitch>";
+    xml.replace(xml.find(note), note.size(),
+                "<Articulation><subtype>articStaccatoAbove</subtype></Articulation>"
+                "<Articulation><subtype>articAccentAbove</subtype></Articulation>" + note);
+    auto session = openSession(root, "voice-articulations", xml);
+    expect(countOccurrences(saveSnapshot(*session, root, "voice-articulations-before"), "<Articulation") == 2,
+           "The test score did not load both articulations");
+    msr::render::ScoreEditState state = selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    std::string error;
+    expect(session->setCurrentVoice(1, state, error), "Could not move the chord to voice 2: " + error);
+    const std::string moved = saveSnapshot(*session, root, "voice-articulations-moved");
+    expect(countOccurrences(moved, "<subtype>articStaccato") == 1 && countOccurrences(moved, "<subtype>articAccent") == 1,
+           "An articulation was lost moving the chord to voice 2");
+}
+
+// Deleting a range removes each chord's anchored elements, a grace note's articulations among
+// them, and then each grace note's own anchored elements. Whether a grace note's articulation was
+// removed twice depended on the order of a pointer set, and closing the score then freed it twice
+// (Goldberg paste finding, compat/README.md). With one grace note and one articulation the set
+// always gives the articulation first; fuller chords make the set rehash, so four chords with
+// four articulated grace notes each make the bad order very likely. The double free shows under
+// ASan at close.
+void testDeletingGraceArticulationsRemovesEachOnce(const std::filesystem::path& root)
+{
+    std::string xml = scoreXml(0, { { 60, 14 } }, 1);
+    const std::string whole = "<Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>";
+    const std::string articulations = "<Articulation><subtype>articStaccatoAbove</subtype></Articulation>"
+                                       "<Articulation><subtype>articAccentAbove</subtype></Articulation>";
+    std::string bar;
+    for (int chord = 0; chord < 4; ++chord) {
+        for (int grace = 0; grace < 4; ++grace) {
+            bar += "<Chord><durationType>16th</durationType><acciaccatura/>" + articulations
+                   + "<Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>";
+        }
+        bar += "<Chord><durationType>quarter</durationType>" + articulations
+               + "<Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>";
+    }
+    xml.replace(xml.find(whole), whole.size(), bar);
+    std::string error;
+    {
+        auto session = openSession(root, "grace-articulations-delete", xml);
+        expect(countOccurrences(saveSnapshot(*session, root, "grace-articulations-before"), "<Articulation") == 40,
+               "The test score did not load the grace notes' articulations");
+        const LocatedItem first = noteWithPitch(scanScore(*session, { 60 }, 0), 60);
+        msr::render::ScoreEditState state;
+        expect(session->selectMeasureRange(0, first.x, first.y, first.x, first.y, state, error), "Could not select the bar: " + error);
+        expect(session->clearSelectedMeasure(state, error), "Could not clear the bar: " + error);
+        const std::string cleared = saveSnapshot(*session, root, "grace-articulations-cleared");
+        expect(countOccurrences(cleared, "<Articulation") == 0 && countOccurrences(cleared, "<acciaccatura") == 0,
+               "Clearing the bar left grace notes or their articulations");
+    } // closing freed an articulation twice
+}
+
 // A written MIDI pitch of 1 on a B-flat instrument becomes sounding pitch -1,
 // NoteVal's rest sentinel. addPitch must not cast that rest to a Chord.
 void testKeyboardRejectsOutOfRangeTransposedPitch(const std::filesystem::path& root)
@@ -3473,6 +3597,10 @@ int main()
     bool passed = true;
     passed &= runTest("rejected tuplet keeps the score", [&] { testRejectedTupletKeepsScore(testDirectory.path); });
     passed &= runTest("time signature splits the last tuplet note into a new tuplet", [&] { testTimeSignatureSplitsLastTupletNote(testDirectory.path); });
+    passed &= runTest("removing part bars clears the part selection", [&] { testRemovingPartMeasuresClearsPartSelection(testDirectory.path); });
+    passed &= runTest("a note over a tuplet's only chord keeps the tuplet", [&] { testNoteOverOnlyTupletChordKeepsTuplet(testDirectory.path); });
+    passed &= runTest("a voice change moves every articulation", [&] { testVoiceChangeMovesEveryArticulation(testDirectory.path); });
+    passed &= runTest("deleting grace note articulations removes each once", [&] { testDeletingGraceArticulationsRemovesEachOnce(testDirectory.path); });
     passed &= runTest("keyboard rejects out-of-range transposed pitch", [&] { testKeyboardRejectsOutOfRangeTransposedPitch(testDirectory.path); });
     passed &= runTest("note entry does not cast a rest to chord", [&] { testNoteEntryDoesNotCastRestToChord(testDirectory.path); });
     passed &= runTest("score details keep an opening text frame", [&] { testScoreDetailsKeepOpeningTextFrame(testDirectory.path); });

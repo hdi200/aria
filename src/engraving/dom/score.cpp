@@ -5499,7 +5499,9 @@ void Score::changeSelectedElementsVoice(voice_idx_t voice)
                     }
                 }
                 // move articulations
-                for (Articulation* artic : chord->articulations()) {
+                // Aria: over a copy; moving one removes it from chord->articulations() (see compat/ENGINE.md)
+                const std::vector<Articulation*> articulations = chord->articulations();
+                for (Articulation* artic : articulations) {
                     if (dstChord->hasArticulation(artic)) {
                         continue;
                     }

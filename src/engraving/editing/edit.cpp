@@ -3366,7 +3366,12 @@ void Score::deleteItem(EngravingItem* el)
 
 void Score::deleteMeasures(MeasureBase* mbStart, MeasureBase* mbEnd, bool preserveTies)
 {
-    select(0, SelectType::SINGLE, 0);
+    // Aria: deselect in every score, not only this one. The measures are removed from the
+    // linked parts too, and a part's selection left pointing into them made the next edit
+    // there (for example adding text) use a removed measure (see compat/ENGINE.md).
+    for (Score* linkedScore : scoreList()) {
+        linkedScore->select(0, SelectType::SINGLE, 0);
+    }
 
     if (mbEnd->isMeasure()) {
         Measure* mbEndMeasure = toMeasure(mbEnd);
@@ -3871,7 +3876,15 @@ void Score::deleteRangeAtTrack(std::vector<ChordRest*>& crsToSelect, const track
             continue;
         }
 
+        // Aria: the set below holds a grace note's articulations as well as the grace note, and
+        // removing the grace note's anchored elements removes them too. Depending on the set's order
+        // an articulation was removed a second time, and closing the score freed it twice
+        // (see compat/ENGINE.md).
+        std::unordered_set<EngravingItem*> removedWithGrace;
         for (EngravingItem* elem : collectElementsAnchoredToChordRest(cr1)) {
+            if (muse::contains(removedWithGrace, elem)) {
+                continue;
+            }
             if (!elem->isChord()) {
                 if (filter.canSelect(elem)) {
                     undoRemoveElement(elem);
@@ -3892,6 +3905,7 @@ void Score::deleteRangeAtTrack(std::vector<ChordRest*>& crsToSelect, const track
                 if (filter.canSelect(graceElem)) {
                     // Delete elements anchored to grace note...
                     undoRemoveElement(graceElem);
+                    removedWithGrace.insert(graceElem);
                 }
             }
             if (filter.canSelect(elem)) {

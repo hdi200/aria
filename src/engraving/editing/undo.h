@@ -178,6 +178,8 @@ public:
     virtual void redo(EditData*);
     void appendChild(UndoCommand* cmd) { m_childCommands.push_back(cmd); }
     UndoCommand* removeChild() { return muse::takeLast(m_childCommands); }
+    // Aria: take one child out without running it; the caller deletes it (Score::endCmd).
+    bool takeChild(UndoCommand* cmd) { return muse::remove(m_childCommands, cmd); }
     size_t childCount() const { return m_childCommands.size(); }
     void unwind();
     const std::vector<UndoCommand*>& commands() const { return m_childCommands; }
