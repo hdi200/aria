@@ -16,7 +16,11 @@ struct ZoomableImageView: UIViewRepresentable {
     let contentSize: CGSize
     let displayedPageSize: CGSize
     let playbackHighlight: ScorePlaybackMeasureHighlight?
+    /// The selection drawn on the page.
     let selection: ScoreSelectedElement?
+    /// The current selection, which auto-scroll follows. It differs from `selection` only while
+    /// the page still shows its render from before an edit.
+    var focusSelection: ScoreSelectedElement? = nil
     let noteEntryPreview: ScoreNoteEntryPreview?
     let layoutMarkers: [ScoreLayoutMarker]
     @Binding var zoomScale: CGFloat
@@ -238,6 +242,8 @@ struct ZoomableImageView: UIViewRepresentable {
     }
 
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        context.coordinator.isApplyingSwiftUIUpdate = true
+        defer { context.coordinator.isApplyingSwiftUIUpdate = false }
         context.coordinator.onTap = onTap
         context.coordinator.onSelectedNoteDrag = onSelectedNoteDrag
         context.coordinator.onExpressionEndpointDrag = onExpressionEndpointDrag
@@ -303,6 +309,7 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.overlayView?.imageSize = contentSize
         context.coordinator.overlayView?.playbackHighlight = playbackHighlight
         context.coordinator.overlayView?.selection = selection
+        context.coordinator.overlayView?.focusSelection = focusSelection ?? selection
         context.coordinator.overlayView?.noteEntryPreview = noteEntryPreview
         context.coordinator.overlayView?.layoutMarkers = layoutMarkers
         context.coordinator.overlayView?.allowsPencilHoverPreview = allowsPencilInsertionFineTune
@@ -382,6 +389,8 @@ struct ZoomableImageView: UIViewRepresentable {
         private var lastHandledPlaybackRect: ScoreNormalizedRect?
         private var pendingZoomViewport: ScoreReaderZoomViewport?
         private var isZoomViewportPublishScheduled = false
+        /// True while `updateUIView` runs, when SwiftUI state can't be written.
+        var isApplyingSwiftUIUpdate = false
         weak var zoomView: UIView?
         var pageWidthConstraint: NSLayoutConstraint?
         var pageHeightConstraint: NSLayoutConstraint?
@@ -514,6 +523,16 @@ struct ZoomableImageView: UIViewRepresentable {
                 || (pendingZoomViewport == nil && zoomViewport.wrappedValue == nextViewport) {
                 return
             }
+            // A scroll or zoom by the user: publish now, so the SwiftUI selection buttons move in
+            // the same frame as the page instead of trailing it. Inside a SwiftUI update the
+            // state can't be written, so that case waits for the next turn of the run loop.
+            let isUserMoving = scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
+                || scrollView.isZooming || scrollView.isZoomBouncing
+            if isUserMoving, !isApplyingSwiftUIUpdate, !isZoomViewportPublishScheduled {
+                pendingZoomViewport = nil
+                zoomViewport.wrappedValue = nextViewport
+                return
+            }
             pendingZoomViewport = nextViewport
             guard !isZoomViewportPublishScheduled else {
                 return
@@ -609,6 +628,11 @@ struct ZoomableImageView: UIViewRepresentable {
         }
 
         private func clampContentOffsetIfNeeded(in scrollView: UIScrollView, animated: Bool) {
+            // While the user drags, or the page is still coasting or bouncing back, an offset
+            // past the edge is the rubber band; snapping it here made the page jump at the edges.
+            guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else {
+                return
+            }
             let adjustedInset = scrollView.adjustedContentInset
             let clampedOffset = ScoreReaderZoomLayout.clampedContentOffset(
                 scrollView.contentOffset,
@@ -1404,6 +1428,15 @@ nonisolated private final class TiledPDFPageSource: @unchecked Sendable {
     }
 }
 
+/// A tiled layer whose tiles appear at once. With the default quarter-second fade, a page
+/// redrawn after an edit cross-faded tile by tile, so for a moment parts of the page showed
+/// the old layout and parts the new one, and notes looked doubled or shifted at tile edges.
+final class ScoreUnfadedTiledLayer: CATiledLayer {
+    override class func fadeDuration() -> CFTimeInterval {
+        0
+    }
+}
+
 final class ScorePagePDFTileView: UIView {
     private var currentPDFData: Data?
     private let pdfSource = TiledPDFPageSource()
@@ -1411,7 +1444,7 @@ final class ScorePagePDFTileView: UIView {
     private var lastViewportSize = CGSize.zero
 
     override class var layerClass: AnyClass {
-        CATiledLayer.self
+        ScoreUnfadedTiledLayer.self
     }
 
     override init(frame: CGRect) {
@@ -1520,7 +1553,7 @@ final class ScoreOverlayPDFView: UIView {
     }
 
     override class var layerClass: AnyClass {
-        CATiledLayer.self
+        ScoreUnfadedTiledLayer.self
     }
 
     override init(frame: CGRect) {
@@ -1816,6 +1849,9 @@ final class ScorePageOverlayView: UIView {
         }
     }
 
+    /// The current selection, which auto-scroll follows (see `ZoomableImageView.focusSelection`).
+    var focusSelection: ScoreSelectedElement?
+
     var noteEntryPreview: ScoreNoteEntryPreview? {
         didSet {
             guard oldValue != noteEntryPreview else {
@@ -1921,12 +1957,13 @@ final class ScorePageOverlayView: UIView {
         if let previewFrame = noteEntryPreviewCoreFrame() {
             return previewFrame.insetBy(dx: -18, dy: -18)
         }
-        if let selectionFrame,
-           selection?.kind == .note || selection?.kind == .rest || selection?.kind == .measure
+        let target = focusSelection ?? selection
+        if let target, let targetFrame = unzoomedFrame(for: target.normalizedRect),
+           target.kind == .note || target.kind == .rest || target.kind == .measure
             // Lyrics and chord symbols, so text entry follows each syllable or chord.
-            || selection?.kind == .text || selection?.kind == .chordText
-            || selection?.canDragMovableElement == true {
-            return selectionFrame.insetBy(dx: -22, dy: -22)
+            || target.kind == .text || target.kind == .chordText
+            || target.canDragMovableElement {
+            return targetFrame.insetBy(dx: -22, dy: -22)
         }
         return nil
     }
@@ -2313,8 +2350,13 @@ final class ScorePageOverlayView: UIView {
                 selectionPDFView.isHidden = hidesOverlay
                 selectionImageView.isHidden = true
                 if !hidesOverlay {
+                    // Redraw only when the size changes. Moving it (a note drag) keeps the drawn
+                    // tiles; redrawing them on every touch made the blue copy flicker and trail.
+                    let sizeChanged = selectionPDFView.frame.size != overlayFrame.size
                     selectionPDFView.frame = overlayFrame
-                    selectionPDFView.setNeedsDisplay()
+                    if sizeChanged {
+                        selectionPDFView.setNeedsDisplay()
+                    }
                 }
                 selectionContainer.isHidden = true
                 for container in selectionRangeContainers {
@@ -2631,8 +2673,14 @@ final class ScorePageOverlayView: UIView {
     }
 
     private var selectionFrame: CGRect? {
+        guard let selection else {
+            return nil
+        }
+        return unzoomedFrame(for: selection.normalizedRect)
+    }
+
+    private func unzoomedFrame(for normalizedRect: ScoreNormalizedRect) -> CGRect? {
         guard
-            let selection,
             bounds.width > 0,
             bounds.height > 0,
             imageSize.width > 0,
@@ -2642,7 +2690,7 @@ final class ScorePageOverlayView: UIView {
         }
 
         let imageRect = AVMakeRect(aspectRatio: imageSize, insideRect: bounds)
-        return frame(for: selection.normalizedRect, inside: imageRect)
+        return frame(for: normalizedRect, inside: imageRect)
     }
 
     private var insertionFineTuneMarkerSize: CGSize {

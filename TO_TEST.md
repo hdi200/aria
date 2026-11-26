@@ -17,6 +17,13 @@ release legal-screen access and billing/account checks remain unverified.
 - [ ] **iPhone/iPad and Android:** edit a score, then open one of its parts for the first time: Undo is greyed out, and the edit is still there in the full score and the part. Make a new edit: Undo works again. Switch to the full score and back to that part: Undo stays available.
 - [ ] **Exporting parts** to PDF also turns off Undo for the edits made before the export; edits made afterwards can be undone.
 
+## Selection offset while editing (November 25, BUG-043)
+
+- [ ] **iPad and iPhone, zoomed in to about 3x in Edit:** enter notes quickly with the keyboard, then tap and drag notes up and down. The blue highlight stays on its note (never beside it, even for a moment), and the page never shows doubled or shifted notes along a line across it.
+- [ ] **Same, scrolling:** with a note selected, scroll and pinch. The note's buttons move with the page. Drag past the top and bottom of the zoomed page: it bounces back smoothly, with no jump.
+- [ ] **Note entry follow:** enter notes to the end of a system and onto the next one, zoomed in and at 1x: the page still scrolls to the new note. Undo and Redo move the highlight correctly.
+- [ ] **Android (phone and tablet emulator):** enter notes and select while zoomed in: the highlight stays on its note, and note entry still follows onto the next system.
+
 ## Pencil crash (November 25, BUG-033)
 
 - [ ] **iPad with Pencil hover (M2 or later):** hold the Pencil just above the score and switch Edit → Annotate → reading several times: no crash.

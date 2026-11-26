@@ -584,6 +584,9 @@ extension ScoreReaderState {
         pageErrorMessages[pageIndex] = nil
         staleLivePageIndices.remove(pageIndex)
         loadTasks[pageIndex] = nil
+        if staleLivePageIndices.isEmpty, !editingVisualRefreshDeferred {
+            selectionHeldForPageRedraw = nil
+        }
     }
 
     func storePageError(_ error: Error, at pageIndex: Int) {

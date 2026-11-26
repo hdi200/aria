@@ -2443,6 +2443,7 @@ extension ScoreReaderState {
         #endif
 
         let startedAt = Date()
+        holdSelectionForPageRedraw()
         applyEditingState(editingState)
         if corruptionReport.isCorrupted {
             refreshCorruptionReport()

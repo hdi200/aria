@@ -22,7 +22,11 @@ struct ZoomableImageView: View {
     let contentSize: CGSize
     let displayedPageSize: CGSize
     let playbackHighlight: ScorePlaybackMeasureHighlight?
+    /// The selection drawn on the page.
     let selection: ScoreSelectedElement?
+    /// The current selection, which auto-scroll follows. It differs from `selection` only while
+    /// the page still shows its render from before an edit (iOS's parameter of the same name).
+    var focusSelection: ScoreSelectedElement? = nil
     let noteEntryPreview: ScoreNoteEntryPreview?
     let layoutMarkers: [ScoreLayoutMarker]
     @Binding var zoomScale: CGFloat
@@ -668,12 +672,12 @@ struct ZoomableImageView: View {
         if let noteEntryPreview {
             return frame(for: noteEntryPreview.overlayNormalizedRect).insetBy(dx: -18, dy: -18)
         }
-        if let selection,
-           selection.kind == .note || selection.kind == .rest || selection.kind == .measure
+        if let target = focusSelection ?? selection,
+           target.kind == .note || target.kind == .rest || target.kind == .measure
             // Lyrics and chord symbols, so text entry follows each syllable or chord (as on iOS).
-            || selection.kind == .text || selection.kind == .chordText
-            || selection.canDragMovableElement {
-            return frame(for: selection.normalizedRect).insetBy(dx: -22, dy: -22)
+            || target.kind == .text || target.kind == .chordText
+            || target.canDragMovableElement {
+            return frame(for: target.normalizedRect).insetBy(dx: -22, dy: -22)
         }
         return nil
     }

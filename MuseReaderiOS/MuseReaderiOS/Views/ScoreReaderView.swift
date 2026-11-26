@@ -2403,6 +2403,7 @@ struct ScoreReaderView: View {
             playbackLoopRange: readerState.playbackLoopRange(for: pageIndex),
             playbackLoopIsActive: readerState.playbackLoopIsActive,
             selectedElement: editingEnabled ? readerState.selectedElement(for: pageIndex) : nil,
+            drawnSelectedElement: editingEnabled ? readerState.drawnSelectedElement(for: pageIndex) : nil,
             noteEntryPreview: editingEnabled ? readerState.noteEntryPreview(for: pageIndex) : nil,
             zoomScale: isActivePage ? $zoomScale : .constant(1),
             availableWidth: isPageTurn || editingEnabled

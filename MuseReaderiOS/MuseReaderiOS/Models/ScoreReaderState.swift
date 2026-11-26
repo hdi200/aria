@@ -252,6 +252,10 @@ final class ScoreReaderState {
     let midiChordMaxHoldDelay = Duration.milliseconds(700)
     @ObservationIgnored var loadTasks: [Int: Task<Void, Never>] = [:]
     var staleLivePageIndices: Set<Int> = []
+    /// The selection that was on screen when an edit started. Pages that still show their
+    /// pre-edit render keep drawing it, so the highlight stays on the notes under it; each page
+    /// switches to the new selection together with its new render.
+    var selectionHeldForPageRedraw: ScoreSelectionHold?
     @ObservationIgnored var playbackMonitorTask: Task<Void, Never>?
     @ObservationIgnored var playbackContextTask: Task<Void, Never>?
     @ObservationIgnored var playbackWarmupTask: Task<Void, Error>?
@@ -637,4 +641,53 @@ final class ScoreReaderState {
 
         return selection.pageIndex == pageIndex ? selection : selection.highlightOnly(onPage: pageIndex)
     }
+
+    /// The selection to draw on a page. While the page still shows its render from before the
+    /// latest edit, that is the selection from before the edit: the new one's position comes
+    /// from the new layout and would sit off the notes of the old render. Scrolling to the
+    /// active bar still uses `selectedElement(for:)`.
+    func drawnSelectedElement(for pageIndex: Int) -> ScoreSelectedElement? {
+        let current = selectedElement(for: pageIndex)
+        guard
+            current != nil,
+            measureRangePreviewSelection?.pageIndex != pageIndex,
+            let hold = selectionHeldForPageRedraw,
+            pageAwaitsEditRedraw(pageIndex)
+        else {
+            return current
+        }
+
+        guard let held = hold.selection else {
+            return nil
+        }
+        return held.pageIndex == pageIndex ? held : held.highlightOnly(onPage: pageIndex)
+    }
+
+    /// True while a page on screen shows its render from before the latest edit.
+    func pageAwaitsEditRedraw(_ pageIndex: Int) -> Bool {
+        if editingVisualRefreshDeferred {
+            return true
+        }
+        return staleLivePageIndices.contains(pageIndex)
+            && cachedPagesByIndex[pageIndex] != nil
+            && pageErrorMessages[pageIndex] == nil
+    }
+
+    /// Called before an edit's new state is applied: keeps the selection now on screen for
+    /// pages that will show their old render until they are redrawn.
+    func holdSelectionForPageRedraw() {
+        let shown = editingState.selection
+        if let hold = selectionHeldForPageRedraw,
+           let shownPageIndex = shown?.pageIndex ?? hold.selection?.pageIndex,
+           pageAwaitsEditRedraw(shownPageIndex) {
+            // That page hasn't been redrawn since the last edit, so it still shows the held one.
+            return
+        }
+        selectionHeldForPageRedraw = ScoreSelectionHold(selection: shown)
+    }
+}
+
+/// A selection kept on screen while pages are redrawn after an edit (nil: nothing was selected).
+struct ScoreSelectionHold: Equatable {
+    let selection: ScoreSelectedElement?
 }

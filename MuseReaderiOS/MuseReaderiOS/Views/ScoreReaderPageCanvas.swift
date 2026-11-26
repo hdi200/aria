@@ -123,6 +123,8 @@ struct ScoreReaderPageCanvas: View {
     let playbackLoopRange: ScorePlaybackLoopRange?
     let playbackLoopIsActive: Bool
     let selectedElement: ScoreSelectedElement?
+    /// The selection drawn on the page; see `ScoreReaderState.drawnSelectedElement(for:)`.
+    let drawnSelectedElement: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
     @Binding var zoomScale: CGFloat
     let availableWidth: CGFloat
@@ -222,6 +224,7 @@ struct ScoreReaderPageCanvas: View {
                 playbackLoopRange: playbackLoopRange,
                 playbackLoopIsActive: playbackLoopIsActive,
                 selectedElement: selectedElement,
+                drawnSelectedElement: drawnSelectedElement,
                 noteEntryPreview: noteEntryPreview,
                 zoomScale: $zoomScale,
                 displayedPageSize: fittedPageSize,
@@ -577,6 +580,7 @@ struct ScoreReaderPageSurface: View {
     let playbackLoopRange: ScorePlaybackLoopRange?
     let playbackLoopIsActive: Bool
     let selectedElement: ScoreSelectedElement?
+    let drawnSelectedElement: ScoreSelectedElement?
     let noteEntryPreview: ScoreNoteEntryPreview?
     @Binding var zoomScale: CGFloat
     let displayedPageSize: CGSize
@@ -650,7 +654,8 @@ struct ScoreReaderPageSurface: View {
                         contentSize: page.displaySize ?? CGSize(width: 612, height: 792),
                         displayedPageSize: displayedPageSize,
                         playbackHighlight: playbackHighlight,
-                        selection: selectedElement,
+                        selection: drawnSelectedElement,
+                        focusSelection: selectedElement,
                         noteEntryPreview: noteEntryPreview,
                         layoutMarkers: page.layoutMarkers,
                         zoomScale: $zoomScale,
