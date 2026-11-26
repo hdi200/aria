@@ -14,7 +14,7 @@ release legal-screen access and billing/account checks remain unverified.
 
 ## Drum pad entry (November 25, branch `percussion-entry`)
 
-Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New Score › Rock Band). Not yet on Android: the Android session needs the new engine call first.
+Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New Score › Rock Band). The steps below apply on iOS and Android unless marked.
 
 - [ ] **iPhone, portrait and landscape:** Edit, tap a rest in the drum staff: the piano keyboard is replaced by the drum pad at the same height. A full kit shows two rows that scroll sideways, fading at the right edge.
 - [ ] **iPad:** the same, with taller pads and shortcut letters; the Half step/Octave controls are gone on drum staves.
@@ -30,13 +30,16 @@ Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New 
 - [ ] **Scrolling:** drag sideways across the pads: the strip scrolls and no note is entered.
 - [ ] **Drum sound:** tapping a pad plays that drum (bass drum, snare, hi-hat), not a piano note.
 - [ ] **No automatic chord mode:** selecting a beat with several drums (hi-hat + snare) does not light anything on a drum staff.
-- [ ] **Chord mode:** turn on the chord toggle, tap Closed Hi-Hat then Kick: both land on the same beat, hi-hat stem up in voice 1 and kick stem down in voice 2. One Undo removes the kick only.
+- [ ] **Add and Undo:** select a hi-hat, tap Add, tap Bass Drum: hi-hat stem up in voice 1, kick stem down in voice 2 on the same beat. One Undo removes the kick only.
+- [ ] **Last beat of the score:** enter drums up to the final beat, then add a kick to that beat with Add: no extra bar appears unless the cursor moves past the end, and the next tap continues correctly.
 - [ ] **Staff taps:** in note input, tap a drum's line on the staff: the preview shows that drum's notehead, and the note enters on that line (the chosen pad's drum if it sits on that line, otherwise the line's first drum).
 - [ ] **Rests and durations:** rest entry, dots and duration changes work on the drum staff.
 - [ ] **Small kits:** a snare-drum or triangle staff shows one row of tall pads instead.
 - [ ] **Pitched staves are unchanged:** the piano keyboard, Half step and Octave still show and work on a treble staff in the same score.
 - [ ] **Desktop MuseScore 4.7.6/4.7.7:** a score saved after drum entry opens with the same drums, voices and noteheads.
-- Known gaps: pressing several pads at once isn't supported yet (use chord mode), hearing a chord plays only the voice-1 drums, and pads can't yet change an existing note's drum.
+- [ ] **Android phone (Pixel):** pads replace the keyboard, Add to beat replaces the accidental and chord controls, and drum taps play the drum sound. Checked on the Pixel 10 Pro emulator; needs a real phone.
+- [ ] **Android tablet:** two-row layout with shortcut letters in portrait and landscape; hold-to-add and sideways scrolling (not confirmed on the Medium Tablet emulator, whose graphics hung).
+- Known gaps: pressing several pads at once isn't supported (use Add or a long press); hearing a chord plays only the voice-1 drums; a fast burst of taps that starts in Select mode can lose one tap while note input turns on (accepted for now).
 
 ## Pencil crash (November 25, BUG-033)
 
