@@ -373,14 +373,15 @@ struct LibraryView: View {
             Text("Create a setlist for organizing scores in performance order.")
         }
         .alert("Rename Setlist", isPresented: renameConfirmationIsPresented, presenting: folderPendingRename) { folder in
-            let proposedName = renameSetlistName
             TextField("Setlist name", text: $renameSetlistName)
             Button("Cancel", role: .cancel) {
                 folderPendingRename = nil
                 renameSetlistName = ""
             }
             Button("Rename") {
-                model.renameSetlistFolder(folder, to: proposedName)
+                // Read the field when Rename is tapped. A copy taken when the alert was built
+                // still held the old name, so renaming did nothing (BUG-039).
+                model.renameSetlistFolder(folder, to: renameSetlistName)
                 if selectedCategory == .setlist(folder.id) {
                     selectedCategory = .setlist(folder.id)
                 }
@@ -551,8 +552,10 @@ struct LibraryView: View {
             folderPendingRename != nil
         } set: { isPresented in
             if !isPresented {
+                // SwiftUI closes the alert before it runs the tapped button, so the typed
+                // name stays until Rename has read it; the buttons and the next Rename reset
+                // it (BUG-039).
                 folderPendingRename = nil
-                renameSetlistName = ""
             }
         }
     }
