@@ -15,6 +15,9 @@ struct ScoreReaderDrumPad: View {
     let isEnabled: Bool
     var showsShortcuts = false
     var targetPadWidth: CGFloat = 92
+    /// Target width for a standard kit's tall pads, when it differs from `targetPadWidth`: a
+    /// phone narrows them so more drums show in a row.
+    var tallPadWidth: CGFloat? = nil
     /// The Add key is armed or locked: pads show a "+" because a tap adds to the current beat.
     var addsToBeat = false
     let action: (Int) -> Void
@@ -67,7 +70,8 @@ struct ScoreReaderDrumPad: View {
                 sectionHeading("Essential Drums",
                                detail: showsDetail ? "Most used in rock, pop and modern styles" : nil)
                     .padding(.bottom, headingGap)
-                drumRow(arrangement.essentials, width: size.width, height: rowHeight, isTall: isTall)
+                drumRow(arrangement.essentials, width: size.width, height: rowHeight, isTall: isTall,
+                        targetWidth: isTall ? tallPadWidth ?? targetPadWidth : targetPadWidth)
                 sectionHeading(
                     "Additional Percussion",
                     detail: showsDetail ? "Cymbals, toms, cowbell and other drums" : nil,
@@ -75,7 +79,8 @@ struct ScoreReaderDrumPad: View {
                 )
                 .padding(.top, sectionGap)
                 if showsExtras {
-                    drumRow(arrangement.extras, width: size.width, height: rowHeight, isTall: isTall)
+                    drumRow(arrangement.extras, width: size.width, height: rowHeight, isTall: isTall,
+                            targetWidth: isTall ? tallPadWidth ?? targetPadWidth : targetPadWidth)
                         .padding(.top, headingGap)
                 }
             }
@@ -137,10 +142,10 @@ struct ScoreReaderDrumPad: View {
     /// One row of pads that scrolls sideways when it doesn't fit. On a phone the row can end
     /// with a chip that folds the Additional row away or brings it back.
     private func drumRow(_ rowPads: [ScoreDrumPad], width: CGFloat, height: CGFloat,
-                         isTall: Bool, foldChip: Bool = false) -> some View {
+                         isTall: Bool, foldChip: Bool = false, targetWidth: CGFloat? = nil) -> some View {
         let chipWidth: CGFloat = foldChip ? 44 : 0
         let layout = RowLayout(padCount: rowPads.count, width: width, reservedWidth: foldChip ? chipWidth + spacing : 0,
-                               spacing: spacing, targetPadWidth: targetPadWidth)
+                               spacing: spacing, targetPadWidth: targetWidth ?? targetPadWidth)
         return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: spacing) {

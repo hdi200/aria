@@ -455,8 +455,9 @@ struct ScoreReaderNoteEntrySurface: View {
 
             if showsDrumPad {
                 // Taller than the keyboard so a standard kit gets the iPad's headings and one
-                // row of tall pads, with Show more for the extras.
-                drumPad(targetPadWidth: 84, showsShortcuts: false)
+                // row of tall pads, with Show more for the extras. The tall pads are narrower
+                // than the compact ones so four show at once, with a fifth peeking in.
+                drumPad(targetPadWidth: 84, tallPadWidth: 64, showsShortcuts: false)
                     .frame(height: 136)
                     .frame(maxWidth: .infinity)
             } else {
@@ -1260,13 +1261,14 @@ struct ScoreReaderNoteEntrySurface: View {
         true
     }
 
-    private func drumPad(targetPadWidth: CGFloat, showsShortcuts: Bool) -> some View {
+    private func drumPad(targetPadWidth: CGFloat, tallPadWidth: CGFloat? = nil, showsShortcuts: Bool) -> some View {
         ScoreReaderDrumPad(
             pads: editingState.drumPads,
             activePitch: editingState.activeDrumPitch,
             isEnabled: drumPadEnabled,
             showsShortcuts: showsShortcuts,
             targetPadWidth: targetPadWidth,
+            tallPadWidth: tallPadWidth,
             addsToBeat: drumAddMode != .off,
             action: enterDrumAction,
             addAction: addDrumAction
