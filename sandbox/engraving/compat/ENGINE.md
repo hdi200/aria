@@ -92,6 +92,12 @@ Parts and loading:
 - `dom/stafflines.cpp`: `StaffLines::pagePos` falls back to the measure's position when the
   measure has no system or the system lacks the staff, instead of dereferencing null (Play build
   29 crash while drawing a page; not reproduced).
+- `editing/undo.h`: `UndoStack::clearHistory()` drops every undo and redo step and keeps whether
+  the score counts as modified. The bridge calls it when it builds a part score
+  (`setActivePartIndex` in `score_render_open_save.cpp`, also reached by exporting parts): Aria
+  builds parts outside undo, so undoing an edit made before that changed only the full score and
+  left the part linked to deleted elements (stress test mmrest-25-systemLock, seed 29001: note
+  entry then undo read freed memory). Desktop records part creation as an undoable step instead.
 - `infrastructure/mscreader.cpp`: `excerptFileNames` sorts parts by their `<index>_` file-name
   prefix, so a score saved as a folder (not a zip) reopens with its parts in order rather than
   in directory order. Zipped files are already in that order.

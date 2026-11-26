@@ -307,6 +307,14 @@ public:
 
     void mergeCommands(size_t startIdx);
     void cleanRedoStack() { remove(m_currentIndex); }
+    // Aria: drop every undo and redo step, keeping whether the score counts as modified. Used when
+    // a part score is built from the score as it is now (see compat/ENGINE.md).
+    void clearHistory()
+    {
+        const bool clean = isClean();
+        remove(0);
+        m_cleanState = clean ? m_stateList[m_currentIndex] : -1;
+    }
 
 private:
     void remove(size_t idx);

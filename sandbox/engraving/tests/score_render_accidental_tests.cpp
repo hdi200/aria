@@ -3297,6 +3297,39 @@ void testNoteOverOnlyTupletChordKeepsTuplet(const std::filesystem::path& root)
 
 // Moving a chord to another voice moves its articulations. The loop moved them out of the list
 // it was walking, so every second one was left behind on the removed chord.
+// A part score built after edits copies the score as it is, outside undo. Undoing an edit made
+// before that changed only the full score and left the part linked to deleted elements (fuzz
+// mmrest-25-systemLock, seed 29001: a later note entry and undo used freed memory). So building a
+// part clears undo; later edits can be undone, and reopening an existing part keeps undo.
+void testBuildingPartClearsEarlierUndo(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "part-clears-undo", scoreXml(0, { { 60, 14 } }, 1));
+    const LocatedItem note = noteWithPitch(scanScore(*session, { 60 }, 0), 60);
+    msr::render::ScoreEditState state = selectAt(*session, note);
+    std::string error;
+    expect(session->addExpression("mf", state, error), "Could not add a dynamic: " + error);
+    expect(state.canUndo, "The dynamic was not undoable before the part existed");
+
+    int pages = 0;
+    expect(session->setActivePartIndex(0, pages, error), "Could not open the part: " + error);
+    state = selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(!state.canUndo, "Undo still reached past building the part");
+    session->undo(state, error);
+    saveSnapshot(*session, root, "part-clears-undo-built");
+    expect(countOccurrences(savedExcerptXml(root), "<subtype>mf</subtype>") == 1, "The part lost the earlier dynamic");
+
+    expect(session->addText("staff", state, error), "Could not add text in the part: " + error);
+    expect(state.canUndo, "An edit after building the part was not undoable");
+    expect(session->setActivePartIndex(std::nullopt, pages, error) && session->setActivePartIndex(0, pages, error),
+           "Could not switch back to the part: " + error);
+    state = selectAt(*session, noteWithPitch(scanScore(*session, { 60 }, 0), 60));
+    expect(state.canUndo, "Reopening an existing part cleared undo");
+    expect(session->undo(state, error), "Could not undo the text: " + error);
+    saveSnapshot(*session, root, "part-clears-undo-undone");
+    expect(countOccurrences(savedExcerptXml(root), "Staff Text") == 0, "Undo did not remove the text from the part");
+    expect(countOccurrences(savedExcerptXml(root), "<subtype>mf</subtype>") == 1, "Undo removed the earlier dynamic");
+}
+
 void testVoiceChangeMovesEveryArticulation(const std::filesystem::path& root)
 {
     std::string xml = scoreXml(0, { { 60, 14 } }, 0);
@@ -3600,6 +3633,7 @@ int main()
     passed &= runTest("removing part bars clears the part selection", [&] { testRemovingPartMeasuresClearsPartSelection(testDirectory.path); });
     passed &= runTest("a note over a tuplet's only chord keeps the tuplet", [&] { testNoteOverOnlyTupletChordKeepsTuplet(testDirectory.path); });
     passed &= runTest("a voice change moves every articulation", [&] { testVoiceChangeMovesEveryArticulation(testDirectory.path); });
+    passed &= runTest("building a part clears earlier undo", [&] { testBuildingPartClearsEarlierUndo(testDirectory.path); });
     passed &= runTest("deleting grace note articulations removes each once", [&] { testDeletingGraceArticulationsRemovesEachOnce(testDirectory.path); });
     passed &= runTest("keyboard rejects out-of-range transposed pitch", [&] { testKeyboardRejectsOutOfRangeTransposedPitch(testDirectory.path); });
     passed &= runTest("note entry does not cast a rest to chord", [&] { testNoteEntryDoesNotCastRestToChord(testDirectory.path); });

@@ -244,6 +244,7 @@ public:
 
         mu::engraving::Part* part = parts.at(static_cast<size_t>(*partIndex));
         mu::engraving::Excerpt* excerpt = excerptForPart(part);
+        mu::engraving::Score* partScoreBefore = excerpt ? excerpt->excerptScore() : nullptr;
         if (!excerpt) {
             std::vector<mu::engraving::Excerpt*> createdExcerpts = mu::engraving::Excerpt::createExcerptsFromParts({ part }, m_masterScore.get());
             if (createdExcerpts.empty()) {
@@ -260,6 +261,15 @@ public:
         if (!excerpt->excerptScore()) {
             errorMessage = "MuseScore created a linked part, but it did not produce a score.";
             return false;
+        }
+
+        // A part score built now copies the score as it is now, outside undo. Undoing an earlier
+        // edit would then change only the full score, and the part would keep a copy linked to
+        // what that undo deletes (fuzz mmrest-25-systemLock, seed 29001: note entry then undo used
+        // freed memory). So undo and redo can't go back past the first time a part is built.
+        if (excerpt->excerptScore() != partScoreBefore && m_masterScore->undoStack()
+            && !m_masterScore->undoStack()->hasActiveCommand()) {
+            m_masterScore->undoStack()->clearHistory();
         }
 
         m_activePartIndex = partIndex;
