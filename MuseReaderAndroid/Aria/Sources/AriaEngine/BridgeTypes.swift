@@ -479,12 +479,42 @@ open class MSRPickupMeasureInfo: NSObject, @unchecked Sendable {
     }
 }
 
+/// One drum of the active percussion staff's drum set, for the drum pad.
+open class MSRDrumPad: NSObject, @unchecked Sendable {
+    public let pitch: Int
+    public let name: String
+    public let shortcut: String
+    /// "normal", "cross", "circleCross", "diamond", "triangle", "slash" or "other".
+    public let notehead: String
+    public let line: Int
+    public let voice: Int
+    public let stemUp: Bool
+    public let panelRow: Int
+    public let panelColumn: Int
+
+    public init(pitch: Int, name: String, shortcut: String, notehead: String, line: Int, voice: Int, stemUp: Bool,
+                panelRow: Int, panelColumn: Int) {
+        self.pitch = pitch
+        self.name = name
+        self.shortcut = shortcut
+        self.notehead = notehead
+        self.line = line
+        self.voice = voice
+        self.stemUp = stemUp
+        self.panelRow = panelRow
+        self.panelColumn = panelColumn
+    }
+}
+
 open class MSREditState: NSObject, @unchecked Sendable {
     public let selection: MSRSelectionInfo?
     public let noteInputEnabled: Bool
     public let noteInputInsertsRests: Bool
     public let noteInputIsDotted: Bool
     public var noteInputIsDoubleDotted = false
+    /// The drum pad for a percussion staff: its drum set's drums, and the drum note input enters.
+    public var drumPads: [MSRDrumPad] = []
+    public var activeDrumPitch = -1
     public let durationCode: Int
     public let currentVoice: Int
     public let canUndo: Bool

@@ -1008,6 +1008,26 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func insertDrumNotesAtCursor(_ drumPitches: [Int], addToCurrentChord: Bool) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.insertDrumNotesAtCursor(drumPitches.map { NSNumber(value: $0) }, addToCurrentChord: addToCurrentChord))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
+    func enterDrumsAtSelectedNote(_ drumPitches: [Int]) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.enterDrumsAtSelectedNote(drumPitches.map { NSNumber(value: $0) }))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func insertMIDIChordAtCursor(_ midiPitches: [Int], preferFlats: Bool) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
@@ -1724,7 +1744,21 @@ actor LiveScoreRenderSession {
             ),
             refreshScope: refreshScope,
             pageCount: refreshedPageCount,
-            scoreParts: Self.makeScoreParts(from: bridgeSession.scoreParts)
+            scoreParts: Self.makeScoreParts(from: bridgeSession.scoreParts),
+            drumPads: editState.drumPads.map { pad in
+                ScoreDrumPad(
+                    pitch: Int(pad.pitch),
+                    name: pad.name,
+                    shortcut: pad.shortcut,
+                    notehead: ScoreDrumPad.Notehead(rawValue: pad.notehead) ?? .other,
+                    line: Int(pad.line),
+                    voice: Int(pad.voice),
+                    stemUp: pad.stemUp,
+                    panelRow: Int(pad.panelRow),
+                    panelColumn: Int(pad.panelColumn)
+                )
+            },
+            activeDrumPitch: editState.activeDrumPitch >= 0 ? Int(editState.activeDrumPitch) : nil
         )
     }
 

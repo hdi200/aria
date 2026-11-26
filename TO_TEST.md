@@ -24,6 +24,37 @@ release legal-screen access and billing/account checks remain unverified.
 - [ ] **Note entry follow:** enter notes to the end of a system and onto the next one, zoomed in and at 1x: the page still scrolls to the new note. Undo and Redo move the highlight correctly.
 - [ ] **Android (phone and tablet emulator):** enter notes and select while zoomed in: the highlight stays on its note, and note entry still follows onto the next system.
 
+## Drum pad entry (November 25–26)
+
+Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New Score › Rock Band). The steps below apply on iOS and Android unless marked.
+
+- [ ] **iPhone, portrait and landscape:** Edit, tap a rest in the drum staff: the piano keyboard is replaced by the drum pad at the same height. A full kit shows two rows that scroll sideways, fading at the right edge.
+- [ ] **iPad:** the same, with taller pads and shortcut letters; the Half step/Octave controls are gone on drum staves.
+- [ ] **Kit sections:** a standard kit (Rock Band, Jazz Combo, the Rock Groove demo) shows Essential Drums (Bass Drum, Snare, Closed, Open and Pedal Hi-Hat, High Tom, mid tom, floor tom, Crash, Ride) and Additional Percussion (Bass Drum 2, Side Stick/Cross-stick, Splash, Crash 2, Ride Bell, China, the other toms, Cowbell, the rest). Additional is closed by default and the choice is remembered. iPad: headings with Show more/Show less, tall pads with a shortcut badge, strip 160 pt tall. Phone: no headings; folded, the essentials fill both rows with a "More" chip; open, essentials on top and extras below with "Less". "Bass Drum 1" and "Acoustic Snare" show as "Bass Drum" and "Snare".
+- [ ] **Other percussion keeps desktop's order:** snare drum (one row of tall pads), marching tenors, concert percussion, and a kit rearranged in desktop's percussion panel show desktop's order with no headings or sections; on iPad they look right at the taller 160 pt strip.
+- [ ] **Entering drums:** tap Snare, Kick, Closed Hi-Hat in turn: each enters at the cursor on its own line, with the right notehead. Kick and pedal hi-hat go to voice 2 (stems down), the others to voice 1. The cursor moves on after each.
+- [ ] **Cursor:** single taps move forward one beat at a time to the end of the bar and into the next; no extra bars are appended and no beat is entered twice.
+- [ ] **Fast taps:** tap one pad four times quickly: four notes, one per beat.
+- [ ] **Select mode, other voice:** leave note input, select a hi-hat, tap Bass Drum: the kick goes under that hi-hat on the same beat (voice 2, stem down), the hi-hat stays, note input turns on in V2, and the next pad tap enters on the following beat.
+- [ ] **Select mode, same voice:** select a hi-hat, tap Ride: that hi-hat becomes a ride (other drums on the beat stay), note input turns on, and the next taps continue from the following beat.
+- [ ] **Add key (phone and iPad):** on a drum staff the sharp/flat/natural buttons and the Chord toggle are replaced by "Add to beat" (iPad: "Add" in the bottom row and the floating palette). Pitched staves look exactly as before.
+- [ ] **Add once:** select a hi-hat, tap Add, tap Snare: the snare goes on the hi-hat's beat, the key turns off, and the next pad tap enters on the following beat.
+- [ ] **Add locked:** double-tap Add (caps-lock icon, "Adding"): every pad tap stacks on the current beat until Add is tapped again. Pads show a small "+" while Add is on.
+- [ ] **Long press:** hold a pad for half a second: that drum is added to the current beat; a normal tap still enters and moves on.
+- [ ] **Scrolling:** drag sideways across the pads: the strip scrolls and no note is entered.
+- [ ] **Drum sound:** tapping a pad plays that drum (bass drum, snare, hi-hat), not a piano note.
+- [ ] **No automatic chord mode:** selecting a beat with several drums (hi-hat + snare) does not light anything on a drum staff.
+- [ ] **Add and Undo:** select a hi-hat, tap Add, tap Bass Drum: hi-hat stem up in voice 1, kick stem down in voice 2 on the same beat. One Undo removes the kick only.
+- [ ] **Last beat of the score:** enter drums up to the final beat, then add a kick to that beat with Add: no extra bar appears unless the cursor moves past the end, and the next tap continues correctly.
+- [ ] **Staff taps:** in note input, tap a drum's line on the staff: the preview shows that drum's notehead, and the note enters on that line (the chosen pad's drum if it sits on that line, otherwise the line's first drum).
+- [ ] **Rests and durations:** rest entry, dots and duration changes work on the drum staff.
+- [ ] **Small kits:** a snare-drum or triangle staff shows one row of tall pads instead.
+- [ ] **Pitched staves are unchanged:** the piano keyboard, Half step and Octave still show and work on a treble staff in the same score.
+- [ ] **Desktop MuseScore 4.7.6/4.7.7:** a score saved after drum entry opens with the same drums, voices and noteheads.
+- [ ] **Android phone (Pixel):** pads replace the keyboard, Add to beat replaces the accidental and chord controls, and drum taps play the drum sound. Checked on the Pixel 10 Pro emulator; needs a real phone.
+- [ ] **Android tablet:** two-row layout with shortcut letters in portrait and landscape; hold-to-add and sideways scrolling (not confirmed on the Medium Tablet emulator, whose graphics hung).
+- Known gaps: pressing several pads at once isn't supported (use Add or a long press); hearing a chord plays only the voice-1 drums; a fast burst of taps that starts in Select mode can lose one tap while note input turns on (accepted for now).
+
 ## Pencil crash (November 25, BUG-033)
 
 - [ ] **iPad with Pencil hover (M2 or later):** hold the Pencil just above the score and switch Edit → Annotate → reading several times: no crash.

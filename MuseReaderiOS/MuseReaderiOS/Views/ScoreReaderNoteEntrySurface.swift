@@ -86,6 +86,11 @@ struct ScoreReaderNoteEntrySurface: View {
     let removeChordPitchAction: (Int) -> Void
     let semitoneShiftAction: (Int) -> Void
     let octaveShiftAction: (Int) -> Void
+    var enterDrumAction: (Int) -> Void = { _ in }
+    /// A long press on a pad: adds the drum to the current beat.
+    var addDrumAction: (Int) -> Void = { _ in }
+    var drumAddMode: ScoreDrumAddMode = .off
+    var tapDrumAddAction: () -> Void = {}
 
     var body: some View {
         #if os(Android) && ARIA_PHONE_AUDIT
@@ -383,7 +388,21 @@ struct ScoreReaderNoteEntrySurface: View {
         )
     }
 
+    @ViewBuilder
     private var pitchKeyboardRow: some View {
+        if showsDrumPad {
+            // Taller than the keyboard row so a standard kit's rows have room for headings.
+            drumPad(targetPadWidth: 112, showsShortcuts: true)
+                .frame(height: 160)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 18)
+        } else {
+            pianoKeyboardRow
+        }
+    }
+
+    private var pianoKeyboardRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
             ScoreReaderPitchNudgePair(
                 title: "Half step",
@@ -434,23 +453,29 @@ struct ScoreReaderNoteEntrySurface: View {
         HStack(alignment: .bottom, spacing: 4) {
             compactUndoRedoColumn
 
-            ScoreReaderWidePitchKeyboard(
-                useFlats: preferFlats,
-                activePitchClass: activePitchClass,
-                activeMIDIPitch: activeMIDIPitch,
-                activeMIDIPitches: activeChordMIDIPitches,
-                followsActiveMIDIPitch: !editingState.noteInputEnabled && !isBusy,
-                isEnabled: keyboardEnabled,
-                minimumVisibleNaturalKeyCount: 7,
-                maximumVisibleNaturalKeyCount: 8,
-                targetWhiteKeyWidth: 42,
-                activeAccidentalLabelFontSize: 7,
-                action: { key in
-                    handlePitchKeyboardTap(key)
-                }
-            )
-            .frame(height: 86)
-            .frame(maxWidth: .infinity)
+            if showsDrumPad {
+                drumPad(targetPadWidth: 84, showsShortcuts: false)
+                    .frame(height: 86)
+                    .frame(maxWidth: .infinity)
+            } else {
+                ScoreReaderWidePitchKeyboard(
+                    useFlats: preferFlats,
+                    activePitchClass: activePitchClass,
+                    activeMIDIPitch: activeMIDIPitch,
+                    activeMIDIPitches: activeChordMIDIPitches,
+                    followsActiveMIDIPitch: !editingState.noteInputEnabled && !isBusy,
+                    isEnabled: keyboardEnabled,
+                    minimumVisibleNaturalKeyCount: 7,
+                    maximumVisibleNaturalKeyCount: 8,
+                    targetWhiteKeyWidth: 42,
+                    activeAccidentalLabelFontSize: 7,
+                    action: { key in
+                        handlePitchKeyboardTap(key)
+                    }
+                )
+                .frame(height: 86)
+                .frame(maxWidth: .infinity)
+            }
 
             compactSelectionNavigationColumn
         }
@@ -469,22 +494,28 @@ struct ScoreReaderNoteEntrySurface: View {
         HStack(alignment: .bottom, spacing: 8) {
             compactLandscapeUndoRedoColumn
 
-            ScoreReaderWidePitchKeyboard(
-                useFlats: preferFlats,
-                activePitchClass: activePitchClass,
-                activeMIDIPitch: activeMIDIPitch,
-                activeMIDIPitches: activeChordMIDIPitches,
-                followsActiveMIDIPitch: !editingState.noteInputEnabled && !isBusy,
-                isEnabled: keyboardEnabled,
-                minimumVisibleNaturalKeyCount: 5,
-                maximumVisibleNaturalKeyCount: 7,
-                targetWhiteKeyWidth: 35,
-                action: { key in
-                    handlePitchKeyboardTap(key)
-                }
-            )
-            .frame(height: 92)
-            .frame(maxWidth: .infinity)
+            if showsDrumPad {
+                drumPad(targetPadWidth: 92, showsShortcuts: false)
+                    .frame(height: 92)
+                    .frame(maxWidth: .infinity)
+            } else {
+                ScoreReaderWidePitchKeyboard(
+                    useFlats: preferFlats,
+                    activePitchClass: activePitchClass,
+                    activeMIDIPitch: activeMIDIPitch,
+                    activeMIDIPitches: activeChordMIDIPitches,
+                    followsActiveMIDIPitch: !editingState.noteInputEnabled && !isBusy,
+                    isEnabled: keyboardEnabled,
+                    minimumVisibleNaturalKeyCount: 5,
+                    maximumVisibleNaturalKeyCount: 7,
+                    targetWhiteKeyWidth: 35,
+                    action: { key in
+                        handlePitchKeyboardTap(key)
+                    }
+                )
+                .frame(height: 92)
+                .frame(maxWidth: .infinity)
+            }
 
             compactLandscapeSelectionNavigationColumn
         }
@@ -500,7 +531,7 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var percussionUnsupportedNotice: some View {
-        Text("Percussion editing is not currently supported. Viewing and playback only.")
+        Text("This percussion staff has no drums to enter. Viewing and playback only.")
             .font(.caption.weight(.semibold))
             .foregroundStyle(Color.black.opacity(0.72))
             .multilineTextAlignment(.center)
@@ -827,7 +858,9 @@ struct ScoreReaderNoteEntrySurface: View {
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
                 moreNoteToolAction: moreNoteToolAction,
-                setCurrentVoiceAction: setCurrentVoiceAction
+                setCurrentVoiceAction: setCurrentVoiceAction,
+                drumAddMode: showsDrumPad ? drumAddMode : nil,
+                tapDrumAddAction: tapDrumAddAction
             )
             .padding(.horizontal, 52)
         }
@@ -904,7 +937,9 @@ struct ScoreReaderNoteEntrySurface: View {
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
                 moreNoteToolAction: moreNoteToolAction,
-                setCurrentVoiceAction: setCurrentVoiceAction
+                setCurrentVoiceAction: setCurrentVoiceAction,
+                drumAddMode: showsDrumPad ? drumAddMode : nil,
+                tapDrumAddAction: tapDrumAddAction
             )
         default:
             // detailToolbar bakes in .padding(.horizontal, 52) — cancel it so
@@ -938,7 +973,9 @@ struct ScoreReaderNoteEntrySurface: View {
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
                 moreNoteToolAction: moreNoteToolAction,
-                setCurrentVoiceAction: setCurrentVoiceAction
+                setCurrentVoiceAction: setCurrentVoiceAction,
+                drumAddMode: showsDrumPad ? drumAddMode : nil,
+                tapDrumAddAction: tapDrumAddAction
             )
 
         case .repeats:
@@ -1060,7 +1097,9 @@ struct ScoreReaderNoteEntrySurface: View {
             changeAccidentalAction: changeAccidentalAction,
             preferFlats: $preferFlats,
             moreNoteToolAction: moreNoteToolAction,
-            setCurrentVoiceAction: setCurrentVoiceAction
+            setCurrentVoiceAction: setCurrentVoiceAction,
+            drumAddMode: showsDrumPad ? drumAddMode : nil,
+            tapDrumAddAction: tapDrumAddAction
         )
     }
 
@@ -1205,7 +1244,31 @@ struct ScoreReaderNoteEntrySurface: View {
     }
 
     private var showsPercussionUnsupportedNotice: Bool {
-        editingState.activeStaffIsPercussion
+        editingState.activeStaffIsPercussion && editingState.drumPads.isEmpty
+    }
+
+    /// Percussion staves get the drum pad in the keyboard's place.
+    private var showsDrumPad: Bool {
+        editingState.activeStaffIsPercussion && !editingState.drumPads.isEmpty
+    }
+
+    // The pad only shows with a drum staff active, and it stays live while an edit runs, so
+    // fast taps queue up in order instead of being dropped.
+    private var drumPadEnabled: Bool {
+        true
+    }
+
+    private func drumPad(targetPadWidth: CGFloat, showsShortcuts: Bool) -> some View {
+        ScoreReaderDrumPad(
+            pads: editingState.drumPads,
+            activePitch: editingState.activeDrumPitch,
+            isEnabled: drumPadEnabled,
+            showsShortcuts: showsShortcuts,
+            targetPadWidth: targetPadWidth,
+            addsToBeat: drumAddMode != .off,
+            action: enterDrumAction,
+            addAction: addDrumAction
+        )
     }
 
     private var activePitchClass: Int? {

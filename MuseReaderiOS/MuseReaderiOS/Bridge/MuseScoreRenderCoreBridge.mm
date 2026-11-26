@@ -308,6 +308,22 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
                              staffSpacingSpatium:editState.staffSpacingSpatium
                              systemSpacingSpatium:editState.systemSpacingSpatium];
     state.noteInputIsDoubleDotted = editState.noteInputIsDoubleDotted;
+    if (!editState.drumPads.empty()) {
+        NSMutableArray<MSRDrumPad *> *pads = [NSMutableArray arrayWithCapacity:editState.drumPads.size()];
+        for (const msr::render::DrumPadInfo& pad : editState.drumPads) {
+            [pads addObject:[[MSRDrumPad alloc] initWithPitch:pad.pitch
+                                                         name:([NSString stringWithUTF8String:pad.name.c_str()] ?: @"")
+                                                     shortcut:([NSString stringWithUTF8String:pad.shortcut.c_str()] ?: @"")
+                                                     notehead:([NSString stringWithUTF8String:pad.notehead.c_str()] ?: @"")
+                                                         line:pad.line
+                                                        voice:pad.voice
+                                                       stemUp:pad.stemUp
+                                                     panelRow:pad.panelRow
+                                                  panelColumn:pad.panelColumn]];
+        }
+        state.drumPads = pads;
+    }
+    state.activeDrumPitch = editState.activeDrumPitch;
     return state;
 }
 #endif
@@ -639,6 +655,35 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 
 @end
 
+@implementation MSRDrumPad
+
+- (instancetype)initWithPitch:(NSInteger)pitch
+                         name:(NSString *)name
+                     shortcut:(NSString *)shortcut
+                     notehead:(NSString *)notehead
+                         line:(NSInteger)line
+                        voice:(NSInteger)voice
+                       stemUp:(BOOL)stemUp
+                     panelRow:(NSInteger)panelRow
+                  panelColumn:(NSInteger)panelColumn
+{
+    self = [super init];
+    if (self) {
+        _pitch = pitch;
+        _name = [name copy];
+        _shortcut = [shortcut copy];
+        _notehead = [notehead copy];
+        _line = line;
+        _voice = voice;
+        _stemUp = stemUp;
+        _panelRow = panelRow;
+        _panelColumn = panelColumn;
+    }
+    return self;
+}
+
+@end
+
 @implementation MSREditState
 
 - (instancetype)initWithSelection:(MSRSelectionInfo * _Nullable)selection
@@ -678,6 +723,8 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
         _staffSizeMillimeters = staffSizeMillimeters;
         _staffSpacingSpatium = staffSpacingSpatium;
         _systemSpacingSpatium = systemSpacingSpatium;
+        _drumPads = @[];
+        _activeDrumPitch = -1;
     }
     return self;
 }
@@ -3218,6 +3265,77 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
     if (!_session->insertMIDIChordAtCursor(pitches, preferFlats, editState, errorMessage)) {
         if (error) {
             *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not enter that MIDI chord at the current cursor."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)insertDrumNotesAtCursor:(NSArray<NSNumber *> *)drumPitches
+                        addToCurrentChord:(BOOL)addToCurrentChord
+                                    error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    std::vector<int> pitches;
+    pitches.reserve(drumPitches.count);
+    for (NSNumber *pitch in drumPitches) {
+        pitches.push_back(static_cast<int>(pitch.integerValue));
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->insertDrumNotesAtCursor(pitches, addToCurrentChord, editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not enter that drum at the current cursor."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
+- (MSREditState *)enterDrumsAtSelectedNote:(NSArray<NSNumber *> *)drumPitches
+                                     error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    std::vector<int> pitches;
+    pitches.reserve(drumPitches.count);
+    for (NSNumber *pitch in drumPitches) {
+        pitches.push_back(static_cast<int>(pitch.integerValue));
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->enterDrumsAtSelectedNote(pitches, editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not put that drum on the selected beat."));
         }
         return nil;
     }

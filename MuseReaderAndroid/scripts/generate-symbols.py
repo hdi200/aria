@@ -55,6 +55,7 @@ SYMBOLS = {
     "arrowtriangle.up.fill": "arrow_drop_up",
     "book.pages": "menu_book",
     "camera": "photo_camera",
+    "capslock.fill": "keyboard_capslock",
     "camera.viewfinder": "document_scanner",
     "checkmark": "check",
     "checkmark.circle": "check_circle",
@@ -171,6 +172,12 @@ CUSTOM = {
     # A metronome like SF Symbols' "metronome": a tapered case with a bar across its
     # foot, and a pendulum from the foot that pokes out through the right wall, with its
     # weight inside the case.
+    "shift": [
+        "M12 2L23 13H18V21H6V13H1Z M12 5L6 11H8V19H16V11H18Z",
+    ],
+    "shift.fill": [
+        "M12 2L23 13H18V21H6V13H1Z",
+    ],
     "metronome": [
         "M9.6 2.5H14.4L19.6 21.5H4.4Z M10.9 4.1L6.5 19.9H17.5L13.1 4.1Z",
         "M7.45 16.5H16.55L16.97 18H7.03Z",

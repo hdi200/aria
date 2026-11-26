@@ -227,6 +227,12 @@ func makeEditState(_ state: msr.render.ScoreEditState) -> MSREditState {
                  staffSpacingSpatium: state.staffSpacingSpatium,
                  systemSpacingSpatium: state.systemSpacingSpatium)
     editState.noteInputIsDoubleDotted = state.noteInputIsDoubleDotted
+    editState.drumPads = state.drumPads.map { pad in
+        MSRDrumPad(pitch: Int(pad.pitch), name: makeString(pad.name), shortcut: makeString(pad.shortcut),
+                   notehead: makeString(pad.notehead), line: Int(pad.line), voice: Int(pad.voice),
+                   stemUp: pad.stemUp, panelRow: Int(pad.panelRow), panelColumn: Int(pad.panelColumn))
+    }
+    editState.activeDrumPitch = Int(state.activeDrumPitch)
     return editState
 }
 

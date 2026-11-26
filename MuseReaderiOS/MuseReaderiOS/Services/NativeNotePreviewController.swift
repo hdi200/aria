@@ -49,6 +49,7 @@ final class NativeNotePreviewController {
     private var sampler: AVAudioUnitSampler?
     private var loadedSoundBankURL: URL?
     private var loadedProgram: UInt8?
+    private var loadedBankMSB: UInt8?
     private var activeStopTasks: [UInt8: Task<Void, Never>] = [:]
 
     func play(midiPitches: [Int]?, fallbackMIDIPitch: Int?, playbackBank: Int?, playbackProgram: Int?, playbackSetupData: String?) {
@@ -61,7 +62,12 @@ final class NativeNotePreviewController {
 
         do {
             let program = UInt8(clamping: playbackProgram ?? 0)
-            try prepareIfNeeded(program: program)
+            // MuseScore puts drum kits in bank 128: the SoundFont's percussion bank, where each
+            // pitch is a different drum. Without it a drum staff previewed as a piano.
+            let bankMSB = (playbackBank ?? 0) >= 128
+                ? UInt8(kAUSampler_DefaultPercussionBankMSB)
+                : UInt8(kAUSampler_DefaultMelodicBankMSB)
+            try prepareIfNeeded(program: program, bankMSB: bankMSB)
 
             for midiPitch in validPitches {
                 let note = UInt8(midiPitch)
@@ -88,6 +94,7 @@ final class NativeNotePreviewController {
         sampler = nil
         loadedSoundBankURL = nil
         loadedProgram = nil
+        loadedBankMSB = nil
     }
 
     private func stopActiveNotes() {
@@ -98,8 +105,8 @@ final class NativeNotePreviewController {
         activeStopTasks.removeAll()
     }
 
-    private func prepareIfNeeded(program: UInt8) throws {
-        if engine != nil, sampler != nil, loadedProgram == program {
+    private func prepareIfNeeded(program: UInt8, bankMSB: UInt8 = UInt8(kAUSampler_DefaultMelodicBankMSB)) throws {
+        if engine != nil, sampler != nil, loadedProgram == program, loadedBankMSB == bankMSB {
             return
         }
 
@@ -129,7 +136,7 @@ final class NativeNotePreviewController {
         try sampler.loadSoundBankInstrument(
             at: soundBankURL,
             program: program,
-            bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
+            bankMSB: bankMSB,
             bankLSB: UInt8(kAUSampler_DefaultBankLSB)
         )
 
@@ -142,6 +149,7 @@ final class NativeNotePreviewController {
         self.sampler = sampler
         self.loadedSoundBankURL = soundBankURL
         self.loadedProgram = program
+        self.loadedBankMSB = bankMSB
         print("MuseReader note preview ready: soundbank=\(soundBankURL.lastPathComponent) program=\(program)")
     }
     #endif

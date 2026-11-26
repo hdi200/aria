@@ -168,8 +168,8 @@
         }
 
         mu::engraving::Staff* staff = inputState.staff();
-        if (!isStandardStaff(staff, inputState.tick())) {
-            errorMessage = "Rest entry currently works only on standard staves.";
+        if (!isStandardStaff(staff, inputState.tick()) && !isDrumStaffAt(staff, inputState.tick())) {
+            errorMessage = "Rest entry currently works only on standard and percussion staves.";
             return false;
         }
 
@@ -2510,7 +2510,9 @@
         }
 
         mu::engraving::Staff* staff = score->staff(position.staffIdx);
-        if (!staff || !isStandardStaff(staff, position.segment ? position.segment->tick() : mu::engraving::Fraction(0, 1))) {
+        const mu::engraving::Fraction positionTick = position.segment ? position.segment->tick() : mu::engraving::Fraction(0, 1);
+        const bool drumStaff = isDrumStaffAt(staff, positionTick);
+        if (!staff || (!isStandardStaff(staff, positionTick) && !drumStaff)) {
             return true;
         }
         normalizePointInputPositionForPutNote(staff, position);
@@ -2538,9 +2540,28 @@
         shadowNote.mutldata()->setMag(mag);
         shadowNote.setTick(tick);
         shadowNote.setStaffIdx(position.staffIdx);
-        shadowNote.setVoice(inputState.voice());
+        // On a percussion staff the tapped line picks the drum, as putNote() will: the chosen
+        // pad's drum when it sits on that line, otherwise the line's first drum.
+        mu::engraving::NoteHeadGroup previewHeadGroup = mu::engraving::NoteHeadGroup::HEAD_NORMAL;
+        mu::engraving::voice_idx_t previewVoice = inputState.voice();
+        if (drumStaff && !rest) {
+            const mu::engraving::Drumset* drumset = drumsetForStaff(staff, tick);
+            if (!drumset) {
+                return true;
+            }
+            int drumPitch = inputState.drumNote();
+            if (!drumset->isValid(drumPitch) || drumset->line(drumPitch) != position.line) {
+                drumPitch = drumset->defaultPitchForLine(position.line);
+            }
+            if (!drumset->isValid(drumPitch)) {
+                return true;
+            }
+            previewHeadGroup = drumset->noteHead(drumPitch);
+            previewVoice = static_cast<mu::engraving::voice_idx_t>(drumset->voice(drumPitch));
+        }
+        shadowNote.setVoice(previewVoice);
         shadowNote.setLineIndex(position.line);
-        shadowNote.setColor(voiceSelectionColor(static_cast<int>(inputState.voice())));
+        shadowNote.setColor(voiceSelectionColor(static_cast<int>(previewVoice)));
 
         mu::engraving::SymId symNotehead = mu::engraving::SymId::noSym;
         if (rest) {
@@ -2550,8 +2571,8 @@
             shadowNote.setState(symNotehead, duration, true, segmentSkylineTopY, segmentSkylineBottomY);
             delete previewRest;
         } else {
-            symNotehead = mu::engraving::Note::noteHead(0, mu::engraving::NoteHeadGroup::HEAD_NORMAL, duration.headType());
-            const std::optional<mu::engraving::AccidentalType> accidentalType = accidentalKind >= 0
+            symNotehead = mu::engraving::Note::noteHead(0, previewHeadGroup, duration.headType());
+            const std::optional<mu::engraving::AccidentalType> accidentalType = accidentalKind >= 0 && !drumStaff
                 ? accidentalTypeForKind(accidentalKind)
                 : std::optional<mu::engraving::AccidentalType>(mu::engraving::AccidentalType::NONE);
             shadowNote.setState(
@@ -2886,6 +2907,355 @@
         return true;
     }
 
+    // Drums struck together but written in different voices are separate chords at the same beat
+    // (for example hi-hat in voice 1 and kick in voice 2), so drum entry groups them by voice.
+    static void groupDrumsByVoice(const mu::engraving::Drumset* drumset,
+                                  const std::vector<int>& drumPitches,
+                                  std::vector<int>& groupVoices,
+                                  std::vector<std::vector<int>>& groups)
+    {
+        groupVoices.clear();
+        groups.clear();
+        for (const int pitch : drumPitches) {
+            if (!drumset || !drumset->isValid(pitch)) {
+                continue;
+            }
+            const int voice = std::clamp(drumset->voice(pitch), 0, static_cast<int>(mu::engraving::VOICES) - 1);
+            auto voiceIt = std::find(groupVoices.begin(), groupVoices.end(), voice);
+            if (voiceIt == groupVoices.end()) {
+                groupVoices.push_back(voice);
+                groups.push_back({ pitch });
+            } else {
+                std::vector<int>& group = groups[static_cast<size_t>(voiceIt - groupVoices.begin())];
+                if (std::find(group.begin(), group.end(), pitch) == group.end()) {
+                    group.push_back(pitch);
+                }
+            }
+        }
+    }
+
+    static mu::engraving::NoteInputParams drumInputParams(const mu::engraving::Drumset* drumset,
+                                                          const mu::engraving::Staff* staff,
+                                                          const int pitch,
+                                                          const mu::engraving::Fraction& tick)
+    {
+        mu::engraving::NoteInputParams params;
+        params.drumPitch = pitch;
+        // The step must land on the drum's own line, or the engine swaps in that line's default drum.
+        params.step = mu::engraving::absStep(drumset->line(pitch), staff->clef(tick));
+        return params;
+    }
+
+    static void addDrumNoteToChord(mu::engraving::Score* score,
+                                   const mu::engraving::Drumset* drumset,
+                                   const mu::engraving::Staff* staff,
+                                   mu::engraving::Chord* chord,
+                                   const int pitch)
+    {
+        if (!chord || chord->notes().empty()) {
+            return;
+        }
+        for (const mu::engraving::Note* note : chord->notes()) {
+            if (note->pitch() == pitch) {
+                return;
+            }
+        }
+        mu::engraving::Note* anchorNote = chord->notes().front();
+        score->select(anchorNote, mu::engraving::SelectType::SINGLE, anchorNote->staffIdx());
+        score->cmdAddPitch(drumInputParams(drumset, staff, pitch, chord->tick()), true, false);
+    }
+
+    // Enters a new chord for pitches (all one voice) at tick, replacing what that voice has there.
+    static mu::engraving::Chord* enterDrumChordAt(mu::engraving::Score* score,
+                                                  const mu::engraving::Drumset* drumset,
+                                                  const mu::engraving::Staff* staff,
+                                                  const mu::engraving::Fraction& tick,
+                                                  const int voice,
+                                                  const mu::engraving::TDuration& duration,
+                                                  const std::vector<int>& pitches)
+    {
+        mu::engraving::Segment* segment = score->tick2segment(tick, true, mu::engraving::SegmentType::ChordRest);
+        if (!segment || pitches.empty()) {
+            return nullptr;
+        }
+        mu::engraving::InputState& inputState = score->inputState();
+        inputState.setTrack(staff->idx() * mu::engraving::VOICES + static_cast<mu::engraving::track_idx_t>(voice));
+        inputState.setSegment(segment);
+        inputState.setDuration(duration);
+        inputState.setRest(false);
+        score->cmdAddPitch(drumInputParams(drumset, staff, pitches.front(), tick), false, false);
+        mu::engraving::Note* entered = lastInputNote(score, false);
+        mu::engraving::Chord* chord = entered ? entered->chord() : nullptr;
+        if (!chord || chord->tick() != tick) {
+            return nullptr;
+        }
+        for (size_t index = 1; index < pitches.size(); ++index) {
+            addDrumNoteToChord(score, drumset, staff, chord, pitches[index]);
+        }
+        return chord;
+    }
+
+    //! Select mode: a pad tapped with a drum note selected. A drum in the selected note's voice
+    //! changes that note into the drum (the way a keyboard key changes a selected note's pitch);
+    //! a drum in another voice goes on the same beat in its own voice, under or over the note.
+    //! The tapped drum's note is then selected and note input continues after that beat, in its voice.
+    bool enterDrumsAtSelectedNote(const std::vector<int>& drumPitches,
+                                  msr::render::ScoreEditState& output,
+                                  std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::Note* selectedNote = currentSelectedNote(score);
+        mu::engraving::Chord* selectedChord = selectedNote ? selectedNote->chord() : nullptr;
+        mu::engraving::Staff* staff = selectedChord ? score->staff(selectedChord->staffIdx()) : nullptr;
+        const mu::engraving::Drumset* drumset = selectedChord ? drumsetForStaff(staff, selectedChord->tick()) : nullptr;
+        if (!drumset) {
+            errorMessage = "Select a drum note first.";
+            return false;
+        }
+
+        std::vector<int> groupVoices;
+        std::vector<std::vector<int>> groups;
+        groupDrumsByVoice(drumset, drumPitches, groupVoices, groups);
+        if (groups.empty()) {
+            errorMessage = "That drum isn't part of this instrument.";
+            return false;
+        }
+
+        const mu::engraving::Fraction tick = selectedChord->tick();
+        const mu::engraving::TDuration duration = noteEntryDurationForChordRest(selectedChord);
+        const bool inTuplet = selectedChord->tuplet() != nullptr;
+        const int selectedVoice = static_cast<int>(selectedChord->voice());
+        const int selectedPitch = selectedNote->pitch();
+        const mu::engraving::staff_idx_t staffIdx = staff->idx();
+        mu::engraving::InputState& inputState = score->inputState();
+        const mu::engraving::TDuration savedDuration = inputState.duration();
+
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader drum at selection"));
+        mu::engraving::Note* tappedNote = nullptr;
+        for (size_t groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
+            const int voice = groupVoices[groupIndex];
+            const std::vector<int>& pitches = groups[groupIndex];
+            mu::engraving::Chord* target = nullptr;
+            if (voice == selectedVoice) {
+                // Same voice: the selected note becomes the tapped drum. Add first, then remove
+                // the old note, so the chord never empties into a rest.
+                target = selectedChord;
+                for (const int pitch : pitches) {
+                    addDrumNoteToChord(score, drumset, staff, target, pitch);
+                }
+                if (std::find(pitches.begin(), pitches.end(), selectedPitch) == pitches.end()
+                    && target->notes().size() > 1) {
+                    score->deleteItem(selectedNote);
+                    selectedNote = nullptr;
+                }
+            } else {
+                const mu::engraving::track_idx_t track = staffIdx * mu::engraving::VOICES
+                                                         + static_cast<mu::engraving::track_idx_t>(voice);
+                mu::engraving::Segment* segment = score->tick2segment(tick, true, mu::engraving::SegmentType::ChordRest);
+                mu::engraving::EngravingItem* existing = segment ? segment->element(track) : nullptr;
+                if (existing && existing->isChord()) {
+                    // That voice already has drums on this beat: strike this one with them.
+                    target = mu::engraving::toChord(existing);
+                    for (const int pitch : pitches) {
+                        addDrumNoteToChord(score, drumset, staff, target, pitch);
+                    }
+                } else if (!inTuplet) {
+                    target = enterDrumChordAt(score, drumset, staff, tick, voice, duration, pitches);
+                }
+            }
+            if (!tappedNote && target) {
+                for (mu::engraving::Note* note : target->notes()) {
+                    if (note->pitch() == pitches.front()) {
+                        tappedNote = note;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!tappedNote) {
+            score->endCmd(true);
+            errorMessage = "MuseReader could not put that drum on the selected beat.";
+            return false;
+        }
+
+        inputState.setDuration(savedDuration);
+        inputState.setDrumNote(tappedNote->pitch());
+        score->select(tappedNote, mu::engraving::SelectType::SINGLE, tappedNote->staffIdx());
+        // After select(), which moves the cursor onto the chord: continue from the next beat in
+        // the tapped drum's voice.
+        continueNoteInputAfterChord(score, tappedNote->chord());
+        if (mu::engraving::Measure* measure = tappedNote->chord()->measure()) {
+            measure->checkMultiVoices(staffIdx);
+        }
+        score->endCmd();
+        refreshAfterEdit();
+        output = makeEditState(score);
+        return true;
+    }
+
+    bool insertDrumNotesAtCursor(const std::vector<int>& drumPitches,
+                                 const bool addToCurrentChord,
+                                 msr::render::ScoreEditState& output,
+                                 std::string& errorMessage)
+    {
+        if (!supportsEditing()) {
+            errorMessage = "Editing is unavailable for this score session.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        mu::engraving::InputState& inputState = score->inputState();
+        if (!inputState.noteEntryMode()) {
+            errorMessage = "Turn on note input before entering drums.";
+            return false;
+        }
+
+        if (selectedMeasureRange(score, nullptr, nullptr)) {
+            if (mu::engraving::ChordRest* chordRest = selectedMeasureChordRest(score)) {
+                configureInputCursorForChordRest(score, chordRest, false);
+            }
+        } else if (!inputState.isValid()) {
+            if (mu::engraving::ChordRest* chordRest = selectedChordRest(score)) {
+                configureInputCursorForChordRest(score, chordRest, false);
+            }
+        }
+
+        normalizeNoteEntryDuration(inputState);
+        if (!inputState.isValid()) {
+            errorMessage = "Tap a place on the percussion staff before entering drums.";
+            return false;
+        }
+
+        mu::engraving::Staff* staff = inputState.staff();
+        const mu::engraving::Drumset* drumset = drumsetForStaff(staff, inputState.tick());
+        if (!drumset) {
+            errorMessage = "Drum entry works only on percussion staves.";
+            return false;
+        }
+
+        std::vector<int> groupVoices;
+        std::vector<std::vector<int>> groups;
+        groupDrumsByVoice(drumset, drumPitches, groupVoices, groups);
+        if (groups.empty()) {
+            errorMessage = "That drum isn't part of this instrument.";
+            return false;
+        }
+
+        const mu::engraving::staff_idx_t staffIdx = staff->idx();
+        auto addDrumToChord = [&](mu::engraving::Chord* chord, const int pitch) {
+            addDrumNoteToChord(score, drumset, staff, chord, pitch);
+        };
+        auto enterChordAt = [&](const mu::engraving::Fraction& tick,
+                                const int voice,
+                                const mu::engraving::TDuration& duration,
+                                const std::vector<int>& pitches) -> mu::engraving::Chord* {
+            return enterDrumChordAt(score, drumset, staff, tick, voice, duration, pitches);
+        };
+
+        if (addToCurrentChord) {
+            mu::engraving::Note* anchorNote = currentSelectedNote(score);
+            if (!anchorNote) {
+                anchorNote = lastInputNote(score);
+            }
+            mu::engraving::Chord* anchorChord = anchorNote ? anchorNote->chord() : nullptr;
+            if (anchorChord && anchorChord->staffIdx() == staffIdx) {
+                const mu::engraving::Fraction tick = anchorChord->tick();
+                const mu::engraving::TDuration savedDuration = inputState.duration();
+                const mu::engraving::TDuration anchorDuration = noteEntryDurationForChordRest(anchorChord);
+
+                score->startCmd(muse::TranslatableString::untranslatable("MuseReader add drums to chord"));
+                for (size_t groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
+                    const mu::engraving::track_idx_t track = staffIdx * mu::engraving::VOICES
+                                                             + static_cast<mu::engraving::track_idx_t>(groupVoices[groupIndex]);
+                    mu::engraving::Segment* segment = score->tick2segment(tick, true, mu::engraving::SegmentType::ChordRest);
+                    mu::engraving::EngravingItem* existing = segment ? segment->element(track) : nullptr;
+                    if (existing && existing->isChord()) {
+                        for (const int pitch : groups[groupIndex]) {
+                            addDrumToChord(mu::engraving::toChord(existing), pitch);
+                        }
+                        continue;
+                    }
+                    if (anchorChord->tuplet()) {
+                        // A new chord in another voice would need its own tuplet; leave that drum out.
+                        continue;
+                    }
+                    enterChordAt(tick, groupVoices[groupIndex], anchorDuration, groups[groupIndex]);
+                }
+                inputState.setDuration(savedDuration);
+                if (!anchorChord->notes().empty()) {
+                    score->select(anchorChord->upNote(), mu::engraving::SelectType::SINGLE, staffIdx);
+                }
+                // Leave the cursor after this beat, in the anchor's voice, so taps after the add
+                // carry on from the next beat. This also marks the beat as the last input segment,
+                // which keeps InputState::endOfScore() right. It must come after select(), which
+                // moves the cursor onto the selected chord.
+                continueNoteInputAfterChord(score, anchorChord);
+                anchorChord->measure()->checkMultiVoices(staffIdx);
+                score->endCmd();
+                refreshAfterEdit();
+                output = makeEditState(score);
+                return true;
+            }
+        }
+
+        const mu::engraving::Fraction tick = inputState.tick();
+        const mu::engraving::TDuration duration = inputState.duration();
+
+        score->startCmd(muse::TranslatableString::untranslatable("MuseReader drum input"));
+        mu::engraving::Chord* firstChord = nullptr;
+        // Where the engine's own entry left the cursor after the first voice's chord: the next
+        // input position, and the entered beat as the last input segment. Restoring both keeps
+        // note entry moving forward in that voice, exactly as keyboard entry does. (Moving the
+        // cursor with Score::nextInputPos() instead makes InputState think it is at the end of
+        // the score, which re-entered beats and appended measures.)
+        bool hasContinuation = false;
+        bool continuationAtEnd = false;
+        mu::engraving::Fraction continuationTick;
+        mu::engraving::Fraction continuationLastTick;
+        mu::engraving::track_idx_t continuationTrack = muse::nidx;
+        for (size_t groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
+            if (firstChord && firstChord->tuplet()) {
+                break;
+            }
+            mu::engraving::Chord* chord = enterChordAt(tick, groupVoices[groupIndex], duration, groups[groupIndex]);
+            if (!firstChord && chord) {
+                firstChord = chord;
+                hasContinuation = true;
+                continuationAtEnd = inputState.segment() == nullptr;
+                continuationTick = inputState.segment() ? inputState.segment()->tick() : mu::engraving::Fraction(0, 1);
+                continuationLastTick = inputState.lastSegment() ? inputState.lastSegment()->tick() : tick;
+                continuationTrack = inputState.track();
+            }
+        }
+        if (!firstChord) {
+            score->endCmd(true);
+            errorMessage = "MuseReader could not enter that drum at the current cursor.";
+            return false;
+        }
+
+        if (groups.size() > 1 && hasContinuation) {
+            score->select(firstChord->upNote(), mu::engraving::SelectType::SINGLE, staffIdx);
+            inputState.setTrack(continuationTrack);
+            if (!continuationAtEnd) {
+                inputState.setSegment(score->tick2segment(continuationTick, true, mu::engraving::SegmentType::ChordRest));
+            }
+            inputState.setLastSegment(score->tick2segment(continuationLastTick, true, mu::engraving::SegmentType::ChordRest));
+        }
+        inputState.setDrumNote(groups.front().front());
+        inputState.setDuration(duration);
+        appendMeasureIfInputCursorReachedEnd(score);
+        firstChord->measure()->checkMultiVoices(staffIdx);
+        score->endCmd();
+        refreshAfterEdit();
+        output = makeEditState(score);
+        return true;
+    }
+
     bool removeMIDIPitchFromCurrentChord(const int midiPitch,
                                          msr::render::ScoreEditState& output,
                                          std::string& errorMessage)
@@ -2992,8 +3362,9 @@
         }
 
         mu::engraving::Staff* staff = score->staff(position.staffIdx);
-        if (!isStandardStaff(staff, position.segment->tick())) {
-            errorMessage = "Tap note entry currently works only on standard staves.";
+        const bool drumStaff = isDrumStaffAt(staff, position.segment->tick());
+        if (!isStandardStaff(staff, position.segment->tick()) && !drumStaff) {
+            errorMessage = "Tap note entry currently works only on standard and percussion staves.";
             return false;
         }
         normalizePointInputPositionForPutNote(staff, position);
@@ -3005,7 +3376,7 @@
         inputState.setSegment(position.segment);
 
         std::optional<mu::engraving::AccidentalType> requestedAccidentalType = mu::engraving::AccidentalType::NONE;
-        if (accidentalKind.has_value() && !inputState.rest()) {
+        if (accidentalKind.has_value() && !inputState.rest() && !drumStaff) {
             requestedAccidentalType = accidentalTypeForKind(*accidentalKind);
             if (!requestedAccidentalType.has_value()) {
                 errorMessage = "MuseReader does not recognize that accidental.";
@@ -3028,7 +3399,7 @@
             errorMessage = insertResult.text().empty() ? "MuseReader could not place a note at that position." : insertResult.text();
             return false;
         }
-        if (pitchClass.has_value() && !inputState.rest()) {
+        if (pitchClass.has_value() && !inputState.rest() && !drumStaff) {
             if (!applyDiatonicPitchClassToNote(score, lastInputNote(score, false), *pitchClass, preferFlats, errorMessage)) {
                 score->endCmd(true);
                 return false;

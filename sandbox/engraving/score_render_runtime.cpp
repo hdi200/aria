@@ -1367,6 +1367,11 @@ bool isStandardStaff(const mu::engraving::Staff* staff, const mu::engraving::Fra
     return staff && !staff->isTabStaff(tick) && !staff->isDrumStaff(tick);
 }
 
+bool isDrumStaffAt(const mu::engraving::Staff* staff, const mu::engraving::Fraction& tick)
+{
+    return staff && staff->isDrumStaff(tick);
+}
+
 std::string layoutBreakKind(const mu::engraving::LayoutBreak* layoutBreak)
 {
     if (!layoutBreak) {
@@ -4851,8 +4856,11 @@ msr::render::ScoreSelectionState makeSelectionState(const mu::engraving::Score* 
             selectionState.playbackProgram = program.program;
             selectionState.playbackSetupData = setupData.toString().toStdString();
         }
+        // A drum note's pitch picks the drum, not a spelling, so it has no accidental to show.
         const int alteration = static_cast<int>(mu::engraving::tpc2alter(note->tpc()));
-        if (alteration < 0) {
+        if (isDrumStaffAt(staff, tick)) {
+            selectionState.accidentalKind = -1;
+        } else if (alteration < 0) {
             selectionState.accidentalKind = 2;
         } else if (alteration > 0) {
             selectionState.accidentalKind = 1;
@@ -5276,6 +5284,88 @@ int currentKeyForSelection(const mu::engraving::Score* score,
     return 0;
 }
 
+std::string drumPadNoteheadKind(const mu::engraving::NoteHeadGroup group)
+{
+    using mu::engraving::NoteHeadGroup;
+    switch (group) {
+    case NoteHeadGroup::HEAD_NORMAL:
+        return "normal";
+    case NoteHeadGroup::HEAD_CROSS:
+    case NoteHeadGroup::HEAD_HEAVY_CROSS:
+    case NoteHeadGroup::HEAD_HEAVY_CROSS_HAT:
+    case NoteHeadGroup::HEAD_PLUS:
+        return "cross";
+    case NoteHeadGroup::HEAD_XCIRCLE:
+    case NoteHeadGroup::HEAD_WITHX:
+        return "circleCross";
+    case NoteHeadGroup::HEAD_DIAMOND:
+    case NoteHeadGroup::HEAD_DIAMOND_OLD:
+    case NoteHeadGroup::HEAD_LARGE_DIAMOND:
+        return "diamond";
+    case NoteHeadGroup::HEAD_TRIANGLE_UP:
+    case NoteHeadGroup::HEAD_TRIANGLE_DOWN:
+        return "triangle";
+    case NoteHeadGroup::HEAD_SLASH:
+    case NoteHeadGroup::HEAD_SLASHED1:
+    case NoteHeadGroup::HEAD_SLASHED2:
+        return "slash";
+    default:
+        return "other";
+    }
+}
+
+const mu::engraving::Drumset* drumsetForStaff(const mu::engraving::Staff* staff, const mu::engraving::Fraction& tick)
+{
+    if (!staff || !staff->isDrumStaff(tick) || !staff->part()) {
+        return nullptr;
+    }
+    const mu::engraving::Instrument* instrument = staff->part()->instrument(tick);
+    return instrument && instrument->useDrumset() ? instrument->drumset() : nullptr;
+}
+
+// The drum set's drums in the order desktop's percussion panel shows them: by panel row and
+// column, then any drum without a panel place by pitch.
+void fillDrumPads(msr::render::ScoreEditState& editState, const mu::engraving::Drumset* drumset)
+{
+    editState.drumPads.clear();
+    if (!drumset) {
+        return;
+    }
+    for (int pitch = 0; pitch < mu::engraving::DRUM_INSTRUMENTS; ++pitch) {
+        if (!drumset->isValid(pitch)) {
+            continue;
+        }
+        msr::render::DrumPadInfo pad;
+        pad.pitch = pitch;
+        pad.name = drumset->name(pitch).toStdString();
+        pad.shortcut = drumset->shortcut(pitch).toStdString();
+        pad.notehead = drumPadNoteheadKind(drumset->noteHead(pitch));
+        pad.line = drumset->line(pitch);
+        pad.voice = drumset->voice(pitch);
+        const mu::engraving::DirectionV direction = drumset->stemDirection(pitch);
+        pad.stemUp = direction == mu::engraving::DirectionV::UP
+                     || (direction == mu::engraving::DirectionV::AUTO && pad.voice % 2 == 0);
+        pad.panelRow = drumset->panelRow(pitch);
+        pad.panelColumn = drumset->panelColumn(pitch);
+        editState.drumPads.push_back(std::move(pad));
+    }
+    std::stable_sort(editState.drumPads.begin(), editState.drumPads.end(),
+                     [](const msr::render::DrumPadInfo& lhs, const msr::render::DrumPadInfo& rhs) {
+        const bool lhsPlaced = lhs.panelRow >= 0 && lhs.panelColumn >= 0;
+        const bool rhsPlaced = rhs.panelRow >= 0 && rhs.panelColumn >= 0;
+        if (lhsPlaced != rhsPlaced) {
+            return lhsPlaced;
+        }
+        if (lhsPlaced && lhs.panelRow != rhs.panelRow) {
+            return lhs.panelRow < rhs.panelRow;
+        }
+        if (lhsPlaced && lhs.panelColumn != rhs.panelColumn) {
+            return lhs.panelColumn < rhs.panelColumn;
+        }
+        return lhs.pitch < rhs.pitch;
+    });
+}
+
 msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score, const bool includeSelection = true)
 {
     msr::render::ScoreEditState editState;
@@ -5304,9 +5394,24 @@ msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score, con
     if (inputState.noteEntryMode()) {
         const mu::engraving::Staff* staff = inputState.staff();
         editState.activeStaffIsPercussion = staff && staff->isDrumStaff(inputState.tick());
+        if (editState.activeStaffIsPercussion) {
+            const mu::engraving::Drumset* drumset = drumsetForStaff(staff, inputState.tick());
+            fillDrumPads(editState, drumset);
+            if (drumset && drumset->isValid(inputState.drumNote())) {
+                editState.activeDrumPitch = inputState.drumNote();
+            }
+        }
     } else if (const mu::engraving::ChordRest* chordRest = selectedChordRest(score)) {
         const mu::engraving::Staff* staff = score->staff(chordRest->staffIdx());
         editState.activeStaffIsPercussion = staff && staff->isDrumStaff(chordRest->tick());
+        if (editState.activeStaffIsPercussion) {
+            const mu::engraving::Drumset* drumset = drumsetForStaff(staff, chordRest->tick());
+            fillDrumPads(editState, drumset);
+            const mu::engraving::EngravingItem* selected = score->selection().element();
+            if (drumset && selected && selected->isNote() && drumset->isValid(mu::engraving::toNote(selected)->pitch())) {
+                editState.activeDrumPitch = mu::engraving::toNote(selected)->pitch();
+            }
+        }
     }
     editState.canUndo = score->undoStack() && score->undoStack()->canUndo();
     editState.canRedo = score->undoStack() && score->undoStack()->canRedo();

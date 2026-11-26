@@ -532,6 +532,35 @@ isEditableText:(BOOL)isEditableText
 
 @end
 
+/// One drum of the active percussion staff's drum set.
+@interface MSRDrumPad : NSObject
+
+@property (nonatomic, readonly) NSInteger pitch;
+@property (nonatomic, copy, readonly) NSString *name;
+@property (nonatomic, copy, readonly) NSString *shortcut;
+/// "normal", "cross", "circleCross", "diamond", "triangle", "slash" or "other".
+@property (nonatomic, copy, readonly) NSString *notehead;
+@property (nonatomic, readonly) NSInteger line;
+@property (nonatomic, readonly) NSInteger voice;
+@property (nonatomic, readonly) BOOL stemUp;
+@property (nonatomic, readonly) NSInteger panelRow;
+@property (nonatomic, readonly) NSInteger panelColumn;
+
+- (instancetype)initWithPitch:(NSInteger)pitch
+                         name:(NSString *)name
+                     shortcut:(NSString *)shortcut
+                     notehead:(NSString *)notehead
+                         line:(NSInteger)line
+                        voice:(NSInteger)voice
+                       stemUp:(BOOL)stemUp
+                     panelRow:(NSInteger)panelRow
+                  panelColumn:(NSInteger)panelColumn NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
 @interface MSREditState : NSObject
 
 @property (nonatomic, strong, readonly, nullable) MSRSelectionInfo *selection;
@@ -544,6 +573,10 @@ isEditableText:(BOOL)isEditableText
 @property (nonatomic, readonly) BOOL canUndo;
 @property (nonatomic, readonly) BOOL canRedo;
 @property (nonatomic, readonly) BOOL activeStaffIsPercussion;
+/// The active percussion staff's drums in pad order; empty on pitched staves.
+@property (nonatomic, copy) NSArray<MSRDrumPad *> *drumPads;
+/// The drum a staff tap enters, or the selected drum note's pitch; -1 when none.
+@property (nonatomic) NSInteger activeDrumPitch;
 @property (nonatomic, readonly) BOOL createMultiMeasureRests;
 @property (nonatomic, readonly) BOOL hideEmptyStaves;
 @property (nonatomic, readonly) double pageWidthMillimeters;
@@ -784,6 +817,14 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)insertMIDIChordAtCursor:(NSArray<NSNumber *> *)midiPitches
                                        preferFlats:(BOOL)preferFlats
                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(insertMIDIChordAtCursor(_:preferFlats:));
+/// Enters drums struck together, split into one chord per drum-set voice at the same beat.
+- (nullable MSREditState *)insertDrumNotesAtCursor:(NSArray<NSNumber *> *)drumPitches
+                                 addToCurrentChord:(BOOL)addToCurrentChord
+                                             error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(insertDrumNotesAtCursor(_:addToCurrentChord:));
+/// Select mode: changes the selected drum note, or puts the drum on its beat in its own voice,
+/// then continues note input after that beat.
+- (nullable MSREditState *)enterDrumsAtSelectedNote:(NSArray<NSNumber *> *)drumPitches
+                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(enterDrumsAtSelectedNote(_:));
 - (nullable MSREditState *)removeMIDIPitchFromCurrentChord:(NSInteger)midiPitch
                                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(removeMIDIPitchFromCurrentChord(_:));
 - (nullable MSRNoteEntryPreviewInfo *)noteEntryPreviewAtPageIndex:(NSInteger)pageIndex

@@ -198,6 +198,20 @@ struct NoteEntryPreviewState {
     std::vector<std::uint8_t> overlayPngData;
 };
 
+//! One drum of the active percussion staff's drum set, for the drum pad.
+struct DrumPadInfo {
+    int pitch = -1;
+    std::string name;
+    std::string shortcut;
+    //! "normal", "cross", "circleCross", "diamond", "triangle", "slash" or "other".
+    std::string notehead;
+    int line = 0;
+    int voice = 0;
+    bool stemUp = true;
+    int panelRow = -1;
+    int panelColumn = -1;
+};
+
 struct ScoreEditState {
     ScoreSelectionState selection;
     bool noteInputEnabled = false;
@@ -209,6 +223,10 @@ struct ScoreEditState {
     bool canUndo = false;
     bool canRedo = false;
     bool activeStaffIsPercussion = false;
+    //! The active percussion staff's drums in pad order; empty on pitched staves.
+    std::vector<DrumPadInfo> drumPads;
+    //! The drum the next pad-less entry (a staff tap) uses, or the selected drum note's pitch.
+    int activeDrumPitch = -1;
     bool createMultiMeasureRests = false;
     bool hideEmptyStaves = false;
     double pageWidthMillimeters = 210.0;
@@ -471,6 +489,14 @@ public:
     bool insertPitchAtCursor(int pitchClass, bool preferFlats, bool addToCurrentChord, ScoreEditState& output, std::string& errorMessage);
     bool insertMIDIPitchAtCursor(int midiPitch, bool preferFlats, bool addToCurrentChord, ScoreEditState& output, std::string& errorMessage);
     bool insertMIDIChordAtCursor(const std::vector<int>& midiPitches, bool preferFlats, ScoreEditState& output, std::string& errorMessage);
+    //! Enters drums on the active percussion staff, all struck together. Drums are split by the
+    //! drum set's voices into one chord per voice at the same beat. addToCurrentChord adds them
+    //! to the beat of the selected or last entered chord instead of entering a new beat.
+    bool insertDrumNotesAtCursor(const std::vector<int>& drumPitches, bool addToCurrentChord, ScoreEditState& output, std::string& errorMessage);
+    //! Select mode: changes the selected drum note into the given drum when it shares its voice,
+    //! otherwise puts the drum on the same beat in its own voice; then selects it and continues
+    //! note input after that beat in its voice.
+    bool enterDrumsAtSelectedNote(const std::vector<int>& drumPitches, ScoreEditState& output, std::string& errorMessage);
     bool removeMIDIPitchFromCurrentChord(int midiPitch, ScoreEditState& output, std::string& errorMessage);
     bool deleteSelection(ScoreEditState& output, std::string& errorMessage);
     bool previewMeasureRange(int pageIndex, double startNormalizedX, double startNormalizedY, double endNormalizedX, double endNormalizedY, ScoreEditState& output, std::string& errorMessage);

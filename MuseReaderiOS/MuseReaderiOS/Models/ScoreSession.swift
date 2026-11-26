@@ -714,6 +714,25 @@ enum ScoreEditRefreshScope: String, Sendable, Equatable {
     case all
 }
 
+/// One drum of the active percussion staff's drum set, as the drum pad shows it.
+struct ScoreDrumPad: Sendable, Equatable, Identifiable, Hashable {
+    enum Notehead: String, Sendable {
+        case normal, cross, circleCross, diamond, triangle, slash, other
+    }
+
+    var pitch: Int
+    var name: String
+    var shortcut: String
+    var notehead: Notehead
+    var line: Int
+    var voice: Int
+    var stemUp: Bool
+    var panelRow: Int
+    var panelColumn: Int
+
+    var id: Int { pitch }
+}
+
 struct ScoreEditingState: Sendable, Equatable {
     var selection: ScoreSelectedElement?
     var noteInputEnabled: Bool
@@ -732,6 +751,10 @@ struct ScoreEditingState: Sendable, Equatable {
     var refreshScope: ScoreEditRefreshScope
     var pageCount: Int?
     var scoreParts: [ScorePart]
+    /// The active percussion staff's drums in pad order; empty on pitched staves.
+    var drumPads: [ScoreDrumPad] = []
+    /// The drum a staff tap enters, or the selected drum note's pitch.
+    var activeDrumPitch: Int?
 
     static let inactive = ScoreEditingState(
         selection: nil,

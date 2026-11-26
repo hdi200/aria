@@ -806,7 +806,11 @@ struct ScoreReaderView: View {
                 changeAccidentalAction: readerState.changeSelectedAccidental,
                 removeChordPitchAction: readerState.removeMIDIPitchFromCurrentChord,
                 semitoneShiftAction: readerState.shiftPitchBySemitones,
-                octaveShiftAction: readerState.shiftPitchByOctaves
+                octaveShiftAction: readerState.shiftPitchByOctaves,
+                enterDrumAction: { pitch in readerState.enterDrums([pitch]) },
+                addDrumAction: { pitch in readerState.enterDrums([pitch], adding: true) },
+                drumAddMode: readerState.drumAddMode,
+                tapDrumAddAction: readerState.tapDrumAddKey
             )
             .padding(.bottom, 0)
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -888,7 +892,9 @@ struct ScoreReaderView: View {
                 prepareAccidentalAction: readerState.prepareAccidental,
                 changeAccidentalAction: readerState.changeSelectedAccidental,
                 openTempoEditorAction: { isTempoEditorPresented = true },
-                toggleDockSideAction: { floatingPaletteDockedLeft.toggle() }
+                toggleDockSideAction: { floatingPaletteDockedLeft.toggle() },
+                drumAddMode: readerState.drumAddMode,
+                tapDrumAddAction: readerState.tapDrumAddKey
             )
             .scrollsVerticallyOnAndroid(maxHeight: floatingPaletteMaxHeight)
             .scrollsVerticallyOnDuo(duoLayout != nil, maxHeight: floatingPaletteMaxHeight)

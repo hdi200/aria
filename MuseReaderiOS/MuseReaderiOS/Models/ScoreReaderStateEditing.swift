@@ -3,6 +3,16 @@ import Foundation
 import CoreGraphics
 #endif
 
+/// The drum pad's Add key, like Shift on the iPhone keyboard.
+enum ScoreDrumAddMode: Sendable, Equatable {
+    /// Pad taps enter at the cursor and move on.
+    case off
+    /// The next pad tap adds its drum to the current beat, then the key turns off.
+    case once
+    /// Every pad tap adds to the current beat until the key is tapped again.
+    case locked
+}
+
 /// Values chosen by the player, kept separate from older engine replies in flight.
 struct ScoreNoteInputIntent: Sendable {
     var enabled: Bool
@@ -894,6 +904,7 @@ extension ScoreReaderState {
             lastKeyboardInputCanReceiveAccidental = false
             stackedChordInputEnabled = false
             stackedChordInputChosen = false
+            drumAddMode = .off
             queuedNoteInputIntent?.chord = false
             updateNoteEntryPreview(pageIndex: selectedPageIndex, normalizedPoint: nil)
         }
@@ -2047,6 +2058,78 @@ extension ScoreReaderState {
         }
     }
 
+    /// The drum pad's Add key, like Shift on the iPhone keyboard: a tap arms it for the next pad
+    /// tap, a quick second tap locks it, and a tap while armed or locked turns it off.
+    func tapDrumAddKey() {
+        let now = Date()
+        switch drumAddMode {
+        case .off:
+            drumAddMode = .once
+        case .once:
+            if let lastTap = drumAddKeyLastTap, now.timeIntervalSince(lastTap) < 0.4 {
+                drumAddMode = .locked
+            } else {
+                drumAddMode = .off
+            }
+        case .locked:
+            drumAddMode = .off
+        }
+        drumAddKeyLastTap = now
+    }
+
+    /// Enters drums from the drum pad, all struck together. The engine splits them into one chord
+    /// per drum-set voice at the same beat, enters them at the cursor and moves on.
+    /// Adding (the Add key, or a long press on a pad) puts the drums on the current beat instead:
+    /// the selected note's beat, or the last entered one. Each drum goes in its own kit voice.
+    /// In Select mode with a drum note selected, a plain tap on a pad in the note's voice changes
+    /// that note into the drum; a pad in another voice puts the drum on the same beat in its own
+    /// voice (hi-hat selected + Bass Drum puts the kick under it in voice 2). Note input then turns
+    /// on in that drum's voice and continues from the next beat.
+    func enterDrums(_ drumPitches: [Int], adding: Bool = false) {
+        guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
+        let pitches = drumPitches.filter { (0...127).contains($0) }
+        guard !pitches.isEmpty else { return }
+        let addsToBeat = adding || drumAddMode != .off
+        if drumAddMode == .once {
+            drumAddMode = .off
+        }
+        var intent = noteInputIntent
+        // Drum staves stack with the Add key, never with the Chord toggle.
+        intent.chord = false
+        let selection = editingState.selection
+        let placesAtSelectedNote = !addsToBeat && !intent.enabled && !hasContinuousNoteInputCursor
+            && selection?.kind == .note
+        if !intent.enabled, let selection, selection.kind == .note || selection.kind == .rest {
+            // Starting from a selected note or rest enters drums with its value, as the
+            // duration toolbar shows it (and as the keyboard does, BUG-008).
+            intent.duration = selection.duration
+            intent.dotted = selection.isDotted
+            intent.doubleDotted = selection.isDoubleDotted
+        }
+        var nextIntent = intent
+        nextIntent.enabled = true
+        nextIntent.rests = false
+        let submittedIntent = nextIntent
+        if placesAtSelectedNote, let drumVoice = editingState.drumPads.first(where: { $0.pitch == pitches[0] })?.voice {
+            // Later taps continue in the tapped drum's voice, where the engine leaves the cursor.
+            nextIntent.voice = drumVoice
+        }
+        queuedNoteInputIntent = nextIntent
+        // Adding needs a beat to add to: the selected note's, or the last one entered.
+        let addToCurrentChord = addsToBeat
+            && (selection?.kind == .note || editingState.noteInputEnabled || hasContinuousNoteInputCursor)
+        pendingAccidentalKind = nil
+        hasContinuousNoteInputCursor = true
+        lastKeyboardInputCanReceiveAccidental = false
+        performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { session in
+            _ = try await Self.prepareNoteInput(submittedIntent, in: session)
+            if placesAtSelectedNote {
+                return try await session.enterDrumsAtSelectedNote(pitches)
+            }
+            return try await session.insertDrumNotesAtCursor(pitches, addToCurrentChord: addToCurrentChord)
+        }
+    }
+
     func removeMIDIPitchFromCurrentChord(_ midiPitch: Int) {
         performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { liveRenderSession in
             try await liveRenderSession.removeMIDIPitchFromCurrentChord(midiPitch)
@@ -2351,7 +2434,10 @@ extension ScoreReaderState {
         } else {
             // A selected chord shows chord entry so its notes can be added to or removed;
             // otherwise chord entry stays as the user set it.
-            stackedChordInputEnabled = stackedChordInputChosen || selectedChordPitchCount > 1
+            // Not on drum staves, where most beats hold several drums: there chord entry is only
+            // ever the user's choice.
+            stackedChordInputEnabled = stackedChordInputChosen
+                || (selectedChordPitchCount > 1 && !editingState.activeStaffIsPercussion)
         }
         if !editingState.noteInputEnabled {
             noteInputAcceptsDirectTaps = false
