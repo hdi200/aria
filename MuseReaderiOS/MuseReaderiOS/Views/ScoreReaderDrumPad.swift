@@ -17,11 +17,16 @@ struct ScoreReaderDrumPad: View {
     var addAction: (Int) -> Void = { _ in }
 
     private let spacing: CGFloat = 6
+    /// The line between a standard kit's essential drums and the rest.
+    private let dividerWidth: CGFloat = 1
 
     var body: some View {
         GeometryReader { geometry in
+            let arrangement = ScoreDrumPadArrangement(pads: pads)
             let layout = PadLayout(
                 padCount: pads.count,
+                columnCount: arrangement.columns.count,
+                dividerWidth: arrangement.hasDivider ? dividerWidth + spacing : 0,
                 size: geometry.size,
                 spacing: spacing,
                 targetPadWidth: targetPadWidth
@@ -29,23 +34,25 @@ struct ScoreReaderDrumPad: View {
 
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHGrid(
-                        rows: Array(repeating: GridItem(.fixed(layout.padHeight), spacing: spacing), count: layout.rows),
-                        spacing: spacing
-                    ) {
-                        ForEach(pads) { pad in
-                            ScoreReaderDrumPadKey(
-                                pad: pad,
-                                isActive: pad.pitch == activePitch,
-                                isTall: layout.rows == 1,
-                                showsShortcut: showsShortcuts,
-                                glyphHeight: min(max(layout.padHeight - 10, 24), 44),
-                                addsToBeat: addsToBeat,
-                                action: action,
-                                addAction: addAction
-                            )
-                            .frame(width: layout.padWidth, height: layout.padHeight)
-                            .id(pad.pitch)
+                    HStack(spacing: spacing) {
+                        if layout.rows == 1 {
+                            ForEach(arrangement.orderedPads) { pad in
+                                key(for: pad, layout: layout)
+                            }
+                        } else {
+                            ForEach(arrangement.columns) { column in
+                                HStack(spacing: spacing) {
+                                    if arrangement.hasDivider && column.index == arrangement.essentialColumnCount {
+                                        Rectangle()
+                                            .fill(Color.black.opacity(0.14))
+                                            .frame(width: dividerWidth, height: geometry.size.height * 0.7)
+                                    }
+                                    VStack(spacing: spacing) {
+                                        slot(column.top, layout: layout)
+                                        slot(column.bottom, layout: layout)
+                                    }
+                                }
+                            }
                         }
                     }
                     .frame(height: geometry.size.height)
@@ -78,6 +85,163 @@ struct ScoreReaderDrumPad: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Drum pad")
     }
+
+    private func key(for pad: ScoreDrumPad, layout: PadLayout) -> some View {
+        ScoreReaderDrumPadKey(
+            pad: pad,
+            isActive: pad.pitch == activePitch,
+            isTall: layout.rows == 1,
+            showsShortcut: showsShortcuts,
+            glyphHeight: min(max(layout.padHeight - 10, 24), 44),
+            addsToBeat: addsToBeat,
+            action: action,
+            addAction: addAction
+        )
+        .frame(width: layout.padWidth, height: layout.padHeight)
+        .id(pad.pitch)
+    }
+
+    @ViewBuilder
+    private func slot(_ pad: ScoreDrumPad?, layout: PadLayout) -> some View {
+        if let pad {
+            key(for: pad, layout: layout)
+        } else {
+            Color.clear
+                .frame(width: layout.padWidth, height: layout.padHeight)
+        }
+    }
+}
+
+/// The order the drum pad shows a kit in. A drum kit as MuseScore ships it (its pads where the
+/// built-in kit puts them in desktop's percussion panel) starts with the drums most parts use,
+/// cymbals over drums the way they sit on the staff:
+///
+///     Closed Hi-Hat  Open Hi-Hat  Crash  Ride      Pedal Hi-Hat
+///     Bass Drum      Snare        High   Mid Tom   Floor Tom
+///
+/// then a divider and the rest: second bass drum, side stick, splash, second crash, ride bell,
+/// china, the other toms, cowbell, then anything else in desktop's order. Every other
+/// percussion instrument, and a kit someone rearranged in desktop, keeps desktop's order.
+struct ScoreDrumPadArrangement {
+    struct Column: Identifiable {
+        let index: Int
+        let top: ScoreDrumPad?
+        let bottom: ScoreDrumPad?
+        var id: Int { index }
+    }
+
+    /// Pads in strip order (used as is when a small kit fits one row).
+    let orderedPads: [ScoreDrumPad]
+    /// The two-row strip, column by column.
+    let columns: [Column]
+    /// How many leading columns hold the essential drums; the divider follows them.
+    let essentialColumnCount: Int
+
+    var hasDivider: Bool { essentialColumnCount > 0 && essentialColumnCount < columns.count }
+
+    init(pads: [ScoreDrumPad]) {
+        guard Self.isStandardDrumKit(pads) else {
+            orderedPads = pads
+            columns = Self.pairedColumns(pads, startingAt: 0)
+            essentialColumnCount = 0
+            return
+        }
+
+        let byPitch = Dictionary(pads.map { ($0.pitch, $0) }, uniquingKeysWith: { first, _ in first })
+        var used = Set<Int>()
+        func pick(_ candidates: [Int]) -> ScoreDrumPad? {
+            guard let pitch = candidates.first(where: { byPitch[$0] != nil && !used.contains($0) }) else {
+                return nil
+            }
+            used.insert(pitch)
+            guard let pad = byPitch[pitch] else { return nil }
+            return Self.shortened(pad)
+        }
+
+        // Pick the drums before the cymbals so a tom's fallback never takes another's slot.
+        let bottom = [
+            pick([36, 35]),          // bass drum
+            pick([38, 40]),          // snare
+            pick([50, 48]),          // high tom
+            pick([47, 48, 45]),      // mid tom
+            pick([43, 41])           // floor tom
+        ]
+        let top = [
+            pick([42]),              // closed hi-hat
+            pick([46]),              // open hi-hat
+            pick([49, 57]),          // crash
+            pick([51, 59]),          // ride
+            pick([44])               // pedal hi-hat
+        ]
+        var essentialColumns: [Column] = []
+        for slot in 0..<5 where top[slot] != nil || bottom[slot] != nil {
+            essentialColumns.append(Column(index: essentialColumns.count, top: top[slot], bottom: bottom[slot]))
+        }
+
+        let extraOrder = [35, 37, 55, 57, 53, 52, 50, 48, 47, 45, 43, 41, 56]
+        var extras: [ScoreDrumPad] = []
+        for pitch in extraOrder where !used.contains(pitch) {
+            if let pad = byPitch[pitch] {
+                extras.append(pad)
+                used.insert(pitch)
+            }
+        }
+        extras += pads.filter { !used.contains($0.pitch) }
+
+        let essentials = essentialColumns.flatMap { [$0.top, $0.bottom].compactMap { $0 } }
+        orderedPads = essentials + extras
+        columns = essentialColumns + Self.pairedColumns(extras, startingAt: essentialColumns.count)
+        essentialColumnCount = essentialColumns.count
+    }
+
+    private static func pairedColumns(_ pads: [ScoreDrumPad], startingAt firstIndex: Int) -> [Column] {
+        stride(from: 0, to: pads.count, by: 2).map { offset in
+            Column(
+                index: firstIndex + offset / 2,
+                top: pads[offset],
+                bottom: offset + 1 < pads.count ? pads[offset + 1] : nil
+            )
+        }
+    }
+
+    /// The General MIDI names the built-in kits use, trimmed to fit a pad. A name the user
+    /// changed is left alone.
+    private static func shortened(_ pad: ScoreDrumPad) -> ScoreDrumPad {
+        var pad = pad
+        switch pad.name {
+        case "Bass Drum 1": pad.name = "Bass Drum"
+        case "Acoustic Snare": pad.name = "Snare"
+        default: break
+        }
+        return pad
+    }
+
+    /// Where desktop's percussion panel puts each drum in MuseScore's built-in drum kits
+    /// (share/instruments/instruments.xml: drumset, drum-kit-4, drum-kit-5): pitch → row, column.
+    private static let builtInKitPanels: [[Int: [Int]]] = [
+        [35: [1, 0], 36: [0, 0], 37: [1, 1], 38: [0, 1], 40: [2, 0], 41: [1, 7], 42: [0, 2], 43: [0, 7],
+         44: [1, 2], 45: [1, 6], 46: [0, 3], 47: [1, 5], 48: [0, 6], 49: [0, 4], 50: [1, 4], 51: [0, 5],
+         52: [2, 3], 53: [2, 5], 54: [2, 1], 55: [2, 4], 56: [2, 2], 57: [1, 3], 59: [2, 6]],
+        [36: [0, 0], 37: [1, 1], 38: [0, 1], 41: [0, 7], 42: [0, 2], 44: [1, 0], 46: [0, 3], 49: [0, 4],
+         50: [0, 6], 51: [0, 5], 53: [1, 2]],
+        [35: [1, 0], 36: [0, 0], 37: [1, 1], 38: [0, 1], 41: [0, 7], 42: [0, 2], 44: [1, 3], 46: [0, 3],
+         47: [1, 6], 49: [0, 4], 50: [0, 6], 51: [0, 5], 52: [1, 7], 53: [1, 5], 55: [1, 2], 57: [1, 4]]
+    ]
+
+    /// A drum kit (bass drum, snare and hi-hat) whose pads are where a built-in kit puts them,
+    /// or that has no panel places at all (files from before MuseScore 4.4).
+    private static func isStandardDrumKit(_ pads: [ScoreDrumPad]) -> Bool {
+        let pitches = Set(pads.map(\.pitch))
+        guard !pitches.isDisjoint(with: [35, 36]), !pitches.isDisjoint(with: [38, 40]), pitches.contains(42) else {
+            return false
+        }
+        if pads.allSatisfy({ $0.panelRow < 0 || $0.panelColumn < 0 }) {
+            return true
+        }
+        return builtInKitPanels.contains { panel in
+            pads.allSatisfy { pad in panel[pad.pitch] == [pad.panelRow, pad.panelColumn] }
+        }
+    }
 }
 
 /// Pad sizes for the space the keyboard would take.
@@ -87,7 +251,7 @@ private struct PadLayout {
     let padHeight: CGFloat
     let scrolls: Bool
 
-    init(padCount: Int, size: CGSize, spacing: CGFloat, targetPadWidth: CGFloat) {
+    init(padCount: Int, columnCount: Int, dividerWidth: CGFloat, size: CGSize, spacing: CGFloat, targetPadWidth: CGFloat) {
         let width = max(size.width, 1)
         let height = max(size.height, 1)
         let count = max(padCount, 1)
@@ -103,12 +267,13 @@ private struct PadLayout {
 
         rows = 2
         padHeight = (height - spacing) / 2
-        let columns = Int(ceil(Double(count) / 2))
+        let columns = max(columnCount, 1)
+        let padArea = max(width - dividerWidth, 1)
         // Stretch the pads to fill the strip when every column fits; otherwise show a partial
         // last column so the strip visibly scrolls.
-        let fitColumns = max(Int(((width + spacing) / (targetPadWidth + spacing)).rounded(.down)), 1)
+        let fitColumns = max(Int(((padArea + spacing) / (targetPadWidth + spacing)).rounded(.down)), 1)
         if columns <= fitColumns {
-            padWidth = (width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+            padWidth = (padArea - CGFloat(columns - 1) * spacing) / CGFloat(columns)
             scrolls = false
         } else {
             let visible = CGFloat(fitColumns) + 0.45

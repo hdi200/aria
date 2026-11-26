@@ -18,6 +18,8 @@ Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New 
 
 - [ ] **iPhone, portrait and landscape:** Edit, tap a rest in the drum staff: the piano keyboard is replaced by the drum pad at the same height. A full kit shows two rows that scroll sideways, fading at the right edge.
 - [ ] **iPad:** the same, with taller pads and shortcut letters; the Half step/Octave controls are gone on drum staves.
+- [ ] **Kit order:** in a standard kit (Rock Band, Jazz Combo, the Rock Groove demo) the first five columns are Closed Hi-Hat, Open Hi-Hat, Crash, Ride, Pedal Hi-Hat over Bass Drum, Snare, High Tom, Mid tom (Low Tom or Low-Mid Tom), Floor tom. Then a thin divider and the rest: Bass Drum 2, Side Stick/Cross-stick, Splash, Crash 2, Ride Bell, China, the other toms, Cowbell, then anything else. "Bass Drum 1" and "Acoustic Snare" show as "Bass Drum" and "Snare".
+- [ ] **Other percussion keeps desktop's order:** marching snare, concert percussion, and a kit whose pads were rearranged in desktop's percussion panel show the desktop order with no divider.
 - [ ] **Entering drums:** tap Snare, Kick, Closed Hi-Hat in turn: each enters at the cursor on its own line, with the right notehead. Kick and pedal hi-hat go to voice 2 (stems down), the others to voice 1. The cursor moves on after each.
 - [ ] **Cursor:** single taps move forward one beat at a time to the end of the bar and into the next; no extra bars are appended and no beat is entered twice.
 - [ ] **Fast taps:** tap one pad four times quickly: four notes, one per beat.
