@@ -1,9 +1,13 @@
 import SwiftUI
 
 /// The drum pad that replaces the pitch keyboard on percussion staves. It shows the active
-/// instrument's own drums (from its drum set), in the order desktop MuseScore's percussion
-/// panel uses, and fits in the keyboard's height: one row of tall pads for small kits, two
-/// rows that scroll sideways for a full drum kit.
+/// instrument's own drums (from its drum set) and fits in the keyboard's space.
+///
+/// A standard drum kit is shown as two rows that each scroll sideways: Essential Drums on top,
+/// Additional Percussion underneath, folded away until the player opens it. With room for them
+/// (the iPad) the rows have headings; on a phone the rows are bare, the folded essentials fill
+/// both rows, and a small chip at the end of the second row folds or unfolds the extras. Other percussion keeps desktop's order: one row of tall pads for
+/// a small kit, or two rows filled column by column.
 struct ScoreReaderDrumPad: View {
     let pads: [ScoreDrumPad]
     let activePitch: Int?
@@ -16,69 +20,24 @@ struct ScoreReaderDrumPad: View {
     /// A long press adds the drum to the current beat, like Shift-click in desktop MuseScore.
     var addAction: (Int) -> Void = { _ in }
 
+    /// Whether the Additional Percussion row is open: closed until the player opens it, then
+    /// remembered between scores.
+    @AppStorage("drumPadShowsAdditional") private var showsAdditional = false
+
     private let spacing: CGFloat = 6
-    /// The line between a standard kit's essential drums and the rest.
-    private let dividerWidth: CGFloat = 1
+    /// Headings need this much height; below it (a phone) the rows are bare.
+    private let headingMinimumHeight: CGFloat = 130
+    private let headingHeight: CGFloat = 16
+    private let headingGap: CGFloat = 4
+    private let sectionGap: CGFloat = 8
 
     var body: some View {
         GeometryReader { geometry in
             let arrangement = ScoreDrumPadArrangement(pads: pads)
-            let layout = PadLayout(
-                padCount: pads.count,
-                columnCount: arrangement.columns.count,
-                dividerWidth: arrangement.hasDivider ? dividerWidth + spacing : 0,
-                size: geometry.size,
-                spacing: spacing,
-                targetPadWidth: targetPadWidth
-            )
-
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: spacing) {
-                        if layout.rows == 1 {
-                            ForEach(arrangement.orderedPads) { pad in
-                                key(for: pad, layout: layout)
-                            }
-                        } else {
-                            ForEach(arrangement.columns) { column in
-                                HStack(spacing: spacing) {
-                                    if arrangement.hasDivider && column.index == arrangement.essentialColumnCount {
-                                        Rectangle()
-                                            .fill(Color.black.opacity(0.14))
-                                            .frame(width: dividerWidth, height: geometry.size.height * 0.7)
-                                    }
-                                    VStack(spacing: spacing) {
-                                        slot(column.top, layout: layout)
-                                        slot(column.bottom, layout: layout)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: geometry.size.height)
-                }
-                .scrollDisabled(!layout.scrolls)
-                .mask {
-                    if layout.scrolls {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.9),
-                                .init(color: .black.opacity(0.25), location: 1)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    } else {
-                        Rectangle()
-                    }
-                }
-                .onChangeCompatible(of: activePitch) { pitch in
-                    guard let pitch, layout.scrolls else { return }
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(pitch)
-                    }
-                }
+            if arrangement.isSectioned {
+                sectionedPad(arrangement, size: geometry.size)
+            } else {
+                gridPad(arrangement, size: geometry.size)
             }
         }
         .opacity(isEnabled ? 1 : 0.4)
@@ -86,42 +45,230 @@ struct ScoreReaderDrumPad: View {
         .accessibilityLabel("Drum pad")
     }
 
-    private func key(for pad: ScoreDrumPad, layout: PadLayout) -> some View {
-        ScoreReaderDrumPadKey(
-            pad: pad,
-            isActive: pad.pitch == activePitch,
-            isTall: layout.rows == 1,
-            showsShortcut: showsShortcuts,
-            glyphHeight: min(max(layout.padHeight - 10, 24), 44),
-            addsToBeat: addsToBeat,
-            action: action,
-            addAction: addAction
+    // MARK: Standard kits: Essential Drums and Additional Percussion
+
+    @ViewBuilder
+    private func sectionedPad(_ arrangement: ScoreDrumPadArrangement, size: CGSize) -> some View {
+        let showsHeadings = size.height >= headingMinimumHeight
+        let showsExtras = showsAdditional && !arrangement.extras.isEmpty
+        if showsHeadings {
+            // Heading, row, gap, heading, row (or just the heading while the extras are folded).
+            let headings = 2 * headingHeight + sectionGap + (showsExtras ? 2 * headingGap : headingGap)
+            let rowHeight = showsExtras ? (size.height - headings) / 2 : size.height - headings
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeading("Essential Drums", detail: "Most used in rock, pop and modern styles")
+                    .padding(.bottom, headingGap)
+                drumRow(arrangement.essentials, width: size.width, height: rowHeight, isTall: true)
+                sectionHeading(
+                    "Additional Percussion",
+                    detail: "Cymbals, toms, cowbell and other drums",
+                    toggle: arrangement.extras.isEmpty ? nil : showsExtras
+                )
+                .padding(.top, sectionGap)
+                if showsExtras {
+                    drumRow(arrangement.extras, width: size.width, height: rowHeight, isTall: true)
+                        .padding(.top, headingGap)
+                }
+            }
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+        } else if showsExtras {
+            let rowHeight = (size.height - spacing) / 2
+            VStack(spacing: spacing) {
+                drumRow(arrangement.essentials, width: size.width, height: rowHeight, isTall: false)
+                drumRow(arrangement.extras, width: size.width, height: rowHeight, isTall: false, foldChip: true)
+            }
+        } else {
+            // Folded on a phone: the essentials fill both rows in order, so more drums show at
+            // once than one row of tall pads would allow.
+            let rowHeight = (size.height - spacing) / 2
+            let split = (arrangement.essentials.count + 1) / 2
+            VStack(spacing: spacing) {
+                drumRow(Array(arrangement.essentials.prefix(split)), width: size.width, height: rowHeight, isTall: false)
+                drumRow(Array(arrangement.essentials.dropFirst(split)), width: size.width, height: rowHeight, isTall: false,
+                        foldChip: !arrangement.extras.isEmpty)
+            }
+        }
+    }
+
+    private func sectionHeading(_ title: String, detail: String, toggle isOpen: Bool? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.black.opacity(0.78))
+            Text(detail)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.black.opacity(0.42))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if let isOpen {
+                Button {
+                    showsAdditional.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                        Text(isOpen ? "Show less" : "Show more")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.black.opacity(0.62))
+                    .padding(.horizontal, 9)
+                    .frame(height: headingHeight + 4)
+                    .background(Color.black.opacity(0.05), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(height: headingHeight)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// One row of pads that scrolls sideways when it doesn't fit. On a phone the row can end
+    /// with a chip that folds the Additional row away or brings it back.
+    private func drumRow(_ rowPads: [ScoreDrumPad], width: CGFloat, height: CGFloat,
+                         isTall: Bool, foldChip: Bool = false) -> some View {
+        let chipWidth: CGFloat = foldChip ? 44 : 0
+        let layout = RowLayout(padCount: rowPads.count, width: width, reservedWidth: foldChip ? chipWidth + spacing : 0,
+                               spacing: spacing, targetPadWidth: targetPadWidth)
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: spacing) {
+                    ForEach(rowPads) { pad in
+                        key(for: pad, width: layout.padWidth, height: height, isTall: isTall)
+                    }
+                    if foldChip {
+                        foldButton()
+                            .frame(width: chipWidth, height: height)
+                    }
+                }
+                .frame(height: height)
+            }
+            .scrollDisabled(!layout.scrolls)
+            .mask { fadeMask(scrolls: layout.scrolls) }
+            .onChangeCompatible(of: activePitch) { pitch in
+                guard let pitch, layout.scrolls, rowPads.contains(where: { $0.pitch == pitch }) else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(pitch)
+                }
+            }
+        }
+        .frame(width: width, height: height)
+    }
+
+    private func foldButton() -> some View {
+        Button {
+            showsAdditional.toggle()
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: showsAdditional ? "chevron.up" : "ellipsis")
+                    .font(.system(size: 12, weight: .bold))
+                Text(showsAdditional ? "Less" : "More")
+                    .font(.system(size: 9.5, weight: .semibold))
+            }
+            .foregroundStyle(Color.black.opacity(0.55))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(showsAdditional ? "Show fewer drums" : "Show more drums")
+    }
+
+    // MARK: Other percussion: desktop's order
+
+    private func gridPad(_ arrangement: ScoreDrumPadArrangement, size: CGSize) -> some View {
+        let layout = PadLayout(
+            padCount: pads.count,
+            columnCount: arrangement.columns.count,
+            size: size,
+            spacing: spacing,
+            targetPadWidth: targetPadWidth
         )
-        .frame(width: layout.padWidth, height: layout.padHeight)
-        .id(pad.pitch)
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: spacing) {
+                    if layout.rows == 1 {
+                        ForEach(arrangement.orderedPads) { pad in
+                            key(for: pad, width: layout.padWidth, height: layout.padHeight, isTall: true)
+                        }
+                    } else {
+                        ForEach(arrangement.columns) { column in
+                            VStack(spacing: spacing) {
+                                slot(column.top, layout: layout)
+                                slot(column.bottom, layout: layout)
+                            }
+                        }
+                    }
+                }
+                .frame(height: size.height)
+            }
+            .scrollDisabled(!layout.scrolls)
+            .mask { fadeMask(scrolls: layout.scrolls) }
+            .onChangeCompatible(of: activePitch) { pitch in
+                guard let pitch, layout.scrolls else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(pitch)
+                }
+            }
+        }
     }
 
     @ViewBuilder
     private func slot(_ pad: ScoreDrumPad?, layout: PadLayout) -> some View {
         if let pad {
-            key(for: pad, layout: layout)
+            key(for: pad, width: layout.padWidth, height: layout.padHeight, isTall: false)
         } else {
             Color.clear
                 .frame(width: layout.padWidth, height: layout.padHeight)
         }
     }
+
+    // MARK: Shared
+
+    private func key(for pad: ScoreDrumPad, width: CGFloat, height: CGFloat, isTall: Bool) -> some View {
+        ScoreReaderDrumPadKey(
+            pad: pad,
+            isActive: pad.pitch == activePitch,
+            isTall: isTall,
+            showsShortcut: showsShortcuts,
+            glyphHeight: isTall
+                ? min(max(height - (showsShortcuts ? 31 : 24), 20), 40)
+                : min(max(height - 10, 24), 44),
+            addsToBeat: addsToBeat,
+            action: action,
+            addAction: addAction
+        )
+        .frame(width: width, height: height)
+        .id(pad.pitch)
+    }
+
+    @ViewBuilder
+    private func fadeMask(scrolls: Bool) -> some View {
+        if scrolls {
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.9),
+                    .init(color: .black.opacity(0.25), location: 1)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        } else {
+            Rectangle()
+        }
+    }
 }
 
-/// The order the drum pad shows a kit in. A drum kit as MuseScore ships it (its pads where the
-/// built-in kit puts them in desktop's percussion panel) starts with the drums most parts use,
-/// cymbals over drums the way they sit on the staff:
+/// The order the drum pad shows a kit in. A drum kit as MuseScore ships it (its pads where a
+/// built-in kit puts them in desktop's percussion panel, or with no panel places at all) is
+/// split into two rows:
 ///
-///     Closed Hi-Hat  Open Hi-Hat  Crash  Ride      Pedal Hi-Hat
-///     Bass Drum      Snare        High   Mid Tom   Floor Tom
+/// - Essential Drums: Bass Drum, Snare, Closed, Open and Pedal Hi-Hat, High, Mid and Floor Tom,
+///   Crash, Ride.
+/// - Additional Percussion: second bass drum, side stick, splash, second crash, ride bell,
+///   china, the other toms, cowbell, then anything else in desktop's order.
 ///
-/// then a divider and the rest: second bass drum, side stick, splash, second crash, ride bell,
-/// china, the other toms, cowbell, then anything else in desktop's order. Every other
-/// percussion instrument, and a kit someone rearranged in desktop, keeps desktop's order.
+/// Every other percussion instrument, and a kit someone rearranged in desktop, keeps desktop's
+/// order, filled into the strip column by column.
 struct ScoreDrumPadArrangement {
     struct Column: Identifiable {
         let index: Int
@@ -130,20 +277,24 @@ struct ScoreDrumPadArrangement {
         var id: Int { index }
     }
 
-    /// Pads in strip order (used as is when a small kit fits one row).
+    /// True for a standard kit, shown as the Essential Drums and Additional Percussion rows.
+    let isSectioned: Bool
+    let essentials: [ScoreDrumPad]
+    let extras: [ScoreDrumPad]
+    /// Every pad in strip order (a small kit uses it as one row).
     let orderedPads: [ScoreDrumPad]
-    /// The two-row strip, column by column.
+    /// Desktop's order filled into two rows column by column, for kits that aren't sectioned.
     let columns: [Column]
-    /// How many leading columns hold the essential drums; the divider follows them.
-    let essentialColumnCount: Int
-
-    var hasDivider: Bool { essentialColumnCount > 0 && essentialColumnCount < columns.count }
 
     init(pads: [ScoreDrumPad]) {
         guard Self.isStandardDrumKit(pads) else {
+            isSectioned = false
+            essentials = []
+            extras = []
             orderedPads = pads
-            columns = Self.pairedColumns(pads, startingAt: 0)
-            essentialColumnCount = 0
+            columns = stride(from: 0, to: pads.count, by: 2).map { offset in
+                Column(index: offset / 2, top: pads[offset], bottom: offset + 1 < pads.count ? pads[offset + 1] : nil)
+            }
             return
         }
 
@@ -158,50 +309,36 @@ struct ScoreDrumPadArrangement {
             return Self.shortened(pad)
         }
 
-        // Pick the drums before the cymbals so a tom's fallback never takes another's slot.
-        let bottom = [
-            pick([36, 35]),          // bass drum
-            pick([38, 40]),          // snare
-            pick([50, 48]),          // high tom
-            pick([47, 48, 45]),      // mid tom
-            pick([43, 41])           // floor tom
-        ]
-        let top = [
-            pick([42]),              // closed hi-hat
-            pick([46]),              // open hi-hat
-            pick([49, 57]),          // crash
-            pick([51, 59]),          // ride
-            pick([44])               // pedal hi-hat
-        ]
-        var essentialColumns: [Column] = []
-        for slot in 0..<5 where top[slot] != nil || bottom[slot] != nil {
-            essentialColumns.append(Column(index: essentialColumns.count, top: top[slot], bottom: bottom[slot]))
-        }
+        // Pick the drums before the cymbals, and the toms high to low, so a fallback never
+        // takes another slot's drum.
+        let bassDrum = pick([36, 35])
+        let snare = pick([38, 40])
+        let highTom = pick([50, 48])
+        let midTom = pick([47, 48, 45])
+        let floorTom = pick([43, 41])
+        let closedHiHat = pick([42])
+        let openHiHat = pick([46])
+        let pedalHiHat = pick([44])
+        let crash = pick([49, 57])
+        let ride = pick([51, 59])
+        let essentialPads = [bassDrum, snare, closedHiHat, openHiHat, pedalHiHat,
+                             highTom, midTom, floorTom, crash, ride].compactMap { $0 }
 
         let extraOrder = [35, 37, 55, 57, 53, 52, 50, 48, 47, 45, 43, 41, 56]
-        var extras: [ScoreDrumPad] = []
+        var extraPads: [ScoreDrumPad] = []
         for pitch in extraOrder where !used.contains(pitch) {
             if let pad = byPitch[pitch] {
-                extras.append(pad)
+                extraPads.append(pad)
                 used.insert(pitch)
             }
         }
-        extras += pads.filter { !used.contains($0.pitch) }
+        extraPads += pads.filter { !used.contains($0.pitch) }
 
-        let essentials = essentialColumns.flatMap { [$0.top, $0.bottom].compactMap { $0 } }
-        orderedPads = essentials + extras
-        columns = essentialColumns + Self.pairedColumns(extras, startingAt: essentialColumns.count)
-        essentialColumnCount = essentialColumns.count
-    }
-
-    private static func pairedColumns(_ pads: [ScoreDrumPad], startingAt firstIndex: Int) -> [Column] {
-        stride(from: 0, to: pads.count, by: 2).map { offset in
-            Column(
-                index: firstIndex + offset / 2,
-                top: pads[offset],
-                bottom: offset + 1 < pads.count ? pads[offset + 1] : nil
-            )
-        }
+        isSectioned = true
+        essentials = essentialPads
+        extras = extraPads
+        orderedPads = essentialPads + extraPads
+        columns = []
     }
 
     /// The General MIDI names the built-in kits use, trimmed to fit a pad. A name the user
@@ -244,14 +381,35 @@ struct ScoreDrumPadArrangement {
     }
 }
 
-/// Pad sizes for the space the keyboard would take.
+/// Pad widths for one scrolling row: stretched to fill the row when every pad fits, otherwise
+/// with a partly visible last pad so the row visibly scrolls.
+private struct RowLayout {
+    let padWidth: CGFloat
+    let scrolls: Bool
+
+    init(padCount: Int, width: CGFloat, reservedWidth: CGFloat, spacing: CGFloat, targetPadWidth: CGFloat) {
+        let count = max(padCount, 1)
+        let area = max(width - reservedWidth, 1)
+        let fit = max(Int(((area + spacing) / (targetPadWidth + spacing)).rounded(.down)), 1)
+        if count <= fit {
+            padWidth = min((area - CGFloat(count - 1) * spacing) / CGFloat(count), targetPadWidth * 1.8)
+            scrolls = false
+        } else {
+            let visible = CGFloat(fit) + 0.45
+            padWidth = (width - CGFloat(fit) * spacing) / visible
+            scrolls = true
+        }
+    }
+}
+
+/// Pad sizes for a kit that keeps desktop's order, in the space the keyboard would take.
 private struct PadLayout {
     let rows: Int
     let padWidth: CGFloat
     let padHeight: CGFloat
     let scrolls: Bool
 
-    init(padCount: Int, columnCount: Int, dividerWidth: CGFloat, size: CGSize, spacing: CGFloat, targetPadWidth: CGFloat) {
+    init(padCount: Int, columnCount: Int, size: CGSize, spacing: CGFloat, targetPadWidth: CGFloat) {
         let width = max(size.width, 1)
         let height = max(size.height, 1)
         let count = max(padCount, 1)
@@ -268,12 +426,9 @@ private struct PadLayout {
         rows = 2
         padHeight = (height - spacing) / 2
         let columns = max(columnCount, 1)
-        let padArea = max(width - dividerWidth, 1)
-        // Stretch the pads to fill the strip when every column fits; otherwise show a partial
-        // last column so the strip visibly scrolls.
-        let fitColumns = max(Int(((padArea + spacing) / (targetPadWidth + spacing)).rounded(.down)), 1)
+        let fitColumns = max(Int(((width + spacing) / (targetPadWidth + spacing)).rounded(.down)), 1)
         if columns <= fitColumns {
-            padWidth = (padArea - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+            padWidth = (width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
             scrolls = false
         } else {
             let visible = CGFloat(fitColumns) + 0.45
@@ -402,9 +557,9 @@ struct ScoreReaderDrumPadCell: View {
     var body: some View {
         Group {
             if isTall {
-                VStack(spacing: 6) {
+                VStack(spacing: glyphHeight < 30 ? 3 : 6) {
                     ScoreReaderDrumNoteGlyph(pad: pad)
-                        .frame(width: 40, height: 40)
+                        .frame(width: glyphHeight, height: glyphHeight)
                     nameText
                         .multilineTextAlignment(.center)
                     shortcutText
@@ -432,7 +587,7 @@ struct ScoreReaderDrumPadCell: View {
     private var nameText: some View {
         let name = Text(pad.name)
             .font(.system(size: isTall ? 13 : 11.5, weight: .medium))
-            .lineLimit(2)
+            .lineLimit(isTall && glyphHeight < 30 ? 1 : 2)
         #if os(Android)
         return name.minimumScaleFactor(0.8)
         #else
@@ -442,7 +597,18 @@ struct ScoreReaderDrumPadCell: View {
 
     @ViewBuilder
     private var shortcutText: some View {
-        if showsShortcut, !pad.shortcut.isEmpty {
+        if showsShortcut, isTall {
+            // Every tall pad keeps the badge's space, so names line up whether or not the
+            // drum has a shortcut.
+            Text(pad.shortcut.isEmpty ? " " : pad.shortcut)
+                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.black.opacity(0.45))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Color.black.opacity(pad.shortcut.isEmpty ? 0 : 0.06),
+                            in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .accessibilityHidden(pad.shortcut.isEmpty)
+        } else if showsShortcut, !pad.shortcut.isEmpty {
             Text(pad.shortcut)
                 .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(Color.black.opacity(0.38))

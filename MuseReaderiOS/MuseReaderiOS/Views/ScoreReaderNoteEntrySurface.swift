@@ -391,8 +391,9 @@ struct ScoreReaderNoteEntrySurface: View {
     @ViewBuilder
     private var pitchKeyboardRow: some View {
         if showsDrumPad {
+            // Taller than the keyboard row so a standard kit's rows have room for headings.
             drumPad(targetPadWidth: 112, showsShortcuts: true)
-                .frame(height: 122)
+                .frame(height: 160)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 18)
