@@ -2128,7 +2128,8 @@ bool selectedMeasureRangeHasVoiceOneContent(const mu::engraving::Score* score,
 
 mu::engraving::ChordRest* firstStandardChordRestInMeasure(const mu::engraving::Score* score,
                                                           mu::engraving::Measure* measure,
-                                                          const mu::engraving::staff_idx_t preferredStaff = muse::nidx)
+                                                          const mu::engraving::staff_idx_t preferredStaff = muse::nidx,
+                                                          const bool allowDrumStaves = false)
 {
     if (!score || !measure) {
         return nullptr;
@@ -2148,7 +2149,9 @@ mu::engraving::ChordRest* firstStandardChordRestInMeasure(const mu::engraving::S
         const mu::engraving::staff_idx_t staffLimit = preferredStaff == muse::nidx ? score->nstaves() : firstStaff + 1;
         for (mu::engraving::staff_idx_t staffIndex = firstStaff; staffIndex < staffLimit; ++staffIndex) {
             const mu::engraving::Staff* staff = score->staff(staffIndex);
-            if (!isStandardStaff(staff, measure->tick())) {
+            const bool usable = isStandardStaff(staff, measure->tick())
+                                || (allowDrumStaves && isDrumStaffAt(staff, measure->tick()));
+            if (!usable) {
                 continue;
             }
 
@@ -2245,7 +2248,7 @@ bool selectMeasureRange(mu::engraving::Score* score,
     if (mu::engraving::ChordRest* chordRest = firstChordRestAtSegment(score, startSegment, staffStart)) {
         score->inputState().setTrack(chordRest->track());
         score->inputState().moveInputPos(chordRest);
-    } else if (mu::engraving::ChordRest* chordRest = firstStandardChordRestInMeasure(score, startSegment->measure(), staffStart)) {
+    } else if (mu::engraving::ChordRest* chordRest = firstStandardChordRestInMeasure(score, startSegment->measure(), staffStart, true)) {
         score->inputState().setTrack(chordRest->track());
         score->inputState().moveInputPos(chordRest);
     }
@@ -2283,7 +2286,9 @@ void selectMeasureRange(mu::engraving::Score* score,
     score->selection().setRange(startSegment, endSegment, staffStart, staffEnd);
     score->selection().updateSelectedElements();
     score->selection().setActiveTrack(staffStart * mu::engraving::VOICES);
-    if (mu::engraving::ChordRest* chordRest = firstStandardChordRestInMeasure(score, firstMeasure, staffStart)) {
+    // Drum staves count too: a bar tapped on a drum staff puts the drum pad's cursor there.
+    // Without it a freshly opened drum part had no cursor and the first drum tap failed.
+    if (mu::engraving::ChordRest* chordRest = firstStandardChordRestInMeasure(score, firstMeasure, staffStart, true)) {
         score->inputState().setTrack(chordRest->track());
         score->inputState().moveInputPos(chordRest);
     }
@@ -3295,7 +3300,8 @@ mu::engraving::ChordRest* selectedChordRest(const mu::engraving::Score* score)
     return mu::engraving::InputState::chordRest(selectedItem);
 }
 
-mu::engraving::ChordRest* selectedMeasureChordRest(const mu::engraving::Score* score)
+mu::engraving::ChordRest* selectedMeasureChordRest(const mu::engraving::Score* score,
+                                                   const bool allowDrumStaves = false)
 {
     mu::engraving::Measure* startMeasure = nullptr;
     mu::engraving::Measure* endMeasure = nullptr;
@@ -3304,7 +3310,7 @@ mu::engraving::ChordRest* selectedMeasureChordRest(const mu::engraving::Score* s
     }
 
     const mu::engraving::staff_idx_t staffIdx = std::min(score->selection().staffStart(), score->nstaves() - 1);
-    return firstStandardChordRestInMeasure(score, startMeasure, staffIdx);
+    return firstStandardChordRestInMeasure(score, startMeasure, staffIdx, allowDrumStaves);
 }
 
 mu::engraving::ChordRest* selectedOrMeasureChordRest(const mu::engraving::Score* score)

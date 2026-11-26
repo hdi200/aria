@@ -1355,6 +1355,105 @@ void testSingleInstrumentPartViewRoundTrip(const std::filesystem::path& root)
     noteWithPitch(scanScore(*reopened, { 72 }, 0), 72);
 }
 
+std::string pianoAndDrumsScoreXml()
+{
+    auto staffMusic = [](const int staffId) {
+        std::string music = "    <Staff id=\"" + std::to_string(staffId) + "\">\n";
+        for (int measure = 0; measure < 4; ++measure) {
+            music += "      <Measure>\n        <voice>\n";
+            if (measure == 0) {
+                music += "          <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>\n";
+            }
+            music += "          <Rest><durationType>measure</durationType><duration>4/4</duration></Rest>\n";
+            music += "        </voice>\n      </Measure>\n";
+        }
+        return music + "    </Staff>\n";
+    };
+    return R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part id="1">
+      <Staff id="1"/>
+      <trackName>Piano</trackName>
+      <Instrument id="piano">
+        <longName>Piano</longName>
+        <trackName>Piano</trackName>
+        <instrumentId>keyboard.piano</instrumentId>
+        <Channel><program value="0"/></Channel>
+      </Instrument>
+    </Part>
+    <Part id="2">
+      <Staff id="2">
+        <StaffType group="percussion">
+          <name>perc5Line</name>
+        </StaffType>
+      </Staff>
+      <trackName>Drumset</trackName>
+      <Instrument id="drumset">
+        <longName>Drumset</longName>
+        <trackName>Drumset</trackName>
+        <instrumentId>drum.group.set</instrumentId>
+        <useDrumset>1</useDrumset>
+        <clef>PERC</clef>
+        <Channel><controller ctrl="0" value="1"/><program value="0"/></Channel>
+      </Instrument>
+    </Part>
+)MSCX" + staffMusic(1) + staffMusic(2) + R"MSCX(  </Score>
+</museScore>
+)MSCX";
+}
+
+// Opening a drum part for the first time and tapping empty space in its first bar used to leave
+// no note-input cursor (the bar's cursor lookup skipped drum staves), so the first drum-pad tap
+// failed with "Tap a place on the percussion staff".
+void testDrumPadAfterTappingFirstBarOfFreshDrumPart(const std::filesystem::path& root)
+{
+    constexpr int drumPartIndex = 1;
+    constexpr int snare = 38;
+    int pageCount = 0;
+    std::string error;
+    msr::render::ScoreEditState state;
+
+    // Find a point in bar 1 that selects the bar itself, not its rest: the top-left bar hit.
+    auto scout = openSession(root, "drum-first-bar-scout", pianoAndDrumsScoreXml());
+    expect(scout->setActivePartIndex(drumPartIndex, pageCount, error), "Could not open drum part: " + error);
+    double barX = -1.0;
+    double barY = -1.0;
+    for (double y = 0.035; y <= 0.5 && barX < 0.0; y += 0.005) {
+        for (double x = 0.035; x <= 0.965; x += 0.005) {
+            error.clear();
+            expect(scout->selectElement(0, x, y, 1.0, state, error), "Hit testing failed: " + error);
+            if (state.selection.isMeasure && state.selection.isSingleMeasure && !state.selection.isRest) {
+                barX = x;
+                barY = y;
+                break;
+            }
+        }
+    }
+    expect(barX >= 0.0, "Could not find empty space in the drum part's first bar");
+
+    for (const bool noteInputFirst : { true, false }) {
+        const std::string order = noteInputFirst ? "note input, then bar" : "bar, then note input";
+        auto session = openSession(root, noteInputFirst ? "drum-first-bar-a" : "drum-first-bar-b", pianoAndDrumsScoreXml());
+        expect(session->setActivePartIndex(drumPartIndex, pageCount, error), order + ": could not open drum part: " + error);
+        if (noteInputFirst) {
+            expect(session->setNoteInputEnabled(true, state, error), order + ": could not turn on note input: " + error);
+        }
+        expect(session->selectElement(0, barX, barY, 1.0, state, error), order + ": could not tap bar 1: " + error);
+        expect(state.selection.isMeasure && state.selection.isSingleMeasure, order + ": tap did not select a bar");
+        if (!noteInputFirst) {
+            expect(session->setNoteInputEnabled(true, state, error), order + ": could not turn on note input: " + error);
+        }
+        error.clear();
+        expect(session->insertDrumNotesAtCursor({ snare }, false, state, error), order + ": drum pad tap failed: " + error);
+        expect(state.selection.isNote && state.selection.midiPitch == snare,
+               order + ": the snare was not selected after entry");
+        expect(state.selection.tick == 0, order + ": the snare went to tick "
+               + std::to_string(state.selection.tick) + " instead of the start of bar 1");
+    }
+}
+
 template<typename Function>
 bool runTest(const std::string& name, Function&& function)
 {
@@ -1399,6 +1498,8 @@ int main()
                       [&] { testDragAndEndpointEdits(directory.path); });
     passed &= runTest("selection, view transpose, and corruption state commands are non-persisting",
                       [&] { testNonPersistedEditingStateCommands(directory.path); });
+    passed &= runTest("drum pad works after tapping bar 1 of a freshly opened drum part",
+                      [&] { testDrumPadAfterTappingFirstBarOfFreshDrumPart(directory.path); });
     if (directory.preserve) {
         std::cout << "EDIT_SWEEP_OUTPUT " << directory.path << '\n';
     }

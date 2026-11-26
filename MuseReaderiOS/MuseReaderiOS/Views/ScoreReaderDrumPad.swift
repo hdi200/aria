@@ -26,7 +26,7 @@ struct ScoreReaderDrumPad: View {
 
     /// Whether the Additional Percussion row is open: closed until the player opens it, then
     /// remembered between scores.
-    @AppStorage("drumPadShowsAdditional") private var showsAdditional = false
+    @AppStorage("drumPadShowsAdditional") var showsAdditional = false
 
     private let spacing: CGFloat = 6
     /// Headings need this much height; below it (a landscape phone) the rows are bare.

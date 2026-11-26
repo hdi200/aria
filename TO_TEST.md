@@ -22,6 +22,10 @@ To force it on a test install, set `UpdateNotice.seenVersion` to 5 and `UpdateNo
 - [ ] **Android phone and tablet:** the percussion page draws its pads and the drum, shift and waveform icons (no missing-icon warnings in logcat).
 - [ ] **Audience:** an install made on or after November 27, 12:00 AM Eastern doesn't see the notice.
 
+## Drum pad on bar 1 of a fresh drum part (November 26)
+
+- [ ] **iPhone/iPad and Android:** open a score with several instruments including drums, open the drum part for the first time, turn on note input and tap empty space in bar 1 (not the rest), then tap Snare: it enters at the start of bar 1, with no "Tap a place on the percussion staff" error. Repeat with a later bar, and with Select mode (tap the bar first, then the pad).
+
 ## Undo after opening a part (November 26, BUG-045)
 
 - [ ] **iPhone/iPad and Android:** edit a score, then open one of its parts for the first time: Undo is greyed out, and the edit is still there in the full score and the part. Make a new edit: Undo works again. Switch to the full score and back to that part: Undo stays available.

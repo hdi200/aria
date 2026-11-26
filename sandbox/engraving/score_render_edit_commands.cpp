@@ -3116,7 +3116,7 @@
         }
 
         if (selectedMeasureRange(score, nullptr, nullptr)) {
-            if (mu::engraving::ChordRest* chordRest = selectedMeasureChordRest(score)) {
+            if (mu::engraving::ChordRest* chordRest = selectedMeasureChordRest(score, true)) {
                 configureInputCursorForChordRest(score, chordRest, false);
             }
         } else if (!inputState.isValid()) {
