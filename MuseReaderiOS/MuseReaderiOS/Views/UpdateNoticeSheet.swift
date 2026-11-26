@@ -9,18 +9,26 @@ import SwiftUI
 /// Versioned so a later release can show a new notice by bumping `currentVersion`
 /// and `releaseDate`.
 struct UpdateNoticeStore {
-    static let currentVersion = 6
+    static let currentVersion = 7
 
-    // Anyone who got the app before November 18, 2026 (12:00 AM Eastern) sees the
+    // Anyone who got the app before November 27, 2026 (12:00 AM Eastern) sees the
     // notice once, as soon as they have this update.
     // AppTransaction supplies Apple's signed date for when this customer first
     // acquired the app, which survives the update itself (on Android, the first install
     // time on the device).
-    static let releaseDate = Date(timeIntervalSince1970: 1_794_978_000)
+    static let releaseDate = Date(timeIntervalSince1970: 1_795_755_600)
+
+    /// The scanning release (version 6, November 18, 2026 12:00 AM Eastern). Customers
+    /// who had the app before then but never saw that notice still get its scanning page.
+    static let scannerVersion = 6
+    static let scannerReleaseDate = Date(timeIntervalSince1970: 1_794_978_000)
 
     private let defaultsKey = "UpdateNotice.seenVersion"
     private var audienceKey: String {
         "UpdateNotice.v\(Self.currentVersion).isExistingInstall"
+    }
+    private var scannerKey: String {
+        "UpdateNotice.v\(Self.currentVersion).showsScanner"
     }
     private let userDefaults: UserDefaults
 
@@ -30,6 +38,15 @@ struct UpdateNoticeStore {
 
     static func isExistingInstall(originalPurchaseDate: Date) -> Bool {
         originalPurchaseDate < releaseDate
+    }
+
+    static func missedScannerNotice(originalPurchaseDate: Date, seenVersion: Int) -> Bool {
+        seenVersion < scannerVersion && originalPurchaseDate < scannerReleaseDate
+    }
+
+    /// Whether this notice also shows the scanning page, decided with the audience.
+    var showsScannerFeature: Bool {
+        userDefaults.bool(forKey: scannerKey)
     }
 
     /// A missing or unverified App Store transaction is left unresolved so a later
@@ -46,7 +63,8 @@ struct UpdateNoticeStore {
             return false
         }
 
-        guard userDefaults.integer(forKey: defaultsKey) < Self.currentVersion else {
+        let seenVersion = userDefaults.integer(forKey: defaultsKey)
+        guard seenVersion < Self.currentVersion else {
             return false
         }
         if userDefaults.object(forKey: audienceKey) != nil {
@@ -54,6 +72,10 @@ struct UpdateNoticeStore {
         }
 
         let isExistingInstall = Self.isExistingInstall(originalPurchaseDate: originalPurchaseDate)
+        userDefaults.set(
+            Self.missedScannerNotice(originalPurchaseDate: originalPurchaseDate, seenVersion: seenVersion),
+            forKey: scannerKey
+        )
         userDefaults.set(isExistingInstall, forKey: audienceKey)
         return isExistingInstall
     }
@@ -77,6 +99,8 @@ struct UpdateNoticeStore {
 struct UpdateNoticeSheet: View {
     @Environment(\.dismiss) var dismiss
     @State var page = 0
+    /// Adds the scanning page for customers who never saw the scanning release's notice.
+    var showsScannerFeature = false
     var openLibraryAction: (() -> Void)? = nil
 
     /// iOS's system blue. Android's accent colour is the Material theme's slate.
@@ -101,6 +125,7 @@ struct UpdateNoticeSheet: View {
         /// Shown under `items`, headed "Fixes".
         var fixes: [Item] = []
         var isScannerFeature = false
+        var isDrumFeature = false
     }
 
     struct Item: Identifiable {
@@ -114,57 +139,116 @@ struct UpdateNoticeSheet: View {
     }
 
     // Android shows only the SF Symbols Skip maps to Material icons (anything else is a "missing icon" warning):
-    // camera.viewfinder, lock, list.bullet, square.and.arrow.up, play and checkmark.circle are on its list;
-    // chords use a text glyph.
-    private static let fixes: [Item] = [
-        Item(
-            systemImage: "checkmark.circle",
-            title: "Screen lock",
-            detail: "The screen no longer locks during playback or the count-in."
-        ),
-        Item(
-            systemImage: "checkmark.circle",
-            title: "Reordering instruments",
-            detail: "The new order now reaches the score."
-        ),
-    ]
+    // generate-symbols.py lists them; textformat, checkmark.circle and the percussion page's drum,
+    // shift and waveform are on it.
+    private static var fixes: [Item] {
+        let shared = [
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Editing crashes",
+                detail: "Fixed crashes when editing tuplets, changing time signatures, deleting bars "
+                    + "and undoing after opening a part."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Selection when zoomed in",
+                detail: "The selection stays on its note after an edit, and the page no longer shows notes "
+                    + "doubled while it redraws."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Score fixes",
+                detail: "A hyphen in a lyric no longer brings up Review Score Fixes, and fixes you skipped "
+                    + "aren't offered again."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Renaming setlists",
+                detail: "Setlists now keep their new name."
+            ),
+        ]
+        #if os(Android)
+        return shared + [
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Importing scores",
+                detail: "Import works when another file manager is your default, as on Galaxy tablets, "
+                    + "and tells you when a file can't be read."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Scanning with the camera",
+                detail: "If the document scanner doesn't open, Aria uses your camera app instead."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Instruments and templates",
+                detail: "Close and Done stay on screen when the keyboard is up."
+            ),
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Library on tablets",
+                detail: "Scan and Import have room again in landscape."
+            ),
+        ]
+        #else
+        return [
+            Item(
+                systemImage: "checkmark.circle",
+                title: "Apple Pencil",
+                detail: "Fixed a crash when turning on editing or annotations with Apple Pencil.",
+                isPadOnly: true
+            ),
+        ] + shared
+        #endif
+    }
 
     private static var items: [Item] {
         [
             Item(
-                systemImage: "music.note",
-                textSymbol: "V1",
-                title: "Voices on phones",
-                detail: "Choose a voice when entering notes on your phone, not just on a tablet."
+                systemImage: "textformat",
+                title: "Fonts from other computers",
+                detail: "Scores set in Arial, Times New Roman, Calibri and other common fonts keep their "
+                    + "spacing and line breaks, even when your device doesn't have the font."
             ),
         ]
     }
 
     private var pages: [Page] {
-        [
+        var pages = [
             Page(
+                clip: nil,
+                systemImage: "sparkles",
+                title: "Percussion editing",
+                message: "",
+                isDrumFeature: true
+            ),
+        ]
+        if showsScannerFeature {
+            pages.append(Page(
                 clip: nil,
                 systemImage: "sparkles",
                 title: "Scan sheet music",
                 message: "",
                 isScannerFeature: true
-            ),
-            Page(
-                clip: nil,
-                systemImage: "checkmark.circle",
-                title: "Also in this update",
-                message: "",
-                items: Self.items,
-                fixes: Self.fixes
-            )
-        ]
-        .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
-        .enumerated()
-        .map { index, page in
-            var page = page
-            page.id = index
-            return page
+            ))
         }
+        pages.append(Page(
+            clip: nil,
+            systemImage: "checkmark.circle",
+            title: "Also in this update",
+            message: "",
+            items: Self.items,
+            fixes: Self.fixes
+        ))
+        return pages
+            .filter { !$0.isPadOnly || UIDevice.current.userInterfaceIdiom != .phone }
+            .enumerated()
+            .map { index, page in
+                var page = page
+                page.id = index
+                return page
+            }
     }
 
     private func shown(_ items: [Item]) -> [Item] {
@@ -229,7 +313,15 @@ struct UpdateNoticeSheet: View {
 
     @ViewBuilder
     private func pageView(_ page: Page) -> some View {
-        if page.isScannerFeature {
+        if page.isDrumFeature {
+            GeometryReader { geometry in
+                ScrollView {
+                    DrumPadUpdateFeature(contentWidth: max(1, geometry.size.width - 48))
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 20)
+                }
+            }
+        } else if page.isScannerFeature {
             GeometryReader { geometry in
                 ScrollView {
                     ScannerUpdateFeature(contentWidth: max(1, geometry.size.width - 48),
@@ -493,6 +585,139 @@ struct ScannerUpdateFeature: View {
             .foregroundStyle(blue)
             .frame(height: 26)
             .accessibilityHidden(true)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 28, alignment: .top)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// The percussion editing page, led by a drum kit: the same pads the editor shows, drawn by the editor's own views.
+struct DrumPadUpdateFeature: View {
+    var contentWidth: CGFloat = 342
+    private let blue = Color(red: 0.0, green: 0.478, blue: 1.0)
+
+    private static func pad(_ pitch: Int, _ name: String, _ notehead: ScoreDrumPad.Notehead,
+                            line: Int, voice: Int = 0, stemUp: Bool = true) -> ScoreDrumPad {
+        ScoreDrumPad(pitch: pitch, name: name, shortcut: "", notehead: notehead, line: line,
+                     voice: voice, stemUp: stemUp, panelRow: 0, panelColumn: 0)
+    }
+
+    /// A standard kit's essential drums, cymbals over drums as on the staff.
+    private static let rows: [[ScoreDrumPad]] = [
+        [
+            pad(42, "Closed Hi-Hat", .cross, line: -1),
+            pad(46, "Open Hi-Hat", .circleCross, line: -1),
+            pad(49, "Crash", .cross, line: -2),
+            pad(51, "Ride", .cross, line: 0),
+        ],
+        [
+            pad(36, "Bass Drum", .normal, line: 7, voice: 1, stemUp: false),
+            pad(38, "Snare", .normal, line: 3),
+            pad(50, "High Tom", .normal, line: 1),
+            pad(43, "Floor Tom", .normal, line: 5),
+        ],
+    ]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("NEW · PERCUSSION EDITING")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(blue)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background(blue.opacity(0.08), in: Capsule())
+
+            VStack(spacing: 12) {
+                Text("Tap in your\npercussion.")
+                    .font(.system(size: 36, weight: .bold))
+                    .tracking(-1.1)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                Text("On a percussion staff, the keyboard becomes pads for that instrument, from snare "
+                    + "and marching drums to concert percussion. Each one lands on its own line, in its own voice.")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 8) {
+                illustration
+                Text("Drum kits open with the essentials first.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 10)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Drum kit pads: hi-hats, crash and ride over bass drum, snare and toms")
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 8) {
+                benefit("Drum kits\nand more", symbol: "drum")
+                benefit("Add to beat", symbol: "shift")
+                benefit("Sounds as\nyou tap", symbol: "waveform")
+            }
+            .padding(.vertical, 3)
+
+            Divider()
+
+            Text("Edit a percussion part and tap a beat to start.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var illustration: some View {
+        let width = min(contentWidth, 480)
+        let spacing: CGFloat = 6
+        let padWidth = (width - 20 - spacing * 3) / 4
+        let padHeight: CGFloat = 50
+        return VStack(spacing: spacing) {
+            ForEach(Self.rows.indices, id: \.self) { row in
+                HStack(spacing: spacing) {
+                    ForEach(Self.rows[row]) { pad in
+                        ScoreReaderDrumPadKey(
+                            pad: pad,
+                            isActive: pad.pitch == 38,
+                            isTall: false,
+                            showsShortcut: false,
+                            glyphHeight: padHeight - 10,
+                            addsToBeat: false,
+                            action: { _ in },
+                            addAction: { _ in }
+                        )
+                        .frame(width: padWidth, height: padHeight)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .allowsHitTesting(false)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func benefit(_ title: String, symbol: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(blue)
+                .frame(height: 26)
+                .accessibilityHidden(true)
             Text(title)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)

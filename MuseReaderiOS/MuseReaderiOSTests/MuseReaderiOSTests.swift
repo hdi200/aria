@@ -29,8 +29,18 @@ struct MuseReaderiOSTests {
         #expect(UpdateNoticeStore.isExistingInstall(originalPurchaseDate: beforeRelease))
         #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: atRelease))
         #expect(!UpdateNoticeStore.isExistingInstall(originalPurchaseDate: afterRelease))
-        // November 6, 2026, 12:00 AM Eastern (EST, UTC-5): installs on November 5 or earlier see it.
-        #expect(UpdateNoticeStore.releaseDate == ISO8601DateFormatter().date(from: "2026-11-06T05:00:00Z"))
+        // November 27, 2026, 12:00 AM Eastern (EST, UTC-5): installs on November 26 or earlier see it.
+        #expect(UpdateNoticeStore.releaseDate == ISO8601DateFormatter().date(from: "2026-11-27T05:00:00Z"))
+        #expect(UpdateNoticeStore.scannerReleaseDate == ISO8601DateFormatter().date(from: "2026-11-18T05:00:00Z"))
+    }
+
+    @Test
+    func updateNoticeAddsScanningOnlyForMissedNotice() {
+        let early = UpdateNoticeStore.scannerReleaseDate.addingTimeInterval(-1)
+        let late = UpdateNoticeStore.scannerReleaseDate
+        #expect(UpdateNoticeStore.missedScannerNotice(originalPurchaseDate: early, seenVersion: 5))
+        #expect(!UpdateNoticeStore.missedScannerNotice(originalPurchaseDate: early, seenVersion: 6))
+        #expect(!UpdateNoticeStore.missedScannerNotice(originalPurchaseDate: late, seenVersion: 0))
     }
 
     @Test
@@ -46,10 +56,10 @@ struct MuseReaderiOSTests {
         let suiteName = "UpdateNoticeTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(3, forKey: "UpdateNotice.seenVersion")
+        defaults.set(UpdateNoticeStore.currentVersion - 1, forKey: "UpdateNotice.seenVersion")
         // The previous release's audience decision must not hide the new notice.
-        defaults.set(false, forKey: "UpdateNotice.v3.isExistingInstall")
-        defaults.set(true, forKey: "UpdateNotice.v4.isExistingInstall")
+        defaults.set(false, forKey: "UpdateNotice.v\(UpdateNoticeStore.currentVersion - 1).isExistingInstall")
+        defaults.set(true, forKey: "UpdateNotice.v\(UpdateNoticeStore.currentVersion).isExistingInstall")
         let store = UpdateNoticeStore(userDefaults: defaults)
 
         #expect(await store.shouldPresentNotice())
@@ -62,7 +72,7 @@ struct MuseReaderiOSTests {
         let suiteName = "UpdateNoticeTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(false, forKey: "UpdateNotice.v4.isExistingInstall")
+        defaults.set(false, forKey: "UpdateNotice.v\(UpdateNoticeStore.currentVersion).isExistingInstall")
         let store = UpdateNoticeStore(userDefaults: defaults)
         #expect(!(await store.shouldPresentNotice()))
     }

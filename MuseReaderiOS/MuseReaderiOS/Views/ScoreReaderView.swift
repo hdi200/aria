@@ -1205,7 +1205,7 @@ struct ScoreReaderView: View {
             }
         }
         .scoreReaderSheet(isPresented: $isUpdateNoticePresented) {
-            UpdateNoticeSheet(openLibraryAction: {
+            UpdateNoticeSheet(showsScannerFeature: updateNoticeStore.showsScannerFeature, openLibraryAction: {
                 isUpdateNoticePresented = false
                 closeReader()
             })
