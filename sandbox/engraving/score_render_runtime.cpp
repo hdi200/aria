@@ -5413,6 +5413,22 @@ msr::render::ScoreEditState makeEditState(const mu::engraving::Score* score, con
             }
         }
     }
+    if (!editState.activeStaffIsPercussion && score->nstaves() > 0) {
+        // A score or part with only drum staves (a drum part) shows the drum pad before anything
+        // is selected, instead of the keyboard. Its first staff's kit is the one shown.
+        const mu::engraving::Fraction start(0, 1);
+        bool onlyDrums = true;
+        for (const mu::engraving::Staff* staff : score->staves()) {
+            if (!staff || !staff->isDrumStaff(start)) {
+                onlyDrums = false;
+                break;
+            }
+        }
+        if (onlyDrums) {
+            editState.activeStaffIsPercussion = true;
+            fillDrumPads(editState, drumsetForStaff(score->staff(0), start));
+        }
+    }
     editState.canUndo = score->undoStack() && score->undoStack()->canUndo();
     editState.canRedo = score->undoStack() && score->undoStack()->canRedo();
     editState.createMultiMeasureRests = score->style().styleB(mu::engraving::Sid::createMultiMeasureRests);
