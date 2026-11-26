@@ -3314,6 +3314,41 @@ MSREditState *MakeEditState(const msr::render::ScoreEditState& editState)
 #endif
 }
 
+- (MSREditState *)enterDrumsAtSelectedNote:(NSArray<NSNumber *> *)drumPitches
+                                     error:(NSError * _Nullable __autoreleasing *)error
+{
+#if defined(MUSEREADER_USE_SCORE_RENDER_CORE) && MUSEREADER_USE_SCORE_RENDER_CORE
+    if (!_session) {
+        if (error) {
+            *error = FailureError(@"The MuseScore render session is no longer available.");
+        }
+        return nil;
+    }
+
+    std::vector<int> pitches;
+    pitches.reserve(drumPitches.count);
+    for (NSNumber *pitch in drumPitches) {
+        pitches.push_back(static_cast<int>(pitch.integerValue));
+    }
+
+    msr::render::ScoreEditState editState;
+    std::string errorMessage;
+    if (!_session->enterDrumsAtSelectedNote(pitches, editState, errorMessage)) {
+        if (error) {
+            *error = FailureError(FailureMessage(errorMessage, @"The MuseScore render core could not put that drum on the selected beat."));
+        }
+        return nil;
+    }
+
+    return MakeEditState(editState);
+#else
+    if (error) {
+        *error = UnavailableError(@"This build of Aria is not linked to MuseScore editing support yet.");
+    }
+    return nil;
+#endif
+}
+
 - (MSREditState *)removeMIDIPitchFromCurrentChord:(NSInteger)midiPitch
                                             error:(NSError * _Nullable __autoreleasing *)error
 {

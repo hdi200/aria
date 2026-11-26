@@ -821,6 +821,10 @@ isEditableText:(BOOL)isEditableText
 - (nullable MSREditState *)insertDrumNotesAtCursor:(NSArray<NSNumber *> *)drumPitches
                                  addToCurrentChord:(BOOL)addToCurrentChord
                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(insertDrumNotesAtCursor(_:addToCurrentChord:));
+/// Select mode: changes the selected drum note, or puts the drum on its beat in its own voice,
+/// then continues note input after that beat.
+- (nullable MSREditState *)enterDrumsAtSelectedNote:(NSArray<NSNumber *> *)drumPitches
+                                              error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(enterDrumsAtSelectedNote(_:));
 - (nullable MSREditState *)removeMIDIPitchFromCurrentChord:(NSInteger)midiPitch
                                                       error:(NSError * _Nullable * _Nullable)error NS_SWIFT_NAME(removeMIDIPitchFromCurrentChord(_:));
 - (nullable MSRNoteEntryPreviewInfo *)noteEntryPreviewAtPageIndex:(NSInteger)pageIndex

@@ -493,6 +493,10 @@ public:
     //! drum set's voices into one chord per voice at the same beat. addToCurrentChord adds them
     //! to the beat of the selected or last entered chord instead of entering a new beat.
     bool insertDrumNotesAtCursor(const std::vector<int>& drumPitches, bool addToCurrentChord, ScoreEditState& output, std::string& errorMessage);
+    //! Select mode: changes the selected drum note into the given drum when it shares its voice,
+    //! otherwise puts the drum on the same beat in its own voice; then selects it and continues
+    //! note input after that beat in its voice.
+    bool enterDrumsAtSelectedNote(const std::vector<int>& drumPitches, ScoreEditState& output, std::string& errorMessage);
     bool removeMIDIPitchFromCurrentChord(int midiPitch, ScoreEditState& output, std::string& errorMessage);
     bool deleteSelection(ScoreEditState& output, std::string& errorMessage);
     bool previewMeasureRange(int pageIndex, double startNormalizedX, double startNormalizedY, double endNormalizedX, double endNormalizedY, ScoreEditState& output, std::string& errorMessage);

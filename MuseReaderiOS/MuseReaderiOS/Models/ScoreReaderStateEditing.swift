@@ -2048,20 +2048,22 @@ extension ScoreReaderState {
     }
 
     /// Enters drums from the drum pad, all struck together. The engine splits them into one chord
-    /// per drum-set voice at the same beat; chord mode adds them to the current beat instead.
-    /// A pad tapped in Select mode with a drum note selected adds that drum to the selected beat,
-    /// in its own kit voice (hi-hat selected + Bass Drum puts the kick under it in voice 2), and
-    /// turns note input on; later taps continue from the next beat.
+    /// per drum-set voice at the same beat; chord mode (only when the user turned it on) adds them
+    /// to the current beat instead.
+    /// In Select mode with a drum note selected, a pad in the note's voice changes that note into
+    /// the drum; a pad in another voice puts the drum on the same beat in its own voice (hi-hat
+    /// selected + Bass Drum puts the kick under it in voice 2). Note input then turns on in that
+    /// drum's voice and continues from the next beat.
     func enterDrums(_ drumPitches: [Int]) {
         guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
         let pitches = drumPitches.filter { (0...127).contains($0) }
         guard !pitches.isEmpty else { return }
         var intent = noteInputIntent
-        // Only chord entry the user turned on counts. Selecting a beat that already has several
-        // drums lights the Chord button too, but pad taps from there must still move on.
+        // Only chord entry the user turned on counts, never one implied by the selection.
         intent.chord = stackedChordInputChosen
         let selection = editingState.selection
-        let addsToSelectedBeat = !intent.enabled && !hasContinuousNoteInputCursor && selection?.kind == .note
+        let placesAtSelectedNote = !intent.chord && !intent.enabled && !hasContinuousNoteInputCursor
+            && selection?.kind == .note
         if !intent.enabled, let selection, selection.kind == .note || selection.kind == .rest {
             // Starting from a selected note or rest enters drums with its value, as the
             // duration toolbar shows it (and as the keyboard does, BUG-008).
@@ -2073,17 +2075,23 @@ extension ScoreReaderState {
         nextIntent.enabled = true
         nextIntent.rests = false
         nextIntent.chord = intent.chord && !intent.rests
-        queuedNoteInputIntent = nextIntent
         let submittedIntent = nextIntent
-        // Select mode and chord mode add to the selected note's beat; chord mode with nothing
-        // selected adds to the last entered beat.
-        let addToCurrentChord = addsToSelectedBeat || (submittedIntent.chord
-            && (editingState.noteInputEnabled || selection?.kind == .note))
+        if placesAtSelectedNote, let drumVoice = editingState.drumPads.first(where: { $0.pitch == pitches[0] })?.voice {
+            // Later taps continue in the tapped drum's voice, where the engine leaves the cursor.
+            nextIntent.voice = drumVoice
+        }
+        queuedNoteInputIntent = nextIntent
+        // Chord mode adds to the selected note's beat, or to the last entered beat.
+        let addToCurrentChord = submittedIntent.chord
+            && (editingState.noteInputEnabled || selection?.kind == .note)
         pendingAccidentalKind = nil
         hasContinuousNoteInputCursor = true
         lastKeyboardInputCanReceiveAccidental = false
         performEditingAction(mutatesScore: true, auditionNote: true, revealActiveNotation: true) { session in
             _ = try await Self.prepareNoteInput(submittedIntent, in: session)
+            if placesAtSelectedNote {
+                return try await session.enterDrumsAtSelectedNote(pitches)
+            }
             return try await session.insertDrumNotesAtCursor(pitches, addToCurrentChord: addToCurrentChord)
         }
     }
@@ -2392,7 +2400,10 @@ extension ScoreReaderState {
         } else {
             // A selected chord shows chord entry so its notes can be added to or removed;
             // otherwise chord entry stays as the user set it.
-            stackedChordInputEnabled = stackedChordInputChosen || selectedChordPitchCount > 1
+            // Not on drum staves, where most beats hold several drums: there chord entry is only
+            // ever the user's choice.
+            stackedChordInputEnabled = stackedChordInputChosen
+                || (selectedChordPitchCount > 1 && !editingState.activeStaffIsPercussion)
         }
         if !editingState.noteInputEnabled {
             noteInputAcceptsDirectTaps = false

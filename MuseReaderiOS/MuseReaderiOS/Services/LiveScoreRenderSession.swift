@@ -1018,6 +1018,16 @@ actor LiveScoreRenderSession {
         return editState
     }
 
+    func enterDrumsAtSelectedNote(_ drumPitches: [Int]) throws -> ScoreEditingState {
+        guard supportsEditing else {
+            return inactiveEditingState()
+        }
+
+        let editState = try makeEditingState(from: bridgeSession.enterDrumsAtSelectedNote(drumPitches.map { NSNumber(value: $0) }))
+        invalidateCachedPlaybackArtifacts()
+        return editState
+    }
+
     func insertMIDIChordAtCursor(_ midiPitches: [Int], preferFlats: Bool) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
