@@ -23,7 +23,13 @@ Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New 
 - [ ] **Fast taps:** tap one pad four times quickly: four notes, one per beat.
 - [ ] **Select mode, other voice:** leave note input, select a hi-hat, tap Bass Drum: the kick goes under that hi-hat on the same beat (voice 2, stem down), the hi-hat stays, note input turns on in V2, and the next pad tap enters on the following beat.
 - [ ] **Select mode, same voice:** select a hi-hat, tap Ride: that hi-hat becomes a ride (other drums on the beat stay), note input turns on, and the next taps continue from the following beat.
-- [ ] **No automatic chord mode:** selecting a beat with several drums (hi-hat + snare) does not light the Chord button on a drum staff.
+- [ ] **Add key (phone and iPad):** on a drum staff the sharp/flat/natural buttons and the Chord toggle are replaced by "Add to beat" (iPad: "Add" in the bottom row and the floating palette). Pitched staves look exactly as before.
+- [ ] **Add once:** select a hi-hat, tap Add, tap Snare: the snare goes on the hi-hat's beat, the key turns off, and the next pad tap enters on the following beat.
+- [ ] **Add locked:** double-tap Add (caps-lock icon, "Adding"): every pad tap stacks on the current beat until Add is tapped again. Pads show a small "+" while Add is on.
+- [ ] **Long press:** hold a pad for half a second: that drum is added to the current beat; a normal tap still enters and moves on.
+- [ ] **Scrolling:** drag sideways across the pads: the strip scrolls and no note is entered.
+- [ ] **Drum sound:** tapping a pad plays that drum (bass drum, snare, hi-hat), not a piano note.
+- [ ] **No automatic chord mode:** selecting a beat with several drums (hi-hat + snare) does not light anything on a drum staff.
 - [ ] **Chord mode:** turn on the chord toggle, tap Closed Hi-Hat then Kick: both land on the same beat, hi-hat stem up in voice 1 and kick stem down in voice 2. One Undo removes the kick only.
 - [ ] **Staff taps:** in note input, tap a drum's line on the staff: the preview shows that drum's notehead, and the note enters on that line (the chosen pad's drum if it sits on that line, otherwise the line's first drum).
 - [ ] **Rests and durations:** rest entry, dots and duration changes work on the drum staff.

@@ -191,6 +191,10 @@ struct ScoreReaderKeyboardContextToolbar: View {
     /// Shows the up arrow that opens the More Notes row.
     var moreNoteToolAction: ((ScoreReaderMoreNoteTool) -> Void)? = nil
     var setCurrentVoiceAction: ((Int) -> Void)? = nil
+    /// Set on drum staves: the Add key takes the accidentals' place (they mean nothing there),
+    /// and the Chord toggle is hidden because the Add key stacks drums instead.
+    var drumAddMode: ScoreDrumAddMode? = nil
+    var tapDrumAddAction: () -> Void = {}
     /// Stays open until the player closes it, across scores and launches.
     @AppStorage("Aria.NoteEntry.MoreNotesExpanded") var moreNotesExpanded = false
 
@@ -404,15 +408,17 @@ struct ScoreReaderKeyboardContextToolbar: View {
 
     private var regularRow: some View {
         HStack(spacing: 0) {
-            ScoreReaderPaletteButton(
-                stackedChordIcon: true,
-                isSelected: stackedChordInputEnabled,
-                isEnabled: canUseStackedChordInput,
-                action: toggleStackedChordInputAction
-            )
-            .frame(minWidth: 0, maxWidth: .infinity)
+            if drumAddMode == nil {
+                ScoreReaderPaletteButton(
+                    stackedChordIcon: true,
+                    isSelected: stackedChordInputEnabled,
+                    isEnabled: canUseStackedChordInput,
+                    action: toggleStackedChordInputAction
+                )
+                .frame(minWidth: 0, maxWidth: .infinity)
 
-            ScoreReaderContextDivider()
+                ScoreReaderContextDivider()
+            }
 
             ForEach(ScoreNoteDuration.toolbarDurations) { duration in
                 ScoreReaderPaletteButton(
@@ -478,11 +484,16 @@ struct ScoreReaderKeyboardContextToolbar: View {
 
             ScoreReaderContextDivider()
 
-            accidentalButton(.flat)
-            ScoreReaderContextDivider()
-            accidentalButton(.natural)
-            ScoreReaderContextDivider()
-            accidentalButton(.sharp)
+            if let drumAddMode {
+                ScoreReaderDrumAddKey(mode: drumAddMode, style: .column, height: 44, action: tapDrumAddAction)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+            } else {
+                accidentalButton(.flat)
+                ScoreReaderContextDivider()
+                accidentalButton(.natural)
+                ScoreReaderContextDivider()
+                accidentalButton(.sharp)
+            }
 
             if moreNoteToolAction != nil {
                 ScoreReaderContextDivider()
@@ -547,17 +558,22 @@ struct ScoreReaderKeyboardContextToolbar: View {
             }
 
             if compactSections != .durationOnly {
-                compactSectionTitle("Accidentals & Options")
+                compactSectionTitle(drumAddMode == nil ? "Accidentals & Options" : "Options")
                     .padding(.top, compactSections == .all ? 2 : 0)
                     .padding(.leading, 4)
 
                 HStack(spacing: 10) {
-                    ScoreReaderCompactControlGroup {
-                        compactGroupedAccidentalButton(.sharp)
-                        ScoreReaderCompactGroupedDivider()
-                        compactGroupedAccidentalButton(.flat)
-                        ScoreReaderCompactGroupedDivider()
-                        compactGroupedAccidentalButton(.natural)
+                    if let drumAddMode {
+                        ScoreReaderDrumAddKey(mode: drumAddMode, action: tapDrumAddAction)
+                            .frame(width: 150)
+                    } else {
+                        ScoreReaderCompactControlGroup {
+                            compactGroupedAccidentalButton(.sharp)
+                            ScoreReaderCompactGroupedDivider()
+                            compactGroupedAccidentalButton(.flat)
+                            ScoreReaderCompactGroupedDivider()
+                            compactGroupedAccidentalButton(.natural)
+                        }
                     }
 
                     ScoreReaderCompactControlGroup {
@@ -586,14 +602,16 @@ struct ScoreReaderKeyboardContextToolbar: View {
                             accessibilityLabel: "Tie",
                             action: toggleTieAction
                         )
-                        ScoreReaderCompactGroupedDivider()
-                        ScoreReaderCompactGroupedPaletteButton(
-                            stackedChordIcon: true,
-                            isSelected: stackedChordInputEnabled,
-                            isEnabled: canUseStackedChordInput,
-                            accessibilityLabel: stackedChordInputEnabled ? "Single note entry" : "Build chord",
-                            action: toggleStackedChordInputAction
-                        )
+                        if drumAddMode == nil {
+                            ScoreReaderCompactGroupedDivider()
+                            ScoreReaderCompactGroupedPaletteButton(
+                                stackedChordIcon: true,
+                                isSelected: stackedChordInputEnabled,
+                                isEnabled: canUseStackedChordInput,
+                                accessibilityLabel: stackedChordInputEnabled ? "Single note entry" : "Build chord",
+                                action: toggleStackedChordInputAction
+                            )
+                        }
                     }
 
                     if moreNoteToolAction != nil {
@@ -657,58 +675,82 @@ struct ScoreReaderKeyboardContextToolbar: View {
                 }
             }
 
-            HStack(spacing: 4) {
-                compactGridAccidentalButton(.sharp)
-                compactGridAccidentalButton(.flat)
-                compactGridAccidentalButton(.natural)
-
-                ScoreReaderCompactGridPaletteButton(
-                    stackedChordIcon: true,
-                    isSelected: stackedChordInputEnabled,
-                    isEnabled: canUseStackedChordInput,
-                    accessibilityLabel: stackedChordInputEnabled ? "Single note entry" : "Build chord",
-                    action: toggleStackedChordInputAction
-                )
-
-                ScoreReaderCompactGridPaletteButton(
-                    textSymbol: "⌒",
-                    isSelected: editingState.selection?.isTiedForward == true,
-                    isEnabled: editingState.selection?.kind == .note && !isBusy,
-                    accessibilityLabel: "Tie",
-                    action: toggleTieAction
-                )
-
-                ScoreReaderCompactGridPaletteButton(
-                    textSymbol: "\u{1D13D}",
-                    usesMusicFont: true,
-                    glyphBaselineOffset: 10,
-                    musicFontSize: 26,
-                    glyphVerticalOffset: -3,
-                    isSelected: selectedIsRest,
-                    isEnabled: canUseRhythmTools,
-                    accessibilityLabel: selectedIsRest ? "Note entry" : "Rest entry",
-                    action: toggleRestAction
-                )
-
-                if moreNoteToolAction != nil {
-                    ScoreReaderCompactGridTupletMenuButton(
-                        isEnabled: canUseRhythmTools,
-                        action: addTupletAction
-                    )
+            if let drumAddMode {
+                // Drum staves: the Add key spans the four slots of the accidentals and Chord.
+                GeometryReader { geometry in
+                    let spacing: CGFloat = 4
+                    let trailingCount: CGFloat = moreNoteToolAction != nil ? 4 : 3
+                    let slot = (geometry.size.width - spacing * (3 + trailingCount)) / (4 + trailingCount)
+                    HStack(spacing: spacing) {
+                        ScoreReaderDrumAddKey(mode: drumAddMode, action: tapDrumAddAction)
+                            .frame(width: slot * 4 + spacing * 3)
+                        HStack(spacing: spacing) {
+                            compactGridTrailingButtons
+                        }
+                        .frame(width: slot * trailingCount + spacing * (trailingCount - 1))
+                    }
                 }
+                .frame(height: 46)
+            } else {
+                HStack(spacing: 4) {
+                    compactGridAccidentalButton(.sharp)
+                    compactGridAccidentalButton(.flat)
+                    compactGridAccidentalButton(.natural)
 
-                ScoreReaderCompactGridPaletteButton(
-                    systemImage: "trash",
-                    isSelected: false,
-                    isEnabled: editingState.canDeleteSelection && !isBusy,
-                    accessibilityLabel: "Delete selection",
-                    action: deleteSelectionAction
-                )
+                    ScoreReaderCompactGridPaletteButton(
+                        stackedChordIcon: true,
+                        isSelected: stackedChordInputEnabled,
+                        isEnabled: canUseStackedChordInput,
+                        accessibilityLabel: stackedChordInputEnabled ? "Single note entry" : "Build chord",
+                        action: toggleStackedChordInputAction
+                    )
+
+                    compactGridTrailingButtons
+                }
             }
         }
         .padding(.horizontal, 2)
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Tie, rest, tuplet and delete: the end of the portrait grid's second row.
+    @ViewBuilder
+    private var compactGridTrailingButtons: some View {
+        ScoreReaderCompactGridPaletteButton(
+            textSymbol: "⌒",
+            isSelected: editingState.selection?.isTiedForward == true,
+            isEnabled: editingState.selection?.kind == .note && !isBusy,
+            accessibilityLabel: "Tie",
+            action: toggleTieAction
+        )
+
+        ScoreReaderCompactGridPaletteButton(
+            textSymbol: "\u{1D13D}",
+            usesMusicFont: true,
+            glyphBaselineOffset: 10,
+            musicFontSize: 26,
+            glyphVerticalOffset: -3,
+            isSelected: selectedIsRest,
+            isEnabled: canUseRhythmTools,
+            accessibilityLabel: selectedIsRest ? "Note entry" : "Rest entry",
+            action: toggleRestAction
+        )
+
+        if moreNoteToolAction != nil {
+            ScoreReaderCompactGridTupletMenuButton(
+                isEnabled: canUseRhythmTools,
+                action: addTupletAction
+            )
+        }
+
+        ScoreReaderCompactGridPaletteButton(
+            systemImage: "trash",
+            isSelected: false,
+            isEnabled: editingState.canDeleteSelection && !isBusy,
+            accessibilityLabel: "Delete selection",
+            action: deleteSelectionAction
+        )
     }
 
     private func compactSectionTitle(_ title: String) -> some View {

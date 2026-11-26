@@ -27,6 +27,9 @@ struct ScoreReaderFloatingToolPalette: View {
     let changeAccidentalAction: (ScoreAccidentalKind) -> Void
     let openTempoEditorAction: () -> Void
     let toggleDockSideAction: () -> Void
+    /// On drum staves the Add key takes the accidentals' place.
+    var drumAddMode: ScoreDrumAddMode = .off
+    var tapDrumAddAction: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 5) {
@@ -134,37 +137,42 @@ struct ScoreReaderFloatingToolPalette: View {
 
         ScoreReaderPaletteSeparator()
 
-        ScoreReaderPaletteButton(textSymbol: "♭", title: "Flat", isSelected: selectedAccidental == .flat, isEnabled: canEditPitch, action: {
-            preferFlats = true
-            if editingState.noteInputEnabled {
-                prepareAccidentalAction(.flat)
-            } else if editingState.selection?.canChangePitch == true {
-                changeAccidentalAction(.flat)
-            } else if let pitchClass = preparedPitchClass(for: .flat) {
-                setPitchClassAction(pitchClass, true)
-            }
-        })
+        if editingState.activeStaffIsPercussion && !editingState.drumPads.isEmpty {
+            ScoreReaderDrumAddKey(mode: drumAddMode, style: .column, height: 52, action: tapDrumAddAction)
+                .frame(width: 68)
+        } else {
+            ScoreReaderPaletteButton(textSymbol: "♭", title: "Flat", isSelected: selectedAccidental == .flat, isEnabled: canEditPitch, action: {
+                preferFlats = true
+                if editingState.noteInputEnabled {
+                    prepareAccidentalAction(.flat)
+                } else if editingState.selection?.canChangePitch == true {
+                    changeAccidentalAction(.flat)
+                } else if let pitchClass = preparedPitchClass(for: .flat) {
+                    setPitchClassAction(pitchClass, true)
+                }
+            })
 
-        ScoreReaderPaletteButton(textSymbol: "♮", title: "Natural", isSelected: selectedAccidental == .natural, isEnabled: canEditPitch, action: {
-            if editingState.noteInputEnabled {
-                prepareAccidentalAction(.natural)
-            } else if editingState.selection?.canChangePitch == true {
-                changeAccidentalAction(.natural)
-            } else if let pitchClass = preparedPitchClass(for: .natural) {
-                setPitchClassAction(pitchClass, false)
-            }
-        })
+            ScoreReaderPaletteButton(textSymbol: "♮", title: "Natural", isSelected: selectedAccidental == .natural, isEnabled: canEditPitch, action: {
+                if editingState.noteInputEnabled {
+                    prepareAccidentalAction(.natural)
+                } else if editingState.selection?.canChangePitch == true {
+                    changeAccidentalAction(.natural)
+                } else if let pitchClass = preparedPitchClass(for: .natural) {
+                    setPitchClassAction(pitchClass, false)
+                }
+            })
 
-        ScoreReaderPaletteButton(textSymbol: "♯", title: "Sharp", isSelected: selectedAccidental == .sharp, isEnabled: canEditPitch, action: {
-            preferFlats = false
-            if editingState.noteInputEnabled {
-                prepareAccidentalAction(.sharp)
-            } else if editingState.selection?.canChangePitch == true {
-                changeAccidentalAction(.sharp)
-            } else if let pitchClass = preparedPitchClass(for: .sharp) {
-                setPitchClassAction(pitchClass, false)
-            }
-        })
+            ScoreReaderPaletteButton(textSymbol: "♯", title: "Sharp", isSelected: selectedAccidental == .sharp, isEnabled: canEditPitch, action: {
+                preferFlats = false
+                if editingState.noteInputEnabled {
+                    prepareAccidentalAction(.sharp)
+                } else if editingState.selection?.canChangePitch == true {
+                    changeAccidentalAction(.sharp)
+                } else if let pitchClass = preparedPitchClass(for: .sharp) {
+                    setPitchClassAction(pitchClass, false)
+                }
+            })
+        }
     }
 
     @ViewBuilder

@@ -87,6 +87,10 @@ struct ScoreReaderNoteEntrySurface: View {
     let semitoneShiftAction: (Int) -> Void
     let octaveShiftAction: (Int) -> Void
     var enterDrumAction: (Int) -> Void = { _ in }
+    /// A long press on a pad: adds the drum to the current beat.
+    var addDrumAction: (Int) -> Void = { _ in }
+    var drumAddMode: ScoreDrumAddMode = .off
+    var tapDrumAddAction: () -> Void = {}
 
     var body: some View {
         #if os(Android) && ARIA_PHONE_AUDIT
@@ -853,7 +857,9 @@ struct ScoreReaderNoteEntrySurface: View {
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
                 moreNoteToolAction: moreNoteToolAction,
-                setCurrentVoiceAction: setCurrentVoiceAction
+                setCurrentVoiceAction: setCurrentVoiceAction,
+                drumAddMode: showsDrumPad ? drumAddMode : nil,
+                tapDrumAddAction: tapDrumAddAction
             )
             .padding(.horizontal, 52)
         }
@@ -930,7 +936,9 @@ struct ScoreReaderNoteEntrySurface: View {
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
                 moreNoteToolAction: moreNoteToolAction,
-                setCurrentVoiceAction: setCurrentVoiceAction
+                setCurrentVoiceAction: setCurrentVoiceAction,
+                drumAddMode: showsDrumPad ? drumAddMode : nil,
+                tapDrumAddAction: tapDrumAddAction
             )
         default:
             // detailToolbar bakes in .padding(.horizontal, 52) — cancel it so
@@ -964,7 +972,9 @@ struct ScoreReaderNoteEntrySurface: View {
                 changeAccidentalAction: changeAccidentalAction,
                 preferFlats: $preferFlats,
                 moreNoteToolAction: moreNoteToolAction,
-                setCurrentVoiceAction: setCurrentVoiceAction
+                setCurrentVoiceAction: setCurrentVoiceAction,
+                drumAddMode: showsDrumPad ? drumAddMode : nil,
+                tapDrumAddAction: tapDrumAddAction
             )
 
         case .repeats:
@@ -1086,7 +1096,9 @@ struct ScoreReaderNoteEntrySurface: View {
             changeAccidentalAction: changeAccidentalAction,
             preferFlats: $preferFlats,
             moreNoteToolAction: moreNoteToolAction,
-            setCurrentVoiceAction: setCurrentVoiceAction
+            setCurrentVoiceAction: setCurrentVoiceAction,
+            drumAddMode: showsDrumPad ? drumAddMode : nil,
+            tapDrumAddAction: tapDrumAddAction
         )
     }
 
@@ -1252,7 +1264,9 @@ struct ScoreReaderNoteEntrySurface: View {
             isEnabled: drumPadEnabled,
             showsShortcuts: showsShortcuts,
             targetPadWidth: targetPadWidth,
-            action: enterDrumAction
+            addsToBeat: drumAddMode != .off,
+            action: enterDrumAction,
+            addAction: addDrumAction
         )
     }
 

@@ -10,7 +10,11 @@ struct ScoreReaderDrumPad: View {
     let isEnabled: Bool
     var showsShortcuts = false
     var targetPadWidth: CGFloat = 92
+    /// The Add key is armed or locked: pads show a "+" because a tap adds to the current beat.
+    var addsToBeat = false
     let action: (Int) -> Void
+    /// A long press adds the drum to the current beat, like Shift-click in desktop MuseScore.
+    var addAction: (Int) -> Void = { _ in }
 
     private let spacing: CGFloat = 6
 
@@ -36,7 +40,9 @@ struct ScoreReaderDrumPad: View {
                                 isTall: layout.rows == 1,
                                 showsShortcut: showsShortcuts,
                                 glyphHeight: min(max(layout.padHeight - 10, 24), 44),
-                                action: action
+                                addsToBeat: addsToBeat,
+                                action: action,
+                                addAction: addAction
                             )
                             .frame(width: layout.padWidth, height: layout.padHeight)
                             .id(pad.pitch)
@@ -112,65 +118,86 @@ private struct PadLayout {
     }
 }
 
-/// One pad. It tracks its own touch instead of being a Button: Buttons inside a horizontal
-/// ScrollView delay and sometimes drop quick taps, and drummers tap fast. A touch that moves
-/// is left to the scroll view, so the strip still scrolls.
+/// One pad: a Button, so the strip scrolls when a finger drags across it. A press held for
+/// half a second adds the drum to the current beat instead (like Shift-click in desktop
+/// MuseScore); the long press gives way as soon as the finger moves, so dragging still scrolls.
 private struct ScoreReaderDrumPadKey: View {
     let pad: ScoreDrumPad
     let isActive: Bool
     let isTall: Bool
     let showsShortcut: Bool
     let glyphHeight: CGFloat
+    let addsToBeat: Bool
     let action: (Int) -> Void
+    let addAction: (Int) -> Void
 
-    @GestureState private var isPressed = false
-    private let tapSlop: CGFloat = 10
+    /// Set when a long press added the drum, so the Button's release doesn't enter it again.
+    @State private var longPressFired = false
+    private let longPressDuration: Double = 0.45
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
-        ScoreReaderDrumPadCell(
-            pad: pad,
-            isActive: isActive,
-            isTall: isTall,
-            showsShortcut: showsShortcut,
-            glyphHeight: glyphHeight
-        )
-        .background { shape.fill(fill) }
-        .overlay {
-            shape.strokeBorder(
-                isActive ? Color.accentColor.opacity(0.85) : Color.black.opacity(0.1),
-                lineWidth: isActive ? 1.5 : 0.75
+        Button {
+            if longPressFired {
+                longPressFired = false
+                return
+            }
+            action(pad.pitch)
+        } label: {
+            ScoreReaderDrumPadCell(
+                pad: pad,
+                isActive: isActive,
+                isTall: isTall,
+                showsShortcut: showsShortcut,
+                glyphHeight: glyphHeight
             )
         }
-        .scaleEffect(isPressed ? 0.95 : 1)
-        .animation(.easeOut(duration: 0.08), value: isPressed)
-        .contentShape(shape)
+        .buttonStyle(ScoreReaderDrumPadButtonStyle(isActive: isActive, addsToBeat: addsToBeat))
         .simultaneousGesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .updating($isPressed) { value, pressed, _ in
-                    pressed = isTap(value.translation)
-                }
-                .onEnded { value in
-                    if isTap(value.translation) {
-                        action(pad.pitch)
-                    }
+            LongPressGesture(minimumDuration: longPressDuration, maximumDistance: 10)
+                .onEnded { _ in
+                    longPressFired = true
+                    addAction(pad.pitch)
                 }
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(pad.name)
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { action(pad.pitch) }
+        .accessibilityAction(named: "Add to beat") { addAction(pad.pitch) }
     }
+}
 
-    private func isTap(_ translation: CGSize) -> Bool {
-        abs(translation.width) < tapSlop && abs(translation.height) < tapSlop
-    }
+private struct ScoreReaderDrumPadButtonStyle: ButtonStyle {
+    let isActive: Bool
+    let addsToBeat: Bool
 
-    private var fill: Color {
-        if isPressed {
-            return Color(red: 0.80, green: 0.87, blue: 0.99)
-        }
-        return isActive ? Color(red: 0.88, green: 0.93, blue: 1.0) : Color.white
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        let fill: Color = configuration.isPressed
+            ? Color(red: 0.80, green: 0.87, blue: 0.99)
+            : (isActive ? Color(red: 0.88, green: 0.93, blue: 1.0) : Color.white)
+        configuration.label
+            .background { shape.fill(fill) }
+            .overlay {
+                shape.strokeBorder(
+                    isActive ? Color.accentColor.opacity(0.85) : Color.black.opacity(0.1),
+                    lineWidth: isActive ? 1.5 : 0.75
+                )
+            }
+            .overlay(alignment: .topTrailing) {
+                if addsToBeat {
+                    Image(systemName: "plus")
+                        .font(.system(size: 7, weight: .heavy))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 12, height: 12)
+                        .background(Color.accentColor, in: Circle())
+                        .padding(3)
+                        .allowsHitTesting(false)
+                }
+            }
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .contentShape(shape)
     }
 }
 
@@ -337,5 +364,82 @@ struct ScoreReaderDrumNoteGlyph: View {
         path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
         path.closeSubpath()
         return path
+    }
+}
+
+/// The drum pad's Add key, in the toolbar where the accidentals sit on pitched staves. It works
+/// like Shift on the iPhone keyboard: tap to add the next drum to the current beat, double-tap to
+/// keep adding, tap again to stop.
+struct ScoreReaderDrumAddKey: View {
+    enum Style {
+        /// iPad toolbar row: icon over a title, like Dot, Rest and Tie.
+        case column
+        /// Phone grid and grouped rows: icon and title side by side.
+        case wide
+    }
+
+    let mode: ScoreDrumAddMode
+    var style: Style = .wide
+    var height: CGFloat = 46
+    let action: () -> Void
+
+    private var isOn: Bool { mode != .off }
+
+    private var symbolName: String {
+        switch mode {
+        case .off: return "shift"
+        case .once: return "shift.fill"
+        case .locked: return "capslock.fill"
+        }
+    }
+
+    private var tint: Color {
+        isOn ? Color(red: 0.0, green: 0.48, blue: 1.0) : Color.black.opacity(0.82)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                switch style {
+                case .column:
+                    VStack(spacing: 3) {
+                        Image(systemName: symbolName)
+                            .font(.system(size: 20, weight: .semibold))
+                        Text("Add")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                case .wide:
+                    HStack(spacing: 7) {
+                        Image(systemName: symbolName)
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(mode == .locked ? "Adding" : "Add to beat")
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .background(
+                isOn ? Color(red: 0.86, green: 0.93, blue: 1.0) : Color.white.opacity(style == .wide ? 0.58 : 0),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay {
+                if style == .wide || isOn {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(isOn ? Color.blue.opacity(mode == .locked ? 0.55 : 0.24) : Color.black.opacity(0.08),
+                                lineWidth: mode == .locked ? 1.4 : 0.7)
+                        .allowsHitTesting(false)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel("Add to beat")
+        .accessibilityValue(mode == .off ? "Off" : mode == .once ? "Next drum" : "Locked")
+        .accessibilityHint("The next drum goes on the current beat. Double-tap quickly to keep adding.")
     }
 }

@@ -216,6 +216,10 @@ final class ScoreReaderState {
     /// selected; without this, selecting a single note turned it off and the next pitch key
     /// replaced that note instead of adding to it (BUG-007).
     var stackedChordInputChosen = false
+    /// The drum pad's Add key, which works like Shift on the iPhone keyboard: armed once, the
+    /// next pad tap adds its drum to the current beat; locked, every tap does.
+    var drumAddMode: ScoreDrumAddMode = .off
+    var drumAddKeyLastTap: Date?
     var noteEntryPreview: ScoreNoteEntryPreview?
     var activeNotationAutoScrollRevision = 0
     /// True when the next auto-scroll should move the page only if the selected bar is
@@ -522,6 +526,7 @@ final class ScoreReaderState {
         pendingMIDIPitch = nil
         stackedChordInputEnabled = false
         stackedChordInputChosen = false
+        drumAddMode = .off
         pickupEditorContext = nil
 
         var transitionSucceeded = true
