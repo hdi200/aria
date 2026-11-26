@@ -30,22 +30,16 @@ struct ScoreReaderDrumPad: View {
                         spacing: spacing
                     ) {
                         ForEach(pads) { pad in
-                            Button {
-                                action(pad.pitch)
-                            } label: {
-                                ScoreReaderDrumPadCell(
-                                    pad: pad,
-                                    isActive: pad.pitch == activePitch,
-                                    isTall: layout.rows == 1,
-                                    showsShortcut: showsShortcuts,
-                                    glyphHeight: min(max(layout.padHeight - 10, 24), 44)
-                                )
-                                .frame(width: layout.padWidth, height: layout.padHeight)
-                            }
-                            .buttonStyle(ScoreReaderDrumPadButtonStyle(isActive: pad.pitch == activePitch))
+                            ScoreReaderDrumPadKey(
+                                pad: pad,
+                                isActive: pad.pitch == activePitch,
+                                isTall: layout.rows == 1,
+                                showsShortcut: showsShortcuts,
+                                glyphHeight: min(max(layout.padHeight - 10, 24), 44),
+                                action: action
+                            )
+                            .frame(width: layout.padWidth, height: layout.padHeight)
                             .id(pad.pitch)
-                            .accessibilityLabel(pad.name)
-                            .accessibilityAddTraits(pad.pitch == activePitch ? [.isSelected] : [])
                         }
                     }
                     .frame(height: geometry.size.height)
@@ -74,7 +68,6 @@ struct ScoreReaderDrumPad: View {
                 }
             }
         }
-        .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.4)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Drum pad")
@@ -119,28 +112,62 @@ private struct PadLayout {
     }
 }
 
-private struct ScoreReaderDrumPadButtonStyle: ButtonStyle {
+/// One pad. It tracks its own touch instead of being a Button: Buttons inside a horizontal
+/// ScrollView delay and sometimes drop quick taps, and drummers tap fast. A touch that moves
+/// is left to the scroll view, so the strip still scrolls.
+private struct ScoreReaderDrumPadKey: View {
+    let pad: ScoreDrumPad
     let isActive: Bool
+    let isTall: Bool
+    let showsShortcut: Bool
+    let glyphHeight: CGFloat
+    let action: (Int) -> Void
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(fill(pressed: configuration.isPressed))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .strokeBorder(
-                        isActive ? Color.accentColor.opacity(0.85) : Color.black.opacity(0.1),
-                        lineWidth: isActive ? 1.5 : 0.75
-                    )
-            }
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    @GestureState private var isPressed = false
+    private let tapSlop: CGFloat = 10
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        ScoreReaderDrumPadCell(
+            pad: pad,
+            isActive: isActive,
+            isTall: isTall,
+            showsShortcut: showsShortcut,
+            glyphHeight: glyphHeight
+        )
+        .background { shape.fill(fill) }
+        .overlay {
+            shape.strokeBorder(
+                isActive ? Color.accentColor.opacity(0.85) : Color.black.opacity(0.1),
+                lineWidth: isActive ? 1.5 : 0.75
+            )
+        }
+        .scaleEffect(isPressed ? 0.95 : 1)
+        .animation(.easeOut(duration: 0.08), value: isPressed)
+        .contentShape(shape)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .updating($isPressed) { value, pressed, _ in
+                    pressed = isTap(value.translation)
+                }
+                .onEnded { value in
+                    if isTap(value.translation) {
+                        action(pad.pitch)
+                    }
+                }
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(pad.name)
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { action(pad.pitch) }
     }
 
-    private func fill(pressed: Bool) -> Color {
-        if pressed {
+    private func isTap(_ translation: CGSize) -> Bool {
+        abs(translation.width) < tapSlop && abs(translation.height) < tapSlop
+    }
+
+    private var fill: Color {
+        if isPressed {
             return Color(red: 0.80, green: 0.87, blue: 0.99)
         }
         return isActive ? Color(red: 0.88, green: 0.93, blue: 1.0) : Color.white

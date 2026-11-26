@@ -1239,12 +1239,10 @@ struct ScoreReaderNoteEntrySurface: View {
         editingState.activeStaffIsPercussion && !editingState.drumPads.isEmpty
     }
 
-    // Like the keyboard, the pad stays live while an edit runs: taps queue up in order.
+    // The pad only shows with a drum staff active, and it stays live while an edit runs, so
+    // fast taps queue up in order instead of being dropped.
     private var drumPadEnabled: Bool {
-        editingState.noteInputEnabled
-        || editingState.selection?.kind == .note
-        || editingState.selection?.kind == .rest
-        || editingState.selection?.kind == .measure
+        true
     }
 
     private func drumPad(targetPadWidth: CGFloat, showsShortcuts: Bool) -> some View {

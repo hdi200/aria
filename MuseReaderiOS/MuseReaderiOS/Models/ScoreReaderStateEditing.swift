@@ -2049,12 +2049,19 @@ extension ScoreReaderState {
 
     /// Enters drums from the drum pad, all struck together. The engine splits them into one chord
     /// per drum-set voice at the same beat; chord mode adds them to the current beat instead.
+    /// A pad tapped in Select mode with a drum note selected adds that drum to the selected beat,
+    /// in its own kit voice (hi-hat selected + Bass Drum puts the kick under it in voice 2), and
+    /// turns note input on; later taps continue from the next beat.
     func enterDrums(_ drumPitches: [Int]) {
         guard supportsEditing, isEditingMode, session.liveRenderSession != nil else { return }
         let pitches = drumPitches.filter { (0...127).contains($0) }
         guard !pitches.isEmpty else { return }
         var intent = noteInputIntent
+        // Only chord entry the user turned on counts. Selecting a beat that already has several
+        // drums lights the Chord button too, but pad taps from there must still move on.
+        intent.chord = stackedChordInputChosen
         let selection = editingState.selection
+        let addsToSelectedBeat = !intent.enabled && !hasContinuousNoteInputCursor && selection?.kind == .note
         if !intent.enabled, let selection, selection.kind == .note || selection.kind == .rest {
             // Starting from a selected note or rest enters drums with its value, as the
             // duration toolbar shows it (and as the keyboard does, BUG-008).
@@ -2068,9 +2075,10 @@ extension ScoreReaderState {
         nextIntent.chord = intent.chord && !intent.rests
         queuedNoteInputIntent = nextIntent
         let submittedIntent = nextIntent
-        // Chord mode adds to the selected note's beat, or to the last entered beat.
-        let addToCurrentChord = submittedIntent.chord
-            && (editingState.noteInputEnabled || selection?.kind == .note)
+        // Select mode and chord mode add to the selected note's beat; chord mode with nothing
+        // selected adds to the last entered beat.
+        let addToCurrentChord = addsToSelectedBeat || (submittedIntent.chord
+            && (editingState.noteInputEnabled || selection?.kind == .note))
         pendingAccidentalKind = nil
         hasContinuousNoteInputCursor = true
         lastKeyboardInputCanReceiveAccidental = false

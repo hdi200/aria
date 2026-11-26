@@ -12,13 +12,16 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
-## Drum pad entry (November 25, branch `percussion-entry`, first pass)
+## Drum pad entry (November 25, branch `percussion-entry`)
 
 Use a drum-kit score (the Rock Groove demo in `promo/percussion-entry/`, or New Score › Rock Band). Not yet on Android: the Android session needs the new engine call first.
 
 - [ ] **iPhone, portrait and landscape:** Edit, tap a rest in the drum staff: the piano keyboard is replaced by the drum pad at the same height. A full kit shows two rows that scroll sideways, fading at the right edge.
 - [ ] **iPad:** the same, with taller pads and shortcut letters; the Half step/Octave controls are gone on drum staves.
 - [ ] **Entering drums:** tap Snare, Kick, Closed Hi-Hat in turn: each enters at the cursor on its own line, with the right notehead. Kick and pedal hi-hat go to voice 2 (stems down), the others to voice 1. The cursor moves on after each.
+- [ ] **Cursor:** single taps move forward one beat at a time to the end of the bar and into the next; no extra bars are appended and no beat is entered twice.
+- [ ] **Fast taps:** tap one pad four times quickly: four notes, one per beat.
+- [ ] **Add from Select mode:** leave note input, tap a hi-hat note to select it, tap Bass Drum: the kick goes under that hi-hat on the same beat (voice 2, stem down), the hi-hat stays, note input turns on, and the next pad tap enters on the following beat.
 - [ ] **Chord mode:** turn on the chord toggle, tap Closed Hi-Hat then Kick: both land on the same beat, hi-hat stem up in voice 1 and kick stem down in voice 2. One Undo removes the kick only.
 - [ ] **Staff taps:** in note input, tap a drum's line on the staff: the preview shows that drum's notehead, and the note enters on that line (the chosen pad's drum if it sits on that line, otherwise the line's first drum).
 - [ ] **Rests and durations:** rest entry, dots and duration changes work on the drum staff.
