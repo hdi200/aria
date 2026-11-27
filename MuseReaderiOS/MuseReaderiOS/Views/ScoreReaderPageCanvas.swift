@@ -841,7 +841,8 @@ struct ScoreReaderPageViewportOverlays: View {
                     selectedElement: selectedElement,
                     imageSize: imageSize,
                     zoomViewport: $zoomViewport,
-                    editAction: editAction(for: selectedElement.kind)
+                    editAction: editAction(for: selectedElement.kind),
+                    deleteAction: signatureDeleteAction(for: selectedElement)
                 )
             }
 
@@ -921,6 +922,19 @@ struct ScoreReaderPageViewportOverlays: View {
             return {}
         }
     }
+
+    /// Key and time signatures can be removed too. The opening time signature is changed
+    /// with Edit instead: removing it would re-bar the whole score in 4/4.
+    private func signatureDeleteAction(for element: ScoreSelectedElement) -> (() -> Void)? {
+        switch element.kind {
+        case .keySignature:
+            return deleteSelectionAction
+        case .timeSignature where !element.isFirstMeasure:
+            return deleteSelectionAction
+        default:
+            return nil
+        }
+    }
 }
 
 struct ScoreReaderSelectedSignatureActions: View {
@@ -928,19 +942,28 @@ struct ScoreReaderSelectedSignatureActions: View {
     let imageSize: CGSize?
     @Binding var zoomViewport: ScoreReaderZoomViewport
     let editAction: () -> Void
+    var deleteAction: (() -> Void)? = nil
 
     var body: some View {
         GeometryReader { geometry in
-            Button(action: editAction) {
-                Label("Edit", systemImage: "pencil")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Capsule())
-                    .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
+            HStack(spacing: 6) {
+                Button(action: editAction) {
+                    Label("Edit", systemImage: "pencil")
+                }
+
+                if let deleteAction {
+                    Button(action: deleteAction) {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
             }
-            .buttonStyle(.plain)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color(red: 0.12, green: 0.36, blue: 0.88), in: Capsule())
+            .shadow(color: Color.black.opacity(0.16), radius: 8, y: 3)
+            .buttonStyle(.borderless)
             .position(actionPosition(in: geometry.size))
         }
         .allowsHitTesting(true)
@@ -948,10 +971,12 @@ struct ScoreReaderSelectedSignatureActions: View {
 
     private func actionPosition(in size: CGSize) -> CGPoint {
         let rect = actionAnchorCGRect(in: size)
-        let rawX = rect.maxX + 28
+        // The Edit / Remove pill is about twice as wide as Edit alone.
+        let halfWidth: CGFloat = deleteAction == nil ? 42 : 78
+        let rawX = rect.maxX + halfWidth - 14
         let rawY = rect.minY - 26
         return CGPoint(
-            x: min(max(rawX, 42), max(size.width - 42, 42)),
+            x: min(max(rawX, halfWidth), max(size.width - halfWidth, halfWidth)),
             y: min(max(rawY, 26), max(size.height - 26, 26))
         )
     }

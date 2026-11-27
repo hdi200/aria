@@ -97,6 +97,7 @@
 #include "engraving/dom/shadownote.h"
 #include "engraving/dom/slur.h"
 #include "engraving/dom/spanner.h"
+#include "engraving/dom/keysig.h"
 #include "engraving/dom/staff.h"
 #include "engraving/dom/stem.h"
 #include "engraving/dom/hook.h"

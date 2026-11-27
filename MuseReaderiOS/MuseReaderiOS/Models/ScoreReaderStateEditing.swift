@@ -1462,8 +1462,11 @@ extension ScoreReaderState {
             return
         }
 
+        // Removing a key or time signature changes every bar up to the next change.
+        let selectionKind = editingState.selection?.kind
+        let refreshScope: ScoreEditRefreshScope = selectionKind == .keySignature || selectionKind == .timeSignature ? .all : .local
         performEditingAction(mutatesScore: true) { liveRenderSession in
-            try await liveRenderSession.deleteSelection()
+            try await liveRenderSession.deleteSelection(refreshScope: refreshScope)
         }
     }
 

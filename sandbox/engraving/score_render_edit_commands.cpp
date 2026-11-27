@@ -3438,11 +3438,119 @@
             if (selectedItem->isLayoutBreak() || selectedItem->isSystemLockIndicator()) {
                 return removeLayoutBreak(output, errorMessage);
             }
+            if (selectedItem->isKeySig()) {
+                return removeKeySignature(mu::engraving::toKeySig(selectedItem), output, errorMessage);
+            }
+            if (selectedItem->isTimeSig()) {
+                return removeTimeSignature(mu::engraving::toTimeSig(selectedItem), output, errorMessage);
+            }
         }
 
         score->startCmd(muse::TranslatableString::untranslatable("MuseReader delete selection"));
         score->cmdDeleteSelection();
         score->endCmd();
+        refreshAfterEdit();
+        output = makeEditState(score);
+        return true;
+    }
+
+    //! The full-score staff a (possibly part) staff stands for.
+    mu::engraving::Staff* masterStaffFor(mu::engraving::Staff* staff) const
+    {
+        mu::engraving::MasterScore* master = m_masterScore.get();
+        if (!staff || !master) {
+            return nullptr;
+        }
+        if (staff->score() == master) {
+            return staff;
+        }
+        return staff->findLinkedInScore(master);
+    }
+
+    //! Removes the key change a tapped key signature stands for, on every staff, as Aria's
+    //! key signature editor sets keys for the whole score. System-start and courtesy copies
+    //! resolve to the change they repeat. The opening key becomes C major (no key signature).
+    bool removeKeySignature(mu::engraving::KeySig* keySig, msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        mu::engraving::MasterScore* master = m_masterScore.get();
+        mu::engraving::Staff* masterStaff = keySig ? masterStaffFor(keySig->staff()) : nullptr;
+        if (!master || !masterStaff) {
+            errorMessage = "Aria could not find that key signature in the score.";
+            return false;
+        }
+
+        const mu::engraving::Fraction itemTick = keySig->segment() ? keySig->segment()->tick() : keySig->tick();
+        const mu::engraving::Fraction keyTick = masterStaff->currentKeyTick(itemTick);
+
+        std::vector<mu::engraving::KeySig*> keySigs;
+        if (keyTick > mu::engraving::Fraction(0, 1)) {
+            mu::engraving::Measure* measure = master->tick2measure(keyTick);
+            mu::engraving::Segment* segment = measure ? measure->findSegment(mu::engraving::SegmentType::KeySig, keyTick) : nullptr;
+            for (size_t staffIndex = 0; segment && staffIndex < master->nstaves(); ++staffIndex) {
+                mu::engraving::EngravingItem* item = segment->element(staffIndex * mu::engraving::VOICES);
+                if (item && item->isKeySig() && !item->generated()) {
+                    keySigs.push_back(mu::engraving::toKeySig(item));
+                }
+            }
+            if (keySigs.empty()) {
+                errorMessage = "This key signature can't be removed.";
+                return false;
+            }
+        }
+
+        mu::engraving::Score* score = activeScore();
+        master->startCmd(muse::TranslatableString::untranslatable("MuseReader remove key signature"));
+        score->deselectAll();
+        if (keyTick > mu::engraving::Fraction(0, 1)) {
+            for (mu::engraving::KeySig* item : keySigs) {
+                master->deleteItem(item);
+            }
+        } else {
+            mu::engraving::KeySigEvent keyEvent;
+            keyEvent.setConcertKey(mu::engraving::Key::C);
+            keyEvent.setKey(mu::engraving::Key::C);
+            for (size_t staffIndex = 0; staffIndex < master->nstaves(); ++staffIndex) {
+                mu::engraving::Staff* staff = master->staff(staffIndex);
+                if (!staff || staff->isDrumStaff(keyTick)) {
+                    continue;
+                }
+                master->undoChangeKeySig(staff, keyTick, keyEvent);
+            }
+        }
+        master->endCmd();
+        refreshAfterEdit();
+        output = makeEditState(score);
+        return true;
+    }
+
+    //! Removes the time signature change a tapped time signature (or its courtesy copy) stands
+    //! for; the bars that follow take the previous time signature. The opening one is changed
+    //! with Edit instead, since removing it would re-bar the whole score in 4/4.
+    bool removeTimeSignature(mu::engraving::TimeSig* timeSig, msr::render::ScoreEditState& output, std::string& errorMessage)
+    {
+        mu::engraving::MasterScore* master = m_masterScore.get();
+        mu::engraving::Staff* masterStaff = timeSig ? masterStaffFor(timeSig->staff()) : nullptr;
+        if (!master || !masterStaff) {
+            errorMessage = "Aria could not find that time signature in the score.";
+            return false;
+        }
+
+        const mu::engraving::Fraction itemTick = timeSig->segment() ? timeSig->segment()->tick() : timeSig->tick();
+        mu::engraving::TimeSig* change = masterStaff->timeSig(itemTick);
+        if (!change || change->generated() || !change->segment() || change->segment()->isCourtesySegment()) {
+            errorMessage = "This time signature can't be removed.";
+            return false;
+        }
+        if (change->tick() <= mu::engraving::Fraction(0, 1)) {
+            errorMessage = "The opening time signature can't be removed. Tap Edit to change it.";
+            return false;
+        }
+
+        mu::engraving::Score* score = activeScore();
+        master->startCmd(muse::TranslatableString::untranslatable("MuseReader remove time signature"));
+        score->deselectAll();
+        master->cmdRemoveTimeSig(change);
+        master->endCmd();
         refreshAfterEdit();
         output = makeEditState(score);
         return true;

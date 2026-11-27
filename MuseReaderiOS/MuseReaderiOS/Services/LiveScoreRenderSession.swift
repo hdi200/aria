@@ -1078,12 +1078,12 @@ actor LiveScoreRenderSession {
         )
     }
 
-    func deleteSelection() throws -> ScoreEditingState {
+    func deleteSelection(refreshScope: ScoreEditRefreshScope = .local) throws -> ScoreEditingState {
         guard supportsEditing else {
             return inactiveEditingState()
         }
 
-        let editState = try makeEditingState(from: bridgeSession.deleteSelection())
+        let editState = try makeEditingState(from: bridgeSession.deleteSelection(), refreshScope: refreshScope)
         invalidateCachedPlaybackArtifacts()
         return editState
     }

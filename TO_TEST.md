@@ -12,6 +12,20 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Remove key and time signatures (November 27)
+
+Tapping a key or time signature in edit mode shows Edit and Remove (`IOS_CHANGES.md` #147).
+Native test `key and time signatures can be removed` passes on the host build.
+
+- [ ] **Key change:** in a score with several instruments and a key change, tap the change on any staff, tap Remove: the change goes on every staff and the bars after it are in the earlier key. Undo brings it back on every staff.
+- [ ] **Repeated / courtesy key signature:** tap the key signature at the start of a later system (or the courtesy one at the end of the line before a change), Remove: the key change it repeats is removed.
+- [ ] **Opening key:** tap the first bar's key signature, Remove: the score is in C major (a B♭ clarinet part shows D major). Undo restores it.
+- [ ] **Time change:** tap a mid-score time signature, Remove: the music is re-barred in the earlier time signature. Undo restores it.
+- [ ] **Opening time signature:** tap it: only Edit shows, no Remove.
+- [ ] **Pill position:** the Edit / Remove pill sits beside the signature and stays on screen near the right edge, on iPhone and iPad.
+- [ ] **Save and open in desktop MuseScore 4.7:** after removing a key and a time change, the file opens unchanged.
+- [ ] **Android:** the same checks after rebuilding `libaria_engine` (engine behaviour changed).
+
 ## Selection and taps line up on narrow Android phones (November 26)
 
 Fix for the Samsung/OnePlus report (`IOS_CHANGES.md` #144). Passed in Firebase Test Lab on

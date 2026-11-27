@@ -3618,6 +3618,97 @@ void testPracticeSpeedScalesPlaybackOnly(const std::filesystem::path& root)
            "Resetting to 100% did not restore the written timing");
 }
 
+// Two staves, F major in 4/4, changing to D major in 3/4 at bar 3.
+std::string signatureChangesScoreXml()
+{
+    std::ostringstream xml;
+    xml << R"MSCX(<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <Score>
+    <Division>480</Division>
+    <Part>
+      <Staff id="1"/>
+      <Instrument id="flute"><trackName>Flute</trackName><instrumentId>wind.flutes.flute</instrumentId><Channel><program value="73"/></Channel></Instrument>
+    </Part>
+    <Part>
+      <Staff id="2"/>
+      <Instrument id="violin"><trackName>Violin</trackName><instrumentId>strings.violin</instrumentId><Channel><program value="40"/></Channel></Instrument>
+    </Part>
+)MSCX";
+    for (int staff = 0; staff < 2; ++staff) {
+        xml << "    <Staff id=\"" << staff + 1 << "\">\n";
+        for (int bar = 0; bar < 4; ++bar) {
+            xml << "      <Measure><voice>";
+            if (bar == 0) {
+                xml << "<KeySig><concertKey>-1</concertKey></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>";
+            } else if (bar == 2) {
+                xml << "<KeySig><concertKey>2</concertKey></KeySig><TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>";
+            }
+            xml << (bar < 2 ? "<Chord><durationType>whole</durationType>" : "<Chord><dots>1</dots><durationType>half</durationType>")
+                << "<Note><pitch>" << (staff == 0 ? 72 : 60) + bar * 2 << "</pitch></Note></Chord></voice></Measure>\n";
+        }
+        xml << "    </Staff>\n";
+    }
+    xml << "  </Score>\n</museScore>\n";
+    return xml.str();
+}
+
+// Taps across the first page until a key or time signature in the bar at `tick` is selected.
+bool selectSignature(msr::render::ScoreRenderSession& session, const bool key, const int64_t tick, msr::render::ScoreEditState& state)
+{
+    std::string error;
+    for (double y = 0.02; y <= 0.4; y += 0.003) {
+        for (double x = 0.02; x <= 0.98; x += 0.003) {
+            expect(session.selectElement(0, x, y, 1.0, state, error), "Signature hit testing failed: " + error);
+            const auto& selection = state.selection;
+            if ((key ? selection.isKeySignature : selection.isTimeSignature) && selection.tick == tick) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void testRemovingKeyAndTimeSignatures(const std::filesystem::path& root)
+{
+    auto session = openSession(root, "remove-signatures", signatureChangesScoreXml());
+    msr::render::ScoreEditState state;
+    std::string error;
+    const int64_t bar3 = 480 * 4 * 2;
+
+    // A key change goes from every staff, though only one staff's signature was tapped.
+    expect(selectSignature(*session, true, bar3, state), "Could not tap the bar 3 key signature");
+    expect(session->deleteSelection(state, error), "Could not remove the key change: " + error);
+    std::string saved = saveSnapshot(*session, root, "remove-signatures-key");
+    expect(saved.find("<concertKey>2</concertKey>") == std::string::npos, "The D major key change is still in the score");
+    expect(countOccurrences(saved, "<concertKey>-1</concertKey>") == 2, "Both staves should keep their opening F major");
+
+    // The opening key becomes C major on both staves.
+    expect(selectSignature(*session, true, 0, state), "Could not tap the opening key signature");
+    expect(session->deleteSelection(state, error), "Could not remove the opening key: " + error);
+    saved = saveSnapshot(*session, root, "remove-signatures-opening-key");
+    expect(saved.find("<concertKey>-1</concertKey>") == std::string::npos, "The opening F major key is still in the score");
+
+    // The 3/4 change goes and the music is re-barred in 4/4.
+    expect(selectSignature(*session, false, bar3, state), "Could not tap the bar 3 time signature");
+    expect(session->deleteSelection(state, error), "Could not remove the time signature change: " + error);
+    saved = saveSnapshot(*session, root, "remove-signatures-time");
+    expect(saved.find("<sigN>3</sigN>") == std::string::npos, "The 3/4 change is still in the score");
+    expect(countOccurrences(saved, "<TimeSig>") == 2, "Only the opening 4/4 should be left, once per staff");
+
+    // The opening time signature is changed with Edit instead.
+    expect(selectSignature(*session, false, 0, state), "Could not tap the opening time signature");
+    expect(!session->deleteSelection(state, error), "Removing the opening time signature should be refused");
+    expect(countOccurrences(saveSnapshot(*session, root, "remove-signatures-opening-time"), "<TimeSig>") == 2,
+           "Refusing to remove the opening time signature changed the score");
+
+    // One undo brings back each removal.
+    expect(session->undo(state, error) && session->undo(state, error) && session->undo(state, error), "Undo failed: " + error);
+    saved = saveSnapshot(*session, root, "remove-signatures-undone");
+    expect(countOccurrences(saved, "<concertKey>2</concertKey>") == 2 && countOccurrences(saved, "<sigN>3</sigN>") == 2,
+           "Undo did not restore the key and time signature changes");
+}
+
 int main()
 {
     TestDirectory testDirectory;
@@ -3628,6 +3719,7 @@ int main()
         return passed ? 0 : 1;
     }
     bool passed = true;
+    passed &= runTest("key and time signatures can be removed", [&] { testRemovingKeyAndTimeSignatures(testDirectory.path); });
     passed &= runTest("rejected tuplet keeps the score", [&] { testRejectedTupletKeepsScore(testDirectory.path); });
     passed &= runTest("time signature splits the last tuplet note into a new tuplet", [&] { testTimeSignatureSplitsLastTupletNote(testDirectory.path); });
     passed &= runTest("removing part bars clears the part selection", [&] { testRemovingPartMeasuresClearsPartSelection(testDirectory.path); });
