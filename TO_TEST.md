@@ -12,6 +12,17 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Selection and taps line up on narrow Android phones (November 26)
+
+Fix for the Samsung/OnePlus report (`IOS_CHANGES.md` #144). Passed in Firebase Test Lab on
+real Galaxy S24, S22 and A16 (`EditingPanelsScreenshotTest#selectionOverlay`).
+
+- [ ] **Samsung or OnePlus phone:** in edit mode, tap a note: the blue selection covers the note exactly, not above it. Tap a staff line in Note mode: the note lands on that line. Try an A4 score and a US Letter score.
+- [ ] **Pixel/Moto-width phone with a US Letter score:** the same checks (Letter pages were affected on phones up to about 433 dp wide).
+- [ ] **Display size:** with Settings → Display size set larger, the same checks.
+- [ ] **iPhone (small, e.g. SE or mini):** edit mode looks and behaves as before (iOS code is unchanged).
+- [ ] **"Editing weirdness" message (Android):** on a Samsung/OnePlus phone that had the app before November 27, updating and opening the library shows the message once, with a Done button, and never again. It waits for the early supporter message if that shows first. A 411 dp phone (Pixel, Moto), a tablet, and an install made on or after November 27 don't show it. Emulator shortcut: `adb shell wm density 480` before the first launch (`wm density reset` after).
+
 ## What's New for November 27 (notice version 7)
 
 To force it on a test install, set `UpdateNotice.seenVersion` to 5 and `UpdateNotice.v7.isExistingInstall` to true in the app's defaults (add `UpdateNotice.v7.showsScanner` true for the scanning page), then open a score.

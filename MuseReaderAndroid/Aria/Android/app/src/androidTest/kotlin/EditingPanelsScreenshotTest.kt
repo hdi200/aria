@@ -143,6 +143,131 @@ class EditingPanelsScreenshotTest {
         assertFalse("Fingering drag created more than one undo command", waitFor("Undo").isEnabled)
     }
 
+    /** Samsung report (November 2026): the blue selection is drawn above the black note.
+     * Makes a new piano score, enters notes with the piano keys (no score taps involved) and
+     * saves screenshots; each entered note is selected, so blue and black can be compared. */
+    @Test fun selectionOverlay() {
+        writeDeviceInfo()
+        val rasterLog = File(directory, "raster-calls.txt").apply { writeText("") }
+        val count = java.util.concurrent.atomic.AtomicInteger()
+        val misshapen = java.util.concurrent.CopyOnWriteArrayList<String>()
+        AriaRasterCapture.record = { pdf, opaque, pageWidth, pageHeight, width, height, crop ->
+            val n = count.incrementAndGet()
+            // A whole-page bitmap must have the page's shape, or the page draws off its
+            // selections and taps (Samsung, November 2026).
+            if (opaque && width > 0 && height > 0) {
+                val wanted = pageHeight.toDouble() / pageWidth
+                val asked = height.toDouble() / width
+                if (kotlin.math.abs(asked / wanted - 1) > 0.01) misshapen += "#$n ${width}x$height for ${pageWidth}x$pageHeight pt"
+            }
+            val kind = if (opaque) "page" else "overlay"
+            if (n <= 40) File(directory, "raster-%02d-$kind.pdf".format(n)).writeBytes(pdf)
+            synchronized(rasterLog) {
+                rasterLog.appendText("$n $kind pdfPoints=${pageWidth}x$pageHeight pixels=${width}x$height crop=${crop.joinToString()}\n")
+            }
+        }
+        val intent = inst.targetContext.packageManager.getLaunchIntentForPackage(inst.targetContext.packageName)!!
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        inst.targetContext.startActivity(intent)
+        settle(4000)
+        dismissPrompts()
+        shot("overlay-00-library")
+        click("New Score")
+        settle(1500)
+        click("Create Score")
+        settle(6000)
+        find("Skip")?.let { tapNode(it); settle(1500) }
+        dismissPrompts()
+        shot("overlay-01-editor")
+        click("Quarter")
+        // The keyboard needs a staff position first: tap the treble staff's middle line,
+        // found in the screenshot (long dark rows; a rest is too short to pass).
+        val screen = ui.takeScreenshot()!!
+        val x = (screen.width * 0.6f).toInt()
+        fun dark(px: Int, py: Int) = android.graphics.Color.red(screen.getPixel(px, py)) < 90
+        val rows = (screen.height / 8 until screen.height * 6 / 10).filter { y ->
+            dark(x, y) && dark(x - 30, y) && dark(x + 30, y)
+        }
+        val lines = rows.filterIndexed { i, y -> i == 0 || y - rows[i - 1] > 2 }
+        screen.recycle()
+        File(directory, "staff-lines.txt").writeText("x=$x lines=$lines\n")
+        // Five evenly spaced lines; skips title text the column happens to cross.
+        val staff = (0..lines.size - 5).firstOrNull { i ->
+            val gaps = (i until i + 4).map { lines[it + 1] - lines[it] }
+            gaps.max() - gaps.min() <= 2 && gaps.min() > 4
+        }
+        assertNotNull("No treble staff found: $lines", staff)
+        tap(x.toFloat(), lines[staff!! + 2].toFloat())
+        settle(2500)
+        shot("overlay-02-note-1")
+        for (index in 2..3) {
+            val key = find(args.getString("key", "C3")) ?: break
+            tapNode(key)
+            settle(2500)
+            shot("overlay-0${index + 1}-note-$index")
+        }
+        AriaRasterCapture.record = null
+        assertTrue("Page bitmaps not shaped like the page: $misshapen", misshapen.isEmpty())
+    }
+
+    /** The same rasterizer the app uses: a whole page, then a crop of it, as the selection
+     * overlay is drawn. On a correct PdfRenderer the box lands at the same page position. */
+    @Test fun pdfCropAlignment() {
+        writeDeviceInfo()
+        val document = android.graphics.pdf.PdfDocument()
+        val pageWidth = 595; val pageHeight = 842
+        val page = document.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create())
+        val box = android.graphics.RectF(300f, 400f, 320f, 410f)
+        page.canvas.drawRect(box, android.graphics.Paint().apply { color = android.graphics.Color.BLACK })
+        document.finishPage(page)
+        val pdf = java.io.ByteArrayOutputStream().also { document.writeTo(it) }.toByteArray()
+        document.close()
+
+        val width = 1080
+        val height = (width * pageHeight.toDouble() / pageWidth).toInt()
+        val lines = ArrayList<String>()
+        fun found(bitmap: android.graphics.Bitmap): android.graphics.RectF? {
+            var minX = Int.MAX_VALUE; var minY = Int.MAX_VALUE; var maxX = -1; var maxY = -1
+            for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
+                val p = bitmap.getPixel(x, y)
+                if (android.graphics.Color.alpha(p) > 128 && android.graphics.Color.red(p) < 100) {
+                    minX = minOf(minX, x); maxX = maxOf(maxX, x); minY = minOf(minY, y); maxY = maxOf(maxY, y)
+                }
+            }
+            return if (maxX < 0) null else android.graphics.RectF(minX.toFloat(), minY.toFloat(), maxX + 1f, maxY + 1f)
+        }
+        val full = AriaPdfRasterizerImpl.renderBitmap(pdf, width, height, true, 0.0, 0.0, 1.0, 1.0)!!
+        val fullBox = found(full)!!
+        lines += "expected px: ${box.left / pageWidth * width},${box.top / pageHeight * height} - ${box.right / pageWidth * width},${box.bottom / pageHeight * height}"
+        lines += "full page px: $fullBox"
+        val crops = listOf(doubleArrayOf(0.4, 0.4, 0.2, 0.1), doubleArrayOf(0.45, 0.45, 0.1, 0.05), doubleArrayOf(0.0, 0.3, 1.0, 0.3))
+        for (crop in crops) {
+            val cw = (width * crop[2]).toInt(); val ch = (height * crop[3]).toInt()
+            val bitmap = AriaPdfRasterizerImpl.renderBitmap(pdf, cw, ch, false, crop[0], crop[1], crop[2], crop[3])!!
+            val b = found(bitmap)
+            // Back to whole-page pixels, as AndroidPageRect places the crop.
+            val mapped = b?.let {
+                android.graphics.RectF((crop[0] * width + it.left * crop[2] * width / cw).toFloat(),
+                    (crop[1] * height + it.top * crop[3] * height / ch).toFloat(),
+                    (crop[0] * width + it.right * crop[2] * width / cw).toFloat(),
+                    (crop[1] * height + it.bottom * crop[3] * height / ch).toFloat())
+            }
+            lines += "crop ${crop.joinToString()} (${cw}x$ch): in-crop $b -> page $mapped" +
+                (mapped?.let { "  dx=${it.left - fullBox.left} dy=${it.top - fullBox.top}" } ?: "  MISSING")
+        }
+        File(directory, "pdf-crop-alignment.txt").writeText(lines.joinToString("\n") + "\n")
+    }
+
+    private fun writeDeviceInfo() {
+        val metrics = inst.targetContext.resources.displayMetrics
+        val b = android.os.Build.VERSION.SDK_INT
+        val ext = if (b >= 30) android.os.ext.SdkExtensions.getExtensionVersion(30) else -1
+        File(directory, "device.txt").writeText(
+            "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} (${android.os.Build.DEVICE}) " +
+            "sdk=$b ext=$ext fingerprint=${android.os.Build.FINGERPRINT}\n" +
+            "display ${metrics.widthPixels}x${metrics.heightPixels} density=${metrics.density} dpi=${metrics.densityDpi}\n")
+    }
+
     private fun dismissPrompts() {
         repeat(5) {
             val node = listOf("Not Now", "Got it", "Close").firstNotNullOfOrNull { find(it) }

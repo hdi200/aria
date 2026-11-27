@@ -564,7 +564,16 @@ struct ScoreReaderPageCanvas: View {
             return max(width * 1.35, 560)
         }
 
+        #if os(Android)
+        // Keep the page's own shape. iOS fits the page inside a taller frame and maps taps
+        // and selections through that fitted rect (AVMakeRect in ZoomableImageView);
+        // AndroidZoomableImageView treats the whole frame as the page. With the 560 floor,
+        // a 360-dp-wide phone (most Samsung Galaxies) got a page frame taller than A4: the
+        // page drew lower than its selections and taps.
+        return width * (imageSize.height / imageSize.width)
+        #else
         return max(width * (imageSize.height / imageSize.width), 560)
+        #endif
     }
 }
 

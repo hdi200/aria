@@ -297,6 +297,10 @@ struct LibraryView: View {
             model.presentEarlySupporterMessageIfNeeded()
         }
         .modifier(LibraryLaunchMessages(model: model, accessStatus: accessController.status))
+        #if os(Android)
+        // One-time note for phones that had the edit-mode offset (IOS_CHANGES.md #145).
+        .modifier(AndroidEditingFixNotice(model: model))
+        #endif
         .onChangeCompatible(of: selectedCategory) { _ in
             isEditingActiveSetlist = false
         }

@@ -12,6 +12,13 @@ internal object AriaRasterTiming {
     @Volatile var record: ((String, Int) -> Unit)? = null
 }
 
+// No collector in a normal app. Instrumented tests set it to save the PDFs a device draws,
+// with the page size its PdfRenderer reports (points) and the crop and pixels asked for.
+internal object AriaRasterCapture {
+    @Volatile var record: ((pdf: ByteArray, opaque: Boolean, pageWidth: Int, pageHeight: Int,
+                            width: Int, height: Int, crop: DoubleArray) -> Unit)? = null
+}
+
 /// Draws the first page of a PDF into a bitmap: Android's counterpart to the CGPDFDocument
 /// drawing in ScorePage.rasterizedImage(). Called from Swift (AndroidPDFPageRenderer), which
 /// gets the bitmap back as a UIImage through UIImageBitmapHandoff: no PNG encode and decode.
@@ -20,7 +27,14 @@ object AriaPdfRasterizerImpl {
     /// bitmap; 0, 0, 1, 1 is the whole page. Returns the handoff key for
     /// UIImage(contentsOfFile:).
     fun bitmapKey(pdf: ByteArray, width: Int, height: Int, opaque: Boolean,
-                  cropX: Double, cropY: Double, cropWidth: Double, cropHeight: Double): String? {
+                  cropX: Double, cropY: Double, cropWidth: Double, cropHeight: Double): String? =
+        renderBitmap(pdf, width, height, opaque, cropX, cropY, cropWidth, cropHeight)
+            ?.let { UIImage.UIImageBitmapHandoff.put(it) }
+
+    /// The drawing itself, separate from the handoff so instrumented tests can check the
+    /// pixels a device's PdfRenderer produces.
+    fun renderBitmap(pdf: ByteArray, width: Int, height: Int, opaque: Boolean,
+                     cropX: Double, cropY: Double, cropWidth: Double, cropHeight: Double): Bitmap? {
         if (BuildConfig.ARIA_PHONE_AUDIT) AriaRasterTiming.record?.invoke(if (opaque) "page_raster_start" else "overlay_raster_start", width * height)
         // PdfRenderer needs a seekable file descriptor.
         val file = File.createTempFile("aria-page", ".pdf")
@@ -34,6 +48,8 @@ object AriaPdfRasterizerImpl {
                     if (renderer.pageCount < 1) return null
                     renderer.openPage(0).use { page ->
                         if (BuildConfig.ARIA_PHONE_AUDIT) AriaRasterTiming.record?.invoke("pdf_page_opened", 0)
+                        AriaRasterCapture.record?.invoke(pdf, opaque, page.width, page.height, width, height,
+                            doubleArrayOf(cropX, cropY, cropWidth, cropHeight))
                         val targetWidth = if (width > 0) width else page.width
                         val targetHeight = if (height > 0) height else page.height
                         if (BuildConfig.ARIA_PHONE_AUDIT) AriaRasterTiming.record?.invoke("bitmap_allocate_begin", 0)
@@ -54,7 +70,7 @@ object AriaPdfRasterizerImpl {
                         if (BuildConfig.ARIA_PHONE_AUDIT) AriaRasterTiming.record?.invoke("pdf_paint_begin", 0)
                         page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                         if (BuildConfig.ARIA_PHONE_AUDIT) AriaRasterTiming.record?.invoke("pdf_paint_end", 0)
-                        return UIImage.UIImageBitmapHandoff.put(bitmap)
+                        return bitmap
                     }
                 }
             }
