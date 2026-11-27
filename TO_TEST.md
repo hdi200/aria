@@ -12,6 +12,32 @@ individual fixture below. Physical Android camera quality, physical iPad/stylus,
 release legal-screen access and billing/account checks remain unverified.
 
 
+## Faster Android edit screen: shape shadows (November 27)
+
+Android draws card, panel, page and key shadows from their outline instead of re-drawing and
+blurring the whole view (`IOS_CHANGES.md` #148). On a cloud Galaxy A35 each note tap does
+about 38% less UI work. iOS is unchanged (each call site is the old `.shadow`).
+
+- [ ] **Android phone, look:** in edit mode the page, the note-entry panel's top edge, the top-bar islands and the black keys still show soft shadows, the same as the last release.
+- [ ] **Android tablet:** the editing deck, the iPad-style note-entry panel and the toolbar chrome have their shadows, with no hard edges or clipping.
+- [ ] **Android, feel:** on the Moto or another budget phone, rapid note entry and selection feel quicker than 1.5.1 (33). Nothing is dropped, and Undo still steps back one note at a time.
+- [ ] **iOS:** a quick look at the edit screen: shadows unchanged.
+
+## Autosave skips re-laying out the open score (November 27)
+
+Autosave no longer lays out the score being edited again before writing it, and the first
+edit after an autosave no longer re-lays out the whole score (`IOS_CHANGES.md` #149). With
+the other Android fixes, a note tap reaches the screen about 30% sooner on a Galaxy A35.
+
+- [ ] **iOS and Android:** in a long score (Goldberg), enter notes steadily for a minute,
+  through a few autosaves. Typing never stalls for seconds, and nothing is lost.
+- [ ] **Both:** close and reopen the score: every edit is there. Open the saved file in
+  desktop MuseScore 4.7.7 and 4.7.6: no changes on open, and parts look right.
+- [ ] **Both, parts:** in a score with parts, edit the full score, wait for an autosave,
+  then open a part: it shows the edits.
+- [ ] **Both, transposing view:** with concert pitch off in a transposing score, edit, let it
+  autosave, reopen: correct.
+
 ## Remove key and time signatures (November 27)
 
 Tapping a key or time signature in edit mode shows Edit and Remove (`IOS_CHANGES.md` #147).

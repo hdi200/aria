@@ -1359,7 +1359,8 @@ private extension View {
                         .stroke(Color.white.opacity(0.38), lineWidth: 0.8)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: Color.black.opacity(0.10), radius: 20, y: 8)
+                .ariaShapeShadow(opacity: 0.10, radius: 20, y: 8,
+                                 topLeading: 28, topTrailing: 28, bottomTrailing: 0, bottomLeading: 0)
         } else {
             self
                 .background(.regularMaterial, in: shape)
@@ -1368,7 +1369,8 @@ private extension View {
                         .stroke(Color.black.opacity(0.08), lineWidth: 0.6)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: Color.black.opacity(0.08), radius: 14, y: 6)
+                .ariaShapeShadow(opacity: 0.08, radius: 14, y: 6,
+                                 topLeading: 28, topTrailing: 28, bottomTrailing: 0, bottomLeading: 0)
         }
     }
 
@@ -1393,7 +1395,8 @@ private extension View {
                         .stroke(Color.white.opacity(0.32), lineWidth: 0.8)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: Color.black.opacity(0.10), radius: 24, y: -6)
+                .ariaShapeShadow(opacity: 0.10, radius: 24, y: -6,
+                                 topLeading: 28, topTrailing: 28, bottomTrailing: 0, bottomLeading: 0)
                 .ignoresSafeArea(.container, edges: .bottom)
         } else {
             self
@@ -1403,7 +1406,8 @@ private extension View {
                         .stroke(Color.black.opacity(0.09), lineWidth: 0.7)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: Color.black.opacity(0.08), radius: 18, y: -5)
+                .ariaShapeShadow(opacity: 0.08, radius: 18, y: -5,
+                                 topLeading: 28, topTrailing: 28, bottomTrailing: 0, bottomLeading: 0)
                 .ignoresSafeArea(.container, edges: .bottom)
         }
     }

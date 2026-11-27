@@ -1715,7 +1715,7 @@ struct ScoreReaderHorizontalToolbarChromeModifier: ViewModifier {
                         .stroke(Color.black.opacity(0.06), lineWidth: 0.7)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: Color.black.opacity(0.06), radius: 9, y: 2)
+                .ariaShapeShadow(opacity: 0.06, radius: 9, y: 2, cornerRadius: 12)
         }
     }
 }

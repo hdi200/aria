@@ -95,7 +95,7 @@ struct ScoreReaderEditorRail: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.16), radius: 24, y: 12)
+        .ariaShapeShadow(opacity: 0.16, radius: 24, y: 12, cornerRadius: 28)
     }
 }
 
@@ -225,7 +225,7 @@ struct ScoreReaderEditingDeck: View {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .stroke(Color.black.opacity(0.06), lineWidth: 1)
             }
-            .shadow(color: Color.black.opacity(0.16), radius: 24, y: 12)
+            .ariaShapeShadow(opacity: 0.16, radius: 24, y: 12, cornerRadius: 28)
         }
     }
 

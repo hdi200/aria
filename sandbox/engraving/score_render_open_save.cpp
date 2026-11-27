@@ -678,13 +678,35 @@ public:
         // serialized, so saving a stale excerpt makes desktop MuseScore add or
         // replace that notation on first open. Materialize every linked view at
         // the save boundary to keep the package stable in MuseScore 4.7.5.
+        //
+        // The score being edited and shown is already current: every edit's endCmd() lays
+        // out its changed range, and its pages are drawn from that layout. Re-laying it out
+        // took 2.6 s of a 3.6 s autosave on a 119-page score on a mid-range phone, holding
+        // up edits queued behind it. Skip it only in the plain case (it is also the drawn
+        // score, no view transposition) and when no layout request is still pending.
+        //
+        // setLayoutAll() writes the master's shared command state, which doLayout() leaves
+        // set, so the next edit's endCmd() used to lay out the whole score again. Restore
+        // the state as it was before the save's own layouts.
+        const mu::engraving::CmdState commandStateBeforeSave = m_masterScore->cmdState();
+        mu::engraving::Score* currentScore = nullptr;
+        if (activeScore() == presentationScore() && !commandStateBeforeSave.layoutRange()) {
+            currentScore = activeScore();
+        }
+        int laidOutScores = 0;
         for (mu::engraving::Score* score : m_masterScore->scoreList()) {
-            if (!score) {
+            if (!score || score == currentScore) {
                 continue;
             }
             score->setLayoutAll();
             score->doLayout();
+            ++laidOutScores;
         }
+        m_masterScore->cmdState() = commandStateBeforeSave;
+        std::cout << "Aria save layout: views=" << m_masterScore->scoreList().size()
+                  << " laidOut=" << laidOutScores
+                  << " skippedCurrent=" << (currentScore ? "true" : "false")
+                  << " elapsed=" << elapsedSecondsSince(started) << "s" << std::endl;
         m_totalPageCount = activePageCount();
 
         // Corrupted scores save as they are, like desktop's save after "Open anyway"; the

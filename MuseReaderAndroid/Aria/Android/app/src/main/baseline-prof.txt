@@ -1,0 +1,19 @@
+## Aria baseline profile: compile Skip's runtime and Aria's generated views ahead of time.
+## Without these rules the profile held only androidx/Compose rules, so the whole SwiftUI to
+## Compose bridge (skip.ui ComposeBuilder, View.Compose, layouts) and every aria.skip view
+## ran interpreted or JIT-compiled after each install and update: about 70% of the main
+## thread's editing time was JIT code or the ART interpreter on a Galaxy A35
+## (MuseReaderAndroid/docs/archive/GALAXY_A35_EDIT_PROFILE.md, finding #3).
+## AGP rewrites these names through R8 into the shipped profile.
+HSPLskip/ui/**->**(**)**
+HSPLskip/lib/**->**(**)**
+HSPLskip/foundation/**->**(**)**
+HSPLskip/model/**->**(**)**
+HSPLskip/bridge/**->**(**)**
+HSPLaria/skip/**->**(**)**
+Lskip/ui/**;
+Lskip/lib/**;
+Lskip/foundation/**;
+Lskip/model/**;
+Lskip/bridge/**;
+Laria/skip/**;

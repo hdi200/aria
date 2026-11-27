@@ -148,6 +148,19 @@ open class MainActivity: AppCompatActivity {
         AppDelegate.shared.onLowMemory()
     }
 
+    // Aria: touch-to-screen latency marker. Only while a system trace is recording, each
+    // finger-down leaves a trace slice saying how long ago the touch happened, so a trace can
+    // measure finger-down → new frame on screen (see AndroidTraceMarker.swift). Costs one
+    // boolean check otherwise.
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN && android.os.Trace.isEnabled()) {
+            val delayMs = android.os.SystemClock.uptimeMillis() - ev.eventTime
+            android.os.Trace.beginSection("aria:touch-down delay=$delayMs")
+            android.os.Trace.endSection()
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onRestart() {
         logger.info("onRestart")
         super.onRestart()

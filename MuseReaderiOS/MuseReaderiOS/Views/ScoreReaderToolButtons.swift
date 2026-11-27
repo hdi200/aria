@@ -130,7 +130,7 @@ struct ScoreReaderModeToolbarChromeModifier: ViewModifier {
         } else {
             content
                 .scoreReaderModeChooserBackground(cornerRadius: 12)
-                .shadow(color: Color.black.opacity(0.10), radius: 12, y: 4)
+                .ariaShapeShadow(opacity: 0.10, radius: 12, y: 4, cornerRadius: 12)
         }
     }
 }

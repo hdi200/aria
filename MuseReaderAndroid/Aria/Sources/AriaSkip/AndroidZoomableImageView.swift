@@ -240,6 +240,7 @@ struct ZoomableImageView: View {
                 AndroidInteractionTrace.point("page_bitmap_assign_begin")
                 #endif
                 pageImage = image; pageImageScale = target
+                AndroidTraceMarker.mark("aria:image-shown page")
                 #if os(Android) && ARIA_PHONE_AUDIT
                 AndroidInteractionTrace.point("page_bitmap_assign_end")
                 #endif
@@ -263,6 +264,7 @@ struct ZoomableImageView: View {
         }
         .task(id: PageKey(data: noteEntryPreview?.overlayImageData, width: pageSize.width, scale: 1, visible: isRasterVisible)) {
             previewImage = isRasterVisible ? noteEntryPreview.flatMap { UIImage(data: $0.overlayImageData) } : nil
+            if previewImage != nil { AndroidTraceMarker.mark("aria:image-shown preview") }
         }
 
     #if os(Android) && ARIA_PHONE_AUDIT
@@ -336,8 +338,10 @@ struct ZoomableImageView: View {
                 selectionTranslation: annotationSelectionTranslation
             )
         }
-        .shadow(color: showsPageBoundary ? Color.black.opacity(0.15) : Color.clear,
-                radius: showsPageBoundary ? 12 : 0, y: showsPageBoundary ? 6 : 0)
+        // The page's outline shadow only: a `.shadow` here composed and blurred the whole
+        // page (image, selection, highlight, annotations) again on every change.
+        .ariaShapeShadow(opacity: showsPageBoundary ? 0.15 : 0, radius: showsPageBoundary ? 12 : 0,
+                         y: showsPageBoundary ? 6 : 0, cornerRadius: 0)
     }
 
     @ViewBuilder
@@ -1063,6 +1067,7 @@ struct ZoomableImageView: View {
                     AndroidInteractionTrace.point("selection_bitmap_assign_begin")
                     #endif
                     selectionImage = image
+                    AndroidTraceMarker.mark("aria:image-shown selection")
                     #if os(Android) && ARIA_PHONE_AUDIT
                     AndroidInteractionTrace.point("selection_bitmap_assign_end")
                     #endif

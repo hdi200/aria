@@ -95,7 +95,7 @@ struct ScoreReaderWidePitchKeyboard: View {
                     ZStack(alignment: .bottom) {
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(isActive(midiPitch: key.midiPitch) ? Color(red: 0.12, green: 0.34, blue: 0.78) : Color(red: 0.08, green: 0.09, blue: 0.10))
-                            .shadow(color: Color.black.opacity(0.30), radius: 2, y: 1)
+                            .ariaShapeShadow(opacity: 0.30, radius: 2, y: 1, cornerRadius: 4)
 
                         if isActive(midiPitch: key.midiPitch), hasExactActiveMIDIPitch {
                             Text(label(forMIDIPitch: key.midiPitch))

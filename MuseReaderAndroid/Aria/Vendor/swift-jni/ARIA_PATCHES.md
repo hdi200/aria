@@ -20,3 +20,10 @@ No Skip version upgrade is included. Root `Aria/Package.swift` selects this dire
 
 All modifications are marked `ARIA PATCH`. Preserve the Apache-2.0 upstream sources and
 license when updating; rebase these changes deliberately and rerun the lifetime gates.
+
+- `Sources/SwiftJNI/AriaJNIIDCache.swift` and `JClass.getMethodID/getStaticMethodID/
+  getFieldID/getStaticFieldID` in `SwiftJNI.swift`: each JClass caches the IDs it has looked
+  up (keyed by kind, name and signature, behind a mutex). Skip's generated bridge declares
+  method IDs as computed properties, so without the cache every bridged modifier call ran
+  JNI GetMethodID, about 5% of the main thread while editing on a Galaxy A35
+  (`MuseReaderAndroid/docs/archive/GALAXY_A35_EDIT_PROFILE.md`, finding #2).

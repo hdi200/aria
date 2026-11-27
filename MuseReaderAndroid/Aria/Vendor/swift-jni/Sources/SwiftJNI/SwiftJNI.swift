@@ -692,6 +692,8 @@ extension JObject: JavaValue {
 
 public final class JClass : JObject, @unchecked Sendable {
     public let name: String
+    // ARIA PATCH: method and field IDs looked up once per class (see AriaJNIIDCache).
+    private let ariaIDs = AriaJNIIDCache()
 
     public init(_ ptr: JavaObjectPointer, name: String) {
         self.name = name
@@ -727,23 +729,35 @@ public final class JClass : JObject, @unchecked Sendable {
     #endif
 
     public func getFieldID(name: String, sig: String) -> JavaFieldID? {
+        if let id = ariaIDs.field(.instanceField, name, sig) { return id }
         defer { JNI.jni.checkExceptionAndClear() }
-        return JNI.jni.withEnv { $0.GetFieldID($1, self.ptr, name, sig).flatMap(JavaFieldID.init) }
+        let id = JNI.jni.withEnv { $0.GetFieldID($1, self.ptr, name, sig).flatMap(JavaFieldID.init) }
+        if let id { ariaIDs.store(id, .instanceField, name, sig) }
+        return id
     }
 
     public func getStaticFieldID(name: String, sig: String) -> JavaFieldID? {
+        if let id = ariaIDs.field(.staticField, name, sig) { return id }
         defer { JNI.jni.checkExceptionAndClear() }
-        return JNI.jni.withEnv { $0.GetStaticFieldID($1, self.ptr, name, sig).flatMap(JavaFieldID.init) }
+        let id = JNI.jni.withEnv { $0.GetStaticFieldID($1, self.ptr, name, sig).flatMap(JavaFieldID.init) }
+        if let id { ariaIDs.store(id, .staticField, name, sig) }
+        return id
     }
 
     public func getMethodID(name: String, sig: String) -> JavaMethodID? {
+        if let id = ariaIDs.method(.instanceMethod, name, sig) { return id }
         defer { JNI.jni.checkExceptionAndClear() }
-        return JNI.jni.withEnv { $0.GetMethodID($1, self.ptr, name, sig).flatMap(JavaMethodID.init) }
+        let id = JNI.jni.withEnv { $0.GetMethodID($1, self.ptr, name, sig).flatMap(JavaMethodID.init) }
+        if let id { ariaIDs.store(id, .instanceMethod, name, sig) }
+        return id
     }
 
     public func getStaticMethodID(name: String, sig: String) -> JavaMethodID? {
+        if let id = ariaIDs.method(.staticMethod, name, sig) { return id }
         defer { JNI.jni.checkExceptionAndClear() }
-        return JNI.jni.withEnv { $0.GetStaticMethodID($1, self.ptr, name, sig).flatMap(JavaMethodID.init) }
+        let id = JNI.jni.withEnv { $0.GetStaticMethodID($1, self.ptr, name, sig).flatMap(JavaMethodID.init) }
+        if let id { ariaIDs.store(id, .staticMethod, name, sig) }
+        return id
     }
 
     public func create(ctor: JavaMethodID, options: JConvertibleOptions, args: [JavaParameter]) throws -> JavaObjectPointer {

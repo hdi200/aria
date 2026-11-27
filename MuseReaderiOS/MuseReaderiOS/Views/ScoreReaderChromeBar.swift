@@ -800,7 +800,7 @@ private extension View {
             self
                 .background(Color.white.opacity(0.20))
                 .glassEffect(.regular.interactive(true))
-                .shadow(color: Color.black.opacity(0.08), radius: 16, y: 6)
+                .ariaShapeShadow(opacity: 0.08, radius: 16, y: 6, cornerRadius: 0)
                 .overlay(alignment: .bottom) {
                     Rectangle()
                         .fill(Color.white.opacity(0.34))
@@ -832,7 +832,7 @@ private extension View {
         if isSelected {
             self
                 .background(Color.blue, in: shape)
-                .shadow(color: Color.black.opacity(0.09), radius: 18, y: 8)
+                .ariaShapeShadow(opacity: 0.09, radius: 18, y: 8, cornerRadius: cornerRadius)
         } else if #available(iOS 26.0, *) {
             self
                 .background(Color.white.opacity(0.26), in: shape)
@@ -842,7 +842,7 @@ private extension View {
                         .stroke(Color.white.opacity(0.36), lineWidth: 0.8)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: Color.black.opacity(0.09), radius: 18, y: 8)
+                .ariaShapeShadow(opacity: 0.09, radius: 18, y: 8, cornerRadius: cornerRadius)
         } else {
             self
                 .background(.ultraThinMaterial, in: shape)

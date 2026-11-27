@@ -7,6 +7,30 @@
 import SwiftUI
 
 extension View {
+    /// A black drop shadow for a view whose outline is a rounded rectangle (a card, panel,
+    /// button or the page). iOS draws exactly `.shadow(color: .black.opacity(opacity), ...)`.
+    /// Android draws only the outline's shadow (Compose `dropShadow`): its `.shadow` composes
+    /// the whole view a second time and blurs it offscreen on every change, which made the
+    /// edit screen's frames take 100–250 ms on a mid-range phone.
+    func ariaShapeShadow(opacity: Double, radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0,
+                         cornerRadius: CGFloat) -> some View {
+        ariaShapeShadow(opacity: opacity, radius: radius, x: x, y: y,
+                        topLeading: cornerRadius, topTrailing: cornerRadius,
+                        bottomTrailing: cornerRadius, bottomLeading: cornerRadius)
+    }
+
+    func ariaShapeShadow(opacity: Double, radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0,
+                         topLeading: CGFloat, topTrailing: CGFloat,
+                         bottomTrailing: CGFloat, bottomLeading: CGFloat) -> some View {
+        #if os(Android)
+        return androidShapeShadow(opacity: opacity, radius: radius, x: x, y: y,
+                                  topLeading: topLeading, topTrailing: topTrailing,
+                                  bottomTrailing: bottomTrailing, bottomLeading: bottomLeading)
+        #else
+        return shadow(color: Color.black.opacity(opacity), radius: radius, x: x, y: y)
+        #endif
+    }
+
     @ViewBuilder
     func onChangeCompatible<Value: Equatable>(
         of value: Value,
