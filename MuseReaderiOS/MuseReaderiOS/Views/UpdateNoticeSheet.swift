@@ -311,14 +311,28 @@ struct UpdateNoticeSheet: View {
         .presentationDetents([.large])
     }
 
+    /// Android phones at their default display size (most Galaxies: 780 dp tall) leave the
+    /// percussion page too short, and its icon labels and last line fell below Next. iOS keeps
+    /// its layout.
+    static func usesCompactDrumFeature(pageHeight: CGFloat) -> Bool {
+        #if os(Android)
+        // About 493 dp on a 780-dp-tall Galaxy, 594 dp on a 891-dp-tall Pixel-size phone,
+        // where the full layout fits.
+        return pageHeight < 545
+        #else
+        return false
+        #endif
+    }
+
     @ViewBuilder
     private func pageView(_ page: Page) -> some View {
         if page.isDrumFeature {
             GeometryReader { geometry in
+                let isCompact = Self.usesCompactDrumFeature(pageHeight: geometry.size.height)
                 ScrollView {
-                    DrumPadUpdateFeature(contentWidth: max(1, geometry.size.width - 48))
+                    DrumPadUpdateFeature(contentWidth: max(1, geometry.size.width - 48), isCompact: isCompact)
                         .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
+                        .padding(.vertical, isCompact ? 10 : 20)
                 }
             }
         } else if page.isScannerFeature {
@@ -600,6 +614,8 @@ struct ScannerUpdateFeature: View {
 /// The percussion editing page, led by a drum kit: the same pads the editor shows, drawn by the editor's own views.
 struct DrumPadUpdateFeature: View {
     var contentWidth: CGFloat = 342
+    /// Tighter spacing, headline and pads for short screens (see usesCompactDrumFeature).
+    var isCompact = false
     private let blue = Color(red: 0.0, green: 0.478, blue: 1.0)
 
     private static func pad(_ pitch: Int, _ name: String, _ notehead: ScoreDrumPad.Notehead,
@@ -625,7 +641,7 @@ struct DrumPadUpdateFeature: View {
     ]
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: isCompact ? 6 : 8) {
             Text("NEW · PERCUSSION EDITING")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.5)
@@ -634,9 +650,9 @@ struct DrumPadUpdateFeature: View {
                 .padding(.vertical, 7)
                 .background(blue.opacity(0.08), in: Capsule())
 
-            VStack(spacing: 12) {
+            VStack(spacing: isCompact ? 8 : 12) {
                 Text("Tap in your\npercussion.")
-                    .font(.system(size: 36, weight: .bold))
+                    .font(.system(size: isCompact ? 30 : 36, weight: .bold))
                     .tracking(-1.1)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -657,7 +673,7 @@ struct DrumPadUpdateFeature: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, isCompact ? 4 : 10)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Drum kit pads: hi-hats, crash and ride over bass drum, snare and toms")
 
@@ -685,7 +701,7 @@ struct DrumPadUpdateFeature: View {
         let width = min(contentWidth, 480)
         let spacing: CGFloat = 6
         let padWidth = (width - 20 - spacing * 3) / 4
-        let padHeight: CGFloat = 50
+        let padHeight: CGFloat = isCompact ? 44 : 50
         return VStack(spacing: spacing) {
             ForEach(Self.rows.indices, id: \.self) { row in
                 HStack(spacing: spacing) {
@@ -705,18 +721,18 @@ struct DrumPadUpdateFeature: View {
                 }
             }
         }
-        .padding(10)
+        .padding(isCompact ? 8 : 10)
         .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .allowsHitTesting(false)
         .frame(maxWidth: .infinity)
     }
 
     private func benefit(_ title: String, symbol: String) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: isCompact ? 4 : 8) {
             Image(systemName: symbol)
                 .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(blue)
-                .frame(height: 26)
+                .frame(height: isCompact ? 22 : 26)
                 .accessibilityHidden(true)
             Text(title)
                 .font(.system(size: 11, weight: .medium))

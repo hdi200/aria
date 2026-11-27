@@ -30,6 +30,7 @@ To force it on a test install, set `UpdateNotice.seenVersion` to 5 and `UpdateNo
 - [ ] **iPhone and iPad:** opening a score shows What's New once. Page 1 is Percussion Editing: the badge, headline, two rows of real drum kit pads (Snare highlighted) with noteheads on their lines, the "essentials first" caption, and the three icons (Drum kits and more, Add to beat, Sounds as you tap) fit without clipping in portrait and landscape. The pads can't be tapped.
 - [ ] **Scanning page:** with `showsScanner` true, the scanning page follows the percussion page; with it false (anyone who saw the November 18 notice, or installed after November 18) it doesn't.
 - [ ] **Also in this update:** Fonts item, then Fixes. iPad lists Apple Pencil first; iPhone doesn't show it. Android shows the four Android fixes (import, camera, sheets, library header) and no Apple Pencil.
+- [ ] **Samsung phone (360 dp, default display size):** the percussion page shows the three icon labels and "Edit a percussion part and tap a beat to start." above the page dots without scrolling. A Pixel/Moto-size phone shows the full-size layout.
 - [ ] **Android phone and tablet:** the percussion page draws its pads and the drum, shift and waveform icons (no missing-icon warnings in logcat).
 - [ ] **Audience:** an install made on or after November 27, 12:00 AM Eastern doesn't see the notice.
 
