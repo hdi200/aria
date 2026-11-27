@@ -17,6 +17,21 @@ final class AndroidPageRasterScheduler {
     var phoneAuditIsIdle: Bool { active == nil && pending.isEmpty }
     #endif
     private nonisolated static let worker = DispatchQueue(label: "aria.page.raster", qos: .userInitiated)
+    private nonisolated static let early = AndroidEarlyPageRaster()
+
+    /// Starts the bitmap of a page the engine has just rendered for display, on the raster
+    /// worker, right away. Without this the PDF waits for the main thread: first for the
+    /// recomposition that hands it to the page view, then for the view's raster request.
+    /// On a Galaxy A35 that wait was about 140 ms of every note tap. The view's request then
+    /// finds the bitmap ready (`render`) or waiting on the worker (`rasterize`).
+    /// Called off the main thread, from the render session.
+    nonisolated static func startEarlyPageRaster(pdf: Data) {
+        early.start(pdf: pdf, on: worker) { pdf, pixels in
+            rasterizeOnWorker(pdf: pdf, image: nil, pixels: pixels, opaque: true, crop: fullPage)
+        }
+    }
+
+    private nonisolated static let fullPage = CGRect(x: 0, y: 0, width: 1, height: 1)
 
     private final class Request {
         let id: UUID
@@ -55,6 +70,16 @@ final class AndroidPageRasterScheduler {
                 pending.removeAll { $0.owner == owner }
                 superseded.forEach { $0.continuation.resume() }
                 if active?.owner == owner { active?.cancelled = true }
+                if opaque, crop == Self.fullPage, let pdf, !pdf.isEmpty {
+                    // The next early page bitmap is made at this size: every page of a score
+                    // is shown at the same size.
+                    Self.early.setPixels(pixels)
+                    if let ready = Self.early.take(pdf: pdf, pixels: pixels) {
+                        publish(ready)
+                        continuation.resume()
+                        return
+                    }
+                }
                 pending.append(Request(id: id, owner: owner, pdf: pdf, image: image, pixels: pixels,
                     opaque: opaque, crop: crop, publish: publish, continuation: continuation))
                 #if ARIA_PHONE_AUDIT
@@ -140,25 +165,14 @@ final class AndroidPageRasterScheduler {
                 defer { AndroidInteractionTrace.point("raster_worker_end") }
                 #endif
 
-                let render = {
-                    if let pdf, !pdf.isEmpty {
-                        return AndroidPDFPageRenderer.image(pdfData: pdf, size: pixels, opaque: opaque, crop: crop)
-                    }
-                    guard let data = image, let decoded = UIImage(data: data, scale: 1) else { return nil }
-                    #if os(Android)
-                    AriaImageSources.remember(data, for: decoded)
-                    #endif
-                    return decoded
+                // An early page bitmap started before this request ran first on this serial
+                // worker; use it instead of drawing the same page again.
+                if opaque, crop == fullPage, let pdf, !pdf.isEmpty,
+                   let ready = early.take(pdf: pdf, pixels: pixels) {
+                    continuation.resume(returning: ready)
+                    return
                 }
-                #if os(Android)
-                let result = jniContext {
-                    JNI.jni.withEnv { precondition($0.PushLocalFrame($1, 32) == 0) }
-                    defer { JNI.jni.withEnv { _ = $0.PopLocalFrame($1, nil) } }
-                    return render()
-                }
-                #else
-                let result = render()
-                #endif
+                let result = rasterizeOnWorker(pdf: pdf, image: image, pixels: pixels, opaque: opaque, crop: crop)
 
                 #if os(Android) && ARIA_PHONE_AUDIT
                 AndroidInteractionTrace.point("raster_worker_result_ready")
@@ -166,6 +180,101 @@ final class AndroidPageRasterScheduler {
                 continuation.resume(returning: result)
             }
         }
+    }
+
+    /// Draws one bitmap. Runs on `worker` only.
+    private nonisolated static func rasterizeOnWorker(pdf: Data?, image: Data?, pixels: CGSize,
+                                                      opaque: Bool, crop: CGRect) -> UIImage? {
+        let render = {
+            if let pdf, !pdf.isEmpty {
+                return AndroidPDFPageRenderer.image(pdfData: pdf, size: pixels, opaque: opaque, crop: crop)
+            }
+            guard let data = image, let decoded = UIImage(data: data, scale: 1) else { return nil }
+            #if os(Android)
+            AriaImageSources.remember(data, for: decoded)
+            #endif
+            return decoded
+        }
+        #if os(Android)
+        return jniContext {
+            JNI.jni.withEnv { precondition($0.PushLocalFrame($1, 32) == 0) }
+            defer { JNI.jni.withEnv { _ = $0.PopLocalFrame($1, nil) } }
+            return render()
+        }
+        #else
+        return render()
+        #endif
+    }
+}
+
+/// At most one early page bitmap (see `AndroidPageRasterScheduler.startEarlyPageRaster`):
+/// a newer page replaces it, the view takes it, or it is dropped after two seconds, so it
+/// never holds more than one extra page bitmap. Thread-safe.
+nonisolated final class AndroidEarlyPageRaster: @unchecked Sendable {
+    private struct Ready {
+        let pdf: Data
+        let pixels: CGSize
+        let image: UIImage
+        let generation: Int
+    }
+
+    private let lock = NSLock()
+    private var pixels: CGSize?
+    private var generation = 0
+    private var ready: Ready?
+
+    func setPixels(_ value: CGSize) {
+        lock.lock(); defer { lock.unlock() }
+        pixels = value
+    }
+
+    func start(pdf: Data, on queue: DispatchQueue,
+               draw: @escaping @Sendable (Data, CGSize) -> UIImage?) {
+        lock.lock()
+        // No page has been shown yet, so there is no size to draw at.
+        guard let size = pixels, size.width > 0, size.height > 0 else { lock.unlock(); return }
+        generation &+= 1
+        let current = generation
+        ready = nil
+        lock.unlock()
+
+        queue.async { [self] in
+            guard isCurrent(current) else { return }
+            guard let image = draw(pdf, size) else { return }
+            lock.lock()
+            if generation == current {
+                ready = Ready(pdf: pdf, pixels: size, image: image, generation: current)
+            }
+            lock.unlock()
+            queue.asyncAfter(deadline: .now() + 2) { [self] in
+                lock.lock(); defer { lock.unlock() }
+                if ready?.generation == current { ready = nil }
+            }
+        }
+    }
+
+    func take(pdf: Data, pixels: CGSize) -> UIImage? {
+        lock.lock(); defer { lock.unlock() }
+        guard let candidate = ready, candidate.pixels == pixels, candidate.pdf == pdf else { return nil }
+        ready = nil
+        return candidate.image
+    }
+
+    private func isCurrent(_ value: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return generation == value
+    }
+}
+
+extension LiveScoreRenderSession {
+    /// `renderPage` for the page on screen: starts its bitmap on the raster worker as soon as
+    /// the engine is done, still on this actor (off the main thread).
+    func renderPageForDisplay(at index: Int, dpi: Int) throws -> ScorePage {
+        let page = try renderPage(at: index, dpi: dpi)
+        if let pdf = page.pdfData, !pdf.isEmpty {
+            AndroidPageRasterScheduler.startEarlyPageRaster(pdf: pdf)
+        }
+        return page
     }
 }
 

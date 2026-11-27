@@ -31,6 +31,18 @@ extension View {
         #endif
     }
 
+    /// On Android, reuses this view's built Compose content while `key` stays equal, instead
+    /// of building it (and bridging every modifier to Java) again whenever its parent
+    /// re-runs. `key` must hold every value the view's look depends on; closures may be
+    /// reused, so they must not capture values that change. iOS: returns the view unchanged.
+    func ariaAndroidReuse<Key: Equatable>(_ key: Key) -> some View {
+        #if os(Android)
+        return androidEquatable(recomposeOverride: key)
+        #else
+        return self
+        #endif
+    }
+
     @ViewBuilder
     func onChangeCompatible<Value: Equatable>(
         of value: Value,

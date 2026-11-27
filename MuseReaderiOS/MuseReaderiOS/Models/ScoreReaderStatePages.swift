@@ -478,7 +478,18 @@ extension ScoreReaderState {
                              priorityLabel,
                              queueWait))
                 try Task.checkCancellation()
+                #if os(Android)
+                // The page on screen (an edited page, or a page turn): its bitmap starts as
+                // soon as the engine is done, off the main thread. Prefetches don't.
+                let page: ScorePage
+                if priority == .userInitiated {
+                    page = try await liveRenderSession.renderPageForDisplay(at: pageIndex, dpi: preferredDPI)
+                } else {
+                    page = try await liveRenderSession.renderPage(at: pageIndex, dpi: preferredDPI)
+                }
+                #else
                 let page = try await liveRenderSession.renderPage(at: pageIndex, dpi: preferredDPI)
+                #endif
                 guard !Task.isCancelled else {
                     print(String(format: "Aria page load canceled after render: page=%d totalElapsed=%.3fs",
                                  pageIndex + 1,

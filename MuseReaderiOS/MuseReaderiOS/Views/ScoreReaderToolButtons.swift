@@ -223,7 +223,21 @@ struct ScoreReaderCompactModeToolbarLabel: View {
     var showsPlusBadge = false
     let isActive: Bool
 
+    private struct LookKey: Equatable {
+        let title: String
+        let systemImage: String?
+        let textSymbol: String?
+        let showsPlusBadge: Bool
+        let isActive: Bool
+    }
+
     var body: some View {
+        // Android: the bar re-runs on every note while it looks the same; reuse the labels.
+        content.ariaAndroidReuse(LookKey(title: title, systemImage: systemImage, textSymbol: textSymbol,
+                                         showsPlusBadge: showsPlusBadge, isActive: isActive))
+    }
+
+    private var content: some View {
         VStack(spacing: 3) {
             ZStack(alignment: .bottomTrailing) {
                 Group {

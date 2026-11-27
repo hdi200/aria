@@ -32,4 +32,9 @@ enum AndroidTraceMarker {
         functions.end()
     }
 }
+#else
+/// Skip's iOS check build compiles this module too; there the markers do nothing.
+enum AndroidTraceMarker {
+    nonisolated static func mark(_ name: @autoclosure () -> String) {}
+}
 #endif

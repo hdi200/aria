@@ -1172,7 +1172,29 @@ struct ScoreReaderCompactGroupedPaletteButton: View {
     let accessibilityLabel: String
     let action: () -> Void
 
+    /// Everything the button's look depends on (its action is a fixed method of the reader).
+    private struct LookKey: Equatable {
+        let duration: ScoreNoteDuration?
+        let textSymbol: String?
+        let systemImage: String?
+        let stackedChordIcon: Bool
+        let usesMusicFont: Bool
+        let glyphBaselineOffset: CGFloat
+        let isSelected: Bool
+        let isEnabled: Bool
+        let accessibilityLabel: String
+    }
+
     var body: some View {
+        // Android: skip rebuilding the buttons that didn't change on each note.
+        content.ariaAndroidReuse(LookKey(
+            duration: duration, textSymbol: textSymbol, systemImage: systemImage,
+            stackedChordIcon: stackedChordIcon, usesMusicFont: usesMusicFont,
+            glyphBaselineOffset: glyphBaselineOffset, isSelected: isSelected,
+            isEnabled: isEnabled, accessibilityLabel: accessibilityLabel))
+    }
+
+    private var content: some View {
         Button(action: action) {
             Group {
                 if let duration {
@@ -1223,7 +1245,33 @@ struct ScoreReaderCompactGridPaletteButton: View {
     let accessibilityLabel: String
     let action: () -> Void
 
+    /// Everything the button's look depends on (its action is a fixed method of the reader).
+    private struct LookKey: Equatable {
+        let duration: ScoreNoteDuration?
+        let textSymbol: String?
+        let systemImage: String?
+        let stackedChordIcon: Bool
+        let usesMusicFont: Bool
+        let glyphBaselineOffset: CGFloat
+        let musicFontSize: CGFloat
+        let glyphVerticalOffset: CGFloat
+        let isSelected: Bool
+        let isEnabled: Bool
+        let accessibilityLabel: String
+    }
+
     var body: some View {
+        // Android: the note-entry grid re-runs on every note; skip rebuilding the buttons
+        // that didn't change (the palette was about 16% of the main thread on a Galaxy A35).
+        content.ariaAndroidReuse(LookKey(
+            duration: duration, textSymbol: textSymbol, systemImage: systemImage,
+            stackedChordIcon: stackedChordIcon, usesMusicFont: usesMusicFont,
+            glyphBaselineOffset: glyphBaselineOffset, musicFontSize: musicFontSize,
+            glyphVerticalOffset: glyphVerticalOffset, isSelected: isSelected,
+            isEnabled: isEnabled, accessibilityLabel: accessibilityLabel))
+    }
+
+    private var content: some View {
         Button(action: action) {
             Group {
                 if let duration {

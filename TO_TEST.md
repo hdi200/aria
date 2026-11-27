@@ -23,6 +23,27 @@ about 38% less UI work. iOS is unchanged (each call site is the old `.shadow`).
 - [ ] **Android, feel:** on the Moto or another budget phone, rapid note entry and selection feel quicker than 1.5.1 (33). Nothing is dropped, and Undo still steps back one note at a time.
 - [ ] **iOS:** a quick look at the edit screen: shadows unchanged.
 
+## Android: page drawn early, unchanged buttons reused (November 27, second pass)
+
+Android only (`IOS_CHANGES.md` #150). The edited page's picture is now made as soon as the
+engine finishes it, and note-entry buttons that didn't change are no longer rebuilt on each
+note. iOS is unchanged: both helpers do nothing there.
+
+- [ ] **Android, note entry:** enter notes with every note length, dot, sharp, flat, natural,
+  tie, rest and chord mode. The highlighted buttons always match the selected note, and
+  greyed-out buttons come back when they should.
+- [ ] **Android, drum staff:** the Add key and its neighbours work and update as before.
+- [ ] **Android, More notes row:** open and close it with the arrow; its buttons work.
+- [ ] **Android, bottom bar:** Note, Select, Text, Repeats, Expr, Layout and More highlight
+  the right tool when switching, and while editing.
+- [ ] **Android, zoom and turn pages while editing:** pinch-zoom right after entering a note,
+  and turn pages during editing. The page is never blurry, wrong-sized or an older version.
+- [ ] **Android, fast typing:** enter notes quickly for 20 seconds. No old page flashes over a
+  newer one, and the selection highlight lands on the right note.
+- [ ] **Android, two scores in a row:** edit one score, close it, open another and edit:
+  the buttons act on the new score.
+- [ ] **iOS:** a quick look at note entry and the mode bar: unchanged.
+
 ## Autosave skips re-laying out the open score (November 27)
 
 Autosave no longer lays out the score being edited again before writing it, and the first
