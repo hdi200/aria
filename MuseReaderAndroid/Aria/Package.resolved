@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/hdi200/ScoreScanner.git",
       "state" : {
-        "revision" : "d0d92124294924101fb5744d08ef4bc3847d6fdd",
-        "version" : "0.1.27"
+        "revision" : "005d529baf3504df5307daadf07561abba2e03df",
+        "version" : "0.1.28"
       }
     },
     {

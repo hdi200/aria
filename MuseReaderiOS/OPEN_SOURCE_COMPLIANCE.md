@@ -57,6 +57,9 @@ Use this checklist for every public build of Aria.
 - November 27: source pins **0.1.27** (`d0d92124294924101fb5744d08ef4bc3847d6fdd`; all parts of a bar share one time
   signature so MuseScore opens the file, crooked flat book scans straightened, a transposing part printed in C no
   longer takes its neighbours' key), with notices and legal links to match. Build again before shipping.
+- November 27: source pins **0.1.28** (`005d529baf3504df5307daadf07561abba2e03df`; page percentiles found by counting
+  instead of sorting, so a page reads 1.5-2x faster with byte-identical output on the full scanner regression), with
+  notices and legal links to match. Build again before shipping.
 - [x] Both apps pin public ScannerCore **0.1.23**, revision `d14c2a2dbbda5c1e4aad98c1ba20dc51be5b5ce0`; anonymous tag resolution verified.
 - [x] Normal remote package resolution succeeds for both platforms; no local scanner override.
 - [x] ScannerCore unit tests: **167 tests in 19 suites pass**.
